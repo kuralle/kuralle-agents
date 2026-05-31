@@ -30,7 +30,6 @@
     "hono": "^4.7.4"
   },
   "devDependencies": {
-    "@kuralle-agents/core": "workspace:*",
     "typescript": "^5.8.2",
     "@types/node": "^22.13.4"
   }

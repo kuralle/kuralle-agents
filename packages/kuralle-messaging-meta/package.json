@@ -52,8 +52,6 @@
     "@ai-sdk/openai": "^3.0.0",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/hono-server": "workspace:*",
-    "@kuralle-agents/http-client": "workspace:*",
-    "@kuralle-agents/messaging": "workspace:*",
     "@hono/node-server": "^1.13.0",
     "@types/node": "^22.13.4",
     "hono": "^4.12.0",

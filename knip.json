@@ -1,0 +1,65 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": ["napi"],
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.{ts,mjs,js}"],
+      "project": ["scripts/**/*.{ts,mjs,js}"],
+      "ignoreDependencies": ["wrangler", "@eslint/js", "ws"]
+    },
+    "packages/*": {
+      "entry": [
+        "src/index.ts",
+        "index.ts",
+        "*.mjs",
+        "examples/**/*.{ts,tsx,mjs,js}",
+        "test/**/*.{ts,tsx,mjs,js}",
+        "tests/**/*.{ts,tsx,mjs,js}",
+        "scripts/**/*.{ts,mjs,js}",
+        "bench/**/*.{ts,mjs,js}",
+        "client/**/*.{ts,mjs,js}",
+        "servers/**/*.{ts,mjs,js}",
+        "harness/**/*.{ts,tsx,mjs,js}",
+        "sandbox-poc/**/*.{ts,mjs,js}",
+        "**/*.smoke.ts",
+        "**/*.test.{ts,mjs}",
+        "**/*.bench.{ts,mjs}"
+      ],
+      "project": ["**/*.{ts,tsx,mjs,js}"]
+    },
+    "packages/kuralle-cf-agent/examples/*": {
+      "entry": ["src/**/*.{ts,tsx}", "*.config.{ts,js,mjs}"],
+      "project": ["**/*.{ts,tsx}"]
+    },
+    "apps/docs": {
+      "entry": [
+        "astro.config.mjs",
+        "src/content.config.ts",
+        "src/content.config.ts",
+        "src/**/*.astro",
+        "src/examples/**/*.{ts,tsx}"
+      ],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/playground/_shared": {
+      "entry": ["**/*.{ts,mjs,js}"],
+      "project": ["**/*.{ts,mjs,js}"]
+    },
+    "apps/playground/livekit-starters/*": {
+      "entry": ["src/**/*.{ts,tsx}", "*.config.{ts,js,mjs}", "eslint.config.ts"],
+      "project": ["**/*.{ts,tsx}"]
+    },
+    "apps/playground/transport-examples": {
+      "entry": ["**/*.{ts,tsx,mjs,js}"],
+      "project": ["**/*.{ts,tsx,mjs,js}"]
+    },
+    "apps/playground/transport-examples/smartpbx-bridge": {
+      "entry": ["**/*.{ts,mjs,js}"],
+      "project": ["**/*.{ts,mjs,js}"]
+    },
+    "apps/playground/*": {
+      "entry": ["**/*.{ts,tsx,mjs,js}"],
+      "project": ["**/*.{ts,tsx,mjs,js}"]
+    }
+  }
+}
