@@ -4,6 +4,7 @@ import type { voice } from '@livekit/agents';
 import type { IncomingMessage } from 'node:http';
 import { TwilioTransportAdapter } from './transport_adapter.js';
 import type { TwilioEvent } from './twilio_protocol.js';
+import { debug } from './debug.js';
 
 /**
  * Options for TwilioAgentServer
@@ -67,7 +68,7 @@ export class TwilioAgentServer {
 
     this.wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
       const callId = `call-${++this.callIdCounter}`;
-      console.log(`[TwilioServer] New connection: ${callId}`);
+      debug(`[TwilioServer] New connection: ${callId}`);
 
       const transport = new TwilioTransportAdapter({
         id: callId,
@@ -91,12 +92,12 @@ export class TwilioAgentServer {
 
           // Log events
           if (event.event === 'connected') {
-            console.log(`[TwilioServer] [${callId}] Connected to Twilio`);
+            debug(`[TwilioServer] [${callId}] Connected to Twilio`);
           } else if (event.event === 'start') {
             const streamSid = event.start?.streamSid ?? event.streamSid ?? '(missing)';
-            console.log(`[TwilioServer] [${callId}] Stream started: ${streamSid}`);
+            debug(`[TwilioServer] [${callId}] Stream started: ${streamSid}`);
           } else if (event.event === 'stop') {
-            console.log(`[TwilioServer] [${callId}] Stream stopped`);
+            debug(`[TwilioServer] [${callId}] Stream stopped`);
           }
 
           // Route to transport
@@ -116,7 +117,7 @@ export class TwilioAgentServer {
 
       // Handle disconnect
       ws.on('close', async () => {
-        console.log(`[TwilioServer] Connection closed: ${callId}`);
+        debug(`[TwilioServer] Connection closed: ${callId}`);
         await this.sessionManager.closeSession(callId).catch((err) => {
           console.error('[TwilioServer] Error closing session:', {
             error: err instanceof Error ? err.message : String(err),

@@ -17,6 +17,7 @@ import type {
   RealtimeEventMap,
 } from '@kuralle-agents/core/realtime';
 import { GEMINI_CAPABILITIES } from '../gemini/common.js';
+import { debug } from '../debug.js';
 import { encodeBase64Chunked, decodeBase64 } from './base64.js';
 import { decodeCFWorkerMessageData } from './ws-message.js';
 export { encodeBase64Chunked, decodeBase64 } from './base64.js';
@@ -223,14 +224,14 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
   // ─── Connect / disconnect ─────────────────────────────────────────────────
 
   async connect(config: RealtimeSessionConfig): Promise<void> {
-    console.log('[gemini-live] connect() entered');
+    debug('[gemini-live] connect() entered');
     const url = `${BIDI_URL}?key=${this.opts.apiKey ? '<present>' : '<MISSING>'}`;
-    console.log('[gemini-live] url (sanitized):', url.replace(/\?key=.*/, '?key=<redacted>'));
+    debug('[gemini-live] url (sanitized):', url.replace(/\?key=.*/, '?key=<redacted>'));
 
     const resp = (await fetch(`${BIDI_URL}?key=${this.opts.apiKey}`, {
       headers: { Upgrade: 'websocket' },
     })) as CFWorkerUpgradeResponse;
-    console.log('[gemini-live] fetch returned, status:', resp.status, 'hasWebSocket:', !!resp.webSocket);
+    debug('[gemini-live] fetch returned, status:', resp.status, 'hasWebSocket:', !!resp.webSocket);
 
     const ws = resp.webSocket;
     if (!ws) {
@@ -246,7 +247,7 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
     // for outbound WebSockets matches the browser default; Gemini sends text
     // frames that workerd wraps as Blob unless we override here).
     try { ws.binaryType = 'arraybuffer'; } catch { /* ignore if not settable */ }
-    console.log('[gemini-live] ws.accept() ok; binaryType=arraybuffer; attaching listeners');
+    debug('[gemini-live] ws.accept() ok; binaryType=arraybuffer; attaching listeners');
 
     let setupRejector: ((err: Error) => void) | null = null;
 
@@ -257,7 +258,7 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
     ws.addEventListener('close', (event: CFWorkerWebSocketCloseEvent) => {
       const code = event.code;
       const reason = event.reason;
-      console.log('[gemini-live] ws close: code=', code, 'reason=', reason);
+      debug('[gemini-live] ws close: code=', code, 'reason=', reason);
       this.ready = false;
       this.emit('disconnected');
       if (setupRejector) {
@@ -286,7 +287,7 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
     // Send setup frame and wait for setupComplete before acknowledging connect().
     const model = config.model ?? this.model;
     const setupFrame = buildSetupFrame(this.opts, config, model);
-    console.log('[gemini-live] sending setup frame, model:', model);
+    debug('[gemini-live] sending setup frame, model:', model);
     ws.send(JSON.stringify(setupFrame));
 
     await new Promise<void>((resolve, reject) => {
@@ -294,7 +295,7 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
       setupRejector = reject;
     });
     setupRejector = null;
-    console.log('[gemini-live] setupComplete received; ready');
+    debug('[gemini-live] setupComplete received; ready');
 
     this.ready = true;
 
@@ -367,12 +368,12 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
     // Enough to diagnose startup without flooding wrangler tail.
     if (this.frameLogCount < 3) {
       const preview = JSON.stringify(frame).slice(0, 300);
-      console.log(`[gemini-live] frame #${this.frameLogCount}:`, preview);
+      debug(`[gemini-live] frame #${this.frameLogCount}:`, preview);
       this.frameLogCount++;
     }
 
     if (frame.setupComplete) {
-      console.log('[gemini-live] setupComplete frame matched');
+      debug('[gemini-live] setupComplete frame matched');
       this.setupResolver?.();
       this.setupResolver = null;
     }
@@ -394,7 +395,7 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
         const data = part.inlineData?.data;
         // Log first two audio frames with mime for diagnosis of rate/format.
         if (mime && this.audioFrameLogCount < 2) {
-          console.log(`[gemini-live] audio frame mime=${mime}, base64 len=${data?.length ?? 0}`);
+          debug(`[gemini-live] audio frame mime=${mime}, base64 len=${data?.length ?? 0}`);
           this.audioFrameLogCount++;
         }
         if (mime?.startsWith('audio/pcm') && typeof data === 'string') {
@@ -471,7 +472,7 @@ export class CloudflareGeminiLiveClient implements RealtimeAudioClient {
       const preview = text.length > 600
         ? text.replace(/"data":"[A-Za-z0-9+/=]+"/g, '"data":"<base64 redacted>"').slice(0, 600)
         : text;
-      console.log(`[gemini-live] frame #${this.frameLogCount} preview:`, preview);
+      debug(`[gemini-live] frame #${this.frameLogCount} preview:`, preview);
       this.frameLogCount++;
     }
 

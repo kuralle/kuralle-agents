@@ -8,6 +8,7 @@
 import register from 'preact-custom-element';
 import { Widget, type WidgetProps } from './widget/Widget';
 import './widget/styles.css';
+import { debug } from './debug.js';
 
 const observedAttributes = [
   'agent-url',
@@ -53,7 +54,7 @@ if (typeof document !== 'undefined') {
 function initWidgets() {
   // Find all <kuralle-widget> elements and log initialization
   const widgets = document.querySelectorAll('kuralle-widget');
-  console.log(`[Kuralle] Initializing ${widgets.length} widget(s)`);
+  debug(`[Kuralle] Initializing ${widgets.length} widget(s)`);
 
   // The preact-custom-element register() handles the actual rendering
   // We just need to ensure the elements are in the DOM

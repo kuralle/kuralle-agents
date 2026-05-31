@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { debug } from '../debug.js';
 
 export interface AgentConfig {
   id: string;
@@ -140,7 +141,7 @@ export class WidgetClient {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          console.log("[Widget] Connected to agent");
+          debug("[Widget] Connected to agent");
           this.reconnectAttempts = 0;
           this.notifyConnectionChange(true);
           resolve();
@@ -158,7 +159,7 @@ export class WidgetClient {
           if (!this.disposed && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
             const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-            console.log(`[Widget] Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts})`);
+            debug(`[Widget] Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts})`);
             setTimeout(() => this.connectToAgent(), delay);
           }
         };
@@ -275,7 +276,7 @@ export class WidgetClient {
       } else if (data.type === "cancelled") {
         this.notifyProcessingChange(false);
       } else {
-        console.log("[Widget] Unknown message type:", data.type);
+        debug("[Widget] Unknown message type:", data.type);
       }
     } catch (error) {
       console.error("[Widget] Error parsing message:", event.data, error);
@@ -303,7 +304,7 @@ export class WidgetClient {
 
     // If agent is streaming, queue the message
     if (this.isAgentStreaming) {
-      console.log("[Widget] Agent is streaming, queuing message");
+      debug("[Widget] Agent is streaming, queuing message");
       this.messageQueue.push(content);
       this.notifyQueueChange(this.messageQueue.length);
       return;
@@ -330,13 +331,13 @@ export class WidgetClient {
     if (this.messageQueue.length === 1) {
       // Send single queued message
       const content = this.messageQueue.shift()!;
-      console.log("[Widget] Sending queued message:", content);
+      debug("[Widget] Sending queued message:", content);
       this.sendToAgent(content);
     } else {
       // Combine multiple messages into one
       const combinedContent = this.messageQueue.join("\n\n");
       this.messageQueue.length = 0; // Clear queue
-      console.log("[Widget] Sending combined queued messages:", combinedContent);
+      debug("[Widget] Sending combined queued messages:", combinedContent);
       this.sendToAgent(combinedContent);
     }
     this.notifyQueueChange(this.messageQueue.length);

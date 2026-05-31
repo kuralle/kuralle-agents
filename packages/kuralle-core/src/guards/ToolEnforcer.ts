@@ -4,6 +4,7 @@ import type {
   EnforcementRule,
   ToolCallRecord,
 } from '../types/index.js';
+import { debug } from '../debug.js';
 
 export class ToolEnforcer {
   private rules: EnforcementRule[] = [];
@@ -54,12 +55,12 @@ export class ToolEnforcer {
       const result = await Promise.resolve(rule.check(call, context));
 
       if (!result.allowed) {
-        console.log(`[Enforcement] Rule "${rule.name}" blocked ${call.toolName}: ${result.reason}`);
+        debug(`[Enforcement] Rule "${rule.name}" blocked ${call.toolName}: ${result.reason}`);
         return result;
       }
 
       if (result.reminder) {
-        console.log(`[Enforcement] Reminder for ${call.toolName}: ${result.reminder}`);
+        debug(`[Enforcement] Reminder for ${call.toolName}: ${result.reminder}`);
       }
     }
 

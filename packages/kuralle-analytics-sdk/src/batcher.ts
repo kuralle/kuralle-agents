@@ -11,6 +11,7 @@
  */
 
 import type { AnalyticsEvent } from "./schema.js";
+import { debug } from "./debug.js";
 
 export interface BatcherOptions {
   maxBatchSize: number;
@@ -60,7 +61,7 @@ export class Batcher {
 
   private async deliverWithRetry(events: AnalyticsEvent[], attempt: number): Promise<void> {
     if (this.options.enableDebug) {
-      console.log(`[Analytics] Flushing ${events.length} events (attempt ${attempt})`);
+      debug(`[Analytics] Flushing ${events.length} events (attempt ${attempt})`);
     }
     try {
       await this.options.onFlush(events);
