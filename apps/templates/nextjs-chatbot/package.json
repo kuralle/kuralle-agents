@@ -2,6 +2,7 @@
   "name": "@kuralle-templates/nextjs-chatbot",
   "version": "1.0.0",
   "private": true,
+  "description": "A Next.js chat app wired to a Kuralle agent — streaming UI, thread history, and Postgres-ready persistence.",
   "scripts": {
     "dev": "next dev --turbo",
     "build": "next build",
@@ -31,7 +32,7 @@
     "motion": "^12.23.26",
     "nanoid": "^5.1.3",
     "next": "16.2.0",
-    "next-themes": "^0.3.0",
+    "next-themes": "^0.4.6",
     "pg": "^8.16.3",
     "radix-ui": "^1.4.3",
     "react": "19.0.1",

@@ -1,24 +1,49 @@
 #!/usr/bin/env node
 /**
- * create-kuralle-agents — scaffold a new Kuralle project from a bundled template.
+ * create-kuralle-agents — scaffold a new Kuralle project from a template.
+ *
+ * Templates are fetched from the public `kuralle/starter` repo (via giget),
+ * pinned to the `vMAJOR.MINOR` tag that matches this CLI's own version — so a
+ * given create-kuralle-agents always pulls a compatible template set.
  *
  *   npm create kuralle-agents@latest [dir] [--template <id>]
  */
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { downloadTemplate } from '@bluwy/giget-core';
+import { existsSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const templatesDir = join(here, '..', 'templates');
+
+const { version } = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8')) as { version: string };
+const [major, minor] = version.split('.');
+const STARTER_REPO = 'kuralle/starter';
+const STARTER_REF = `v${major}.${minor}`;
 
 type ManifestEntry = { id: string; title: string; description: string };
 
-function loadManifest(): ManifestEntry[] {
-  const file = join(templatesDir, 'manifest.json');
-  if (!existsSync(file)) return [];
-  return JSON.parse(readFileSync(file, 'utf8')) as ManifestEntry[];
+// Offline fallback for the picker. The live manifest from the starter repo is
+// preferred (new templates show up without a CLI release); this list only kicks
+// in when GitHub is unreachable.
+const FALLBACK_MANIFEST: ManifestEntry[] = [
+  {
+    id: 'nextjs-chatbot',
+    title: 'Next.js Chatbot',
+    description: 'A Next.js chat app wired to a Kuralle agent — streaming UI, thread history, and Postgres-ready persistence.',
+  },
+];
+
+async function loadManifest(): Promise<ManifestEntry[]> {
+  try {
+    const url = `https://raw.githubusercontent.com/${STARTER_REPO}/${STARTER_REF}/manifest.json`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return (await res.json()) as ManifestEntry[];
+  } catch {
+    // offline / network error — fall through to the bundled fallback
+  }
+  return FALLBACK_MANIFEST;
 }
 
 function parseArgs(argv: string[]): { dir?: string; template?: string; help: boolean } {
@@ -37,8 +62,7 @@ function parseArgs(argv: string[]): { dir?: string; template?: string; help: boo
 
 function isEmptyDir(dir: string): boolean {
   if (!existsSync(dir)) return true;
-  const entries = readdirSync(dir).filter((e) => e !== '.git');
-  return entries.length === 0;
+  return readdirSync(dir).filter((e) => e !== '.git').length === 0;
 }
 
 function bail(message: string): never {
@@ -58,14 +82,15 @@ ${pc.bold('create-kuralle-agents')} — scaffold a new Kuralle project
 Options:
   -t, --template <id>   Template to use (skips the picker)
   -h, --help            Show this help
+
+Templates are fetched from ${pc.cyan(`github.com/${STARTER_REPO}`)} (${STARTER_REF}).
 `);
     return;
   }
 
-  const templates = loadManifest();
-  if (templates.length === 0) bail('No templates are bundled with this build of create-kuralle-agents.');
-
   p.intro(pc.bgCyan(pc.black(' create-kuralle-agents ')));
+
+  const templates = await loadManifest();
 
   // 1. Project directory
   let targetDir = dir;
@@ -103,18 +128,24 @@ Options:
     templateId = choice as string;
   }
 
-  // 3. Scaffold
+  // 3. Fetch + scaffold
   const s = p.spinner();
-  s.start(`Creating ${pc.cyan(projectName)} from ${pc.cyan(templateId)}`);
+  s.start(`Fetching ${pc.cyan(templateId)} from ${pc.dim(`${STARTER_REPO}#${STARTER_REF}`)}`);
+  try {
+    await downloadTemplate(`gh:${STARTER_REPO}/${templateId}#${STARTER_REF}`, {
+      dir: targetPath,
+      force: true,
+    });
+  } catch (err) {
+    s.stop(pc.red('Download failed'));
+    bail(
+      `Could not fetch the template from github.com/${STARTER_REPO} (${STARTER_REF}).\n` +
+        `${(err as Error).message}\n\n` +
+        `Check your network connection, or browse templates at https://github.com/${STARTER_REPO}.`,
+    );
+  }
 
-  const src = join(templatesDir, templateId);
-  mkdirSync(targetPath, { recursive: true });
-  cpSync(src, targetPath, {
-    recursive: true,
-    filter: (from) => basename(from) !== 'manifest.json',
-  });
-
-  // npm strips .gitignore from tarballs, so templates store it as _gitignore — restore it.
+  // npm/git tooling strips a real .gitignore, so templates store it as _gitignore — restore it.
   const gi = join(targetPath, '_gitignore');
   if (existsSync(gi)) renameSync(gi, join(targetPath, '.gitignore'));
 
