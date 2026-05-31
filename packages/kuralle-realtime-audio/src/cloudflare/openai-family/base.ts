@@ -41,6 +41,7 @@ import { OpenAIFamilySessionState } from './session-state.js';
 import { OpenAIFamilyMessageQueue } from './message-queue.js';
 import { encodeBase64Chunked, decodeBase64 } from '../base64.js';
 import { decodeCFWorkerMessageData } from '../ws-message.js';
+import { debug } from '../../debug.js';
 export { encodeBase64Chunked, decodeBase64 } from '../base64.js';
 
 const INPUT_RATE = 24000;
@@ -187,7 +188,7 @@ export class OpenAIFamilyRealtimeClient implements RealtimeAudioClient {
     const url = this.#profile.buildUrl(this.model);
     const subprotocols = this.#profile.buildSubprotocols(this.#opts.apiKey);
 
-    console.log(
+    debug(
       '[openai-family] connect(): provider=',
       this.provider,
       'model=',
@@ -251,7 +252,7 @@ export class OpenAIFamilyRealtimeClient implements RealtimeAudioClient {
         reject(new Error(`WebSocket closed during open handshake: code=${evt.code}`));
       });
     });
-    console.log('[openai-family] WS open');
+    debug('[openai-family] WS open');
 
     ws.addEventListener('message', (event) => {
       void this.#handleFrame(event);
@@ -259,7 +260,7 @@ export class OpenAIFamilyRealtimeClient implements RealtimeAudioClient {
     ws.addEventListener('close', (event: CFWorkerWebSocketCloseEvent) => {
       const code = event.code;
       const reason = event.reason;
-      console.log('[openai-family] ws close: code=', code, 'reason=', reason);
+      debug('[openai-family] ws close: code=', code, 'reason=', reason);
       this.#teardownSocket();
       this.#emit('disconnected');
       if (this.#sessionUpdatedRejector) {
@@ -300,7 +301,7 @@ export class OpenAIFamilyRealtimeClient implements RealtimeAudioClient {
       tools: config.tools,
     });
     this.#wsSendRaw(JSON.stringify(frame));
-    console.log('[openai-family] sent session.update, awaiting session.updated');
+    debug('[openai-family] sent session.update, awaiting session.updated');
 
     await new Promise<void>((resolve, reject) => {
       this.#sessionUpdatedResolver = resolve;
@@ -312,7 +313,7 @@ export class OpenAIFamilyRealtimeClient implements RealtimeAudioClient {
 
     this.#drainQueue();
     this.#scheduleRollover();
-    console.log('[openai-family] connect() complete, state=ACTIVE');
+    debug('[openai-family] connect() complete, state=ACTIVE');
   }
 
   async disconnect(): Promise<void> {
@@ -438,7 +439,7 @@ export class OpenAIFamilyRealtimeClient implements RealtimeAudioClient {
     const after = this.#opts.rolloverAfterMs ?? DEFAULT_ROLLOVER_MS;
     if (after <= 0) return;
     this.#rolloverTimer = setTimeout(() => {
-      console.log('[openai-family] rolloverDue fired after', after, 'ms');
+      debug('[openai-family] rolloverDue fired after', after, 'ms');
       this.#emit('rolloverDue');
     }, after);
   }
@@ -459,7 +460,7 @@ export class OpenAIFamilyRealtimeClient implements RealtimeAudioClient {
 
     if (this.#frameLogCount < 10) {
       const preview = JSON.stringify(frame).slice(0, 300);
-      console.log(`[openai-family] frame #${this.#frameLogCount} type=${canonical}:`, preview);
+      debug(`[openai-family] frame #${this.#frameLogCount} type=${canonical}:`, preview);
       this.#frameLogCount++;
     }
 

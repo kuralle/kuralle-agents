@@ -16,6 +16,7 @@ import {
   buildG711SdpAnswer,
   negotiateG711FromRemoteOffer,
 } from './sdp_g711.js';
+import { debug } from './debug.js';
 
 type NodeJsSipVoipCallback = (data: { type?: string; message?: string }) => void;
 
@@ -226,7 +227,7 @@ export class SIPSignaling {
           },
           (data: Parameters<NodeJsSipVoipCallback>[0]) => {
             if (data.type === 'UAS_READY') {
-              console.log(
+              debug(
                 `[SIPSignaling] UAS_READY - Server ready on ${this.localAddress}:${this.localPort}`,
               );
             }
@@ -292,7 +293,7 @@ export class SIPSignaling {
         return;
 
       case 'ACK':
-        console.log(`[SIPSignaling] ACK received for call: ${callId}`);
+        debug(`[SIPSignaling] ACK received for call: ${callId}`);
         return;
 
       case 'REGISTER':
@@ -300,7 +301,7 @@ export class SIPSignaling {
         return;
 
       default:
-        console.log(`[SIPSignaling] Event: ${method ?? 'UNKNOWN'}`);
+        debug(`[SIPSignaling] Event: ${method ?? 'UNKNOWN'}`);
         return;
     }
   }
@@ -367,7 +368,7 @@ export class SIPSignaling {
       negotiatedCodec,
     ).replace(/^[ \t]+/gm, '');
 
-    console.log(`[SIPSignaling] Received INVITE for call: ${callId}`);
+    debug(`[SIPSignaling] Received INVITE for call: ${callId}`);
 
     this.sendResponse(message, parsedHeaders, 100, 'Trying');
     this.sendResponse(message, parsedHeaders, 180, 'Ringing', {
@@ -422,7 +423,7 @@ export class SIPSignaling {
   ): Promise<void> {
     const parsedHeaders = this.parseHeaders(message.headers);
 
-    console.log(`[SIPSignaling] Received BYE for call: ${callId}`);
+    debug(`[SIPSignaling] Received BYE for call: ${callId}`);
 
     const call = this.activeCalls.get(callId);
     if (!call) {
@@ -542,7 +543,7 @@ export class SIPSignaling {
 
     this.sendToPeer(bye, call.responseHost, call.responsePort);
     this.activeCalls.delete(callId);
-    console.log(`[SIPSignaling] Sent BYE for call: ${callId}`);
+    debug(`[SIPSignaling] Sent BYE for call: ${callId}`);
   }
 
   async stop(): Promise<void> {
@@ -579,7 +580,7 @@ export class SIPSignaling {
     this.activeCalls.clear();
     this.pendingInvites.clear();
     this.ready = false;
-    console.log('[SIPSignaling] Stopped');
+    debug('[SIPSignaling] Stopped');
   }
 
   getRtpPort(callId: string): number | undefined {

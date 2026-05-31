@@ -32,6 +32,7 @@ import {
   sanitizeForClient,
   type StreamEventFilter,
 } from './streamFilter.js';
+import { debug } from './debug.js';
 
 type FlowStreamPart = {
   type: string;
@@ -588,7 +589,7 @@ export const createKuralleChatRouter = ({
 
       return {
         onOpen: async (_event, ws) => {
-          console.log(`[Kuralle] New widget connection: ${sessionId}`);
+          debug(`[Kuralle] New widget connection: ${sessionId}`);
 
           // Send connected message
           ws.send(

@@ -8,6 +8,7 @@
  */
 
 import type { AnalyticsEvent, VoiceCallData } from "./schema.js";
+import { debug } from "./debug.js";
 
 export interface Sink {
   /** Send a batch of events. Throw to trigger the batcher's retry path. */
@@ -41,7 +42,7 @@ export class HttpSink implements Sink {
 
   async sendVoiceCall(data: VoiceCallData): Promise<void> {
     if (this.options.enableDebug) {
-      console.log("[Analytics] Tracking voice call:", data.sessionId);
+      debug("[Analytics] Tracking voice call:", data.sessionId);
     }
     const response = await fetch(`${this.options.endpoint}/voice-call`, {
       method: "POST",
@@ -56,7 +57,7 @@ export class HttpSink implements Sink {
 
   async updateVoiceCall(sessionId: string, data: Partial<VoiceCallData>): Promise<void> {
     if (this.options.enableDebug) {
-      console.log("[Analytics] Updating voice call:", sessionId);
+      debug("[Analytics] Updating voice call:", sessionId);
     }
     const response = await fetch(`${this.options.endpoint}/voice-call/${sessionId}`, {
       method: "PUT",

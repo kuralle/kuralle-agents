@@ -1,6 +1,7 @@
 import { UA, WebSocketInterface } from 'jssip';
 import type { RTCSession } from 'jssip/lib/RTCSession.js';
 import type { JsSIPSignalingOptions, OnByeCallback, OnSessionCallback } from './types.js';
+import { debug } from '../debug.js';
 
 /**
  * SIP signaling/session lifecycle utility for SIP over WebSocket (JsSIP).
@@ -34,7 +35,7 @@ export class JsSIPSignaling {
     });
 
     this.ua.on('connected', () => {
-      console.log(`[JsSIPSignaling] Connected to SIP server: ${wsUrl}`);
+      debug(`[JsSIPSignaling] Connected to SIP server: ${wsUrl}`);
     });
 
     this.ua.on('disconnected', () => {
@@ -42,7 +43,7 @@ export class JsSIPSignaling {
     });
 
     this.ua.on('registered', () => {
-      console.log(`[JsSIPSignaling] Registered as: ${sipUri}`);
+      debug(`[JsSIPSignaling] Registered as: ${sipUri}`);
     });
 
     this.ua.on('registrationFailed', (event: unknown) => {

@@ -10,6 +10,7 @@ import type {
   RealtimeEventMap,
 } from '@kuralle-agents/core/realtime';
 import { GEMINI_CAPABILITIES } from '../gemini/common.js';
+import { debug } from '../debug.js';
 
 const DEFAULT_MODEL = 'gemini-3.1-flash-live-preview';
 const SAMPLE_RATE = 24000;
@@ -200,7 +201,7 @@ export class GeminiLiveSession implements RealtimeAudioClient {
       liveConfig.sessionResumption = { handle: this.resumptionHandle };
     }
 
-    console.log('[GeminiLiveSession] Connecting with config:', {
+    debug('[GeminiLiveSession] Connecting with config:', {
       model,
       promptLength: promptText.length,
       toolCount: tools?.length ?? 0,
@@ -236,7 +237,7 @@ export class GeminiLiveSession implements RealtimeAudioClient {
           }
           // Do not clear _postReconfigure* in an else branch — the SDK may call
           // onopen more than once; clearing would drop the post-reconnect retry budget.
-          console.log('[GeminiLiveSession] Connection opened');
+          debug('[GeminiLiveSession] Connection opened');
         },
         onmessage: (message: unknown) => {
           if (connectionGeneration !== this.liveConnectionGeneration) return;
@@ -251,7 +252,7 @@ export class GeminiLiveSession implements RealtimeAudioClient {
         onclose: () => {
           if (connectionGeneration !== this.liveConnectionGeneration) return;
           this._connected = false;
-          console.log(`[GeminiLiveSession] Connection closed (reconfiguring=${this._reconfiguring})`);
+          debug(`[GeminiLiveSession] Connection closed (reconfiguring=${this._reconfiguring})`);
 
           if (this._reconfiguring) {
             return;

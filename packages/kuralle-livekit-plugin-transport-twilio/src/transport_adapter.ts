@@ -19,6 +19,7 @@ import { TransportAdapterBase } from '@kuralle-agents/transport-base';
 import { TwilioAudioInput } from './audio_input.js';
 import { TwilioAudioOutput } from './audio_output.js';
 import { TwilioTextOutput } from './text_output.js';
+import { debug } from './debug.js';
 
 export interface TwilioTransportOptions {
   id?: string;
@@ -88,12 +89,12 @@ export class TwilioTransportAdapter extends TransportAdapterBase {
           break;
 
         case 'connected':
-          console.log('[TwilioTransport] Connected to Twilio Media Streams');
+          debug('[TwilioTransport] Connected to Twilio Media Streams');
           break;
 
         case 'start':
           this._streamSid = event.start?.streamSid || event.streamSid || '';
-          console.log('[TwilioTransport] Stream started:', {
+          debug('[TwilioTransport] Stream started:', {
             streamSid: this._streamSid,
             callSid: event.start?.callSid,
             tracks: event.start?.tracks,
@@ -102,23 +103,23 @@ export class TwilioTransportAdapter extends TransportAdapterBase {
 
         case 'stop':
         case 'disconnected':
-          console.log('[TwilioTransport] Stream ended:', this._streamSid);
+          debug('[TwilioTransport] Stream ended:', this._streamSid);
           this.audioInput.endCurrentStreamPublic();
           this._streamSid = '';
           void this.close();
           break;
 
         case 'clear':
-          console.log('[TwilioTransport] Clear audio buffer requested');
+          debug('[TwilioTransport] Clear audio buffer requested');
           this.audioOutput.clearBuffer();
           break;
 
         case 'mark':
-          console.log('[TwilioTransport] Received mark:', event.mark?.name);
+          debug('[TwilioTransport] Received mark:', event.mark?.name);
           break;
 
         default:
-          console.log('[TwilioTransport] Unknown event:', event.event);
+          debug('[TwilioTransport] Unknown event:', event.event);
       }
     } catch (error) {
       console.error('[TwilioTransport] Error handling message:', {

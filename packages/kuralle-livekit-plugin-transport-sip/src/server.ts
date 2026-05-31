@@ -29,6 +29,7 @@ import type { Codec } from '@kuralle-agents/transport-base/codec/g711';
 import { SIPSignaling } from './sip_signaling.js';
 import type { SIPServerOptions, SIPTransport } from './types.js';
 import { createSipNativeAudioTransport } from './native_bridge.js';
+import { debug } from './debug.js';
 
 /**
  * Optional event sink for AgentSession events in realtime mode.
@@ -198,7 +199,7 @@ export class SIPAgentServer {
 
     this.nativeSessions.set(callId, { handle, transport: nativeTransport });
 
-    console.log(`[SIPAgentServer] native session started for call: ${callId}`);
+    debug(`[SIPAgentServer] native session started for call: ${callId}`);
     return handle;
   }
 
@@ -297,7 +298,7 @@ export class SIPAgentServer {
 
     this.realtimeSessions.set(callId, { session, close: closeRealtimeSession });
 
-    console.log(`[SIPAgentServer] realtime session started for call: ${callId}`);
+    debug(`[SIPAgentServer] realtime session started for call: ${callId}`);
     return session;
   }
 
@@ -338,11 +339,11 @@ export class SIPAgentServer {
    */
   async listen(): Promise<void> {
     const transportName = this.transportType === 'websocket' ? 'WebSocket' : 'UDP';
-    console.log(`[SIPAgentServer] Starting SIP server using ${transportName} transport`);
+    debug(`[SIPAgentServer] Starting SIP server using ${transportName} transport`);
 
     await this.signaling.start(
       async (callId, remoteSdp, rtpPort, negotiatedCodec) => {
-        console.log(`[SIPAgentServer] Creating transport for call: ${callId} on RTP port ${rtpPort}`);
+        debug(`[SIPAgentServer] Creating transport for call: ${callId} on RTP port ${rtpPort}`);
 
         // Create transport with the allocated RTP port and remote SDP
         const transport = this.createTransport(
@@ -368,12 +369,12 @@ export class SIPAgentServer {
       },
       async (callId) => {
         // Handle BYE from remote party
-        console.log(`[SIPAgentServer] Remote party hung up call: ${callId}`);
+        debug(`[SIPAgentServer] Remote party hung up call: ${callId}`);
         await this.cleanupCall(callId, 'remote_hangup');
       }
     );
 
-    console.log(`[SIPAgentServer] Listening for calls (${transportName})`);
+    debug(`[SIPAgentServer] Listening for calls (${transportName})`);
   }
 
   /**

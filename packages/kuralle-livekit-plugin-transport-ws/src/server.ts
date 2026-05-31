@@ -9,6 +9,7 @@ import { WebSocketTransportAdapter } from './transport_adapter.js';
 import { bridgeWebSocketToRealtimeTransport } from './realtime_bridge.js';
 import { parseClientMessage, serializeServerMessage, type ServerMessage } from './protocol.js';
 import type { WebSocketServerOptions } from './types.js';
+import { debug } from './debug.js';
 
 /**
  * Options for starting a native audio session through VoiceCallSession.
@@ -345,7 +346,7 @@ export class WebSocketAgentServer {
               timestamp: new Date().toISOString(),
             });
           } else if (binaryMessageCount % 100 === 0) {
-            console.debug('[WebSocketServer] binary audio packet progress', {
+            debug('[WebSocketServer] binary audio packet progress', {
               adapterId: adapter.id,
               count: binaryMessageCount,
               bytes: data.byteLength,
