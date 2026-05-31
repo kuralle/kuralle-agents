@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/hono-server",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Hono router for hosting Kuralle createRuntime() over HTTP, SSE, and WebSocket",
   "type": "module",
   "main": "dist/index.js",
