@@ -150,6 +150,27 @@ Local tools are now **first-class**: validated, interim-capable, paired, and dur
 identical to registry tools. Result: conformance 6/6, **full core suite 362 pass / 0 fail**
 (was 360/2), build + typecheck:all green. No workaround — the bypass is gone.
 
+### D8 — apps/docs hygiene + public-readiness slop sweep
+- **apps/docs:** removed dead `@astrojs/starlight-tailwind` (Tailwind-v4 migration leftover);
+  declared the 4 doc-example deps (`hono`/`@hono/node-server`/`@hono/node-ws`/`redis`) that
+  `src/examples/*` import; knip `ignoreDependencies` for config-used deps it can't trace
+  (typedoc string-plugins, tailwindcss CSS directives, prettier plugin, dynamic playground
+  providers). **knip is now fully clean: 0 deps / 0 devDeps / 0 unlisted / 0 unused-files.**
+- **Slop sweep (going public):** scan came back clean — **0** TODO/FIXME/HACK/XXX, **0** `@ts-ignore`,
+  **0** `debugger`, **0** test `.only`/`.skip`, **0** tracked `.env`/`.map`, no secrets, no editor junk.
+  The 3 `@ts-expect-error` are all justified-with-comments (AI SDK overload limitation, CF workerd
+  WebSocket) — kept.
+- **The one real finding — operational console logging:** 62 `console.log/.debug` in published
+  library code printed to consumer stdout unconditionally (worst: `gemini-live` logged every WS
+  frame). Added a per-package `debug()` gate (no-op unless `KURALLE_DEBUG` set) and routed them all
+  through it across 8 packages; kept `console.warn/.error` and intentional console output (CLI
+  scaffolder, logging/observability hooks, eval runner). Silent-by-default for consumers, full
+  traces on demand. No test asserts console, so behaviour-preserving.
+- **Untracked local clutter (NOT in git → won't go public, left as-is):** a stray
+  `packages/ariaflow-core/rfcs/` (rename leftover) and `apps/docs/DOCS-CONTENT-AUDIT.md`.
+- **Process docs** (`implementation-notes.md`, `HANDOFF.md`) are tracked engineering records, not
+  product — fine to keep or `git rm`/gitignore before the public flip; owner's call.
+
 ## Final state
 - `bun run typecheck:all` → green (57 framework configs + 7 playground configs + eslint).
 - `bun run build:packages` → green (0 TS errors).
