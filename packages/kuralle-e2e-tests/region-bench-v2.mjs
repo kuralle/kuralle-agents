@@ -10,7 +10,7 @@ import WebSocket from 'ws';
 import { readFileSync } from 'node:fs';
 
 const URL = 'wss://kuralle-voice-agent.fly.dev';
-const PCM = readFileSync('/Users/mithushancj/Documents/asyncdot/openscoped/aria-flow/packages/kuralle-e2e-tests/fixtures/bench_hello.pcm');
+const PCM = readFileSync(new URL('./fixtures/bench_hello.pcm', import.meta.url));
 const REGIONS = ['iad', 'sin'];
 const TURNS_PER_REGION = 4;
 const SILENCE_MS = 250;

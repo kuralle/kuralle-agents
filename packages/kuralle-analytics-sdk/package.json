@@ -30,7 +30,12 @@
     "sdk",
     "telemetry"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuralle/kuralle-agents.git",
+    "directory": "packages/kuralle-analytics-sdk"
+  },
   "dependencies": {
     "zod": "^3.24.0"
   },

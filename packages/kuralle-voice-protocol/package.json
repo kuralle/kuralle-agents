@@ -8,7 +8,12 @@
     "kuralle",
     "cloudflare-voice"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuralle/kuralle-agents.git",
+    "directory": "packages/kuralle-voice-protocol"
+  },
   "publishConfig": {
     "access": "public"
   },

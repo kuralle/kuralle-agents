@@ -1,6 +1,7 @@
 {
   "private": true,
   "name": "@kuralle-agents/docs",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
