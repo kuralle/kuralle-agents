@@ -50,3 +50,31 @@ knip didn't scan) and **17 candidate-dead**. After a second grep pass (tsconfig 
   types. Removed both; gate stayed green → confirmed dead. (If the gate had broken, they'd be restored.)
 
 **ADDED:** `dotenv` as a **devDependency** of `kuralle-realtime-audio` (knip "unlisted" — imported in `test/gemini-live-e2e.ts` but undeclared).
+
+### D2 — knip config + completing the dead-files pass (Task 21)
+- Authored `knip.json` with accurate per-workspace entries (examples, test/tests, scripts, bench,
+  client, servers, harness, sandbox-poc, `*.smoke.ts`, `*.test.mjs`, root-level `*.mjs` benches).
+  Result: example/test/bench false-positive **file** flags went 60→0, and the **framework
+  (packages/\*) + root dependency report is now completely clean**. Configured docs says
+  configured `entry` *overrides* defaults (not merged), so src entries are listed explicitly;
+  `includeEntryExports` left off so public-API exports in entry files aren't flagged.
+- `ignoreDependencies` at root: `wrangler` (cf-agent example deploys), `@eslint/js` + `ws`
+  (hoisted shared devtools used by workspaces/playground; root eslint.config uses only
+  `typescript-eslint` and ignores `apps/**`, but the livekit-starter's own eslint config uses
+  `@eslint/js`). `ignoreBinaries: ["napi"]` (wavekat-vad-node build).
+- **Caught 2 dead barrels my first dead-files pass wrongly kept:** `kuralle-core/src/flow/index.ts`
+  and `kuralle-livekit-plugin/src/metrics/index.ts`. The earlier "20/4 importers" was a **regex
+  artifact** — that grep matched `src/types/flow.js` and `flow/classifyControl.js` (deep files),
+  not the barrels. No file imports either barrel; their symbols are imported directly from the
+  deep source files. Deleted both. **Lesson: trust a configured tool's module resolution over a
+  hand-rolled import-regex for barrel reachability.**
+
+### D3 — Redundant devDependency duplicates (Task 4 completion)
+Removed 9 devDep entries that duplicated a `dependencies` entry in the same manifest (provably
+safe — `dependencies` are installed in all contexts, so the devDep copy is pure redundancy):
+`hono-server` (core, ai), `messaging` (core), `messaging-meta` (http-client, messaging),
+`postgres-store` (core), `redis-store` (core), `tools` (core, rag), plus `widget`'s genuinely-dead
+`convex` (only an unrelated `'convex-dev'` string in vite config). Section-aware removal kept the
+`dependencies` copies intact. The peer-backing devDeps (in `peerDependencies`+`devDependencies`
+but NOT `dependencies`, e.g. `rag` in the stores) were **left intact** — removing them would
+unbind the peer for local builds. typecheck:all green.

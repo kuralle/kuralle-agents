@@ -20,7 +20,6 @@
     "pg": "^8.0.0"
   },
   "devDependencies": {
-    "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/rag": "workspace:*",
     "@types/node": "^20.11.0",
     "@types/pg": "^8.11.0",
