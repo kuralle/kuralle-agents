@@ -7,13 +7,12 @@
     "create-kuralle-agents": "dist/index.js"
   },
   "files": [
-    "dist",
-    "templates"
+    "dist"
   ],
   "scripts": {
-    "sync-templates": "tsx scripts/sync-templates.ts",
+    "build-starter": "tsx scripts/build-starter.ts",
     "build": "tsc -p tsconfig.json",
-    "prepublishOnly": "npm run sync-templates && npm run build"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "kuralle",
@@ -24,6 +23,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@bluwy/giget-core": "^0.1.7",
     "@clack/prompts": "^0.11.0",
     "picocolors": "^1.1.1"
   },
