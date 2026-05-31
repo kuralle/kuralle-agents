@@ -29,6 +29,25 @@ async function bindSocket(socket: dgram.Socket, port: number): Promise<void> {
   });
 }
 
+function boundPort(socket: dgram.Socket): number {
+  return (socket.address() as { port: number }).port;
+}
+
+// Allocate a currently-free UDP port by binding to 0 and releasing it. The
+// server needs a known port before SIPSignaling starts; clients bind ephemerally
+// instead. This replaces a `pid + random` base-port scheme that collided when Bun
+// runs the UDP-binding SIP test files in the same process (shared pid → low entropy),
+// which surfaced as "received 0 messages" flakes in the full suite.
+async function getFreeUdpPort(): Promise<number> {
+  const socket = dgram.createSocket('udp4');
+  try {
+    await bindSocket(socket, 0);
+    return boundPort(socket);
+  } finally {
+    await closeSocket(socket);
+  }
+}
+
 function waitForMessages(
   store: ReceivedMessage[],
   count: number,
@@ -129,10 +148,9 @@ afterEach(async () => {
 
 describe('SIPSignaling UDP integration', () => {
   it('handles pending and established dialog flows over real UDP', async () => {
-    const basePort = 43000 + ((process.pid + Math.floor(Math.random() * 100)) % 500) * 4;
-    const cancelClientPort = basePort;
-    const inviteClientPort = basePort + 2;
-    const serverPort = basePort + 1;
+    // Ports are allocated collision-free: clients bind ephemerally (read back via
+    // boundPort), the server uses a probed free port. No shared fixed ports across
+    // parallel test files.
     const cancelCallId = 'call-udp-cancel';
     const inviteCallId = 'call-udp-1';
     const cancelReceived: ReceivedMessage[] = [];
@@ -147,7 +165,8 @@ describe('SIPSignaling UDP integration', () => {
         port: rinfo.port,
       });
     });
-    await bindSocket(cancelClient, cancelClientPort);
+    await bindSocket(cancelClient, 0);
+    const cancelClientPort = boundPort(cancelClient);
 
     const inviteClient = createUdpSocket();
     inviteClient.on('message', (msg, rinfo) => {
@@ -157,8 +176,10 @@ describe('SIPSignaling UDP integration', () => {
         port: rinfo.port,
       });
     });
-    await bindSocket(inviteClient, inviteClientPort);
+    await bindSocket(inviteClient, 0);
+    const inviteClientPort = boundPort(inviteClient);
 
+    const serverPort = await getFreeUdpPort();
     const signaling = new SIPSignaling({
       localAddress: '127.0.0.1',
       sipPort: serverPort,
