@@ -1,22 +1,27 @@
 {
   "name": "@kuralle-agents/analytics-sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Type-safe SDK for sending analytics events to Kuralle Analytics Platform",
   "exports": {
-    ".": "./src/index.ts",
-    "./react": "./src/react.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    }
   },
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "prebuild": "rm -rf dist",
-    "build": "~/.bun/bin/bun build ./src/index.ts ./src/react.ts --outdir ./dist --target bun --minify --sourcemap --external react",
-    "dev": "~/.bun/bin/bun build ./src/index.ts ./src/react.ts --outdir ./dist --target bun --watch --external react",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
     "test": "bun test test"
   },
   "files": [
-    "src",
     "dist"
   ],
   "keywords": [
