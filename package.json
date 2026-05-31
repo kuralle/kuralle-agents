@@ -16,9 +16,7 @@
     "apps/playground/_shared",
     "apps/playground/acme-support-agent",
     "apps/playground/langfuse-demo",
-    "apps/playground/gemini-voice-agent",
-    "apps/templates/*",
-    "apps/templates/_shared/*"
+    "apps/playground/gemini-voice-agent"
   ],
   "scripts": {
     "build": "bun run build:packages",
