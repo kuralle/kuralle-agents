@@ -51,7 +51,8 @@
     },
     "apps/playground/transport-examples": {
       "entry": ["**/*.{ts,tsx,mjs,js}"],
-      "project": ["**/*.{ts,tsx,mjs,js}"]
+      "project": ["**/*.{ts,tsx,mjs,js}"],
+      "ignoreDependencies": ["@ai-sdk/google"]
     },
     "apps/playground/transport-examples/smartpbx-bridge": {
       "entry": ["**/*.{ts,mjs,js}"],
@@ -59,7 +60,16 @@
     },
     "apps/playground/*": {
       "entry": ["**/*.{ts,tsx,mjs,js}"],
-      "project": ["**/*.{ts,tsx,mjs,js}"]
+      "project": ["**/*.{ts,tsx,mjs,js}"],
+      "ignoreDependencies": [
+        "@ai-sdk/google",
+        "@ai-sdk/openai",
+        "@livekit/agents-plugin-deepgram",
+        "@hono/node-ws",
+        "@kuralle-playground/shared",
+        "@kuralle-agents/core",
+        "ai"
+      ]
     }
   }
 }

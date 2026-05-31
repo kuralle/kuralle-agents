@@ -111,3 +111,28 @@ flags exports re-exported from entry files, so a flagged symbol is provably not 
 had failed with "No packages matched the filter" since commit `bc30551`. Removed the stale T6
 tier. `bun run build:packages` now exits 0. Not one of the three assigned tasks, but a five-minute
 tie-off of a broken build I hit while verifying the export work.
+
+### D6 — Playground gate (Task 23) + apps/* dep decision
+- Added `scripts/typecheck-playground.sh` (sweeps all 7 `apps/playground/*` tsconfigs) and wired it
+  into `typecheck:all` (+ standalone `typecheck:playground`). All 7 were already green; proven to
+  catch a planted type error. This closes the rot hole (the framework sweep only scans `packages/`).
+- **apps/\* unused deps — deliberately NOT removed.** The improved knip config surfaced ~15 "unused"
+  deps in the demo apps. I grep-verified every one: they are **dynamic-runtime deps static analysis
+  can't see** — `@ai-sdk/*` providers are chosen at runtime by `resolveTemplateModel`'s
+  xAI→Google→OpenAI key-presence logic (see CLAUDE.md gotcha), `@livekit/agents-plugin-*` are loaded
+  by name, `@hono/node-*` run the demo servers — plus genuine config deps (typedoc plugins, tailwind,
+  `@trivago/prettier-plugin`, opusscript). Removing them would break demos at *runtime* (uncaught by
+  typecheck). Correct call: keep them, and teach knip via `ignoreDependencies` on the playground
+  workspaces so the report stays signal. The **framework (`packages/*`) dep report is now 100% clean.**
+- **Known-benign remainder** (documented, not fixed — `apps/docs` is a separate deployable, not the
+  framework): 4 docs build-tool deps (typedoc/tailwind/starlight) that knip's plugin detection misses,
+  and 4 "unlisted" imports in `apps/docs/src/examples/*` (hono/redis/@hono-node-*) — doc example code
+  that demonstrates framework usage and resolves via workspace hoisting. Left for a docs-scoped pass.
+
+## Final state
+- `bun run typecheck:all` → green (57 framework configs + 7 playground configs + eslint).
+- `bun run build:packages` → green (0 TS errors).
+- knip framework report: 0 dep/devDep/unlisted flags. Remaining export/type flags (45/31) are
+  documented-intentional (sub-module re-export barrels + the unwired `openai-family` subtree).
+- Commits: deps prune, knip config + 2 barrels + redundant devDeps, dead-export pass + build fix,
+  playground gate.
