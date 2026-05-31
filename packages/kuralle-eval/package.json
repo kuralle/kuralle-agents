@@ -1,5 +1,11 @@
 {
   "name": "@kuralle-agents/eval",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuralle/kuralle-agents.git",
+    "directory": "packages/kuralle-eval"
+  },
   "version": "0.2.0",
   "description": "Deterministic conversation replay and assertions for Kuralle transcripts",
   "type": "module",

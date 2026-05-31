@@ -49,7 +49,7 @@ If you use a `.env` loader in your shell profile, keep the same keys.
 From repo root:
 
 ```bash
-cd /Users/mithushancj/Documents/asyncdot/openscoped/aria-flow
+cd kuralle-agents
 bun install
 ```
 

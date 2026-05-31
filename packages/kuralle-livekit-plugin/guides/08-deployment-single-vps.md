@@ -103,7 +103,7 @@ After=network.target
 [Service]
 Type=simple
 User=kuralle
-WorkingDirectory=/opt/aria-flow
+WorkingDirectory=/opt/kuralle
 Environment=NODE_ENV=production
 Environment=LOG_LEVEL=info
 EnvironmentFile=/etc/kuralle/twilio-edge.env

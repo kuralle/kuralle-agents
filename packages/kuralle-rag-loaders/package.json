@@ -1,5 +1,11 @@
 {
   "name": "@kuralle-agents/rag-loaders",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuralle/kuralle-agents.git",
+    "directory": "packages/kuralle-rag-loaders"
+  },
   "version": "0.2.0",
   "description": "Document loaders for Kuralle RAG pipelines (INGESTION-TIME ONLY \u2014 never import at runtime)",
   "type": "module",

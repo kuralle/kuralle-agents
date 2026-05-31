@@ -45,3 +45,8 @@ cloudflare-research/
 .next/
 .wrangler/
 dump.rdb
+
+# worker/agent artifacts + binaries (public-readiness)
+.antigravitycli/
+*.done
+*.zip

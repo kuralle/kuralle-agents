@@ -20,7 +20,7 @@
     "template",
     "ai-agents"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@bluwy/giget-core": "^0.1.7",
     "@clack/prompts": "^0.11.0",
