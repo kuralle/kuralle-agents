@@ -50,3 +50,7 @@ dump.rdb
 .antigravitycli/
 *.done
 *.zip
+
+# session/process docs — kept locally, not shipped public
+HANDOFF.md
+implementation-notes.md
