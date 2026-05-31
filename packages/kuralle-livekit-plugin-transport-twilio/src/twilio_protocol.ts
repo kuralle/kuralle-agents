@@ -12,7 +12,7 @@
 /**
  * Twilio Media Streams event types.
  */
-export type TwilioEventType =
+type TwilioEventType =
   | 'connected'
   | 'start'
   | 'media'

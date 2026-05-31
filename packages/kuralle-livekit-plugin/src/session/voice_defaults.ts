@@ -27,7 +27,7 @@ import type { voice } from '@livekit/agents';
  * Sensible voice-optimized defaults. The caller's options override these
  * via spread: { ...VOICE_DEFAULTS.voiceOptions, ...userOptions.voiceOptions }
  */
-export const VOICE_OPTIMIZED_VOICE_OPTIONS: Partial<voice.VoiceOptions> = {
+const VOICE_OPTIMIZED_VOICE_OPTIONS: Partial<voice.VoiceOptions> = {
   allowInterruptions: true,
   minInterruptionDuration: 500,
   minInterruptionWords: 0,

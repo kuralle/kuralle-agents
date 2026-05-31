@@ -27,7 +27,7 @@ export interface TurnResult {
 
 export type UserSignal = { type: 'message'; input: string };
 
-export interface ToolResultRecord {
+interface ToolResultRecord {
   name: string;
   args: unknown;
   result: unknown;

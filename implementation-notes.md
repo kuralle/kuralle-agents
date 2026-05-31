@@ -78,3 +78,36 @@ safe — `dependencies` are installed in all contexts, so the devDep copy is pur
 `dependencies` copies intact. The peer-backing devDeps (in `peerDependencies`+`devDependencies`
 but NOT `dependencies`, e.g. `rag` in the stores) were **left intact** — removing them would
 unbind the peer for local builds. typecheck:all green.
+
+### D4 — Dead exports: read-and-judge (Task 22)
+knip flagged 127 unused export/type symbols. Verified each by actual usage. **No package uses
+wildcard (`./*`) exports**, so internal-file exports are not consumer-reachable — and knip never
+flags exports re-exported from entry files, so a flagged symbol is provably not public-API. Split:
+- **68 used-elsewhere** (real import refs) — kept. These include the sub-module re-export barrels
+  (`tools/effect/index.ts`, `runtime/channels/index.ts`, `runtime/grounding/index.ts`) whose
+  symbols are imported via direct deep paths rather than through the barrel, and the
+  **`openai-family` cloudflare-realtime subtree (29 symbols)** which is a *deliberate unwired
+  capability* (it has its own `__tests__`) under the project's separate "wire-or-remove" review
+  (`.handoff/recon/SYNTHESIS.md`) — NOT janitorial dead code. Left intact + flagged here.
+- **20 truly-dead → deleted** (zero refs anywhere): `toNullableSchema`, `renderNodePrompt`,
+  `sanitizeFlowControlSignal` (+ its orphan `FlowTransitionContinuation`), `mergeVoiceToolDefs`,
+  the `buildVoiceNodePrompt` re-export alias, the 5-symbol unwired `pending-citations`-on-messages
+  cluster, `ContextOverflowUnrecoverableError` + `isApiCallContextOverflow`, 4 unused policy
+  builders, 2 dead cf-agent test stubs, and the `Tool.ts` runtime-context cluster (3). Orphaned
+  imports cleaned (`FlowPromptContext`, `Session`, `APICallError`, `EnforcementRule`, `Runtime`, 4
+  policy types). ~441 lines removed.
+- **31 used-only-intra-file → demoted** (removed `export`, kept the symbol private).
+- **Supporting-type trap:** my first intra-usage heuristic wrongly marked `BrandVoiceTemplate`,
+  `ToolExecutionContextWithRuntime` for deletion — they're referenced by *other* exported
+  declarations. Re-verified with a supporting-type-aware check; `BrandVoiceTemplate` is a knip
+  false positive (kept exported); `ToolExecutionContextWithRuntime`'s only users were themselves
+  deleted (so it went too). A full **declaration-emit build** (`build:packages`, not just
+  `--noEmit`) was the arbiter for `TS4023` "using private name" — none surfaced. knip
+  exports 80→45, types 47→31 (the remainder are the intentional barrels + the kept unwired subtree).
+
+### D5 — Fixed pre-existing broken `bun run build` (encountered during verification)
+`scripts/build-packages.sh` line 25 (`tier studio e2e-tests`) referenced `@kuralle-agents/studio`
+(dropped in the rebrand — no such package) and `e2e-tests` (no build step), so `bun run build`
+had failed with "No packages matched the filter" since commit `bc30551`. Removed the stale T6
+tier. `bun run build:packages` now exits 0. Not one of the three assigned tasks, but a five-minute
+tie-off of a broken build I hit while verifying the export work.

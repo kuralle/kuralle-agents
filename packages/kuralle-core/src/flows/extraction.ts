@@ -57,24 +57,6 @@ export function toExtractionSubmissionSchema(schema: ZodTypeAny): ZodTypeAny {
   return schema.nullable().optional();
 }
 
-/**
- * Build a nullable schema for extraction model calls.
- *
- * This matches the text extraction behavior: unknown fields should come back
- * as null instead of being forced into placeholder strings.
- */
-export function toNullableSchema(schema: ZodTypeAny): ZodTypeAny {
-  if (schema instanceof z.ZodObject) {
-    const nullableShape: Record<string, ZodTypeAny> = {};
-    for (const [key, fieldSchema] of Object.entries(schema.shape)) {
-      nullableShape[key] = (fieldSchema as ZodTypeAny).nullable();
-    }
-    return z.object(nullableShape);
-  }
-
-  return schema;
-}
-
 export function mergeExtractionData(
   current: Record<string, unknown>,
   extracted: Record<string, unknown> | null | undefined

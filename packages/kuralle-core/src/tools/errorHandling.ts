@@ -109,7 +109,7 @@ export async function executeWithRetry<T>(
   throw lastError;
 }
 
-export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export function createCircuitBreaker<T, Args extends unknown[]>(
   fn: (...args: Args) => Promise<T>,

@@ -6,7 +6,7 @@ export function findStepByKey(steps: StepRecord[], key: string): StepRecord | un
   return steps.find((step) => step.key === key);
 }
 
-export function findStepBySignalId(steps: StepRecord[], signalId: string): StepRecord | undefined {
+function findStepBySignalId(steps: StepRecord[], signalId: string): StepRecord | undefined {
   return steps.find((step) => step.signalId === signalId);
 }
 

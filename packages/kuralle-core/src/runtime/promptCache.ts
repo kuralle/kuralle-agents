@@ -27,7 +27,7 @@ import type { ModelMessage } from 'ai';
 
 export type AnthropicCacheTtl = '5m' | '1h';
 
-export interface AnthropicCacheControl {
+interface AnthropicCacheControl {
   type: 'ephemeral';
   ttl?: '1h'; // '5m' is implicit when omitted
 }

@@ -14,7 +14,7 @@ export interface StepRecord {
   finishedAt?: number;
 }
 
-export interface WaitingFor {
+interface WaitingFor {
   signalName: string;
   callsite: string;
   deadline?: number;
