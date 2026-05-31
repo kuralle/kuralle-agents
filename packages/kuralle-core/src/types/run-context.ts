@@ -7,6 +7,7 @@ import type { HarnessStreamPart } from './stream.js';
 import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { Limits } from './guardrails.js';
+import type { AnyTool } from './effectTool.js';
 
 export interface EffectToolExecutor {
   execute(args: {
@@ -15,6 +16,8 @@ export interface EffectToolExecutor {
     session: Session;
     toolCallId?: string;
     abortSignal?: AbortSignal;
+    toolCtx?: ToolContext;
+    def?: AnyTool;
   }): Promise<unknown>;
 }
 
@@ -49,7 +52,7 @@ export interface RunContext {
   bargeIn?: AbortSignal;
   abortSignal?: AbortSignal;
   telemetry?: TelemetrySettings;
-  tool(name: string, args: unknown, options?: { toolCallId?: string }): Promise<unknown>;
+  tool(name: string, args: unknown, options?: { toolCallId?: string; def?: AnyTool; toolCtx?: ToolContext }): Promise<unknown>;
   approve(req: { title: string; description?: string }): Promise<{ approved: boolean; by?: string }>;
   signal(name: string, opts?: { deadline?: number; meta?: Record<string, unknown> }): Promise<unknown>;
   now(): Promise<number>;

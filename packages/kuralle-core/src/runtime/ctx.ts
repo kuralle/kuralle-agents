@@ -191,6 +191,8 @@ function makeCtx(deps: CtxDeps): RunContext {
           session: deps.session,
           toolCallId: options?.toolCallId,
           abortSignal: deps.bargeIn ?? deps.abortSignal,
+          def: options?.def,
+          toolCtx: options?.toolCtx,
         }),
       );
     },

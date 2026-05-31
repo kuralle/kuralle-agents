@@ -129,6 +129,27 @@ tie-off of a broken build I hit while verifying the export work.
   and 4 "unlisted" imports in `apps/docs/src/examples/*` (hono/redis/@hono-node-*) — doc example code
   that demonstrates framework usage and resolves via workspace hoisting. Left for a docs-scoped pass.
 
+### D7 — Fixed the 2 conformance failures at root (G5/G6)
+**Not a test tweak — a real architecture fix.** `core-voice/conformance.test.ts` G5 (slow tool emits
+interim message) and G6 (LLM args validated → `ToolValidationError` before backend) failed because
+`TextDriver`/`VoiceDriver` executed **per-node (flow-local) tools by calling `localTool.execute()`
+directly**, bypassing `CoreToolExecutor` entirely. The executor is the single place that does input
+validation, the `interimAfterMs` timer, request/response pairing, and durable replay — so local
+tools silently skipped *all* of it, while registry tools (routed via `ctx.tool`) got it. That
+asymmetry (introduced by the 0.2.1 "local tools self-register" fix) is the root cause.
+
+Fix: made the executor able to run an explicitly-supplied `def`, and routed local tools through
+`ctx.tool` like registry tools:
+- `CoreExecuteArgs` + `EffectToolExecutor.execute` + `RunContext.tool` options gained optional
+  `def?: AnyTool` and `toolCtx?: ToolContext` (additive, backward-compatible).
+- `executeInner`: `const def = this.tools.get(name) ?? args.def`.
+- `ctx.tool` forwards `def`/`toolCtx`; both drivers pass the flow-local tool def + its rich toolCtx
+  (preserving the 0.2.1 `runState` access) through `ctx.tool` instead of executing it directly.
+
+Local tools are now **first-class**: validated, interim-capable, paired, and durably replayed —
+identical to registry tools. Result: conformance 6/6, **full core suite 362 pass / 0 fail**
+(was 360/2), build + typecheck:all green. No workaround — the bypass is gone.
+
 ## Final state
 - `bun run typecheck:all` → green (57 framework configs + 7 playground configs + eslint).
 - `bun run build:packages` → green (0 TS errors).
