@@ -12,19 +12,16 @@ const { model } = requireLiveModel();
 const roleMessage =
   'You are an order-taking assistant. You must ALWAYS use the available functions to progress the conversation. This is a phone conversation and your responses will be converted to audio. Keep the conversation friendly, casual, and polite. Avoid outputting special characters and emojis.';
 
-// Per-node `tools` (buildToolSet) is the model-visible *schema* only — the AI SDK
-// entry carries no executor. The executors run through the agent's `effectTools`
-// (see `effectTools` on the agent below). Define each tool once and reference it
-// from both places.
+// Each tool is defined once and exposed to the model per node via buildToolSet.
+// Flow-node tools self-register their executors (core >= 0.2.1) and receive the run
+// context, so no separate `effectTools` wiring is needed.
 const getDeliveryEstimate = defineTool({
   name: 'get_delivery_estimate',
   description: 'Provide delivery estimate information.',
   input: z.object({}),
-  // NOTE: flow-node tool executors are not passed the flow run context, so this
-  // cannot read `ctx.runState.state` — return a static estimate. To act on the
-  // collected order, use an `action` node (which receives flow state directly).
-  execute: async () => ({
+  execute: async (_args, ctx) => ({
     time: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    order: ctx?.runState?.state?.order ?? null,
   }),
 });
 
@@ -169,17 +166,6 @@ const agent = defineAgent({
   name: 'Food Ordering Direct Functions (Pipecat parity)',
   instructions: roleMessage,
   model,
-  // Register every per-node tool's executor. Per-node `tools` only shows the model
-  // the schema; without this, calling a node tool throws "Unknown tool".
-  effectTools: {
-    get_delivery_estimate: getDeliveryEstimate,
-    choose_pizza: choosePizzaTool,
-    choose_sushi: chooseSushiTool,
-    select_pizza_order: selectPizzaOrder,
-    select_sushi_order: selectSushiOrder,
-    complete_order: completeOrder,
-    revise_order: reviseOrder,
-  },
   flows: [
     defineFlow({
       name: 'order',

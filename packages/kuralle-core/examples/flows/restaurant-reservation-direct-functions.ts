@@ -125,13 +125,6 @@ const agent = defineAgent({
   name: 'Restaurant Reservation Direct Functions (Pipecat parity)',
   instructions: roleMessage,
   model,
-  // Register the per-node tools' executors. Per-node `tools` only shows the model
-  // the schema; without this, calling a node tool throws "Unknown tool".
-  effectTools: {
-    collect_party_size: collectPartySize,
-    check_availability: checkAvailability,
-    end_conversation: endConversation,
-  },
   flows: [
     defineFlow({
       name: 'reservation',
