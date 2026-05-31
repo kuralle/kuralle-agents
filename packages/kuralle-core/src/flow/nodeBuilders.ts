@@ -3,7 +3,7 @@ import type { Instructions } from '../types/agentConfig.js';
 import type { FlowState, ReplyNode, CollectNode } from '../types/flow.js';
 import type { ResolvedNode } from '../types/channel.js';
 import type { Tool } from '../types/effectTool.js';
-import { buildToolSet } from '../tools/effect/defineTool.js';
+import { buildToolSet, rawToolsFromSet } from '../tools/effect/defineTool.js';
 
 export function resolveInstructions(instructions: Instructions, state: FlowState): string {
   if (typeof instructions === 'string') {
@@ -39,6 +39,9 @@ export function resolveReplyNode(node: ReplyNode, state: FlowState): ResolvedNod
     node,
     prompt: buildNodePrompt(node, state),
     tools,
+    // Recover the raw executors from the node's `buildToolSet` tools so they run
+    // in-flow (with run context) — without also needing `agent.effectTools`.
+    localTools: rawToolsFromSet(tools),
   };
 }
 
