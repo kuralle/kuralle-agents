@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": false,
+    "resolveJsonModule": true
+  },
+  "include": ["tests/**/*.ts", "harness/**/*.ts", "bun-test.d.ts"],
+  "exclude": [
+    "tests/tool-schema-diagnostic.ts",
+    "tests/livekit-ws-bridge.test.ts",
+    "tests/session-runner.test.ts",
+    "harness/audio_fixtures.test.ts",
+    "tests/postcall-audit/**"
+  ]
+}

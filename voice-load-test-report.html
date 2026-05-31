@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Agent Load Test Report</title>
+<style>
+  :root { --bg:#0d1117; --surface:#161b22; --surface2:#1c2128; --border:#30363d; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; padding:2rem; }
+  h1 { font-size:1.8rem; color:var(--accent); margin-bottom:0.3rem; }
+  h2 { font-size:1.3rem; margin:2rem 0 1rem; padding-bottom:0.5rem; border-bottom:1px solid var(--border); }
+  h3 { font-size:1rem; margin:1.5rem 0 0.5rem; color:var(--muted); }
+  .subtitle { color:var(--muted); font-size:0.9rem; margin-bottom:2rem; }
+  table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:0.85rem; }
+  th,td { padding:10px 14px; text-align:left; border:1px solid var(--border); }
+  th { background:var(--surface2); font-weight:600; color:var(--muted); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; }
+  td { background:var(--surface); }
+  tr:hover td { background:var(--surface2); }
+  .info-table { max-width:600px; }
+  .info-table td:first-child { font-weight:600; width:250px; }
+  pre { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:0.8rem 1rem; font-size:0.85rem; color:var(--muted); overflow-x:auto; margin:0.5rem 0; }
+  .chart-container { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.5rem; margin:1rem 0; }
+  canvas { max-width:100%; }
+  footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--border); font-size:0.75rem; color:var(--muted); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<h1>Voice Agent Load Test Report</h1>
+<p class="subtitle">Kuralle Voice Agent — Concurrent WebSocket Load Test</p>
+
+<table class="info-table">
+  <tr><td>Target</td><td>wss://kuralle-voice-agent.fly.dev</td></tr>
+  <tr><td>Date / Time</td><td>2026-04-14 13:53:27</td></tr>
+  <tr><td>Audio per call</td><td>2.1s (PCM int16 24 kHz mono)</td></tr>
+  <tr><td>Total rounds</td><td>6</td></tr>
+  <tr><td>Max concurrency tested</td><td>60</td></tr>
+  <tr><td>Peak concurrency (≥90% success)</td><td>60</td></tr>
+</table>
+
+<h2>Round Results</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Concurrency</th><th>Total</th><th>Success</th><th>Failed</th>
+      <th>Rate %</th><th>Avg Time</th><th>P95 Time</th><th>Avg Connect</th><th>Elapsed</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>10</td>
+      <td>10</td>
+      <td>10</td>
+      <td>0</td>
+      <td style="color:#3fb950">100.0%</td>
+      <td>24.08s</td>
+      <td>24.17s</td>
+      <td>1.14s</td>
+      <td>24.2s</td>
+    </tr>
+
+    <tr>
+      <td>20</td>
+      <td>20</td>
+      <td>20</td>
+      <td>0</td>
+      <td style="color:#3fb950">100.0%</td>
+      <td>23.89s</td>
+      <td>23.93s</td>
+      <td>0.93s</td>
+      <td>23.9s</td>
+    </tr>
+
+    <tr>
+      <td>30</td>
+      <td>30</td>
+      <td>30</td>
+      <td>0</td>
+      <td style="color:#3fb950">100.0%</td>
+      <td>23.91s</td>
+      <td>24.05s</td>
+      <td>0.97s</td>
+      <td>24.1s</td>
+    </tr>
+
+    <tr>
+      <td>40</td>
+      <td>40</td>
+      <td>40</td>
+      <td>0</td>
+      <td style="color:#3fb950">100.0%</td>
+      <td>23.82s</td>
+      <td>24.14s</td>
+      <td>0.90s</td>
+      <td>24.1s</td>
+    </tr>
+
+    <tr>
+      <td>50</td>
+      <td>50</td>
+      <td>45</td>
+      <td>5</td>
+      <td style="color:#3fb950">90.0%</td>
+      <td>23.98s</td>
+      <td>24.17s</td>
+      <td>1.08s</td>
+      <td>24.4s</td>
+    </tr>
+
+    <tr>
+      <td>60</td>
+      <td>60</td>
+      <td>60</td>
+      <td>0</td>
+      <td style="color:#3fb950">100.0%</td>
+      <td>23.91s</td>
+      <td>24.08s</td>
+      <td>1.01s</td>
+      <td>24.1s</td>
+    </tr></tbody>
+</table>
+
+<h2>Success Rate vs Concurrency</h2>
+<div class="chart-container">
+  <canvas id="rateChart" height="80"></canvas>
+</div>
+
+<h2>Average Call Duration vs Concurrency</h2>
+<div class="chart-container">
+  <canvas id="latencyChart" height="80"></canvas>
+</div>
+
+<h2>Per-Round Detail</h2>
+
+    <h3>Concurrency 10 — <span style="color:#3fb950">100.0%</span> (10/10 succeeded)</h3>
+    <pre>Call time: avg=24.08s p95=24.17s min=23.70s max=24.17s
+Connect: avg=1.14s max=1.23s
+First response: avg=6.75s max=15.52s
+Total elapsed: 24.2s</pre>
+    
+
+    <h3>Concurrency 20 — <span style="color:#3fb950">100.0%</span> (20/20 succeeded)</h3>
+    <pre>Call time: avg=23.89s p95=23.93s min=23.65s max=23.93s
+Connect: avg=0.93s max=0.99s
+First response: avg=5.50s max=6.29s
+Total elapsed: 23.9s</pre>
+    
+
+    <h3>Concurrency 30 — <span style="color:#3fb950">100.0%</span> (30/30 succeeded)</h3>
+    <pre>Call time: avg=23.91s p95=24.05s min=23.64s max=24.05s
+Connect: avg=0.97s max=1.10s
+First response: avg=5.84s max=6.57s
+Total elapsed: 24.1s</pre>
+    
+
+    <h3>Concurrency 40 — <span style="color:#3fb950">100.0%</span> (40/40 succeeded)</h3>
+    <pre>Call time: avg=23.82s p95=24.14s min=23.64s max=24.14s
+Connect: avg=0.90s max=1.22s
+First response: avg=6.38s max=7.13s
+Total elapsed: 24.1s</pre>
+    
+
+    <h3>Concurrency 50 — <span style="color:#3fb950">90.0%</span> (45/50 succeeded)</h3>
+    <pre>Call time: avg=23.98s p95=24.17s min=23.59s max=24.17s
+Connect: avg=1.08s max=1.26s
+First response: avg=6.49s max=7.39s
+Total elapsed: 24.4s</pre>
+    <p style="color:#f85149;font-size:0.85rem">Failures: no_audio_response, no_audio_response, no_audio_response, no_audio_response, no_audio_response</p>
+
+    <h3>Concurrency 60 — <span style="color:#3fb950">100.0%</span> (60/60 succeeded)</h3>
+    <pre>Call time: avg=23.91s p95=24.08s min=23.61s max=24.08s
+Connect: avg=1.01s max=1.18s
+First response: avg=6.62s max=7.59s
+Total elapsed: 24.1s</pre>
+    
+
+<footer>Generated by kuralle-voice-agent load test &middot; 2026-04-14 13:53:27</footer>
+
+<script>
+const labels = [10,20,30,40,50,60];
+const chartDefaults = { responsive: true, plugins: { legend: { labels: { color: '#8b949e' } } }, scales: { x: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' }, title: { display: true, text: 'Concurrent Calls', color: '#8b949e' } }, y: { ticks: { color: '#8b949e' }, grid: { color: '#30363d' } } } };
+
+new Chart(document.getElementById('rateChart'), {
+  type: 'bar',
+  data: { labels, datasets: [{ label: 'Success Rate %', data: ["100.0","100.0","100.0","100.0","90.0","100.0"], backgroundColor: 'rgba(88,166,255,0.7)', borderColor: '#58a6ff', borderWidth: 1 }] },
+  options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, min: 0, max: 100 } }, plugins: { ...chartDefaults.plugins, annotation: { annotations: { line90: { type: 'line', yMin: 90, yMax: 90, borderColor: '#3fb950', borderDash: [5,5], label: { display: true, content: '90%', color: '#3fb950' } } } } } }
+});
+
+new Chart(document.getElementById('latencyChart'), {
+  type: 'line',
+  data: { labels, datasets: [
+    { label: 'Avg', data: ["24.08","23.89","23.91","23.82","23.98","23.91"], borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.1)', tension: 0.3 },
+    { label: 'P95', data: ["24.17","23.93","24.05","24.14","24.17","24.08"], borderColor: '#d29922', backgroundColor: 'rgba(210,153,34,0.1)', borderDash: [5,5], tension: 0.3 },
+  ]},
+  options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, title: { display: true, text: 'Seconds', color: '#8b949e' } } } }
+});
+</script>
+</body>
+</html>

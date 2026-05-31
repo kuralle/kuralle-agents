@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kuralle SmartPBX Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0b1020;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container {
+      width: min(880px, 100%);
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #f9fafb;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+    }
+    .panel {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .panel h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #cbd5e1;
+      margin-bottom: 12px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .field.full {
+      grid-column: 1 / -1;
+    }
+    label {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      background: #020617;
+      color: #e2e8f0;
+      font-size: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .status {
+      margin: 16px 0;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #cbd5e1;
+      font-size: 13px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+    .status.connected {
+      border-color: #166534;
+      background: rgba(22, 101, 52, 0.18);
+      color: #86efac;
+    }
+    .status.error {
+      border-color: #991b1b;
+      background: rgba(127, 29, 29, 0.18);
+      color: #fca5a5;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    button {
+      padding: 10px 16px;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+    button:hover { background: #334155; border-color: #475569; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    button.primary {
+      background: #166534;
+      border-color: #166534;
+      color: #f0fdf4;
+    }
+    button.primary:hover { background: #15803d; }
+    button.active {
+      background: #991b1b;
+      border-color: #991b1b;
+      color: #fff1f2;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .meter {
+      height: 8px;
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .meter-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #38bdf8);
+      transition: width 0.08s linear;
+    }
+    .notes {
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.6;
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .log {
+      height: 520px;
+      overflow-y: auto;
+      background: #020617;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .log-entry { color: #94a3b8; margin-bottom: 4px; }
+    .log-entry.event { color: #c4b5fd; }
+    .log-entry.audio-in { color: #60a5fa; }
+    .log-entry.audio-out { color: #4ade80; }
+    .log-entry.warn { color: #fbbf24; }
+    .log-entry.error { color: #fca5a5; }
+    @media (max-width: 880px) {
+      .grid { grid-template-columns: 1fr; }
+      .container { padding: 18px; }
+      .log { height: 320px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kuralle SmartPBX Test</h1>
+    <p class="subtitle">
+      Browser harness for the official SmartPBX AI Provider WebSocket flow. This page sends one
+      <code>start</code> event after connect, streams microphone audio as <code>media</code>, plays
+      inbound <code>media</code>, and ends the call by closing the socket.
+    </p>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Session</h2>
+
+        <div class="form-grid">
+          <div class="field full">
+            <label for="wsUrl">WebSocket URL</label>
+            <input id="wsUrl" type="text" value="ws://127.0.0.1:8081/media-stream">
+          </div>
+
+          <div class="field">
+            <label for="callId">Call ID</label>
+            <input id="callId" type="text">
+          </div>
+
+          <div class="field">
+            <label for="accountId">Account ID</label>
+            <input id="accountId" type="text" value="web-test-account">
+          </div>
+
+          <div class="field">
+            <label for="callerId">Caller Number</label>
+            <input id="callerId" type="text" value="+14155550100">
+          </div>
+
+          <div class="field">
+            <label for="calleeId">Callee Number</label>
+            <input id="calleeId" type="text" value="+14155550199">
+          </div>
+
+          <div class="field">
+            <label for="encoding">Encoding</label>
+            <select id="encoding">
+              <option value="pcm16">pcm16</option>
+              <option value="g711_ulaw">g711_ulaw</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="sampleRate">Sample Rate</label>
+            <input id="sampleRate" type="number" value="24000" min="8000" step="1000">
+          </div>
+        </div>
+
+        <div class="status" id="status">Disconnected</div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value" id="uplinkStat">0</div>
+            <div class="stat-label">Uplink Frames</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="downlinkStat">0</div>
+            <div class="stat-label">Downlink Frames</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="playbackStat">0</div>
+            <div class="stat-label">Playback Chunks</div>
+          </div>
+        </div>
+
+        <div class="meter"><div class="meter-fill" id="meter"></div></div>
+
+        <div class="controls">
+          <button id="connectBtn" class="primary" onclick="toggleConnection()">Connect + Start</button>
+          <button id="micBtn" disabled onclick="toggleMic()">Start Mic</button>
+          <button id="newCallBtn" onclick="regenerateCallId()">New Call ID</button>
+        </div>
+
+        <div class="notes">
+          <div>Protocol notes:</div>
+          <div>- No SmartPBX <code>mark</code> event is sent from this page.</div>
+          <div>- Turn endpointing is expected to come from VAD or host-side orchestration.</div>
+          <div>- <code>opus</code> is omitted from this browser harness; the page supports <code>pcm16</code> and <code>g711_ulaw</code>.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Trace</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ws = null;
+    let audioCtx = null;
+    let micStream = null;
+    let micProcessor = null;
+    let isMicActive = false;
+    let playbackQueue = [];
+    let isPlaying = false;
+    let uplinkFrames = 0;
+    let downlinkFrames = 0;
+    let playbackChunks = 0;
+    let activeMediaFormat = null;
+
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const meterEl = document.getElementById('meter');
+    const connectBtn = document.getElementById('connectBtn');
+    const micBtn = document.getElementById('micBtn');
+
+    regenerateCallId();
+    syncFormatDefaults();
+
+    document.getElementById('encoding').addEventListener('change', syncFormatDefaults);
+
+    function syncFormatDefaults() {
+      const encoding = document.getElementById('encoding').value;
+      const sampleRateEl = document.getElementById('sampleRate');
+      if (encoding === 'g711_ulaw') {
+        sampleRateEl.value = '8000';
+      } else {
+        sampleRateEl.value = '24000';
+      }
+    }
+
+    function regenerateCallId() {
+      document.getElementById('callId').value = 'call-' + crypto.randomUUID().slice(0, 12);
+    }
+
+    function log(message, cls = '') {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry ' + cls;
+      entry.textContent = `[${new Date().toISOString().slice(11, 23)}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateStatus(message, kind = '') {
+      statusEl.textContent = message;
+      statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    function updateStats() {
+      document.getElementById('uplinkStat').textContent = String(uplinkFrames);
+      document.getElementById('downlinkStat').textContent = String(downlinkFrames);
+      document.getElementById('playbackStat').textContent = String(playbackChunks);
+    }
+
+    function getMediaFormat() {
+      return {
+        encoding: document.getElementById('encoding').value,
+        sampleRate: Number(document.getElementById('sampleRate').value),
+      };
+    }
+
+    async function ensureAudioContext(targetSampleRate) {
+      if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new AudioContext({ sampleRate: targetSampleRate });
+      }
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+    }
+
+    async function toggleConnection() {
+      if (ws && ws.readyState <= WebSocket.OPEN) {
+        disconnect();
+        return;
+      }
+
+      const url = document.getElementById('wsUrl').value.trim();
+      const mediaFormat = getMediaFormat();
+      activeMediaFormat = mediaFormat;
+
+      try {
+        await ensureAudioContext(mediaFormat.sampleRate);
+      } catch (error) {
+        log(`AudioContext error: ${error.message}`, 'error');
+        updateStatus('Audio initialization failed', 'error');
+        return;
+      }
+
+      uplinkFrames = 0;
+      downlinkFrames = 0;
+      playbackChunks = 0;
+      updateStats();
+      log(`Connecting to ${url}`, 'event');
+      updateStatus('Connecting...');
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        const startMessage = {
+          event: 'start',
+          start: {
+            callId: document.getElementById('callId').value.trim(),
+            callerIdNumber: document.getElementById('callerId').value.trim(),
+            calleeIdNumber: document.getElementById('calleeId').value.trim(),
+            accountId: document.getElementById('accountId').value.trim(),
+            mediaFormat,
+          },
+        };
+
+        ws.send(JSON.stringify(startMessage));
+        updateStatus(`Connected (${mediaFormat.encoding}/${mediaFormat.sampleRate}Hz)`, 'connected');
+        connectBtn.textContent = 'Disconnect';
+        micBtn.disabled = false;
+        log(`Sent start: ${JSON.stringify(startMessage.start)}`, 'event');
+      };
+
+      ws.onmessage = async (event) => {
+        if (typeof event.data !== 'string') {
+          log(`Ignoring non-text WebSocket message (${typeof event.data})`, 'warn');
+          return;
+        }
+
+        let parsed = null;
+        try {
+          parsed = JSON.parse(event.data);
+        } catch (error) {
+          log(`Invalid JSON from server: ${String(error)}`, 'error');
+          return;
+        }
+
+        if (!parsed || typeof parsed.event !== 'string') {
+          log(`Ignoring malformed server event`, 'warn');
+          return;
+        }
+
+        if (parsed.event === 'media') {
+          const payload = parsed.media && typeof parsed.media.payload === 'string'
+            ? parsed.media.payload
+            : null;
+          if (!payload) {
+            log('Received media event without payload', 'warn');
+            return;
+          }
+          handleDownlinkMedia(payload, activeMediaFormat || mediaFormat);
+          return;
+        }
+
+        log(`Server event: ${parsed.event} ${JSON.stringify(parsed).slice(0, 220)}`, 'event');
+      };
+
+      ws.onclose = (event) => {
+        updateStatus(`Disconnected (${event.code})`);
+        connectBtn.textContent = 'Connect + Start';
+        micBtn.disabled = true;
+        stopMic();
+        ws = null;
+        activeMediaFormat = null;
+        log(`Socket closed code=${event.code} reason=${event.reason || 'n/a'}`, 'event');
+      };
+
+      ws.onerror = () => {
+        updateStatus('WebSocket error', 'error');
+        log('WebSocket error', 'error');
+      };
+    }
+
+    function disconnect() {
+      stopMic();
+      if (ws && ws.readyState <= WebSocket.OPEN) {
+        ws.close(1000, 'smartpbx test frontend disconnect');
+      }
+    }
+
+    async function toggleMic() {
+      if (isMicActive) {
+        stopMic();
+        return;
+      }
+      await startMic();
+    }
+
+    async function startMic() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('Connect first before starting the microphone', 'warn');
+        return;
+      }
+
+      const mediaFormat = activeMediaFormat || getMediaFormat();
+      await ensureAudioContext(mediaFormat.sampleRate);
+
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+
+        const source = audioCtx.createMediaStreamSource(micStream);
+        micProcessor = audioCtx.createScriptProcessor(2048, 1, 1);
+
+        micProcessor.onaudioprocess = (event) => {
+          if (!ws || ws.readyState !== WebSocket.OPEN || !isMicActive) {
+            return;
+          }
+
+          const input = event.inputBuffer.getChannelData(0);
+          const resampled = resampleFloat32(input, audioCtx.sampleRate, mediaFormat.sampleRate);
+          const payload = mediaFormat.encoding === 'g711_ulaw'
+            ? base64FromBytes(mulawEncodeFloat32(resampled))
+            : encodePcm16Base64(float32ToInt16(resampled));
+
+          ws.send(JSON.stringify({
+            event: 'media',
+            callId: document.getElementById('callId').value.trim(),
+            media: { payload },
+          }));
+
+          uplinkFrames += 1;
+          updateStats();
+          updateMeterFromFloat32(resampled);
+        };
+
+        source.connect(micProcessor);
+        micProcessor.connect(audioCtx.destination);
+        isMicActive = true;
+        micBtn.textContent = 'Stop Mic';
+        micBtn.className = 'active';
+        log(`Microphone started (${mediaFormat.encoding}/${mediaFormat.sampleRate}Hz)`, 'audio-in');
+      } catch (error) {
+        log(`Microphone error: ${error.message}`, 'error');
+      }
+    }
+
+    function stopMic() {
+      if (micProcessor) {
+        micProcessor.disconnect();
+        micProcessor = null;
+      }
+      if (micStream) {
+        micStream.getTracks().forEach((track) => track.stop());
+        micStream = null;
+      }
+      if (isMicActive) {
+        log('Microphone stopped', 'audio-in');
+      }
+      isMicActive = false;
+      micBtn.textContent = 'Start Mic';
+      micBtn.className = '';
+      meterEl.style.width = '0%';
+    }
+
+    function handleDownlinkMedia(payload, mediaFormat) {
+      downlinkFrames += 1;
+      updateStats();
+
+      let pcm16;
+      if (mediaFormat.encoding === 'g711_ulaw') {
+        pcm16 = mulawDecode(base64ToBytes(payload));
+      } else {
+        pcm16 = decodePcm16Base64(payload);
+      }
+
+      const float32 = int16ToFloat32(pcm16);
+      playbackQueue.push({ samples: float32, sampleRate: mediaFormat.sampleRate });
+      if (!isPlaying) {
+        drainPlayback();
+      }
+      updateMeterFromFloat32(float32);
+      log(`Downlink media frame (${mediaFormat.encoding}, ${pcm16.length} samples)`, 'audio-out');
+    }
+
+    function drainPlayback() {
+      if (!audioCtx || playbackQueue.length === 0) {
+        isPlaying = false;
+        return;
+      }
+
+      isPlaying = true;
+      const next = playbackQueue.shift();
+      const buffer = audioCtx.createBuffer(1, next.samples.length, next.sampleRate);
+      buffer.getChannelData(0).set(next.samples);
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.onended = () => {
+        playbackChunks += 1;
+        updateStats();
+        drainPlayback();
+      };
+      source.start();
+    }
+
+    function updateMeterFromFloat32(samples) {
+      let sum = 0;
+      for (let i = 0; i < samples.length; i++) {
+        const sample = samples[i] || 0;
+        sum += sample * sample;
+      }
+      const rms = Math.sqrt(sum / Math.max(1, samples.length));
+      meterEl.style.width = Math.min(100, rms * 350) + '%';
+      clearTimeout(updateMeterFromFloat32._timer);
+      updateMeterFromFloat32._timer = setTimeout(() => {
+        meterEl.style.width = '0%';
+      }, 120);
+    }
+    updateMeterFromFloat32._timer = null;
+
+    function resampleFloat32(input, sourceRate, targetRate) {
+      if (!input || input.length === 0 || sourceRate === targetRate) {
+        return new Float32Array(input);
+      }
+
+      const ratio = sourceRate / targetRate;
+      const outputLength = Math.max(1, Math.floor(input.length / ratio));
+      const output = new Float32Array(outputLength);
+      for (let i = 0; i < outputLength; i++) {
+        const sourceIndex = Math.min(input.length - 1, Math.floor(i * ratio));
+        output[i] = input[sourceIndex] || 0;
+      }
+      return output;
+    }
+
+    function float32ToInt16(input) {
+      const out = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const sample = Math.max(-1, Math.min(1, input[i] || 0));
+        out[i] = sample * 0x7fff;
+      }
+      return out;
+    }
+
+    function int16ToFloat32(input) {
+      const out = new Float32Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        out[i] = (input[i] || 0) / 0x7fff;
+      }
+      return out;
+    }
+
+    function encodePcm16Base64(samples) {
+      const bytes = new Uint8Array(samples.length * 2);
+      const view = new DataView(bytes.buffer);
+      for (let i = 0; i < samples.length; i++) {
+        view.setInt16(i * 2, samples[i] || 0, true);
+      }
+      return base64FromBytes(bytes);
+    }
+
+    function decodePcm16Base64(payload) {
+      const bytes = base64ToBytes(payload);
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const count = Math.floor(bytes.byteLength / 2);
+      const out = new Int16Array(count);
+      for (let i = 0; i < count; i++) {
+        out[i] = view.getInt16(i * 2, true);
+      }
+      return out;
+    }
+
+    function base64ToBytes(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function base64FromBytes(bytes) {
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    }
+
+    function mulawEncodeFloat32(input) {
+      const pcm = float32ToInt16(input);
+      const out = new Uint8Array(pcm.length);
+      for (let i = 0; i < pcm.length; i++) {
+        out[i] = linearToMulawSample(pcm[i] || 0);
+      }
+      return out;
+    }
+
+    function mulawDecode(input) {
+      const out = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        out[i] = mulawToLinearSample(input[i]);
+      }
+      return out;
+    }
+
+    function linearToMulawSample(sample) {
+      const MULAW_BIAS = 0x84;
+      const MULAW_CLIP = 32635;
+
+      let pcm = sample;
+      let sign = 0;
+      if (pcm < 0) {
+        sign = 0x80;
+        pcm = -pcm;
+      }
+
+      if (pcm > MULAW_CLIP) {
+        pcm = MULAW_CLIP;
+      }
+
+      pcm += MULAW_BIAS;
+
+      let exponent = 7;
+      for (let expMask = 0x4000; (pcm & expMask) === 0 && exponent > 0; expMask >>= 1) {
+        exponent -= 1;
+      }
+
+      const mantissa = (pcm >> (exponent + 3)) & 0x0F;
+      return (~(sign | (exponent << 4) | mantissa)) & 0xFF;
+    }
+
+    function mulawToLinearSample(value) {
+      const MULAW_BIAS = 0x84;
+      const sample = ~value & 0xFF;
+      const sign = sample & 0x80;
+      const exponent = (sample >> 4) & 0x07;
+      const mantissa = sample & 0x0F;
+      let pcm = ((mantissa << 3) + MULAW_BIAS) << exponent;
+      pcm -= MULAW_BIAS;
+      return sign ? -pcm : pcm;
+    }
+  </script>
+</body>
+</html>

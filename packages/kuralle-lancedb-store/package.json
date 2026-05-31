@@ -1,0 +1,38 @@
+{
+  "name": "@kuralle-agents/lancedb-store",
+  "version": "0.2.0",
+  "description": "LanceDB-backed VectorStore for Kuralle (Node/Bun only, not for edge runtimes)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@kuralle-agents/rag": "workspace:*",
+    "@lancedb/lancedb": ">=0.13.0"
+  },
+  "devDependencies": {
+    "@kuralle-agents/rag": "workspace:*",
+    "@lancedb/lancedb": "^0.13.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.0"
+  },
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test test",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

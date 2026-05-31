@@ -1,0 +1,62 @@
+{
+  "name": "@kuralle-agents/messaging-meta",
+  "version": "0.2.0",
+  "description": "Meta platform clients (WhatsApp, Messenger, Instagram) for Kuralle messaging",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./whatsapp": {
+      "types": "./dist/whatsapp/index.d.ts",
+      "default": "./dist/whatsapp/index.js"
+    },
+    "./messenger": {
+      "types": "./dist/messenger/index.d.ts",
+      "default": "./dist/messenger/index.js"
+    },
+    "./instagram": {
+      "types": "./dist/instagram/index.d.ts",
+      "default": "./dist/instagram/index.js"
+    },
+    "./webhooks": {
+      "types": "./dist/webhook/index.d.ts",
+      "default": "./dist/webhook/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@kuralle-agents/http-client": "workspace:*",
+    "@kuralle-agents/messaging": "workspace:*"
+  },
+  "peerDependencies": {
+    "hono": "^4.12.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai": "^3.0.0",
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/hono-server": "workspace:*",
+    "@kuralle-agents/http-client": "workspace:*",
+    "@kuralle-agents/messaging": "workspace:*",
+    "@hono/node-server": "^1.13.0",
+    "@types/node": "^22.13.4",
+    "hono": "^4.12.0",
+    "typescript": "^5.8.2"
+  }
+}

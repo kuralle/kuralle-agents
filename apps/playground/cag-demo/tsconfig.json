@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@kuralle-agents/core": ["../../../packages/kuralle-core/src/index.ts"],
+      "@kuralle-agents/hono-server": ["../../../packages/kuralle-hono-server/src/index.ts"],
+      "@kuralle-agents/rag": ["../../../packages/kuralle-rag/src/index.ts"],
+      "@kuralle-agents/tools": ["../../../packages/kuralle-tools/src/index.ts"]
+    }
+  },
+  "include": ["*.ts", "../_shared/runtime/**/*.ts"]
+}

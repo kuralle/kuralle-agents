@@ -1,0 +1,53 @@
+{
+  "name": "@kuralle-agents/livekit-plugin-transport-sip",
+  "version": "0.2.0",
+  "description": "SIP/RTP transport adapter for LiveKit Agents. Run voice agents over traditional telephony with G.711 codec support.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    },
+    "./jssip": {
+      "types": "./dist/jssip/index.d.ts",
+      "import": "./dist/jssip/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bash -c 'udp=test/sip_signaling_udp_integration.test.ts; filtered=(); for f in test/*.test.ts; do [[ \"$f\" == \"$udp\" ]] || filtered+=(\"$f\"); done; bun test \"${filtered[@]}\" && exec bun test \"$udp\"'",
+    "test:typecheck": "tsc -p test/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "node.js-sip": "^1.0.9",
+    "jssip": "^3.13.5"
+  },
+  "peerDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/livekit-plugin": "workspace:*",
+    "@kuralle-agents/realtime-audio": "workspace:*",
+    "@kuralle-agents/transport-base": "workspace:*",
+    "@livekit/agents": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/livekit-plugin": "workspace:*",
+    "@kuralle-agents/realtime-audio": "workspace:*",
+    "@kuralle-agents/transport-base": "workspace:*",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.5.0"
+  },
+  "license": "Apache-2.0"
+}

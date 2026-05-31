@@ -1,0 +1,54 @@
+{
+  "name": "@kuralle-agents/rag-loaders",
+  "version": "0.2.0",
+  "description": "Document loaders for Kuralle RAG pipelines (INGESTION-TIME ONLY \u2014 never import at runtime)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "@kuralle-agents/rag": "workspace:*",
+    "pdf-parse": ">=1.1.1",
+    "cheerio": ">=1.0.0",
+    "papaparse": ">=5.4.0"
+  },
+  "peerDependenciesMeta": {
+    "pdf-parse": {
+      "optional": true
+    },
+    "cheerio": {
+      "optional": true
+    },
+    "papaparse": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@kuralle-agents/rag": "workspace:*",
+    "@types/node": "^20.11.0",
+    "@types/papaparse": "^5.3.0",
+    "cheerio": "^1.0.0",
+    "papaparse": "^5.4.0",
+    "pdf-parse": "^1.1.1",
+    "typescript": "^5.3.0"
+  },
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test test",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

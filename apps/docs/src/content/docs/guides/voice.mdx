@@ -1,0 +1,54 @@
+---
+title: Voice Agents
+description: Build voice agents using provider-native realtime or cascaded STT→LLM→TTS pipelines.
+---
+
+import { Aside, Code, Tabs, TabItem } from '@astrojs/starlight/components';
+import realtimeAudioExample from '../../../examples/voice/realtime-audio.ts?raw';
+import cascadedVoiceExample from '../../../examples/voice/cascaded-voice.ts?raw';
+
+The same `defineAgent` you use for text works for voice. Kuralle keeps tool, flow, and handoff authority regardless of transport — audio handling lives in a separate layer.
+
+## Two paths
+
+| Path | Package | How it works |
+|---|---|---|
+| Provider-native realtime | `@kuralle-agents/realtime-audio` | Raw audio goes directly to the provider model (Gemini Live, OpenAI Realtime, xAI Grok Realtime) and audio comes back in a single connection. Lower latency; no transcript round-trip. |
+| Cascaded STT→LLM→TTS | `@kuralle-agents/livekit-plugin` | Speech-to-text transcribes audio, a standard Kuralle turn runs, then text-to-speech synthesizes the response. Works with any LLM. |
+
+Both paths run the same Kuralle runtime — flows, tools, routing, and handoffs work identically.
+
+## Provider-native realtime
+
+`@kuralle-agents/realtime-audio` sends raw audio directly to the model and receives audio back in a single connection.
+
+```bash
+npm install @kuralle-agents/realtime-audio
+```
+
+`VoiceEngine` is the call acceptor. It creates per-call `VoiceCallSession` workers that bridge a transport to the chosen provider:
+
+<Code code={realtimeAudioExample} lang="typescript" title="realtime-audio.ts" />
+
+When a connection arrives from your transport layer, call `engine.acceptCall({ callId, transport })` and then `session.start()`.
+
+<Aside type="note">
+  Supported providers: Gemini Live (`createGeminiClientFactory`), OpenAI Realtime (`createOpenAIClientFactory`). Pass the appropriate factory to `modelClientFactory`.
+</Aside>
+
+## Cascaded voice (LiveKit)
+
+`@kuralle-agents/livekit-plugin` bridges Kuralle to a LiveKit voice pipeline via the cascaded path: STT → `KuralleRuntimeLLMAdapter` → TTS.
+
+```bash
+npm install @kuralle-agents/livekit-plugin @kuralle-agents/livekit-plugin-transport-ws
+```
+
+<Code code={cascadedVoiceExample} lang="typescript" title="cascaded-voice.ts" />
+
+`KuralleRuntimeLLMAdapter` wraps any Kuralle `Runtime` as the LLM step, so your agents, flows, and tools run exactly as they do in text mode.
+
+## Which path to choose
+
+- Use **provider-native realtime** when latency is the priority or when you want the provider's native voice model capabilities (Gemini Live, OpenAI Realtime).
+- Use **cascaded** when you need to mix voice with a non-realtime LLM, need fine-grained STT/TTS control, or are already on a LiveKit-based infrastructure.

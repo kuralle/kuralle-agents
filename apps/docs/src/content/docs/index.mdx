@@ -1,0 +1,84 @@
+---
+title: Kuralle
+description: A TypeScript framework for building conversational AI agents with structured flows, routing, and durable tool execution.
+---
+
+import { CardGrid, LinkCard, Code } from '@astrojs/starlight/components';
+import Hero from '../../components/Hero.astro';
+import firstAgentExample from '../../examples/quickstart/first-agent.ts?raw';
+
+<Hero>
+  <Fragment slot="title">Kuralle</Fragment>
+  <Fragment slot="description">
+    Build conversational agents with structured flows, routing, and durable tool
+    execution. The same agent runs over text or voice.
+  </Fragment>
+  <Fragment slot="cta">Get started</Fragment>
+</Hero>
+
+Kuralle is a TypeScript framework for building conversational AI agents — text and voice — with structured flows, routing, and durable tool execution.
+
+Most agent frameworks give you a prompt and a tool-call loop. That's fine until the conversation has steps — collect these fields, confirm, then book. Kuralle puts those steps in a **flow**: a small graph of typed nodes with real control flow, so your procedure lives in code you can test, not in a 600-line system prompt.
+
+One tagless primitive (`defineAgent`) derives its behavior from the fields you set. Add `flows` to get a structured flow agent. Add `routes` to get a router. Add `agents` to compose them. The runtime, session management, and streaming stay the same across all three.
+
+## Primitives
+
+- **Agents** — `defineAgent` with instructions and tools. Behavior is derived from what you populate, not a type flag.
+- **Flows** — node graphs (`reply`, `collect`, `action`, `decide`) where each node returns its next transition. Your SOP becomes a typed state machine you didn't have to hand-write.
+- **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
+- **Routing & Handoffs** — structured routing (`routes`) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
+- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, or pipe to HTTP with `handle.toResponseStream('sse')`.
+
+## Why Kuralle
+
+**Procedures belong in flows, not prompts.** The form-filler example in the repo replaces a 584-line v1 state machine with ~60 lines.
+
+**One agent config, text and voice.** The same `defineAgent` runs over chat text and over provider-native realtime voice. You don't maintain two stacks.
+
+**Durable tool execution.** Every `defineTool` call is logged in an append-only effect log. Retries replay against the log — a payment tool doesn't charge twice, a booking tool doesn't double-book.
+
+**Few primitives, composed.** `defineAgent`, `defineFlow`, `defineTool`, `createRuntime`. That's the core API. Structured routing, multi-agent composition, and session persistence are all derived from these.
+
+## Installation
+
+```bash
+npm install @kuralle-agents/core @ai-sdk/openai ai zod
+```
+
+Peer dependencies: `ai@^6`, `zod`. Bring your own provider package (`@ai-sdk/openai`, `@ai-sdk/anthropic`, etc.).
+
+## Your first agent
+
+<Code code={firstAgentExample} lang="typescript" title="agent.ts" />
+
+Run it:
+
+```bash
+OPENAI_API_KEY=sk-... npx tsx agent.ts
+```
+
+## Start here
+
+<CardGrid>
+  <LinkCard
+    title="Quickstart"
+    href="/guides/quickstart"
+    description="Install, define an agent, run it, and stream events — end to end in minutes."
+  />
+  <LinkCard
+    title="Agents"
+    href="/guides/agents"
+    description="The defineAgent primitive — fields, behavior derivation, and composition patterns."
+  />
+  <LinkCard
+    title="Flows"
+    href="/guides/flows"
+    description="Multi-step procedures as typed node graphs — collect, reply, and transitions."
+  />
+  <LinkCard
+    title="Tools"
+    href="/guides/tools"
+    description="Define tools with Zod inputs, durable execution, and the effect log."
+  />
+</CardGrid>

@@ -1,0 +1,20 @@
+{
+  "name": "sandbox-voice-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "npx tsx src/deploy.ts",
+    "deploy:echo": "npx tsx src/deploy-sandbox.ts",
+    "deploy:gemini": "npx tsx src/deploy-gemini.ts",
+    "deploy:agentsession": "npx tsx src/deploy-agentsession.ts"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "^1.9.3",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.3.0"
+  }
+}

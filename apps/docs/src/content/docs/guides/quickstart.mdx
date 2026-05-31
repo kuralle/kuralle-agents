@@ -1,0 +1,122 @@
+---
+title: Quickstart
+description: Build your first Kuralle agent in minutes.
+---
+
+import { Aside, Code, Steps } from '@astrojs/starlight/components';
+import firstAgentExample from '../../../examples/quickstart/first-agent.ts?raw';
+
+## Project setup
+
+<Steps>
+
+1. Install Kuralle and its peers. The `ai` package is the Vercel AI SDK; bring your own provider.
+
+   ```bash
+   npm install @kuralle-agents/core @ai-sdk/openai ai zod
+   ```
+
+2. Set your API key.
+
+   ```bash
+   export OPENAI_API_KEY=sk-...
+   ```
+
+3. Define a tool. `defineTool` takes a Zod input schema and an async `execute` function. The return value is passed back to the model as a tool result.
+
+   ```typescript
+   import { z } from 'zod';
+   import { defineTool } from '@kuralle-agents/core';
+
+   const echo = defineTool({
+     name: 'echo',
+     description: 'Echo back the provided text',
+     input: z.object({ text: z.string() }),
+     execute: async ({ text }) => ({ echoed: text }),
+   });
+   ```
+
+4. Define an agent and wire the tool. `tools: buildToolSet({ echo })` makes it model-visible; `effectTools: { echo }` wires the durable executor.
+
+   ```typescript
+   import { openai } from '@ai-sdk/openai';
+   import { defineAgent, buildToolSet } from '@kuralle-agents/core';
+
+   const agent = defineAgent({
+     id: 'support',
+     instructions: 'Helpful support agent. Use the echo tool when asked.',
+     model: openai('gpt-4o-mini'),
+     tools: buildToolSet({ echo }),
+     effectTools: { echo },
+   });
+   ```
+
+5. Create a runtime and run a turn. `runtime.run()` returns a `TurnHandle`. Stream events by iterating `handle.events` — it's a property, not a method call.
+
+   ```typescript
+   import { createRuntime } from '@kuralle-agents/core';
+
+   const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
+
+   const handle = runtime.run({ input: 'Use echo to say "hello"' });
+   for await (const part of handle.events) {
+     if (part.type === 'text-delta') process.stdout.write(part.text);
+     if (part.type === 'done') console.log('\nSession:', part.sessionId);
+   }
+   await handle;
+   ```
+
+</Steps>
+
+<Aside type="note">
+  `handle.events` is a property on `TurnHandle`, not a method. Writing `handle.events()` with parentheses will throw.
+</Aside>
+
+## Full example
+
+Put it all together in `agent.ts`:
+
+<Code code={firstAgentExample} lang="typescript" title="agent.ts" />
+
+Run it:
+
+```bash
+OPENAI_API_KEY=sk-... npx tsx agent.ts
+```
+
+## Streaming events
+
+The `handle.events` async iterable emits `HarnessStreamPart` events. The most common:
+
+| Event type | When | Key fields |
+|---|---|---|
+| `text-delta` | Each text chunk from the model | `part.text: string` |
+| `tool-call` | Before a tool executes | `part.toolName`, `part.input` |
+| `tool-result` | After a tool executes | `part.toolName`, `part.result` |
+| `done` | Turn complete | `part.sessionId` |
+
+Save `part.sessionId` and pass it back on subsequent turns to continue in the same session.
+
+## Session continuity
+
+```typescript
+let sessionId: string | undefined;
+
+async function chat(input: string) {
+  const handle = runtime.run({ input, sessionId });
+  for await (const part of handle.events) {
+    if (part.type === 'text-delta') process.stdout.write(part.text);
+    if (part.type === 'done') sessionId = part.sessionId;
+  }
+  await handle;
+}
+```
+
+The runtime auto-assigns a session ID on the first turn and persists conversation history. By default it uses an in-process `MemoryStore`; swap for Redis or Postgres in production.
+
+## Next steps
+
+- [Agents](/guides/agents) — how `defineAgent` derives behavior from the fields you set.
+- [Flows](/guides/flows) — multi-step procedures as typed node graphs.
+- [Tools](/guides/tools) — tool wiring, durable execution, and the effect log.
+- [Sessions & State](/guides/sessions) — durable session backends for production.

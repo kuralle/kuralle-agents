@@ -1,0 +1,4 @@
+{"sessionId":"golden-quickstart-1","agentId":"quickstart-hello-world","timestamp":"2026-02-15T00:00:00.000Z","part":{"type":"input","text":"My favorite color is blue"}}
+{"sessionId":"golden-quickstart-1","agentId":"quickstart-hello-world","timestamp":"2026-02-15T00:00:00.800Z","part":{"type":"tool-call","toolCallId":"tc-quick-1","toolName":"record_favorite_color_func","args":{"color":"blue"}}}
+{"sessionId":"golden-quickstart-1","agentId":"quickstart-hello-world","timestamp":"2026-02-15T00:00:01.200Z","part":{"type":"tool-result","toolCallId":"tc-quick-1","toolName":"record_favorite_color_func","result":{"__flow_transition":true,"targetNode":"end","data":{"color":"blue"}}}}
+{"sessionId":"golden-quickstart-1","agentId":"quickstart-hello-world","timestamp":"2026-02-15T00:00:01.900Z","part":{"type":"done","sessionId":"golden-quickstart-1"},"fullText":"Thanks for telling me your favorite color."}

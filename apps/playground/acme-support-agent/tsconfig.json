@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@kuralle-agents/core": ["../../../packages/kuralle-core/src/index.ts"],
+      "@kuralle-agents/hono-server": ["../../../packages/kuralle-hono-server/src/index.ts"],
+      "@kuralle-agents/rag": ["../../../packages/kuralle-rag/src/index.ts"],
+      "@kuralle-agents/lancedb-store": ["../../../packages/kuralle-lancedb-store/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "smoke.ts", "../_shared/runtime/**/*.ts"],
+  "exclude": ["scripts"]
+}

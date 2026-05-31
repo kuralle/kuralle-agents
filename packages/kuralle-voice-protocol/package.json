@@ -1,0 +1,63 @@
+{
+  "name": "@kuralle-agents/voice-protocol",
+  "version": "0.2.0",
+  "description": "Canonical client-server wire protocol for Kuralle voice transports. Pure TypeScript types + optional Zod schemas, zero runtime.",
+  "keywords": [
+    "voice",
+    "wire-protocol",
+    "kuralle",
+    "cloudflare-voice"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "NOTICE"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./zod": {
+      "types": "./dist/zod.d.ts",
+      "import": "./dist/zod.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test src/__tests__/*.test.js"
+  },
+  "peerDependencies": {
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.24.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    },
+    "zod-to-json-schema": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.0",
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.24.0"
+  }
+}

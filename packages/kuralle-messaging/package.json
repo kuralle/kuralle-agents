@@ -1,0 +1,37 @@
+{
+  "name": "@kuralle-agents/messaging",
+  "version": "0.2.0",
+  "description": "Core interfaces and Kuralle adapter for messaging platforms",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "hono": "^4.7.4"
+  },
+  "devDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "typescript": "^5.8.2",
+    "@types/node": "^22.13.4"
+  }
+}

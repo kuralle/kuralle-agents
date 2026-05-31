@@ -1,0 +1,38 @@
+{
+  "name": "rag-demo",
+  "version": "1.0.11",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run server.ts",
+    "cli": "bun run cli.ts",
+    "dev:pg": "VECTOR_STORE=pg bun run server.ts",
+    "cli:pg": "VECTOR_STORE=pg bun run cli.ts",
+    "dev:redis": "VECTOR_STORE=redis bun run server.ts",
+    "cli:redis": "VECTOR_STORE=redis bun run cli.ts",
+    "smoke": "bun run smoke.ts",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "latest",
+    "@kuralle-playground/shared": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/hono-server": "workspace:*",
+    "@kuralle-agents/postgres-store": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*",
+    "@kuralle-agents/redis-store": "workspace:*",
+    "@kuralle-agents/tools": "workspace:*",
+    "@hono/node-server": "latest",
+    "@hono/node-ws": "latest",
+    "ai": "latest",
+    "dotenv": "^16.4.5",
+    "hono": "latest",
+    "pg": "^8.11.0",
+    "redis": "^4.7.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/pg": "^8.11.0"
+  }
+}

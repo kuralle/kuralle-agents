@@ -1,0 +1,14 @@
+{
+  "id":  "380232e6-7c83-4f79-bd4c-d5028ba4be37",
+  "name":  "/Users/mithushancj/Documents/asyncdot/openscoped/aria-flow",
+  "projectResources":  {
+    "resources":  [
+      {
+        "gitFolder":  {
+          "folderUri":  "file:///Users/mithushancj/Documents/asyncdot/openscoped/aria-flow",
+          "allowWrite":  true
+        }
+      }
+    ]
+  }
+}

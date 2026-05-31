@@ -1,0 +1,22 @@
+{
+  "name": "@kuralle-playground/shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./runtime/model": "./runtime/model.ts",
+    "./runtime/v2Tools": "./runtime/v2Tools.ts",
+    "./runtime/v2Tools.mjs": "./runtime/v2Tools.mjs",
+    "./runtime/harnessTools": "./runtime/harnessTools.ts",
+    "./runtime/smokeRunner": "./runtime/smokeRunner.ts",
+    "./voice/scenarios": "./voice/scenarios.ts",
+    "./voice/scenarios.mjs": "./voice/scenarios.mjs",
+    "./voice/nativeSession.mjs": "./voice/nativeSession.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "latest",
+    "@kuralle-agents/core": "workspace:*",
+    "ai": "latest",
+    "dotenv": "^16.4.5"
+  }
+}

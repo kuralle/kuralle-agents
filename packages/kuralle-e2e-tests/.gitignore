@@ -1,0 +1,5 @@
+# E2E test artifacts
+fixtures/
+benchmark-report.html
+tests/postcall-audit/_audit_traces/
+

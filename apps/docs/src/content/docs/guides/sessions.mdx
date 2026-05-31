@@ -1,0 +1,95 @@
+---
+title: Sessions & State
+description: Persist conversation history and per-agent state across restarts.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import redisStoreExample from '../../../examples/sessions/redis-store.ts?raw';
+
+Kuralle uses a `SessionStore` to persist conversation history and per-agent state. Every `runtime.run()` call retrieves the session, appends the new turn, and saves it back.
+
+## Default: MemoryStore
+
+`createRuntime` defaults to an in-process `MemoryStore`. It's zero-config and suitable for development and short-lived processes:
+
+```typescript
+import { createRuntime } from '@kuralle-agents/core';
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  // sessionStore defaults to new MemoryStore()
+});
+```
+
+Sessions live in memory and are lost on process restart.
+
+## Redis
+
+For persistent sessions, pass a `RedisSessionStore` from `@kuralle-agents/redis-store`:
+
+```bash
+npm install @kuralle-agents/redis-store redis
+```
+
+<Code code={redisStoreExample} lang="typescript" title="redis-store.ts" />
+
+## Postgres
+
+For Postgres-backed sessions, use `@kuralle-agents/postgres-store`:
+
+```bash
+npm install @kuralle-agents/postgres-store pg
+```
+
+```typescript
+import { Pool } from 'pg';
+import { createRuntime } from '@kuralle-agents/core';
+import { PostgresSessionStore } from '@kuralle-agents/postgres-store';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  sessionStore: new PostgresSessionStore({ client: pool }),
+});
+```
+
+By default, `PostgresSessionStore` creates the sessions table on first use (`autoMigrate: true`).
+
+## Session IDs
+
+The runtime auto-assigns a session ID when none is provided. Pass `sessionId` back on subsequent turns to continue the same conversation:
+
+```typescript
+let sessionId: string | undefined;
+
+async function chat(input: string) {
+  const handle = runtime.run({ input, sessionId });
+  for await (const part of handle.events) {
+    if (part.type === 'done') sessionId = part.sessionId;
+  }
+  await handle;
+}
+```
+
+## Flow state
+
+Flow state — current node, collected fields — lives inside the session under `session.agentStates`. When you swap session stores, flow state persists with the rest of the session automatically.
+
+## Custom stores
+
+The `SessionStore` interface is exported from `@kuralle-agents/core`. Implement it to back sessions with any storage system:
+
+```typescript
+import type { SessionStore } from '@kuralle-agents/core';
+
+class MyStore implements SessionStore {
+  // get, set, delete methods
+}
+```
+
+<Aside type="note">
+  For multi-process deployments, a durable store (Redis or Postgres) is required so sessions survive restarts and are visible across all instances.
+</Aside>

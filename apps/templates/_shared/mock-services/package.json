@@ -1,0 +1,39 @@
+{
+  "name": "@kuralle-templates/_shared-mock-services",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared inline-mock services for kuralle template apps. Ported from Floe's @floe/mock-services (originally MCP-mounted) into pure-TS createTool() functions. Each template imports only the services it needs; tools share the same in-memory store across a process.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./subscription": "./src/subscription.ts",
+    "./order": "./src/order.ts",
+    "./okta": "./src/okta.ts",
+    "./notion": "./src/notion.ts",
+    "./linear": "./src/linear.ts",
+    "./calendar": "./src/calendar.ts",
+    "./email": "./src/email.ts",
+    "./patient-fhir": "./src/patient-fhir.ts",
+    "./rx": "./src/rx.ts",
+    "./billing": "./src/billing.ts",
+    "./store": "./src/store.ts",
+    "./runtime/v2Tools": "./src/runtime/v2Tools.ts",
+    "./runtime/model": "./src/runtime/model.ts",
+    "./runtime/smokeRunner": "./src/runtime/smokeRunner.ts",
+    "./runtime/harnessTools": "./src/runtime/harnessTools.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@kuralle-agents/core": "workspace:*",
+    "ai": "^6.0.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "typescript": "^5.9.3"
+  }
+}

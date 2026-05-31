@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-voice-realtime-openai",
+  "main": "src/server.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CfVoiceRealtimeOpenAIAgent",
+        "class_name": "CfVoiceRealtimeOpenAIAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CfVoiceRealtimeOpenAIAgent"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+  // OPENAI_API_KEY and/or XAI_API_KEY are secrets — set with:
+  //   wrangler secret put OPENAI_API_KEY
+  //   wrangler secret put XAI_API_KEY
+  //
+  // Choose provider at runtime via the PROVIDER env var (set in vars or secrets).
+  // Default: "openai". Set to "xai" to route through xAI Grok.
+}

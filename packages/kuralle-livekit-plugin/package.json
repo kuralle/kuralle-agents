@@ -1,0 +1,58 @@
+{
+  "name": "@kuralle-agents/livekit-plugin",
+  "version": "0.2.0",
+  "description": "Kuralle plugin for LiveKit Agents \u2014 runtime adapter, transport foundation, Gemini STT/TTS",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./gemini": {
+      "types": "./dist/gemini/index.d.ts",
+      "import": "./dist/gemini/index.js"
+    },
+    "./recording": {
+      "types": "./dist/recording/index.d.ts",
+      "import": "./dist/recording/index.js"
+    },
+    "./utils/resample": {
+      "types": "./dist/utils/resample.d.ts",
+      "import": "./dist/utils/resample.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test test",
+    "test:typecheck": "tsc -p test/tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@livekit/agents": ">=1.0.0",
+    "@livekit/rtc-node": ">=0.12.0",
+    "@kuralle-agents/core": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "dependencies": {
+    "@kuralle-agents/realtime-audio": "workspace:*",
+    "@kuralle-agents/voice-protocol": "workspace:*",
+    "@google/genai": "1.43.0",
+    "@aws-sdk/client-s3": "3.1000.0",
+    "@aws-sdk/lib-storage": "3.1000.0"
+  },
+  "devDependencies": {
+    "@kuralle-agents/livekit-plugin-transport-ws": "workspace:*",
+    "@types/node": "^25.3.2",
+    "typescript": "^5.9.3",
+    "ai": "^6.0.0",
+    "zod": "^3.23.0"
+  },
+  "license": "Apache-2.0"
+}

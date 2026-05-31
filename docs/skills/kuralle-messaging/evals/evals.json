@@ -1,0 +1,48 @@
+{
+  "skill_name": "kuralle-messaging",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to build a WhatsApp customer support chatbot using Kuralle. Show me how to set up the webhook handler and wire it to an Kuralle agent.",
+      "expected_output": "A setup using @kuralle-agents/messaging + @kuralle-agents/messaging-meta. Should show createWhatsAppClient() with phone number ID + access token, createMessagingRouter() binding an Kuralle Runtime, webhook verification handler (GET), message handler (POST), and how to run the Hono/Express app. Should mention the 24h messaging window and that outside it you need templates.",
+      "files": [],
+      "expectations": [
+        "Uses @kuralle-agents/messaging-meta (not just @kuralle-agents/messaging alone)",
+        "Uses createWhatsAppClient() with phoneNumberId and accessToken",
+        "Uses createMessagingRouter() to bind the Kuralle runtime",
+        "Includes webhook GET handler for verification (hub.challenge response)",
+        "Includes webhook POST handler for incoming messages",
+        "Mentions the 24-hour messaging window constraint",
+        "Does NOT use graph.instagram.com for WhatsApp (that is Instagram-only)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "How do I set up a single Kuralle agent that handles both WhatsApp and Instagram DMs from the same webhook endpoint?",
+      "expected_output": "Shows createMessagingRouter() accepting an array of clients (WhatsApp + Instagram), mounted on a single POST route. Should mention the different URL patterns for each platform or use a combined router, note the Instagram-specific quirks (graph.instagram.com, HUMAN_AGENT tag for 24h window), and show that both platforms share the same Kuralle Runtime. Should also show webhook verification for both platforms if on separate routes.",
+      "files": [],
+      "expectations": [
+        "Uses createMessagingRouter() with multiple platform clients",
+        "Includes both createWhatsAppClient() and createInstagramClient()",
+        "Notes Instagram uses graph.instagram.com (not graph.facebook.com)",
+        "Shows how both platforms share the same Kuralle Runtime instance",
+        "Mentions HUMAN_AGENT tag requirement for Instagram 24h window re-open",
+        "Does not conflate WhatsApp template handling with Instagram (they differ)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "My WhatsApp bot works great within the first 24 hours but then users come back the next day and the bot fails silently. What's happening and how do I fix it?",
+      "expected_output": "Explanation of the Meta 24-hour messaging window: after 24h since the user's last message, you can only send pre-approved WhatsApp templates. Should show WindowClosedError handling, sendTextOrTemplate() as the safe utility that auto-falls-back to a template, and how to set up a template fallback. Should NOT suggest ignoring the error or just retrying the same message.",
+      "files": [],
+      "expectations": [
+        "Correctly explains the 24-hour window — window resets on user message, NOT on agent message",
+        "Shows WindowClosedError (or equivalent) catch handling",
+        "Recommends sendTextOrTemplate() as the idiomatic solution",
+        "Shows how to configure a fallback template (templateName + templateLanguageCode)",
+        "Does NOT suggest silently dropping the message as a fix",
+        "Does NOT confuse WhatsApp 24h window with Instagram 24h window (they work differently)"
+      ]
+    }
+  ]
+}

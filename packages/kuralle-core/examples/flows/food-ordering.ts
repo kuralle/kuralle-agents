@@ -1,0 +1,204 @@
+#!/usr/bin/env bun
+
+import { z } from 'zod';
+import { defineAgent } from '../../src/authoring/defineAgent.js';
+import { action, defineFlow, reply } from '../../src/authoring/nodes.js';
+import { buildToolSet, defineTool } from '../../src/tools/effect/defineTool.js';
+import { loadExampleEnv, requireLiveModel, runV2Conversation } from '../_shared/v2Runner.js';
+
+loadExampleEnv(import.meta.url);
+const { model } = requireLiveModel();
+
+const initialRole =
+  'You are an order-taking assistant. You must ALWAYS use the available functions to progress the conversation. This is a phone conversation and your responses will be converted to audio. Keep the conversation friendly, casual, and polite. Avoid outputting special characters and emojis.';
+const initialTask =
+  "For this step, ask the user if they want pizza or sushi, and wait for them to use a function to choose. Start off by greeting them. Be friendly and casual; you're taking an order for food over the phone.";
+const pizzaTask = `You are handling a pizza order. Use the available functions:
+- Use select_pizza_order when the user specifies both size AND type
+
+Pricing:
+- Small: $10
+- Medium: $15
+- Large: $20
+
+Remember to be friendly and casual.`;
+const sushiTask = `You are handling a sushi order. Use the available functions:
+- Use select_sushi_order when the user specifies both count AND type
+
+Pricing:
+- $8 per roll
+
+Remember to be friendly and casual.`;
+const confirmTask = `Read back the complete order details to the user and ask if they want anything else or if they want to make changes. Use the available functions:
+- Use complete_order when the user confirms that the order is correct and no changes are needed
+- Use revise_order if they want to change something
+
+Be friendly and clear when reading back the order details.`;
+
+const getDeliveryEstimate = defineTool({
+  name: 'get_delivery_estimate',
+  description: 'Get a delivery estimate for the current order',
+  input: z.object({}),
+  execute: async (_args, ctx) => ({
+    time: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    order: ctx!.runState.state.order ?? null,
+  }),
+});
+
+const end = reply({
+  id: 'end',
+  instructions: 'Thank the user for their order and end the conversation politely and concisely.',
+  model,
+  next: () => ({ end: 'order_completed' }),
+});
+
+const confirm = reply({
+  id: 'confirm',
+  instructions: confirmTask,
+  model,
+  tools: () =>
+    buildToolSet({
+      get_delivery_estimate: getDeliveryEstimate,
+      complete_order: defineTool({
+        name: 'complete_order',
+        description: 'User confirms the order is correct',
+        input: z.object({}),
+        execute: async () => ({ done: true }),
+      }),
+      revise_order: defineTool({
+        name: 'revise_order',
+        description: 'User wants to make changes to their order',
+        input: z.object({}),
+        execute: async () => ({ revise: true }),
+      }),
+    }),
+  next: (turn) => {
+    if (turn.toolResults.some((r) => r.name === 'complete_order')) return end;
+    if (turn.toolResults.some((r) => r.name === 'revise_order')) return initial;
+    return 'stay';
+  },
+});
+
+const choosePizza = reply({
+  id: 'choose_pizza',
+  instructions: pizzaTask,
+  model,
+  tools: () =>
+    buildToolSet({
+      get_delivery_estimate: getDeliveryEstimate,
+      select_pizza_order: defineTool({
+        name: 'select_pizza_order',
+        description: 'Record the pizza order details',
+        input: z.object({
+          size: z.enum(['small', 'medium', 'large']),
+          type: z.enum(['pepperoni', 'cheese', 'supreme', 'vegetarian']),
+        }),
+        execute: async ({ size, type }) => {
+          const basePrice: Record<string, number> = { small: 10, medium: 15, large: 20 };
+          const price = basePrice[size];
+          return {
+            order: { type: 'pizza', size, pizza_type: type, price },
+            size,
+            type,
+            price,
+          };
+        },
+      }),
+    }),
+  next: (turn) => {
+    const r = turn.toolResults.find((t) => t.name === 'select_pizza_order');
+    if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
+    return 'stay';
+  },
+});
+
+const chooseSushi = reply({
+  id: 'choose_sushi',
+  instructions: sushiTask,
+  model,
+  tools: () =>
+    buildToolSet({
+      get_delivery_estimate: getDeliveryEstimate,
+      select_sushi_order: defineTool({
+        name: 'select_sushi_order',
+        description: 'Record the sushi order details',
+        input: z.object({
+          count: z.number().int().min(1).max(10),
+          type: z.enum(['california', 'spicy tuna', 'rainbow', 'dragon']),
+        }),
+        execute: async ({ count, type }) => {
+          const price = count * 8;
+          return {
+            order: { type: 'sushi', count, roll_type: type, price },
+            count,
+            type,
+            price,
+          };
+        },
+      }),
+    }),
+  next: (turn) => {
+    const r = turn.toolResults.find((t) => t.name === 'select_sushi_order');
+    if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
+    return 'stay';
+  },
+});
+
+const initial = reply({
+  id: 'initial',
+  instructions: `${initialRole}\n\n${initialTask}`,
+  model,
+  tools: () =>
+    buildToolSet({
+      get_delivery_estimate: getDeliveryEstimate,
+      choose_pizza: defineTool({
+        name: 'choose_pizza',
+        description: "User wants to order pizza. Let's get that order started.",
+        input: z.object({}),
+        execute: async () => ({ choice: 'pizza' }),
+      }),
+      choose_sushi: defineTool({
+        name: 'choose_sushi',
+        description: "User wants to order sushi. Let's get that order started.",
+        input: z.object({}),
+        execute: async () => ({ choice: 'sushi' }),
+      }),
+    }),
+  next: (turn) => {
+    if (turn.toolResults.some((r) => r.name === 'choose_pizza')) return choosePizza;
+    if (turn.toolResults.some((r) => r.name === 'choose_sushi')) return chooseSushi;
+    return 'stay';
+  },
+});
+
+const kitchenCheck = action({
+  id: 'kitchen_check',
+  run: async () => {
+    console.log('[Action] Checking kitchen status');
+    return initial;
+  },
+});
+
+const agent = defineAgent({
+  id: 'food-ordering',
+  name: 'Food Ordering (Pipecat parity)',
+  instructions: initialRole,
+  model,
+  flows: [
+    defineFlow({
+      name: 'order',
+      description: 'Take a pizza or sushi order',
+      start: kitchenCheck,
+      nodes: [kitchenCheck, initial, choosePizza, chooseSushi, confirm, end],
+    }),
+  ],
+});
+
+runV2Conversation({
+  title: 'Pipecat Food Ordering (v2)',
+  agent,
+  prompts: ['Hi there', 'I want pizza', 'Large pepperoni please', 'Can I get a delivery estimate?', 'That order sounds right'],
+}).catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

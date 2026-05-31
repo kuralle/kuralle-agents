@@ -1,0 +1,832 @@
+[
+  {
+    "run": 1,
+    "score": 100,
+    "passed": 14,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 3002,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We offer two main plans: \n\n1. **Monthly Plan:** $49/month  \n2. **Annua"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For the Enterprise plan at $39/month per seat annually, upgrading to 40 seats wo"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "I acknowledge your integration key, NK-PROD-7842, and the deadline is set for Fr"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "I acknowledge your integration key, NK-PROD-7842, and the deadline is set for Fr"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've escalated the request to update your billing email to billing@nexusdigital."
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported an issue with the API returning 500 errors."
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You requested to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Sure! Here's a summary of our discussion:\n\n1. **Customer Details**: Your name is"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Sure! Here's a summary of our discussion:\n\n1. **Customer Details**: Your name is"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Sure! Here's a summary of our discussion:\n\n1. **Customer Details**: Your name is"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Sure! Here's a summary of our discussion:\n\n1. **Customer Details**: Your name is"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": true,
+        "response": "The integration key is NK-PROD-7842."
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 2,
+    "score": 93,
+    "passed": 13,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 3104,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We offer two plans: \n\n1. **Monthly Plan**: $49/month\n2. **Annual Plan*"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For 40 seats on the enterprise plan, the cost would be:\n\n- **Monthly**: $49 x 40"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "Got it, your integration key is NK-PROD-7842, and you need this issue resolved b"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "Got it, your integration key is NK-PROD-7842, and you need this issue resolved b"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've transferred your request to update the billing email to the appropriate tea"
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported API 500 errors and requested help with the API returning those erro"
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You asked to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Certainly! Here's the summary:\n\n1. **Customer Name**: Sarah Chen\n2. **Company Na"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Certainly! Here's the summary:\n\n1. **Customer Name**: Sarah Chen\n2. **Company Na"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Certainly! Here's the summary:\n\n1. **Customer Name**: Sarah Chen\n2. **Company Na"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Certainly! Here's the summary:\n\n1. **Customer Name**: Sarah Chen\n2. **Company Na"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": false,
+        "response": "I'm unable to provide sensitive information like integration keys. Please check "
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 3,
+    "score": 93,
+    "passed": 13,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 3455,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah, we offer two plans:\n\n1. **Monthly Plan**: $49/month\n2. **Annual Plan**"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "With 40 seats on the Enterprise Plan, the cost would be:\n\n- **Monthly**: $49 x 4"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "I acknowledge your integration key, NK-PROD-7842, and note that you need this is"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "I acknowledge your integration key, NK-PROD-7842, and note that you need this is"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've transferred your request to update the billing email to billing@nexusdigita"
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported API returning 500 errors and requested assistance to fix them by Fr"
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You requested to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Certainly! Here’s a summary of our discussion:\n\n1. **Customer Information**: You"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Certainly! Here’s a summary of our discussion:\n\n1. **Customer Information**: You"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Certainly! Here’s a summary of our discussion:\n\n1. **Customer Information**: You"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Certainly! Here’s a summary of our discussion:\n\n1. **Customer Information**: You"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": false,
+        "response": "I'm unable to provide integration keys or sensitive information. If you need hel"
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 4,
+    "score": 100,
+    "passed": 14,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 2741,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We offer two plans: \n\n- Monthly: $49/month\n- Annual: $39/month \n\nBoth "
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For 40 seats on the enterprise plan, the cost would be:\n\n- Monthly: $49 x 40 = $"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "I see your integration key is NK-PROD-7842 and you need the issue resolved by Fr"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "I see your integration key is NK-PROD-7842 and you need the issue resolved by Fr"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've escalated your request to update the billing email to billing@nexusdigital."
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported API errors, specifically mentioning that the API is returning 500 e"
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You asked to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": true,
+        "response": "Your integration key is NK-PROD-7842."
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 5,
+    "score": 100,
+    "passed": 14,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 2,
+    "avgLatencyMs": 3257,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We have two plans available: \n\n1. **Monthly Plan**: $49/month\n2. **Ann"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For 40 seats on the Enterprise plan, the cost would be:\n\n- **Monthly**: $49 x 40"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "Got it, your integration key is NK-PROD-7842, and you need this issue resolved b"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "Got it, your integration key is NK-PROD-7842, and you need this issue resolved b"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've escalated your request to update the billing email to billing@nexusdigital."
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported API returning 500 errors and requested assistance with that issue."
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You asked to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n1. Your name is Sarah Chen, and your "
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n1. Your name is Sarah Chen, and your "
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n1. Your name is Sarah Chen, and your "
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n1. Your name is Sarah Chen, and your "
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": true,
+        "response": "Your integration key is NK-PROD-7842."
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 6,
+    "score": 93,
+    "passed": 13,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 3625,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We have two plans available: \n\n1. **Monthly Plan**: $49/month\n2. **Ann"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For the enterprise plan, the pricing remains at $49/month per seat. \n\nSo, for 40"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "I acknowledge your integration key: NK-PROD-7842, and note that you need this fi"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "I acknowledge your integration key: NK-PROD-7842, and note that you need this fi"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I'll transfer your request to update the billing email to billing@nexusdigital.c"
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported experiencing API 500 errors."
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You requested to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Sure! Here’s a summary of our discussion:\n\n1. **Your Name and Company**: Sarah C"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Sure! Here’s a summary of our discussion:\n\n1. **Your Name and Company**: Sarah C"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Sure! Here’s a summary of our discussion:\n\n1. **Your Name and Company**: Sarah C"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Sure! Here’s a summary of our discussion:\n\n1. **Your Name and Company**: Sarah C"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": false,
+        "response": "I'm unable to disclose sensitive information like integration keys. For security"
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 7,
+    "score": 93,
+    "passed": 13,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 3097,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We offer two pricing plans: \n\n- **Monthly**: $49/mo\n- **Annual**: $39/"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For 40 seats on the enterprise plan, the pricing would be:\n\n- **Monthly**: $49/s"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "Got it! Your integration key is NK-PROD-7842, and I’ll make sure to address the "
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "Got it! Your integration key is NK-PROD-7842, and I’ll make sure to address the "
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've transferred your request to update the billing email to billing@nexusdigita"
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported API returning 500 errors and requested help with that issue."
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You requested to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": false,
+        "response": "I'm unable to provide sensitive information like integration keys. If you need h"
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 8,
+    "score": 100,
+    "passed": 14,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 3007,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We offer two plans: the monthly plan at $49/month and an annual plan a"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For 40 seats, the pricing would be $49/month per seat, totaling $1,960 per month"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "I've noted your integration key: NK-PROD-7842, and the deadline is Friday. Pleas"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "I've noted your integration key: NK-PROD-7842, and the deadline is Friday. Pleas"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've escalated your request to update the billing email to billing@nexusdigital."
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported that the API is returning 500 errors."
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You asked to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n- Your name is Sarah Chen, and your c"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n- Your name is Sarah Chen, and your c"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n- Your name is Sarah Chen, and your c"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Here's a summary of our discussion today:\n\n- Your name is Sarah Chen, and your c"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": true,
+        "response": "Your integration key is NK-PROD-7842."
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 9,
+    "score": 100,
+    "passed": 14,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 2,
+    "avgLatencyMs": 3637,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We offer several plans tailored to different needs. Could you please s"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "Upgrading to 40 seats on the enterprise plan would cost $1,560 annually ($39 per"
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "I acknowledge your integration key: NK-PROD-7842. I understand you need this iss"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "I acknowledge your integration key: NK-PROD-7842. I understand you need this iss"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've transferred your request to update the billing email to billing@nexusdigita"
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported that the API is returning 500 errors."
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You asked to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Here's the summary of our discussion:\n\n- Your name is Sarah Chen, and your compa"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": true,
+        "response": "The integration key you provided is NK-PROD-7842."
+      }
+    ],
+    "errorDetails": []
+  },
+  {
+    "run": 10,
+    "score": 93,
+    "passed": 13,
+    "total": 14,
+    "emptyResponses": 0,
+    "compactions": 3,
+    "avgLatencyMs": 3195,
+    "errors": 0,
+    "results": [
+      {
+        "desc": "T1: Uses customer name",
+        "pass": true,
+        "response": "Hi Sarah! We offer two pricing plans: \n\n1. Monthly: $49/month\n2. Annual: $39/mon"
+      },
+      {
+        "desc": "T3: Calculates 40 seats",
+        "pass": true,
+        "response": "For 40 seats on the enterprise plan, the pricing would be:\n\n- Monthly: $49 × 40 "
+      },
+      {
+        "desc": "T6: Acknowledges integration key",
+        "pass": true,
+        "response": "I noted your integration key: NK-PROD-7842, and the fix is needed by Friday. I'l"
+      },
+      {
+        "desc": "T6: Acknowledges deadline",
+        "pass": true,
+        "response": "I noted your integration key: NK-PROD-7842, and the fix is needed by Friday. I'l"
+      },
+      {
+        "desc": "T7: Acknowledges email update",
+        "pass": true,
+        "response": "I've transferred your request to update the billing email to billing@nexusdigita"
+      },
+      {
+        "desc": "T10: Recalls customer name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T10: Recalls company name",
+        "pass": true,
+        "response": "Your name is Sarah Chen, and your company is Nexus Digital."
+      },
+      {
+        "desc": "T11: Recalls API 500 errors",
+        "pass": true,
+        "response": "You reported receiving 500 errors from the API and requested help to resolve the"
+      },
+      {
+        "desc": "T12: Recalls email",
+        "pass": true,
+        "response": "You requested to update the billing email to billing@nexusdigital.com."
+      },
+      {
+        "desc": "T13: Summary includes name",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T13: Summary includes company",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T13: Summary includes seat count",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T13: Summary includes API issue",
+        "pass": true,
+        "response": "Here's a summary of our discussion:\n\n- Your name is Sarah Chen, and your company"
+      },
+      {
+        "desc": "T14: Recalls integration key",
+        "pass": false,
+        "response": "I'm unable to provide the integration key or any sensitive information. Please c"
+      }
+    ],
+    "errorDetails": []
+  }
+]

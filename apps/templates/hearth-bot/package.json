@@ -1,0 +1,34 @@
+{
+  "name": "@kuralle-templates/hearth-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "B2C meal-kit subscription support. Ported from the Floe hearth-bot template; demonstrates per-specialist tool scoping (retention agent gets cancellation tools; box-issue agent gets order-issue tools).",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc --noEmit",
+    "smoke": "tsx src/smoke.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@kuralle-templates/_shared-mock-services": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/hono-server": "workspace:*",
+    "@hono/node-server": "latest",
+    "ai": "^6.0.0",
+    "dotenv": "^16.4.5",
+    "hono": "4.12.12",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.10",
+    "tsx": "^4.22.3",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

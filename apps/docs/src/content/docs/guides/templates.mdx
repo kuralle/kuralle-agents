@@ -1,0 +1,57 @@
+---
+title: Templates
+description: Start a new Kuralle project from a template with create-kuralle-agents.
+---
+
+import { Steps, Aside, Code } from '@astrojs/starlight/components';
+
+The fastest way to start is from a template. `create-kuralle-agents` scaffolds a working project — no clone, no boilerplate to wire up.
+
+## Create a project
+
+<Steps>
+
+1. Run the scaffolder. It copies a template, sets your project name, and prints the next steps.
+
+   ```bash
+   npm create kuralle-agents@latest my-app
+   ```
+
+   Or pick the template up front:
+
+   ```bash
+   npm create kuralle-agents@latest my-app --template nextjs-chatbot
+   ```
+
+2. Install and run.
+
+   ```bash
+   cd my-app
+   npm install
+   cp .env.example .env   # add your OPENAI_API_KEY
+   npm run dev
+   ```
+
+</Steps>
+
+With no arguments, the CLI asks where to create the project and which template to use.
+
+## Templates
+
+| Template | What it is |
+| --- | --- |
+| `nextjs-chatbot` | A Next.js chat app wired to a Kuralle agent — streaming chat UI, thread history, and persistence through Kuralle `SessionStore` (in-memory by default, Postgres when `POSTGRES_URL` is set). |
+
+<Aside type="note" title="More templates">
+  The framework ships several reference agents (campus support, clinic intake, ops bot, and more) that demonstrate triage, flows, and per-specialist tool scoping. They use internal mock-service backends, so they aren't standalone-installable yet — they'll join the CLI as those backends are inlined. For now they live in the repository's `apps/templates/` as references.
+</Aside>
+
+## What you get
+
+Every template is a complete, runnable project:
+
+- Kuralle already wired — `defineAgent` + `createRuntime`, ready to extend.
+- A real example of the pattern it demonstrates (chat UI, persistence, flows, or triage).
+- `.env.example` listing the keys you need.
+
+Edit `lib/kuralle/` (or the equivalent) to change the agent, add tools, or attach a flow — see the [Agents](/guides/agents), [Flows](/guides/flows), and [Tools](/guides/tools) guides.

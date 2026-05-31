@@ -1,0 +1,15 @@
+{
+  "name": "@kuralle-agents/ws-bench",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Head-to-head benchmark — `ws` vs `@sockudo/ws` under voice-frame echo workload",
+  "scripts": {
+    "bench": "node bench.mjs",
+    "test": "bun test test"
+  },
+  "dependencies": {
+    "@sockudo/ws": "1.6.10",
+    "ws": "^8.20.0"
+  }
+}

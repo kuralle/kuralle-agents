@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# templates/ is generated from apps/templates/* by scripts/sync-templates.ts
+# (runs at prepublishOnly). Not committed to avoid duplicating template source.
+templates/

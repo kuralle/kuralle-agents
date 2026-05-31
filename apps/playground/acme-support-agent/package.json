@@ -1,0 +1,35 @@
+{
+  "name": "acme-support-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "ingest": "bun run scripts/ingest.ts",
+    "bench": "bun run scripts/bench.ts",
+    "bench:ttft": "bun run scripts/bench-ttft.ts",
+    "bench:quality": "bun run scripts/bench-quality.ts",
+    "bench:scale": "bun run scripts/bench-scale.ts",
+    "cli": "bun run src/cli.ts",
+    "dev": "bun run src/server.ts",
+    "smoke": "bun run smoke.ts",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "latest",
+    "@kuralle-playground/shared": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/hono-server": "workspace:*",
+    "@kuralle-agents/lancedb-store": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*",
+    "@kuralle-agents/rag-loaders": "workspace:*",
+    "@hono/node-server": "latest",
+    "@hono/node-ws": "latest",
+    "ai": "latest",
+    "dotenv": "^16.4.5",
+    "hono": "latest",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "skill_name": "kuralle-voice-agents",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to build a voice agent for a pizza ordering service using Kuralle. It should use the native audio pipeline with Gemini so it responds fast. Show me a complete working server setup.",
+      "expected_output": "A complete server using createVoiceSession({ mode: 'realtime', options: { runtime: createRuntime(...) } }) (not cascaded pipeline), binding a WebSocketAgentServer (or LiveKit server.onConnection), using a Gemini RealtimeModel, with createRuntime wiring in the defineAgent, and a clean graceful shutdown. Should NOT use KuralleVoiceSession or TurnDetector (those are cascaded, not native).",
+      "files": [],
+      "expectations": [
+        "Uses createVoiceSession with mode realtime or createKuralleRealtimeAgent with runtime — not KuralleVoiceSession",
+        "Uses a Gemini model (gemini-2.5-flash-preview or similar) — not a cascaded STT/TTS stack",
+        "Wires createRuntime with defineAgent agents",
+        "Includes a WebSocketAgentServer or server.onConnection listener to accept connections",
+        "Does NOT incorrectly recommend TurnDetector (cascaded-only feature)",
+        "Includes graceful shutdown (SIGTERM/SIGINT handling or equivalent)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My Kuralle voice agent is working over WebSocket but I need to also accept calls via SIP (for a 3CX PBX). How do I add SIP transport support?",
+      "expected_output": "Instructions and code using @kuralle-agents/livekit-plugin-transport-sip (SIPAgentServer), showing the transport config with the correct sampleRate (24000), and how to point a 3CX trunk at the agent endpoint. Should mention the SIP client configuration requirements (PCMU/PCMA codec, G.711 at 8kHz for SIP transcoding vs 24kHz for the pipeline).",
+      "files": [],
+      "expectations": [
+        "References @kuralle-agents/livekit-plugin-transport-sip package",
+        "Uses SIPAgentServer (not WebSocketAgentServer) for SIP connections",
+        "Explains the codec chain: SIP sends G.711 at 8kHz, the transport resamples to 24kHz for the native audio model — the developer does NOT need to configure sampleRate manually",
+        "Provides guidance on pointing a SIP trunk (3CX or generic) to the agent endpoint",
+        "Does NOT confuse SIP transport with the WebSocket transport"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I'm building a voice agent that collects appointment info across multiple turns — first the caller's name, then their preferred date. How do I set up extraction nodes so it transitions automatically when both are collected? Also, I know voice models can hallucinate extracted slots, how do I prevent that?",
+      "expected_output": "A defineAgent with a collect node gathering name + date, required fields set, onComplete pointing to the next node, and critically: extractionModel set on createRuntime (not just on the agent). Should also show .voiceRules() or equivalent voice prompt guidance. Should NOT have the user manually write a submit tool (collect nodes handle multi-turn gather internally).",
+      "files": [],
+      "expectations": [
+        "Uses collect node kind for the data-collection step",
+        "Sets required with both fields on the collect node",
+        "Sets onComplete to auto-advance when fields are collected",
+        "Sets extractionModel on createRuntime — not just on the agent config",
+        "Does NOT add a manual submit tool (would conflict with collect loop)",
+        "Mentions or applies voice prompt rules (short utterances, one ask per turn)"
+      ]
+    }
+  ]
+}
