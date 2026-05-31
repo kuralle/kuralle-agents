@@ -12,14 +12,75 @@ const { model } = requireLiveModel();
 const roleMessage =
   'You are an order-taking assistant. You must ALWAYS use the available functions to progress the conversation. This is a phone conversation and your responses will be converted to audio. Keep the conversation friendly, casual, and polite. Avoid outputting special characters and emojis.';
 
+// Per-node `tools` (buildToolSet) is the model-visible *schema* only — the AI SDK
+// entry carries no executor. The executors run through the agent's `effectTools`
+// (see `effectTools` on the agent below). Define each tool once and reference it
+// from both places.
 const getDeliveryEstimate = defineTool({
   name: 'get_delivery_estimate',
   description: 'Provide delivery estimate information.',
   input: z.object({}),
-  execute: async (_args, ctx) => ({
+  // NOTE: flow-node tool executors are not passed the flow run context, so this
+  // cannot read `ctx.runState.state` — return a static estimate. To act on the
+  // collected order, use an `action` node (which receives flow state directly).
+  execute: async () => ({
     time: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    order: ctx!.runState.state.order ?? null,
   }),
+});
+
+const completeOrder = defineTool({
+  name: 'complete_order',
+  description: 'User confirms the order is correct.',
+  input: z.object({}),
+  execute: async () => ({ done: true }),
+});
+
+const reviseOrder = defineTool({
+  name: 'revise_order',
+  description: 'User wants to make changes to their order.',
+  input: z.object({}),
+  execute: async () => ({ revise: true }),
+});
+
+const selectPizzaOrder = defineTool({
+  name: 'select_pizza_order',
+  description: 'Record the pizza order details.',
+  input: z.object({
+    size: z.enum(['small', 'medium', 'large']),
+    pizza_type: z.enum(['pepperoni', 'cheese', 'supreme', 'vegetarian']),
+  }),
+  execute: async ({ size, pizza_type }) => {
+    const basePrice: Record<string, number> = { small: 10, medium: 15, large: 20 };
+    const price = basePrice[size];
+    return { order: { type: 'pizza', size, pizza_type, price }, size, type: pizza_type, price };
+  },
+});
+
+const selectSushiOrder = defineTool({
+  name: 'select_sushi_order',
+  description: 'Record the sushi order details.',
+  input: z.object({
+    count: z.number().int().min(1).max(10),
+    roll_type: z.enum(['california', 'spicy tuna', 'rainbow', 'dragon']),
+  }),
+  execute: async ({ count, roll_type }) => {
+    const price = count * 8;
+    return { order: { type: 'sushi', count, roll_type, price }, count, type: roll_type, price };
+  },
+});
+
+const choosePizzaTool = defineTool({
+  name: 'choose_pizza',
+  description: "User wants to order pizza. Let's get that order started.",
+  input: z.object({}),
+  execute: async () => ({ choice: 'pizza' }),
+});
+
+const chooseSushiTool = defineTool({
+  name: 'choose_sushi',
+  description: "User wants to order sushi. Let's get that order started.",
+  input: z.object({}),
+  execute: async () => ({ choice: 'sushi' }),
 });
 
 const end = reply({
@@ -37,22 +98,7 @@ const confirm = reply({
 
 Be friendly and clear when reading back the order details.`,
   model,
-  tools: () =>
-    buildToolSet({
-      get_delivery_estimate: getDeliveryEstimate,
-      complete_order: defineTool({
-        name: 'complete_order',
-        description: 'User confirms the order is correct.',
-        input: z.object({}),
-        execute: async () => ({ done: true }),
-      }),
-      revise_order: defineTool({
-        name: 'revise_order',
-        description: 'User wants to make changes to their order.',
-        input: z.object({}),
-        execute: async () => ({ revise: true }),
-      }),
-    }),
+  tools: () => buildToolSet({ get_delivery_estimate: getDeliveryEstimate, complete_order: completeOrder, revise_order: reviseOrder }),
   next: (turn) => {
     if (turn.toolResults.some((r) => r.name === 'complete_order')) return end;
     if (turn.toolResults.some((r) => r.name === 'revise_order')) return initial;
@@ -72,28 +118,7 @@ Pricing:
 
 Remember to be friendly and casual.`,
   model,
-  tools: () =>
-    buildToolSet({
-      get_delivery_estimate: getDeliveryEstimate,
-      select_pizza_order: defineTool({
-        name: 'select_pizza_order',
-        description: 'Record the pizza order details.',
-        input: z.object({
-          size: z.enum(['small', 'medium', 'large']),
-          pizza_type: z.enum(['pepperoni', 'cheese', 'supreme', 'vegetarian']),
-        }),
-        execute: async ({ size, pizza_type }) => {
-          const basePrice: Record<string, number> = { small: 10, medium: 15, large: 20 };
-          const price = basePrice[size];
-          return {
-            order: { type: 'pizza', size, pizza_type, price },
-            size,
-            type: pizza_type,
-            price,
-          };
-        },
-      }),
-    }),
+  tools: () => buildToolSet({ get_delivery_estimate: getDeliveryEstimate, select_pizza_order: selectPizzaOrder }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'select_pizza_order');
     if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
@@ -111,27 +136,7 @@ Pricing:
 
 Remember to be friendly and casual.`,
   model,
-  tools: () =>
-    buildToolSet({
-      get_delivery_estimate: getDeliveryEstimate,
-      select_sushi_order: defineTool({
-        name: 'select_sushi_order',
-        description: 'Record the sushi order details.',
-        input: z.object({
-          count: z.number().int().min(1).max(10),
-          roll_type: z.enum(['california', 'spicy tuna', 'rainbow', 'dragon']),
-        }),
-        execute: async ({ count, roll_type }) => {
-          const price = count * 8;
-          return {
-            order: { type: 'sushi', count, roll_type, price },
-            count,
-            type: roll_type,
-            price,
-          };
-        },
-      }),
-    }),
+  tools: () => buildToolSet({ get_delivery_estimate: getDeliveryEstimate, select_sushi_order: selectSushiOrder }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'select_sushi_order');
     if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
@@ -143,22 +148,7 @@ const initial = reply({
   id: 'initial',
   instructions: `${roleMessage}\n\nFor this step, ask the user if they want pizza or sushi, and wait for them to use a function to choose. Start off by greeting them. Be friendly and casual; you're taking an order for food over the phone.`,
   model,
-  tools: () =>
-    buildToolSet({
-      get_delivery_estimate: getDeliveryEstimate,
-      choose_pizza: defineTool({
-        name: 'choose_pizza',
-        description: "User wants to order pizza. Let's get that order started.",
-        input: z.object({}),
-        execute: async () => ({ choice: 'pizza' }),
-      }),
-      choose_sushi: defineTool({
-        name: 'choose_sushi',
-        description: "User wants to order sushi. Let's get that order started.",
-        input: z.object({}),
-        execute: async () => ({ choice: 'sushi' }),
-      }),
-    }),
+  tools: () => buildToolSet({ get_delivery_estimate: getDeliveryEstimate, choose_pizza: choosePizzaTool, choose_sushi: chooseSushiTool }),
   next: (turn) => {
     if (turn.toolResults.some((r) => r.name === 'choose_pizza')) return choosePizza;
     if (turn.toolResults.some((r) => r.name === 'choose_sushi')) return chooseSushi;
@@ -179,6 +169,17 @@ const agent = defineAgent({
   name: 'Food Ordering Direct Functions (Pipecat parity)',
   instructions: roleMessage,
   model,
+  // Register every per-node tool's executor. Per-node `tools` only shows the model
+  // the schema; without this, calling a node tool throws "Unknown tool".
+  effectTools: {
+    get_delivery_estimate: getDeliveryEstimate,
+    choose_pizza: choosePizzaTool,
+    choose_sushi: chooseSushiTool,
+    select_pizza_order: selectPizzaOrder,
+    select_sushi_order: selectSushiOrder,
+    complete_order: completeOrder,
+    revise_order: reviseOrder,
+  },
   flows: [
     defineFlow({
       name: 'order',
