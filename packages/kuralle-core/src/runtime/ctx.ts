@@ -25,7 +25,7 @@ import { findStepByKey } from './durable/replay.js';
 
 const APPROVAL_SIGNAL = '__approval';
 
-export interface EffectClock {
+interface EffectClock {
   now(): number;
   uuid(): string;
 }
@@ -51,7 +51,7 @@ export interface CtxDeps {
   emit?: (part: HarnessStreamPart) => void;
 }
 
-export function makeCtx(deps: CtxDeps): RunContext {
+function makeCtx(deps: CtxDeps): RunContext {
   let effectOrdinal = 0;
   const steps = deps.steps;
   const clock: EffectClock = deps.clock ?? {

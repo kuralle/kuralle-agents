@@ -13,7 +13,7 @@ export function resolveNodeRef(ref: FlowNode | (() => FlowNode)): FlowNode {
   return typeof ref === 'function' ? ref() : ref;
 }
 
-export function isFlowNode(value: unknown): value is FlowNode {
+function isFlowNode(value: unknown): value is FlowNode {
   if (typeof value !== 'object' || value === null) {
     return false;
   }

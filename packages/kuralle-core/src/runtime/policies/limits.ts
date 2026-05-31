@@ -10,7 +10,7 @@ export class LimitsExceededError extends Error {
   }
 }
 
-export function readTurnCount(run: RunState): number {
+function readTurnCount(run: RunState): number {
   const value = run.state[TURN_COUNT_KEY];
   return typeof value === 'number' ? value : 0;
 }

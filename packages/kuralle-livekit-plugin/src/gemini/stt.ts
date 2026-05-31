@@ -39,7 +39,7 @@ export interface GeminiLiveSession {
   close(): Promise<void> | void;
 }
 
-export interface GeminiLiveConnectCallbacks {
+interface GeminiLiveConnectCallbacks {
   onopen?: () => void;
   onmessage?: (message: unknown) => void;
   onerror?: (error: unknown) => void;

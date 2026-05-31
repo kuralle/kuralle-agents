@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export function stableStringify(value: unknown): string {
+function stableStringify(value: unknown): string {
   return JSON.stringify(value, (_key, val) => {
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       const record = val as Record<string, unknown>;

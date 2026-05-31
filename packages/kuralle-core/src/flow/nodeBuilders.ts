@@ -23,7 +23,7 @@ export function buildNodePrompt(node: ReplyNode, state: FlowState): string {
   return resolveInstructions(node.instructions, state);
 }
 
-export function buildNodeTools(node: ReplyNode, state: FlowState): ToolSet {
+function buildNodeTools(node: ReplyNode, state: FlowState): ToolSet {
   if (!node.tools) {
     return {};
   }

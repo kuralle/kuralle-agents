@@ -1,6 +1,4 @@
-import type { FlowPromptContext } from '../types/processors.js';
-
-export type TemplateMissingBehavior = 'keep' | 'empty';
+type TemplateMissingBehavior = 'keep' | 'empty';
 
 export interface RenderTemplateOptions {
   missing?: TemplateMissingBehavior;
@@ -59,10 +57,6 @@ export function renderFlowTemplate(
     }
     return formatValue(v);
   });
-}
-
-export function renderNodePrompt(prompt: string | undefined | null, ctx: FlowPromptContext): string {
-  return renderFlowTemplate(prompt, ctx.collectedData, { missing: 'keep' });
 }
 
 function parseRegexLiteral(pattern: string): RegExp | null {

@@ -22,5 +22,5 @@ tier rag-loaders lancedb-store postgres-store redis-store upstash-store \
 tier transport-base                                                                        # T4
 tier livekit-plugin-transport-ws livekit-plugin-transport-sip livekit-plugin-transport-http \
      livekit-plugin-transport-twilio livekit-plugin-transport-smartpbx                     # T5 transports
-tier studio e2e-tests                                                                      # T6 top consumers
+# (no T6 tier: `studio` was dropped in the rebrand and `e2e-tests` has no build step)
 echo "✓ all packages built (ordered)"

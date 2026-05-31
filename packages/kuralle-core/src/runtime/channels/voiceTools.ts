@@ -53,18 +53,4 @@ function toolSetToEffectTools(tools: ToolSet): Record<string, AnyTool> {
   return out;
 }
 
-export function mergeVoiceToolDefs(
-  resolved: ResolvedNode,
-  toolDefs: Record<string, AnyTool>,
-): Record<string, AnyTool> {
-  const merged: Record<string, AnyTool> = { ...toolDefs, ...(resolved.localTools ?? {}) };
-  const fromNode = toolSetToEffectTools(resolved.tools);
-  for (const [name, tool] of Object.entries(fromNode)) {
-    if (!merged[name]) {
-      merged[name] = tool;
-    }
-  }
-  return merged;
-}
-
 export { buildToolSet };

@@ -1,9 +1,6 @@
 import type { ModelMessage } from 'ai';
-import type { InputProcessor, OutputProcessor } from '../../types/processors.js';
 import type { ToolCallRecord } from '../../types/session.js';
 import type { RunContext } from '../../types/run-context.js';
-import type { RefinementCapability } from '../../capabilities/RefinementCapability.js';
-import type { ValidationCapability } from '../../capabilities/ValidationCapability.js';
 import { runInputProcessors, runOutputProcessors } from '../../processors/ProcessorRunner.js';
 
 export interface PreTurnResult {
@@ -176,18 +173,4 @@ function patchLatestUserMessage(messages: ModelMessage[], next: string): void {
     }
   }
   messages.push({ role: 'user', content: next });
-}
-
-export function buildValidationPolicies(
-  outputProcessors: OutputProcessor[],
-  moderators: ValidationCapability[],
-): ValidationCapability[] {
-  return [...moderators];
-}
-
-export function buildRefinementPolicies(
-  inputProcessors: InputProcessor[],
-  refinements: RefinementCapability[],
-): RefinementCapability[] {
-  return [...refinements];
 }

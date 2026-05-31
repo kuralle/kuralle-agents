@@ -54,7 +54,7 @@ type AbstractConstructor<T = object> = abstract new (...args: unknown[]) => T;
 type AgentLike = Constructor | AbstractConstructor;
 
 /** DO host surface accessed by the realtime voice mixin. */
-export interface RealtimeVoiceHost<Env = unknown, State = unknown>
+interface RealtimeVoiceHost<Env = unknown, State = unknown>
   extends DurableObjectAgentSurface<Env, State> {}
 
 interface VoiceResumptionState {

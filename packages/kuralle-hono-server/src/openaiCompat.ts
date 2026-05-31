@@ -4,7 +4,7 @@ import type { ModelMessage } from 'ai';
 import type { HarnessStreamPart, RuntimeLike, TurnHandle } from '@kuralle-agents/core';
 import crypto from 'node:crypto';
 
-export type SystemPromptMode = 'agent' | 'merge';
+type SystemPromptMode = 'agent' | 'merge';
 
 export interface CreateOpenAICompatRouterOptions {
   runtime: RuntimeLike;

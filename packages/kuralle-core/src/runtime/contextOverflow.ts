@@ -31,21 +31,6 @@
  */
 import type { Session } from '../types/index.js';
 
-// AI SDK v6 ships APICallError both directly via 'ai' and re-exports the
-// '@ai-sdk/provider' definition. We import the type only — runtime check
-// uses `APICallError.isInstance` via the imported class.
-import { APICallError } from 'ai';
-
-/** Error subclass surfaced to TurnPipeline when overflow recovery fails twice. */
-export class ContextOverflowUnrecoverableError extends Error {
-  readonly cause?: unknown;
-  constructor(cause?: unknown) {
-    super('Context overflow could not be recovered after retry');
-    this.name = 'ContextOverflowUnrecoverableError';
-    this.cause = cause;
-  }
-}
-
 // Pre-compiled message patterns — keep tight and audited; loose patterns
 // inflate false positives across providers.
 const OVERFLOW_MESSAGE_PATTERNS: RegExp[] = [
@@ -137,16 +122,6 @@ export function isContextOverflowError(error: unknown): boolean {
   }
 
   return false;
-}
-
-/**
- * APICallError-aware check that also recognizes the AI SDK v6 type guard.
- * Exported separately so callers can compose with other classifiers without
- * paying the message-regex cost when the type tells them everything.
- */
-export function isApiCallContextOverflow(error: unknown): boolean {
-  if (!APICallError.isInstance(error)) return false;
-  return isContextOverflowError(error);
 }
 
 export interface OverflowRecoveryResult {

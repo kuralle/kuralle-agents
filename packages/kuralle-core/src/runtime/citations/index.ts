@@ -4,11 +4,8 @@ import type {
   HarnessStreamPart,
   KnowledgeRetrievalResult,
   RetrievalCacheAdapter,
-  Session,
   SourceRef,
 } from '../../types/index.js';
-
-export const PENDING_CITATIONS_KEY = '__pendingCitations';
 
 export interface CitationRetrievalProvider {
   retrieve(
@@ -61,51 +58,6 @@ export function normalizeCitations(
   }
 
   return Array.from(byId.values()).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-}
-
-export function getPendingCitations(session: Session): SourceRef[] {
-  const pending = session.workingMemory[PENDING_CITATIONS_KEY];
-  return Array.isArray(pending) ? (pending as SourceRef[]) : [];
-}
-
-export function popPendingCitations(session: Session): SourceRef[] {
-  const citations = getPendingCitations(session);
-  delete session.workingMemory[PENDING_CITATIONS_KEY];
-  return citations;
-}
-
-export function withCitationMetadata<T extends { role?: unknown; metadata?: unknown }>(
-  message: T,
-  citations: readonly SourceRef[],
-): T {
-  if (message.role !== 'assistant' || citations.length === 0) return message;
-  const metadata =
-    typeof message.metadata === 'object' && message.metadata !== null
-      ? { ...(message.metadata as Record<string, unknown>) }
-      : {};
-  return {
-    ...message,
-    metadata: {
-      ...metadata,
-      citations,
-    },
-  };
-}
-
-export function withCitationsOnLastAssistantMessage<T extends { role?: unknown; metadata?: unknown }>(
-  messages: readonly T[],
-  citations: readonly SourceRef[],
-): T[] {
-  if (citations.length === 0) return [...messages];
-
-  const next = [...messages];
-  for (let index = next.length - 1; index >= 0; index--) {
-    if (next[index].role === 'assistant') {
-      next[index] = withCitationMetadata(next[index], citations);
-      break;
-    }
-  }
-  return next;
 }
 
 function sourceRefFromResult(result: KnowledgeRetrievalResult): SourceRef {

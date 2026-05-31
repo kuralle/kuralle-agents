@@ -6,7 +6,6 @@ import {
   type ToolExecutionOptions as AiToolExecutionOptions,
   type ToolExecuteFunction,
 } from 'ai';
-import type { Runtime } from '../runtime/Runtime.js';
 import type { ZodTypeAny, z } from 'zod';
 
 export type Tool<TInput = unknown, TResult = unknown> = AiTool<TInput, TResult>;
@@ -26,20 +25,6 @@ export interface ToolExecutionContext {
 }
 
 export type ToolExecutionOptions = AiToolExecutionOptions;
-
-export type ToolExecutionContextWithRuntime = ToolExecutionContext & { runtime: Runtime };
-
-export function isAgentContext(value: unknown): value is ToolExecutionContextWithRuntime {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'runtime' in value
-  );
-}
-
-export function getRuntimeFromContext(context: ToolExecutionContext | undefined): Runtime | undefined {
-  return context?.runtime as Runtime | undefined;
-}
 
 export interface ToolDefinition<TInput = unknown, TResult = unknown> {
   description: string;

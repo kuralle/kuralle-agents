@@ -30,7 +30,7 @@ export class FlowOscillationError extends Error {
   }
 }
 
-export function buildNodeRegistry(flow: Flow): Map<string, FlowNode> {
+function buildNodeRegistry(flow: Flow): Map<string, FlowNode> {
   const registry = new Map<string, FlowNode>();
   for (const node of flow.nodes) {
     registry.set(node.id, node);
@@ -38,7 +38,7 @@ export function buildNodeRegistry(flow: Flow): Map<string, FlowNode> {
   return registry;
 }
 
-export function resolveStartNode(flow: Flow): FlowNode {
+function resolveStartNode(flow: Flow): FlowNode {
   return resolveNodeRef(flow.start);
 }
 
