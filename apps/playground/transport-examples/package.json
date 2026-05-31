@@ -12,7 +12,7 @@
     "smartpbx-bridge": "cd smartpbx-bridge && bun run start",
     "3cx-support": "tsx 3cx-support/3cx-support.ts",
     "test-client": "tsx test-client/index.ts",
-    "build": "tsc --noEmit -p tsconfig.json && bun run --cwd smartpbx-bridge typecheck",
+    "build": "tsc --noEmit -p tsconfig.json && bun run --cwd smartpbx-bridge typecheck"
   },
   "dependencies": {
     "@kuralle-agents/core": "workspace:*",

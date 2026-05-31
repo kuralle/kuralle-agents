@@ -76,8 +76,18 @@ pnpm release             # version + build + publish (all packages version toget
 ## Adding a feature
 1. Start in `@kuralle-agents/core` for primitives or runtime changes; update types under `packages/kuralle-core/src/types/`.
 2. Update the runtime / flow execution paths; keep streaming semantics stable (`text-delta`, tool events, `done`).
-3. Add a runnable example under `packages/kuralle-core/examples/`.
+3. Add a runnable example under `packages/kuralle-core/examples/` — and **run it** (live smoke), not just typecheck it (see Gotchas).
 4. Update the docs (`apps/docs/`, package READMEs, `docs/skills/`) — in the same change.
+
+## Gotchas & disciplines (learned the hard way)
+
+- **Version + publish *together*, never piecemeal.** `pnpm` rewrites `workspace:*` to the *exact* dependency version at publish time. So publishing `core@x` alone leaves every dependent (e.g. `hono-server`) pinning the *old exact* `core` → consumers install two copies of `core` → `tsc` errors ("separate declarations of a private property"). Bump and `pnpm publish -r` the whole graph — or at minimum every package a template/consumer installs — in one release.
+- **Run examples and templates — typecheck is not enough.** A flow/agent example that compiles can still throw at runtime (both shipped `*-direct-functions` flow examples crashed on the first tool call: schema registered, executor not). Execute a live smoke before shipping; gate templates with a build-smoke (`verify-templates.sh`). "Untested example = broken example."
+- **Ship a tested lockfile with each template** so `npm install` is deterministic — a transitive major bump (e.g. `next-themes`) can break a previously-green scaffold (ERESOLVE, or a dropped subpath like `next-themes/dist/types`).
+- **Never bundle a real `.env` in a published artifact** — only `.env.example`. A bundled `.env.local` once leaked a key. The starter sync excludes every `.env*` except `.env.example`.
+- **`npm`/`wrangler` `config.load()` failure** — these CLIs error ("call config.load() before reading values") when run from *inside* a monorepo package dir. Run them from a neutral cwd (repo root or `/tmp`).
+- **Forcing a model in examples/templates** — `resolveTemplateModel`/`requireLiveModel` prefer **xAI → Google → OpenAI** by which provider key is present. To force OpenAI, clear `XAI_API_KEY` + the Google keys; otherwise you may hit a stale Grok model (404) or a Google quota (429) that *looks* like an OpenAI failure but isn't.
+- **Playground apps (`apps/playground/*`) are excluded from `typecheck:all`** and rot silently (a trailing-comma `package.json` went uncaught). If a playground demo is referenced by docs/guides, either add it to CI or fold it into the relevant package's `examples/`.
 
 ## Key docs
 - `README.md` — onboarding. `apps/docs/` — the documentation site (Astro Starlight).
