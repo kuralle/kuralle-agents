@@ -34,7 +34,8 @@
     "fresh": "rm -rf node_modules bun.lockb && bun install",
     "changeset": "changeset",
     "changeset:version": "changeset version && pnpm install --no-frozen-lockfile",
-    "changeset:publish": "bun run build:packages && pnpm publish -r --access public",
+    "check:no-source-maps": "bash scripts/check-no-source-maps.sh",
+    "changeset:publish": "bun run build:packages && bash scripts/check-no-source-maps.sh && pnpm publish -r --access public",
     "release": "pnpm changeset:version && pnpm changeset:publish"
   },
   "devDependencies": {
