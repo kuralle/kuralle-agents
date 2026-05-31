@@ -22,7 +22,6 @@
     "zod": "^3.0.0"
   },
   "devDependencies": {
-    "@ai-sdk/openai": "^3.0.0",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/rag": "workspace:*",
     "@types/node": "^20.11.0",

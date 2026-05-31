@@ -20,7 +20,6 @@
     "@kuralle-agents/core": "workspace:*"
   },
   "devDependencies": {
-    "@ai-sdk/google": "^3.0.0",
     "@ai-sdk/openai": "^3.0.0",
     "@kuralle-agents/core": "workspace:*",
     "@hono/node-server": "^1.13.0",
