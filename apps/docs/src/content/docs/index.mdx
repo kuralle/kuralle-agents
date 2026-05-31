@@ -18,7 +18,7 @@ import firstAgentExample from '../../examples/quickstart/first-agent.ts?raw';
 
 Kuralle is a TypeScript framework for building conversational AI agents — text and voice — with structured flows, routing, and durable tool execution.
 
-Most agent frameworks give you a prompt and a tool-call loop. That's fine until the conversation has steps — collect these fields, confirm, then book. Kuralle puts those steps in a **flow**: a small graph of typed nodes with real control flow, so your procedure lives in code you can test, not in a 600-line system prompt.
+Most agent frameworks give you a prompt and a tool-call loop. That's fine until the conversation has steps — collect these fields, confirm, then book. Kuralle puts those steps in a **flow**: a small graph of typed nodes with real control flow, so your procedure lives in code you can test, not in a sprawling system prompt.
 
 One tagless primitive (`defineAgent`) derives its behavior from the fields you set. Add `flows` to get a structured flow agent. Add `routes` to get a router. Add `agents` to compose them. The runtime, session management, and streaming stay the same across all three.
 
@@ -32,7 +32,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 
 ## Why Kuralle
 
-**Procedures belong in flows, not prompts.** The form-filler example in the repo replaces a 584-line v1 state machine with ~60 lines.
+**Procedures belong in flows, not prompts.** A booking or intake procedure becomes a handful of typed nodes you can test — not a long prompt you hope the model follows every turn.
 
 **One agent config, text and voice.** The same `defineAgent` runs over chat text and over provider-native realtime voice. You don't maintain two stacks.
 
