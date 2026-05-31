@@ -1,0 +1,102 @@
+---
+title: Tools
+description: Define deterministic tools with Zod-typed inputs and durable execution.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import echoToolExample from '../../../examples/tools/echo-tool.ts?raw';
+
+Tools give agents the ability to call external functions. `defineTool` wraps a typed `execute` function with a Zod input schema so the model knows what to pass and what to expect back.
+
+## Defining a tool
+
+```typescript
+import { z } from 'zod';
+import { defineTool } from '@kuralle-agents/core';
+
+const echo = defineTool({
+  name: 'echo',
+  description: 'Echo back the provided text',
+  input: z.object({ text: z.string() }),
+  execute: async ({ text }) => ({ echoed: text }),
+});
+```
+
+`name` and `description` go directly into the model's tool schema. Keep descriptions accurate — the model uses them to decide when to call the tool.
+
+`input` is a Zod object schema. Kuralle validates the model's arguments against it before calling `execute`.
+
+`execute` receives the validated input and returns any value. The return value is serialized and passed back to the model as the tool result.
+
+## Wiring a tool to an agent
+
+There are two wiring steps — both are required:
+
+**`tools: buildToolSet(...)`** — makes the tool model-visible. The model sees the schema and can decide to call it.
+
+**`effectTools: { ... }`** — wires the durable executor. The runtime logs each call and result in the effect log, enabling exactly-once replay on retry.
+
+```typescript
+import { defineAgent, buildToolSet } from '@kuralle-agents/core';
+
+const tools = { echo };
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'Use the echo tool when asked.',
+  model: openai('gpt-4o-mini'),
+  tools: buildToolSet(tools),   // model-visible
+  effectTools: tools,           // durable executor
+});
+```
+
+<Aside type="note">
+  If you only pass `effectTools`, the model won't know the tool exists. If you only pass `tools`, calls route through the AI SDK executor (not the effect log) and won't replay correctly on retry. Pass both.
+</Aside>
+
+## What `buildToolSet` does
+
+`defineTool` returns a Kuralle **effect tool** — `{ name, description, input, execute }`, where `input` is a Standard Schema and `execute` is your durable handler. The model, however, speaks the [Vercel AI SDK](https://sdk.vercel.ai/) tool format. `buildToolSet` is the bridge between the two:
+
+```typescript
+buildToolSet({ echo, lookup_order })
+// → an AI SDK ToolSet: each entry has the tool's name, description, and
+//   inputSchema — the shape the model needs to know a tool exists and how to call it.
+```
+
+It copies each tool's `name`, `description`, and `input` schema into an AI SDK `ToolSet`. It deliberately does **not** copy `execute` into the model-facing tool — the AI SDK entry is schema-only. The actual execution runs through `effectTools`, which is what gives you the durable effect log and exactly-once replay.
+
+That's why the two fields are complementary rather than redundant:
+
+- **`tools: buildToolSet(tools)`** — *what the model can see and decide to call* (name + description + input schema).
+- **`effectTools: tools`** — *how the call actually runs* (durable, logged, replay-safe).
+
+You author each tool once with `defineTool`; `buildToolSet` derives the model-facing view from it.
+
+## Durable execution
+
+Every tool call is written to an append-only effect log before `execute` is called. On retry, the runtime checks the log first — if the call already ran, it returns the logged result without calling `execute` again.
+
+This means a payment tool won't charge twice if the turn fails mid-execution, and a booking tool won't double-book a slot.
+
+## Multiple tools
+
+```typescript
+const tools = {
+  lookup_order: lookupOrder,
+  cancel_order: cancelOrder,
+  create_ticket: createTicket,
+};
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: '...',
+  model: openai('gpt-4o-mini'),
+  tools: buildToolSet(tools),
+  effectTools: tools,
+});
+```
+
+## Example
+
+<Code code={echoToolExample} lang="typescript" title="echo-tool.ts" />

@@ -1,0 +1,23 @@
+[package]
+name = "kuralle-wavekat-vad-node"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2.16", default-features = false, features = ["napi6"] }
+napi-derive = { version = "2.16", features = ["type-def"] }
+# WebRTC default; ten-vad as opt-in feature.
+wavekat-vad = { version = "0.1", default-features = false, features = ["webrtc", "ten-vad"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"
+opt-level = 3

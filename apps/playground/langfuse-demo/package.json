@@ -1,0 +1,25 @@
+{
+  "name": "langfuse-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "run": "bun run run.ts",
+    "smoke": "bun run smoke.ts",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "latest",
+    "@kuralle-playground/shared": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "@langfuse/otel": "^4.5.1",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-node": "^0.202.0",
+    "ai": "latest",
+    "dotenv": "^16.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

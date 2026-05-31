@@ -1,0 +1,48 @@
+{
+  "name": "@kuralle-agents/tools",
+  "version": "0.2.0",
+  "description": "Kuralle tools (CAG)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*"
+  },
+  "peerDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*",
+    "ai": "^6.0.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai": "^3.0.0",
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*",
+    "@types/node": "^20.11.0",
+    "ai": "^6.0.0",
+    "typescript": "^5.3.0",
+    "zod": "^3.23.0"
+  },
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test test",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "guides",
+    "README.md"
+  ]
+}

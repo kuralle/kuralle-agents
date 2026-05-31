@@ -1,0 +1,114 @@
+---
+title: Deployment
+description: Deploy Kuralle agents to Hono/Node, Cloudflare Workers, or serverless platforms.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import honoNodeExample from '../../../examples/deployment/hono-node.ts?raw';
+
+Kuralle agents run anywhere that runs Node.js, Bun, or Cloudflare Workers. The runtime has no external process dependencies — serve it with whatever HTTP framework you prefer.
+
+## Hono (Node.js or Bun)
+
+`@kuralle-agents/hono-server` mounts a full set of endpoints onto a Hono app with one call.
+
+```bash
+npm install @kuralle-agents/hono-server hono @hono/node-server @hono/node-ws
+```
+
+<Code code={honoNodeExample} lang="typescript" title="server.ts" />
+
+**Bun** doesn't need `@hono/node-server` or `createNodeWebSocket`. Use Bun's built-in WebSocket upgrade instead:
+
+```typescript
+import { upgradeWebSocket } from 'hono/bun';
+
+const app = new Hono();
+app.route('/', createKuralleChatRouter({ runtime, upgradeWebSocket }));
+
+export default app;
+```
+
+## Endpoints
+
+`createKuralleChatRouter` mounts these routes:
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/chat` | Single-turn JSON response |
+| `POST` | `/api/chat/sse` | SSE streaming response |
+| `POST` | `/api/chat/stream` | Chunked text stream |
+| `GET` | `/agents/chat/:sessionId` | WebSocket widget endpoint |
+| `GET` | `/ws/:sessionId` | WebSocket turn endpoint |
+| `GET` | `/api/session/:id` | Fetch session |
+| `DELETE` | `/api/session/:id` | Delete session |
+| `GET` | `/health` | Health check |
+
+## Cloudflare Workers
+
+`@kuralle-agents/cf-agent` runs Kuralle agents on Cloudflare Workers with Durable Objects. Subclass `KuralleAgent`, implement two methods, and Cloudflare handles SQLite persistence, multi-client sync, and stream resumability.
+
+```bash
+npm install @kuralle-agents/cf-agent
+```
+
+```typescript
+import { KuralleAgent } from '@kuralle-agents/cf-agent';
+import { defineAgent } from '@kuralle-agents/core';
+import { createOpenAI } from '@ai-sdk/openai';
+
+interface Env {
+  OPENAI_API_KEY: string;
+}
+
+export class SupportAgent extends KuralleAgent<Env> {
+  protected getAgents() {
+    const openai = createOpenAI({ apiKey: this.env.OPENAI_API_KEY });
+    return [
+      defineAgent({
+        id: 'support',
+        instructions: 'You are a helpful support agent.',
+        model: openai('gpt-4o-mini'),
+      }),
+    ];
+  }
+
+  protected getDefaultAgentId() {
+    return 'support';
+  }
+}
+
+export default SupportAgent;
+```
+
+Declare the Durable Object in `wrangler.toml`:
+
+```toml
+[[durable_objects.bindings]]
+name = "SUPPORT_AGENT"
+class_name = "SupportAgent"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SupportAgent"]
+```
+
+Flows, tools, and structured routing all work identically on Cloudflare — the same `defineAgent` primitive, no runtime differences.
+
+## HTTP streaming
+
+Use `handle.toResponseStream('sse')` to pipe a `TurnHandle` directly to an HTTP response without `createKuralleChatRouter`:
+
+```typescript
+app.post('/chat', async (c) => {
+  const { input, sessionId } = await c.req.json();
+  const handle = runtime.run({ input, sessionId });
+  return handle.toResponseStream('sse');
+});
+```
+
+`createKuralleChatRouter` uses this internally and also wires sessions, WebSocket, and the full endpoint set.
+
+<Aside type="note">
+  For production, pair the Hono server or CF agent with a durable `SessionStore`. See [Sessions & State](/guides/sessions).
+</Aside>

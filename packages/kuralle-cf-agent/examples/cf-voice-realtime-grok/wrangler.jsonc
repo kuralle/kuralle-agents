@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cf-voice-realtime-grok",
+  "main": "src/server.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CfVoiceRealtimeGrokAgent",
+        "class_name": "CfVoiceRealtimeGrokAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CfVoiceRealtimeGrokAgent"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+  // XAI_API_KEY is a secret — set with:
+  //   wrangler secret put XAI_API_KEY
+}

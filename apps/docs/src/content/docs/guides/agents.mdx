@@ -1,0 +1,99 @@
+---
+title: Agents
+description: Define agents with instructions, tools, flows, and routing.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import defineAgentExample from '../../../examples/agents/define-agent.ts?raw';
+
+`defineAgent` is Kuralle single agent primitive. Behavior is derived from which fields you populate — there's no separate `FlowAgent` or `TriageAgent` type.
+
+## The tagless primitive
+
+A minimal agent needs only `id`, `instructions`, and `model`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+```
+
+From there, the fields you add determine the behavior:
+
+| Add these fields | The agent becomes |
+|---|---|
+| `tools` + `effectTools` | A tool-calling agent |
+| `flows` | A structured flow agent |
+| `routes` + `routing` | A triage router |
+| `agents` + `handoffs` | A composition wrapper |
+
+These aren't mutually exclusive. An agent can have tools, a flow, and route to specialists at the same time.
+
+## Fields
+
+```typescript
+defineAgent({
+  id: string,
+  name?: string,
+  instructions?: string,
+  model?: LanguageModel,
+  tools?: ToolSet,                         // AI SDK ToolSet — what the model sees and can call
+  effectTools?: Record<string, EffectTool>, // durable executors (from defineTool)
+  flows?: Flow[],                           // structured flow graphs
+  routes?: Route[],                         // route entries for triage
+  routing?: RoutingPolicy,                  // { mode: 'structured', default: 'agentId' }
+  agents?: AgentConfig[],                   // composed sub-agents
+  handoffs?: string[],                      // agent IDs this agent can hand off to
+})
+```
+
+### `instructions`
+
+A string describing the agent's role and rules. Keep it focused on persona and constraints — if you're writing more than ~20 lines of procedure here, move it to a flow.
+
+### `tools` and `effectTools`
+
+`tools` is the AI SDK `ToolSet` — what the model sees when deciding what to call. `effectTools` is the durable executor map. Pass the same tools to both using `buildToolSet`:
+
+```typescript
+import { defineTool, buildToolSet } from '@kuralle-agents/core';
+
+const tools = { echo, lookup };
+
+defineAgent({
+  id: 'support',
+  instructions: '...',
+  model: openai('gpt-4o-mini'),
+  tools: buildToolSet(tools),   // model-visible
+  effectTools: tools,           // durable executor
+});
+```
+
+<Aside type="note">
+  Tool effects are logged in an append-only effect log. On retry, the runtime replays log entries rather than re-executing — a payment tool won't charge twice.
+</Aside>
+
+### `flows`
+
+Attach one or more `Flow` objects (from `defineFlow`) to make the agent procedure-driven. The runtime enters the flow on the first turn and tracks node state in the session.
+
+See the [Flows guide](/guides/flows) for the full node model.
+
+### `routes` and `routing`
+
+Add `routes` to make the agent a triage router. With `routing: { mode: 'structured' }`, the routing decision is schema-only and never surfaces in the user-facing response.
+
+See [Routing & Handoffs](/guides/routing).
+
+### `agents` and `handoffs`
+
+`agents` registers sub-agents the runtime can activate during a handoff. `handoffs` declares which agent IDs this agent is allowed to transfer to. The combination enables tool-based handoffs where the agent explicitly decides when to transfer.
+
+## Example
+
+<Code code={defineAgentExample} lang="typescript" title="define-agent.ts" />

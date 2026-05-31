@@ -1,0 +1,44 @@
+{
+  "name": "@kuralle-agents/postgres-store",
+  "version": "0.2.0",
+  "description": "PostgreSQL-backed SessionStore for Kuralle",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*",
+    "pg": "^8.0.0"
+  },
+  "devDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*",
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.11.0",
+    "typescript": "^5.3.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "bun test ./test ./src/__tests__",
+    "clean": "rm -rf dist",
+    "prebuild": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

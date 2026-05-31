@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kuralle Voice Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .container { width: 420px; padding: 32px; }
+    h1 { font-size: 18px; font-weight: 600; margin-bottom: 24px; color: #fff; }
+    .status { font-size: 13px; color: #888; margin-bottom: 16px; min-height: 20px; }
+    .status.connected { color: #4ade80; }
+    .status.error { color: #f87171; }
+    .controls { display: flex; gap: 12px; margin-bottom: 24px; }
+    button { padding: 10px 20px; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; color: #e0e0e0; font-size: 14px; cursor: pointer; transition: all 0.15s; }
+    button:hover { background: #252525; border-color: #555; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+    button.active { background: #dc2626; border-color: #dc2626; color: #fff; }
+    button.connect { background: #166534; border-color: #166534; }
+    button.connect:hover { background: #15803d; }
+    .config { margin-bottom: 20px; }
+    .config label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+    .config input { width: 100%; padding: 8px 12px; border: 1px solid #333; border-radius: 6px; background: #111; color: #e0e0e0; font-size: 14px; font-family: monospace; }
+    .meter { height: 4px; background: #222; border-radius: 2px; margin-bottom: 20px; overflow: hidden; }
+    .meter-fill { height: 100%; background: #4ade80; width: 0%; transition: width 0.1s; }
+    .log { background: #111; border: 1px solid #222; border-radius: 8px; padding: 12px; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; line-height: 1.6; max-height: 320px; overflow-y: auto; }
+    .log-entry { color: #888; }
+    .log-entry.audio-in { color: #60a5fa; }
+    .log-entry.audio-out { color: #4ade80; }
+    .log-entry.event { color: #c084fc; }
+    .log-entry.error { color: #f87171; }
+    .stats { display: flex; gap: 24px; margin-bottom: 16px; font-size: 12px; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 20px; font-weight: 600; color: #fff; }
+    .stat-label { color: #666; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kuralle Voice Test</h1>
+
+    <div class="config">
+      <label>WebSocket URL</label>
+      <input id="wsUrl" type="text" value="ws://127.0.0.1:19800" />
+    </div>
+
+    <div class="status" id="status">Disconnected</div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value" id="latencyStat">--</div>
+        <div class="stat-label">Latency (ms)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="chunksStat">0</div>
+        <div class="stat-label">Audio chunks</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="turnsStat">0</div>
+        <div class="stat-label">Turns</div>
+      </div>
+    </div>
+
+    <div class="meter"><div class="meter-fill" id="meter"></div></div>
+
+    <div class="controls">
+      <button id="connectBtn" class="connect" onclick="toggleConnection()">Connect</button>
+      <button id="muteBtn" disabled onclick="toggleMute()">Unmute Mic</button>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const SAMPLE_RATE = 24000;
+    const FRAME_SIZE = 960; // 20ms at 24kHz, 16-bit mono = 960 bytes
+
+    let ws = null;
+    let audioCtx = null;
+    let micStream = null;
+    let micProcessor = null;
+    let isMuted = true;
+    let playbackQueue = [];
+    let isPlaying = false;
+    let audioChunksReceived = 0;
+    let turnsCompleted = 0;
+    let lastSpeechEnd = null;
+
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+    const connectBtn = document.getElementById('connectBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const meterEl = document.getElementById('meter');
+
+    function log(msg, cls = '') {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry ' + cls;
+      entry.textContent = `[${new Date().toISOString().slice(11, 23)}] ${msg}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function toggleConnection() {
+      if (ws && ws.readyState <= 1) {
+        ws.close();
+        return;
+      }
+
+      const url = document.getElementById('wsUrl').value;
+      log(`Connecting to ${url}...`);
+      statusEl.textContent = 'Connecting...';
+      statusEl.className = 'status';
+
+      try {
+        audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+        ws = new WebSocket(url);
+        ws.binaryType = 'arraybuffer';
+
+        ws.onopen = () => {
+          statusEl.textContent = 'Connected';
+          statusEl.className = 'status connected';
+          connectBtn.textContent = 'Disconnect';
+          muteBtn.disabled = false;
+          log('WebSocket connected', 'event');
+        };
+
+        ws.onmessage = (event) => {
+          if (event.data instanceof ArrayBuffer) {
+            handleAudioOutput(event.data);
+          } else {
+            const msg = JSON.parse(event.data);
+            handleJsonMessage(msg);
+          }
+        };
+
+        ws.onclose = (event) => {
+          statusEl.textContent = `Disconnected (${event.code})`;
+          statusEl.className = 'status';
+          connectBtn.textContent = 'Connect';
+          connectBtn.className = 'connect';
+          muteBtn.disabled = true;
+          stopMic();
+          log(`Disconnected: code=${event.code}`, 'event');
+        };
+
+        ws.onerror = () => {
+          statusEl.textContent = 'Connection error';
+          statusEl.className = 'status error';
+          log('WebSocket error', 'error');
+        };
+      } catch (err) {
+        log(`Error: ${err.message}`, 'error');
+      }
+    }
+
+    function handleJsonMessage(msg) {
+      if (msg.type === 'session_started') {
+        log(`Session started: ${msg.sessionId}`, 'event');
+      } else if (msg.type === 'agent_text') {
+        if (msg.text && msg.text.length > 0) {
+          log(`Agent: ${msg.text}`, 'event');
+        }
+      } else if (msg.type === 'clear_audio') {
+        // Barge-in: stop playing buffered audio immediately
+        playbackQueue = [];
+        isPlaying = false;
+        log('Barge-in: audio cleared', 'audio-out');
+      } else {
+        log(`${msg.type}: ${JSON.stringify(msg).slice(0, 100)}`, 'event');
+      }
+    }
+
+    function handleAudioOutput(arrayBuffer) {
+      audioChunksReceived++;
+      document.getElementById('chunksStat').textContent = audioChunksReceived;
+
+      // Measure latency from end of speech
+      if (lastSpeechEnd && audioChunksReceived === 1) {
+        // This is approximate — first chunk after silence
+      }
+
+      // Convert int16 PCM to float32 for Web Audio
+      const int16 = new Int16Array(arrayBuffer);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768;
+      }
+
+      playbackQueue.push(float32);
+      if (!isPlaying) drainPlayback();
+
+      meterEl.style.width = '80%';
+      setTimeout(() => { meterEl.style.width = '0%'; }, 100);
+    }
+
+    function drainPlayback() {
+      if (playbackQueue.length === 0) {
+        isPlaying = false;
+        return;
+      }
+      isPlaying = true;
+
+      const samples = playbackQueue.shift();
+      const buffer = audioCtx.createBuffer(1, samples.length, SAMPLE_RATE);
+      buffer.getChannelData(0).set(samples);
+
+      const source = audioCtx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioCtx.destination);
+      source.onended = () => drainPlayback();
+      source.start();
+    }
+
+    async function toggleMute() {
+      if (isMuted) {
+        await startMic();
+        isMuted = false;
+        muteBtn.textContent = 'Mute Mic';
+        muteBtn.className = 'active';
+      } else {
+        stopMic();
+        isMuted = true;
+        muteBtn.textContent = 'Unmute Mic';
+        muteBtn.className = '';
+      }
+    }
+
+    async function startMic() {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+        });
+
+        const source = audioCtx.createMediaStreamSource(micStream);
+        micProcessor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+        micProcessor.onaudioprocess = (event) => {
+          if (!ws || ws.readyState !== 1 || isMuted) return;
+
+          const float32 = event.inputBuffer.getChannelData(0);
+
+          // Resample if needed (browser may give us a different rate)
+          // Convert float32 to int16 PCM
+          const int16 = new Int16Array(float32.length);
+          for (let i = 0; i < float32.length; i++) {
+            const s = Math.max(-1, Math.min(1, float32[i]));
+            int16[i] = s * 32767;
+          }
+
+          ws.send(int16.buffer);
+
+          // Simple volume meter
+          let sum = 0;
+          for (let i = 0; i < float32.length; i++) sum += float32[i] * float32[i];
+          const rms = Math.sqrt(sum / float32.length);
+          meterEl.style.width = Math.min(100, rms * 500) + '%';
+        };
+
+        source.connect(micProcessor);
+        micProcessor.connect(audioCtx.destination);
+        log('Microphone active (echo cancellation on)', 'audio-in');
+      } catch (err) {
+        log(`Mic error: ${err.message}`, 'error');
+      }
+    }
+
+    function stopMic() {
+      if (micProcessor) {
+        micProcessor.disconnect();
+        micProcessor = null;
+      }
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      log('Microphone stopped', 'audio-in');
+    }
+  </script>
+</body>
+</html>

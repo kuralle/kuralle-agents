@@ -1,0 +1,33 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.3/schema.json",
+  "changelog": false,
+  "commit": false,
+  "fixed": [
+    [
+      "@kuralle-agents/core",
+      "@kuralle-agents/hono-server",
+      "@kuralle-agents/tools",
+      "@kuralle-agents/rag",
+      "@kuralle-agents/eval",
+      "@kuralle-agents/realtime-audio",
+      "@kuralle-agents/livekit-plugin",
+      "@kuralle-agents/livekit-plugin-transport-ws",
+      "@kuralle-agents/livekit-plugin-transport-http",
+      "@kuralle-agents/livekit-plugin-transport-sip",
+      "@kuralle-agents/livekit-plugin-transport-smartpbx",
+      "@kuralle-agents/livekit-plugin-transport-twilio",
+      "@kuralle-agents/cf-agent",
+      "@kuralle-agents/redis-store",
+      "@kuralle-agents/postgres-store",
+      "@kuralle-agents/messaging",
+      "@kuralle-agents/messaging-meta",
+      "@kuralle-agents/analytics-sdk",
+      "@kuralle-agents/widget"
+    ]
+  ],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

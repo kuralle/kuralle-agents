@@ -1,0 +1,37 @@
+{
+  "name": "transport-examples",
+  "version": "0.1.11",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "http-support": "tsx http-support/index.ts",
+    "websocket-support": "tsx websocket-support/index.ts",
+    "websocket-audio-stream": "tsx websocket-audio-stream/index.ts",
+    "twilio-support": "tsx twilio-support/index.ts",
+    "sip-support": "tsx sip-support/index.ts",
+    "smartpbx-bridge": "cd smartpbx-bridge && bun run start",
+    "3cx-support": "tsx 3cx-support/3cx-support.ts",
+    "test-client": "tsx test-client/index.ts",
+    "build": "tsc --noEmit -p tsconfig.json && bun run --cwd smartpbx-bridge typecheck",
+  },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/livekit-plugin": "workspace:*",
+    "@kuralle-agents/livekit-plugin-transport-http": "workspace:*",
+    "@kuralle-agents/livekit-plugin-transport-ws": "workspace:*",
+    "@kuralle-agents/livekit-plugin-transport-twilio": "workspace:*",
+    "@kuralle-agents/livekit-plugin-transport-sip": "workspace:*",
+    "@ai-sdk/google": "^3.0.43",
+    "@ai-sdk/openai": "^3.0.41",
+    "ai": "^6.0.116",
+    "zod": "^3.24.1",
+    "hono": "^4.12.5",
+    "@hono/node-server": "^1.19.11",
+    "ws": "^8.18.0",
+    "opusscript": "^0.1.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.9.3"
+  }
+}

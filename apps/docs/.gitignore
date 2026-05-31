@@ -1,0 +1,16 @@
+# Astro
+.astro/
+dist/
+node_modules/
+
+# Generated API reference (starlight-typedoc regenerates this on every build)
+src/content/docs/api/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+*.pem

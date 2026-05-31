@@ -1,0 +1,28 @@
+{
+  "name": "gemini-voice-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node --check server.mjs && node --check server-livekit.mjs",
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "latest",
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/livekit-plugin": "workspace:*",
+    "@kuralle-agents/livekit-plugin-transport-ws": "workspace:*",
+    "@kuralle-agents/realtime-audio": "workspace:*",
+    "@google-cloud/speech": "^6.0.0",
+    "@livekit/agents": "^1.2.6",
+    "@livekit/agents-plugin-deepgram": "^1.2.6",
+    "@livekit/agents-plugin-google": "^1.2.6",
+    "@livekit/agents-plugin-openai": "^1.2.6",
+    "@livekit/agents-plugin-silero": "^1.3.4",
+    "@livekit/rtc-node": ">=0.12.0",
+    "ai": "latest",
+    "dotenv": "^17.4.2",
+    "ws": "^8.19.0",
+    "zod": "^3.23.0"
+  }
+}

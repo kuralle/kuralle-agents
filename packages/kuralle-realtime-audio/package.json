@@ -1,0 +1,51 @@
+{
+  "name": "@kuralle-agents/realtime-audio",
+  "version": "0.2.0",
+  "description": "Realtime audio pipeline for Kuralle \u2014 multi-provider speech-to-speech and orchestration.",
+  "keywords": [
+    "realtime-audio",
+    "openai",
+    "multi-provider"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@kuralle-agents/voice-protocol": "workspace:*",
+    "@google/genai": "^1.0.0",
+    "ws": "^8.19.0",
+    "zod-to-json-schema": "^3.24.0"
+  },
+  "peerDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "ai": "^6.0.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.13",
+    "ai": "^6.0.0",
+    "typescript": "^5.3.0",
+    "zod": "^3.23.0"
+  }
+}

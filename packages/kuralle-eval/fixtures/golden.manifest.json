@@ -1,0 +1,32 @@
+[
+  {
+    "name": "quickstart_favorite_color_path",
+    "file": "golden/quickstart_favorite_color_path.jsonl",
+    "expectEventOrder": ["input", "tool-call", "tool-result", "done"],
+    "expectNoErrors": true,
+    "expectDone": true,
+    "expectNoToolMismatches": true,
+    "requireTools": [
+      { "name": "record_favorite_color_func", "minCount": 1 }
+    ]
+  },
+  {
+    "name": "warm_transfer_handoff_path",
+    "file": "golden/warm_transfer_handoff_path.jsonl",
+    "expectEventOrder": [
+      "input",
+      "tool-call",
+      "tool-result",
+      "tool-call",
+      "tool-result",
+      "done"
+    ],
+    "expectNoErrors": true,
+    "expectDone": true,
+    "expectNoToolMismatches": true,
+    "requireTools": [
+      { "name": "start_order", "minCount": 1 },
+      { "name": "start_human_agent_interaction", "minCount": 1 }
+    ]
+  }
+]

@@ -1,0 +1,93 @@
+---
+title: Flows
+description: Model multi-step procedures as typed node graphs.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import bookingFlowExample from '../../../examples/flows/booking-flow.ts?raw';
+
+A flow is a small directed graph of typed nodes. Each node owns a slice of the conversation — collecting input, giving a reply, running an action, or making a decision — and returns a transition to the next node when it's done.
+
+Put your SOP in a flow instead of a system prompt. Code you can test beats instructions you can't.
+
+<Aside type="note">
+  Rule of thumb: if you're pasting more than ~20 lines of procedure into a system prompt, it belongs in a flow.
+</Aside>
+
+## Defining a flow
+
+```typescript
+import { defineFlow, reply, collect } from '@kuralle-agents/core';
+
+const flow = defineFlow({
+  name: 'booking',
+  description: 'Book an appointment',
+  start: getDate,          // the node to enter on the first turn
+  nodes: [getDate, confirm], // every node in the flow
+});
+```
+
+Attach the flow to an agent with `defineAgent({ flows: [flow] })`.
+
+## Node kinds
+
+### `reply`
+
+Sends a response and returns a transition. Use it for confirmations, summaries, and any step where the agent speaks and then moves on.
+
+```typescript
+import { reply } from '@kuralle-agents/core';
+
+const confirm = reply({
+  id: 'confirm',
+  instructions: 'Confirm the booking with the collected date, then end.',
+  next: () => ({ end: 'done' }),
+});
+```
+
+`next` is called after the model responds and returns the transition for the next turn.
+
+### `collect`
+
+Collects a structured schema from the user over one or more turns. The node re-enters until all `required` fields are filled.
+
+```typescript
+import { collect } from '@kuralle-agents/core';
+import { z } from 'zod';
+
+const getDate = collect({
+  id: 'get_date',
+  schema: z.object({ date: z.string() }),
+  required: ['date'],
+  instructions: (missing) => `Ask the user for: ${missing.join(', ')}`,
+  onComplete: () => confirm,
+});
+```
+
+`instructions` receives the list of still-missing fields on each re-entry. `onComplete` is called when all required fields are collected and returns the next node.
+
+### `action`
+
+Runs a side effect (tool call, API request, state update) without a user-facing reply. The node executes and then transitions immediately.
+
+### `decide`
+
+Makes a routing decision based on the conversation state, choosing which node to enter next without prompting the user.
+
+## Transitions
+
+A node's `next` (or `onComplete`) function returns a `Transition`:
+
+| Return value | Effect |
+|---|---|
+| `'stay'` | Stay on the current node for another turn |
+| `{ end: 'label' }` | End the flow with a label |
+| A node object | Move to that node on the next turn |
+
+## Hybrid mode
+
+A flow agent can answer off-flow questions without losing its position in the flow. If the user asks something outside the current node's scope, the agent responds naturally and then returns to the flow. No extra configuration needed.
+
+## Example: booking flow
+
+<Code code={bookingFlowExample} lang="typescript" title="booking-flow.ts" />

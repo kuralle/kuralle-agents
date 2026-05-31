@@ -1,0 +1,36 @@
+{
+  "name": "cf-voice-realtime-grok",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kuralle realtime voice agent on Cloudflare — single-agent variant locked to xAI Grok Voice (no LiveKit)",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kuralle-agents/cf-agent": "workspace:*",
+    "@kuralle-agents/realtime-audio": "workspace:*",
+    "@kuralle-agents/voice-protocol": "workspace:*",
+    "@cloudflare/ai-chat": "^0.1.8",
+    "@cloudflare/voice": "^0.1.0",
+    "agents": "^0.11.5",
+    "ai": "^6.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.0.0",
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "wrangler": "^4.0.0"
+  }
+}

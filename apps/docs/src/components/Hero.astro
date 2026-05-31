@@ -1,0 +1,13 @@
+---
+const path = Astro.url.pathname;
+const base = path !== '/' ? (!path.endsWith('/') ? path + '/' : path) : '/';
+const quickstartLink = base + 'guides/quickstart';
+---
+
+<div class="aria-hero">
+  <h2 class="aria-hero-title"><slot name="title" /></h2>
+  <p class="aria-hero-desc"><slot name="description" /></p>
+  <a href={quickstartLink} class="aria-hero-cta">
+    <slot name="cta" />
+  </a>
+</div>

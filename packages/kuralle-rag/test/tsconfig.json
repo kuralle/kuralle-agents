@@ -1,0 +1,20 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "types": ["bun-types", "node"]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": [
+    "./e2e-full-agent.test.ts",
+    "./e2e-real.test.ts",
+    "./e2e-multihop.test.ts",
+    "./e2e-pipeline.test.ts",
+    "./e2e-tasktype.test.ts",
+    "./e2e-loaders.test.ts"
+  ]
+}
