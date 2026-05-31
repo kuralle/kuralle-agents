@@ -10,7 +10,6 @@
     "dist"
   ],
   "scripts": {
-    "build-starter": "tsx scripts/build-starter.ts",
     "build": "tsc -p tsconfig.json",
     "prepublishOnly": "npm run build"
   },

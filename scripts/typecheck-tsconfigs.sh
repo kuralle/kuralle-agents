@@ -3,8 +3,8 @@
 # deleted-API imports in test/example files can no longer rot silently. The
 # per-package `build` only compiles `src/**` (its tsconfig `include`); a test or
 # example file that imports a removed symbol never breaks the build. This sweep
-# closes that hole: it finds each tsconfig under packages/ + apps/templates and
-# runs `tsc --noEmit -p` on it.
+# closes that hole: it finds each tsconfig under packages/ and runs
+# `tsc --noEmit -p` on it.
 #
 # Standalone apps (docs)
 # are EXCLUDED — they have independent dep trees (react/next/etc.) and their
@@ -17,12 +17,10 @@ cd "$(dirname "$0")/.."
 TSC=./node_modules/.bin/tsc
 [ -x "$TSC" ] || TSC=packages/kuralle-core/node_modules/.bin/tsc
 
-# Standalone-app configs to skip (independent dep trees, not framework v2 surface).
-# create-kuralle-agents/templates holds generated, dependency-stripped template copies (bundled
-# at publish time) — the real templates are checked under apps/templates/*, not these copies.
-SKIP_RE='apps/docs|create-kuralle-agents/templates'
+# Standalone-app configs to skip (independent dep trees, not framework surface).
+SKIP_RE='apps/docs'
 
-CFGS=$(find packages apps/templates -name "tsconfig*.json" \
+CFGS=$(find packages -name "tsconfig*.json" \
     -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.next/*" 2>/dev/null \
   | grep -vE "$SKIP_RE" | sort)
 

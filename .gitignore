@@ -45,6 +45,3 @@ cloudflare-research/
 .next/
 .wrangler/
 dump.rdb
-
-# create-kuralle-agents: build-starter staging output
-/.starter-build/

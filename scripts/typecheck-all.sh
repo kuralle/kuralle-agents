@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Aggregate type-check across the surfaces that are NOT covered by each
-# package's own `src/**` build: core examples + the shippable templates.
+# package's own `src/**` build: core examples.
 # (Per-package src/ is type-checked by `bun run build`; this gate covers the
-# example/template code that imports those packages.)
+# example code that imports those packages.)
 #
 # Playground apps under apps/playground/* are intentionally EXCLUDED — they are
 # R&D/demos, not a supported surface, and several carry their own unrelated
@@ -32,12 +32,6 @@ run() { # <label> <tsconfig path>
 
 echo "== core examples =="
 run "kuralle-core/examples" "packages/kuralle-core/tsconfig.examples.json"
-
-echo "== templates =="
-for d in apps/templates/*/; do
-  [ -f "$d/tsconfig.json" ] || continue
-  run "$(basename "$d")" "$d/tsconfig.json"
-done
 
 echo ""
 [ "$fail" -eq 0 ] && echo "✓ typecheck: all green" || echo "✗ typecheck: failures above"
