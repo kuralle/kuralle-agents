@@ -21,10 +21,19 @@ Checkpoint for a fresh agent. References artifacts (commits/repos/packages) rath
 ## Pending / next (in priority order)
 1. ✅ **DONE — Remove dead files** (`8622fa0`). 9 verified-dead files deleted from `packages/*/src` (5 orphaned impl files + 4 unimported re-export barrels); `flow/index.ts`/`metrics/index.ts` were knip false-positives and kept. `typecheck:all` green. knip's raw list also flags every example/test/bench as "unused" — those are runnable entry points, not dead code.
 2. ✅ **DONE — Source-map leak fixed** (`1dc7a6a`). The leak was `@kuralle-agents/analytics-sdk@0.2.0`: built with `bun build --sourcemap` + `files:['src','dist']`, so it shipped both `dist/*.map` **and** raw TS source. Switched it to the standard tsc/dist model (compiled `.js`+`.d.ts`, `files:['dist']`, no maps), republished clean as `0.2.1`, **unpublished the leaked `0.2.0`** (tarball confirmed gone from registry). Added `scripts/check-no-source-maps.sh` (fails release on any `.map`/raw-`src` in a tarball), wired into `changeset:publish`. The other 0.2.1 packages (core/hono-server/postgres-store) were already clean.
-3. **Prune unused deps** — `knip`: 15 unused deps + 31 devDeps.
-4. **Review 78 unused exports + 49 unused exported types** (per-item; some are likely intended public API — do not bulk-delete).
-5. **`apps/playground/*` rot** — excluded from `typecheck:all`, so they break silently (a trailing-comma `package.json` was just fixed). Either add to CI or fold into the relevant package's `examples/`. `transport-examples` is referenced by the livekit-plugin guides.
-6. **Owner decisions:** flip `kuralle-agents` public; add the `docs.kuralle.com` CNAME; **rotate the OpenAI key** that was pasted in chat (only lives in gitignored `.env` files now).
+3. ✅ **DONE — Pruned unused deps** (`94db0fd`, `af8ed01`). 18 genuinely-unused deps removed + `dotenv` declared; 9 redundant devDep duplicates dropped; peer-backing devDeps kept. Framework dep report 100% clean. Each verified by grep (knip alone has many false positives).
+4. ✅ **DONE — Reviewed unused exports** (`215db03`). Read-and-judge over 127: deleted 20 truly-dead (~441 lines), demoted 31 internal-only, kept 76 intentional (sub-module barrels + the unwired `openai-family` subtree). See `implementation-notes.md` D4.
+5. ✅ **DONE — Playground gated** (`88fb83a`). `scripts/typecheck-playground.sh` wired into `typecheck:all`; all 7 demo tsconfigs green, proven to catch rot.
+6. **Owner decisions:** flip `kuralle-agents` public; add the `docs.kuralle.com` CNAME; **rotate the OpenAI key** that was pasted in chat (owner said low-budget; still in gitignored `.env` only).
+
+### Follow-ups surfaced (not blocking)
+- **2 pre-existing test failures** in `packages/kuralle-core/test/core-voice/conformance.test.ts`
+  (G5, G6 — voice tool-validation gates expect `ToolValidationError` but the turn resolves). Verified
+  these fail at the pre-session baseline `1dc7a6a` too — NOT caused by the cleanup. Needs `/diagnose`.
+- **apps/docs dep hygiene** (separate deployable): 4 build-tool deps knip's plugin detection misses,
+  and 4 "unlisted" imports in `apps/docs/src/examples/*` (doc snippets resolving via hoisting). Low priority.
+- **knip is now configured** (`knip.json`) but not in CI; framework report is clean except the
+  documented-intentional export barrels. Could be wired into CI after a wire-or-remove pass on `openai-family`.
 
 ## Run/verify notes (also in CLAUDE.md "Gotchas")
 - **Publish whole graph together** — `pnpm` pins `workspace:*` to exact versions, so a lone `core` bump skews dependents → duplicate-install `tsc` errors.
