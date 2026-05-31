@@ -171,16 +171,20 @@ export class VoiceDriver implements ChannelDriver {
             ctx.emit({ type: 'tool-call', toolName: name, args, toolCallId: id });
 
             const localTool = localTools?.[name];
-            const toolResult = localTool
-              ? await localTool.execute(args, {
+            const toolResult = await ctx.tool(name, args, {
+              toolCallId: id,
+              ...(localTool && {
+                def: localTool,
+                toolCtx: {
                   session: ctx.session,
                   runState: ctx.runState,
                   tool: ctx.tool.bind(ctx),
                   now: ctx.now.bind(ctx),
                   uuid: ctx.uuid.bind(ctx),
                   emit: ctx.emit.bind(ctx),
-                })
-              : await ctx.tool(name, args, { toolCallId: id });
+                },
+              }),
+            });
 
             out.toolResults.push({ name, args, result: toolResult, toolCallId: id });
             toolCallsMade.push({

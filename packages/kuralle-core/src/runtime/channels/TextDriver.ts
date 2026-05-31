@@ -92,16 +92,20 @@ export class TextDriver implements ChannelDriver {
         });
 
         const localTool = node.localTools?.[call.toolName];
-        const toolResult = localTool
-          ? await localTool.execute(call.input, {
+        const toolResult = await ctx.tool(call.toolName, call.input, {
+          toolCallId: call.toolCallId,
+          ...(localTool && {
+            def: localTool,
+            toolCtx: {
               session: ctx.session,
               runState: ctx.runState,
               tool: ctx.tool.bind(ctx),
               now: ctx.now.bind(ctx),
               uuid: ctx.uuid.bind(ctx),
               emit: ctx.emit.bind(ctx),
-            })
-          : await ctx.tool(call.toolName, call.input);
+            },
+          }),
+        });
         out.toolResults.push({
           name: call.toolName,
           args: call.input,

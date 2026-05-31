@@ -26,6 +26,12 @@ export interface CoreExecuteArgs {
   abortSignal?: AbortSignal;
   toolCallId?: string;
   toolCtx?: ToolContext;
+  /**
+   * Explicit tool definition for per-node (flow-local) tools that are not in
+   * the executor's registry. When present it's used in preference to the
+   * registry so local tools get the same validation/interim/pairing path.
+   */
+  def?: AnyTool;
 }
 
 export class CoreToolExecutor implements EffectToolExecutor {
@@ -77,7 +83,7 @@ export class CoreToolExecutor implements EffectToolExecutor {
 
   private async executeInner(args: CoreExecuteArgs): Promise<unknown> {
     const { name, session, abortSignal, toolCallId, toolCtx } = args;
-    const def = this.tools.get(name);
+    const def = this.tools.get(name) ?? args.def;
     if (!def) {
       throw new Error(`Unknown tool: ${name}`);
     }
