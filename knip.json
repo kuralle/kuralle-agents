@@ -35,11 +35,11 @@
       "entry": [
         "astro.config.mjs",
         "src/content.config.ts",
-        "src/content.config.ts",
         "src/**/*.astro",
         "src/examples/**/*.{ts,tsx}"
       ],
-      "project": ["src/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["typedoc-plugin-zod", "typedoc-plugin-frontmatter", "tailwindcss"]
     },
     "apps/playground/_shared": {
       "entry": ["**/*.{ts,mjs,js}"],
@@ -47,16 +47,18 @@
     },
     "apps/playground/livekit-starters/*": {
       "entry": ["src/**/*.{ts,tsx}", "*.config.{ts,js,mjs}", "eslint.config.ts"],
-      "project": ["**/*.{ts,tsx}"]
+      "project": ["**/*.{ts,tsx}"],
+      "ignoreDependencies": ["@trivago/prettier-plugin-sort-imports"]
     },
     "apps/playground/transport-examples": {
       "entry": ["**/*.{ts,tsx,mjs,js}"],
       "project": ["**/*.{ts,tsx,mjs,js}"],
-      "ignoreDependencies": ["@ai-sdk/google"]
+      "ignoreDependencies": ["@ai-sdk/google", "opusscript"]
     },
     "apps/playground/transport-examples/smartpbx-bridge": {
       "entry": ["**/*.{ts,mjs,js}"],
-      "project": ["**/*.{ts,mjs,js}"]
+      "project": ["**/*.{ts,mjs,js}"],
+      "ignoreDependencies": ["@ai-sdk/google"]
     },
     "apps/playground/*": {
       "entry": ["**/*.{ts,tsx,mjs,js}"],
