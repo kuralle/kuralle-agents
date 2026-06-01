@@ -2,6 +2,7 @@ export * from './policy.js';
 export * from './strategist.js';
 export { strategistMiddleware } from './strategist-middleware.js';
 export { interactiveRenderer, renderChoices } from './interactive-renderer.js';
+export { withChoices } from './authoring.js';
 export { smartSend } from './nodes.js';
 export {
   whatsappTemplateCatalog,
