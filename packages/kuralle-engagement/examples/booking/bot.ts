@@ -159,9 +159,9 @@ export function buildBookingBot(model: LanguageModel) {
       schema: choiceSchema,
       decide: (sel, state) => {
         const choice = (sel as { choice: string }).choice;
-        if (!choice) return 'stay';
         if (choice === 'yes') return book;
-        return collectDetails;
+        if (choice === 'no') return collectDetails;
+        return 'stay';
       },
     }),
     [
@@ -178,6 +178,8 @@ export function buildBookingBot(model: LanguageModel) {
       decide: (sel, state) => {
         const slot = (sel as { choice: string }).choice;
         if (!slot) return 'stay';
+        const slots = state.availableSlots;
+        if (!Array.isArray(slots) || !slots.includes(slot)) return 'stay';
         state.confirmedTime = slot;
         return confirm;
       },
@@ -208,8 +210,7 @@ export function buildBookingBot(model: LanguageModel) {
     required: ['partySize', 'date'],
     instructions: () =>
       'Ask conversationally for date, time, party size, and name. Extract all provided fields.',
-    onComplete: (data, state) => {
-      Object.assign(state, data as Record<string, unknown>);
+    onComplete: (_data, state) => {
       const bucket = state.__collect_collectDetails;
       if (bucket && typeof bucket === 'object' && !Array.isArray(bucket)) {
         Object.assign(state, bucket as Record<string, unknown>);
