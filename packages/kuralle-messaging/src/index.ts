@@ -60,6 +60,13 @@ export {
   PhoneLookupResolver,
 } from './adapter/session-resolver-chain.js';
 export type { SessionResolverPlugin } from './adapter/session-resolver-chain.js';
+export {
+  InboundResolverChain,
+  InteractiveResolver,
+  TextResolver,
+  defaultInboundChain,
+} from './adapter/input-resolver-chain.js';
+export type { InboundResolverPlugin } from './adapter/input-resolver-chain.js';
 export { StreamMapper } from './adapter/stream-mapper.js';
 export { WindowTracker } from './adapter/window-tracker.js';
 export type { WindowStore, WindowState } from './adapter/window-store.js';

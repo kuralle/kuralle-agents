@@ -8,6 +8,7 @@
 import type { RuntimeLike, HarnessStreamPart } from '@kuralle-agents/core';
 import type { OutboundPipeline } from '../adapter/outbound-pipeline.js';
 import type { WindowStore } from '../adapter/window-store.js';
+import type { InboundResolverPlugin } from '../adapter/input-resolver-chain.js';
 import type { OutboundMiddleware } from './outbound.js';
 import type { InboundMessage, InteractiveMessage, MediaPayload, StatusUpdate } from './messages.js';
 import type { SendResult } from './responses.js';
@@ -51,6 +52,8 @@ export interface MessagingRouterConfig {
   runtime: RuntimeLike;
   platforms: Record<string, PlatformClient>;
   sessionResolver?: SessionResolver;
+  /** Custom inbound input resolvers; defaults to `[InteractiveResolver, TextResolver]`. */
+  inputResolver?: InboundResolverPlugin[];
   responseMapper?: ResponseMapper;
   onStatus?: StatusHandler;
   onError?: (error: Error, context: ErrorContext) => void;
