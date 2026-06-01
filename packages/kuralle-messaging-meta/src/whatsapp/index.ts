@@ -67,6 +67,7 @@ export type {
 export {
   buildTemplateSendPayload,
   buildTemplatePayload,
+  mapOutboundTemplateComponents,
 } from './templates.js';
 export type {
   TypedTemplateConfig,

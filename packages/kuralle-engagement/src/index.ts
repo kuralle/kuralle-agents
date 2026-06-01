@@ -1,3 +1,11 @@
 export * from './policy.js';
 export * from './strategist.js';
+export {
+  whatsappTemplateCatalog,
+  mapTemplateInfoToDescriptor,
+  isApprovedNonPaused,
+  type WhatsAppTemplateCatalogClient,
+} from './catalog.js';
+export { aiTemplateSelector } from './selector.js';
+export type { OutboundTemplateComponent } from '@kuralle-agents/messaging';
 export { webPolicy } from './policies/web.js';

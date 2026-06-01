@@ -58,6 +58,7 @@ import type {
   TemplateMessage,
   TemplateInfo,
   TemplateDefinition,
+  TemplateDefinitionComponent,
   TextOrTemplateOptions,
   ListMessage,
   ButtonMessage,
@@ -461,10 +462,10 @@ export class WhatsAppClient extends BaseMetaClient<
 
   readonly templates = {
     list: async (wabaId: string): Promise<TemplateInfo[]> => {
-      const result = await this.graphApi.get<{ data: TemplateInfo[] }>(
+      const result = await this.graphApi.get<{ data: RawTemplateListRow[] }>(
         `${wabaId}/message_templates`,
       );
-      return result.data;
+      return result.data.map(mapListTemplateRow);
     },
 
     create: async (wabaId: string, template: TemplateDefinition): Promise<TemplateInfo> => {
@@ -758,6 +759,38 @@ export class WhatsAppClient extends BaseMetaClient<
     if (mimeType.startsWith('audio/')) return 'audio';
     return 'document';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Template list mapping
+// ---------------------------------------------------------------------------
+
+type RawTemplateListRow = {
+  id: string;
+  name: string;
+  language: string;
+  status: string;
+  category: string;
+  components: TemplateDefinitionComponent[];
+  quality_score?: { score?: string };
+  paused?: boolean;
+};
+
+function mapListTemplateRow(raw: RawTemplateListRow): TemplateInfo {
+  const quality = raw.quality_score?.score?.toUpperCase();
+  const statusUpper = raw.status.toUpperCase();
+  const paused =
+    raw.paused === true || statusUpper === 'PAUSED' || quality === 'PAUSED';
+  return {
+    id: raw.id,
+    name: raw.name,
+    language: raw.language,
+    status: raw.status,
+    category: raw.category,
+    components: raw.components,
+    quality,
+    paused,
+  };
 }
 
 // ---------------------------------------------------------------------------

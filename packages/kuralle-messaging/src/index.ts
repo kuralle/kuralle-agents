@@ -98,6 +98,7 @@ export { windowGuard } from './adapter/middleware/window-guard.js';
 export type {
   OutboundSink,
   OutboundTemplate,
+  OutboundTemplateComponent,
   OutboundMiddleware,
   OutboundNext,
   OutboundRequest,
