@@ -1,9 +1,16 @@
 import { Hono } from 'hono';
 import type { MessagingRouterConfig, ErrorContext } from '../types.js';
+import type { OutboundMiddleware } from '../types/outbound.js';
 import { MessageDeduplicator } from '../shared/deduplicator.js';
-import { WindowTracker } from './window-tracker.js';
+import { InMemoryWindowStore } from './window-store.js';
 import { defaultSessionResolver } from './session-resolver.js';
 import { StreamMapper } from './stream-mapper.js';
+import { OutboundPipeline } from './outbound-pipeline.js';
+import { windowGuard } from './middleware/window-guard.js';
+
+function buildOutboundChain(extra?: OutboundMiddleware[]): OutboundMiddleware[] {
+  return [...(extra ?? []), windowGuard];
+}
 
 /**
  * Create a Hono router that bridges messaging platform webhooks with the Kuralle runtime.
@@ -17,7 +24,7 @@ import { StreamMapper } from './stream-mapper.js';
  *    and dispatches to the registered message handler
  * 2. The handler deduplicates the message, tracks the conversation window,
  *    resolves the session, and streams the runtime response
- * 3. The stream mapper sends the response back through the platform client
+ * 3. The stream mapper sends the response back through the outbound pipeline
  *
  * @param config - Router configuration with runtime, platforms, and optional customizations.
  * @returns A Hono app with webhook routes mounted for each platform.
@@ -41,7 +48,7 @@ import { StreamMapper } from './stream-mapper.js';
 export function createMessagingRouter(config: MessagingRouterConfig): Hono {
   const app = new Hono();
   const deduplicator = new MessageDeduplicator();
-  const windowTracker = new WindowTracker();
+  const windowStore = config.windowStore ?? new InMemoryWindowStore();
   const sessionResolver = config.sessionResolver ?? defaultSessionResolver;
   const streamMapper = new StreamMapper();
 
@@ -49,38 +56,40 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
     config.fallbackMessage ?? "Sorry, I'm having trouble right now. Please try again.";
 
   for (const [name, platform] of Object.entries(config.platforms)) {
-    // -------------------------------------------------------
-    // Register message handler
-    // -------------------------------------------------------
+    const pipeline = new OutboundPipeline(buildOutboundChain(config.outbound), platform);
+
     platform.onMessage(async (message) => {
-      // Deduplicate — webhooks can be retried by the platform
       if (deduplicator.isDuplicate(message.id)) return;
 
-      // Track the messaging window
-      windowTracker.recordInbound(message.threadId, message.timestamp);
+      await windowStore.recordInbound(message.threadId, message.timestamp);
 
-      // Resolve Kuralle session
       const { sessionId, userId } = await sessionResolver.resolve(message);
 
-      // Extract text input — fall back to a type indicator for non-text messages
       const input = message.text ?? `[${message.type}]`;
 
       try {
-        // Stream from the Kuralle runtime
         const handle = config.runtime.run({
           input,
           sessionId,
           userId,
         });
 
-        // Map the stream output to platform messages
         await streamMapper.mapStream(handle.events, platform, message.threadId, {
           responseMapper: config.responseMapper,
+          pipeline,
+          windowStore,
+          sessionId,
+          userId,
         });
       } catch (error) {
-        // Attempt to send a fallback message
         try {
-          await platform.sendText(message.threadId, fallbackMessage);
+          const window = await windowStore.get(message.threadId);
+          await pipeline.send({
+            threadId: message.threadId,
+            platform: name,
+            payload: { kind: 'text', text: fallbackMessage },
+            meta: { window, parts: [], sessionId, userId },
+          });
         } catch {
           // Cannot even send fallback — nothing more we can do
         }
@@ -94,42 +103,26 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
       }
     });
 
-    // -------------------------------------------------------
-    // Register status handler
-    // -------------------------------------------------------
     platform.onStatus(async (status) => {
-      // Track window expiry from platform-reported conversation info.
-      // Use status.threadId (set by platform clients in the same format as
-      // inbound messages) so the window tracker key matches recordInbound().
       if (status.conversation?.expirationTimestamp && status.threadId) {
-        windowTracker.recordExpiry(
+        await windowStore.recordExpiry(
           status.threadId,
           status.conversation.expirationTimestamp,
         );
       }
 
-      // Forward to user-provided status handler
       config.onStatus?.(status);
     });
 
-    // -------------------------------------------------------
-    // Mount webhook routes
-    // -------------------------------------------------------
-    // GET — webhook verification (e.g. Meta's hub.verify_token challenge)
     app.get(`/${name}/webhook`, async (c) => {
       return platform.handleWebhook(c.req.raw);
     });
 
-    // POST — incoming events (messages, statuses, reactions)
     app.post(`/${name}/webhook`, async (c) => {
       return platform.handleWebhook(c.req.raw);
     });
   }
 
-  // -------------------------------------------------------
-  // /health — aggregated probe. Included when at least one
-  // platform client implements the optional healthCheck().
-  // -------------------------------------------------------
   const hasAnyProbe = Object.values(config.platforms).some(
     (p) => typeof p.healthCheck === 'function',
   );

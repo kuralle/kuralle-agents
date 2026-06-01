@@ -94,6 +94,7 @@ export { filterStreamParts } from './stream-filter.js';
 // Outbound
 // ====================================
 export { OutboundPipeline } from './adapter/outbound-pipeline.js';
+export { windowGuard } from './adapter/middleware/window-guard.js';
 export type {
   OutboundSink,
   OutboundTemplate,
