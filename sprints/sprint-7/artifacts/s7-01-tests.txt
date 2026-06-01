@@ -1,0 +1,31 @@
+S7-01 — engagement() wiring (F1)
+
+Named tests (packages/kuralle-engagement/test/engagement.test.ts):
+  engagement_composes_bridge
+    - bridge.outbound order and router constructs without throwing
+    - omits gates when consent and ownership stores are not provided
+  engagement_inbound_resolver_dispatches_by_platform
+    - dispatches whatsapp and instagram inbounds and resolves free text
+    - returns undefined for unknown platform so chain can fall through
+  engagement broadcasts
+    - throws when broadcast pipeline is not configured
+
+eng-wire-test: 5 pass, 0 fail
+
+Full suite (messaging + messaging-meta + engagement): 527 pass, 0 fail
+
+typecheck:all tail:
+swept 58 configs; 0 stale-empty
+✓ typecheck:all green
+== playground tsconfig sweep (7 configs) ==
+ok     apps/playground/acme-support-agent/tsconfig.json
+ok     apps/playground/cag-demo/tsconfig.json
+ok     apps/playground/langfuse-demo/tsconfig.json
+ok     apps/playground/livekit-starters/livekit-agent-starter/tsconfig.json
+ok     apps/playground/rag-demo/tsconfig.json
+ok     apps/playground/transport-examples/smartpbx-bridge/tsconfig.json
+ok     apps/playground/transport-examples/tsconfig.json
+
+swept 7 playground configs; 0 stale-empty
+✓ typecheck:playground green
+$ eslint 'packages/*/src/**/*.ts' 'packages/*/test/**/*.ts' 'packages/*/tests/**/*.ts'

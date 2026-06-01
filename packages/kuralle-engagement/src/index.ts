@@ -1,4 +1,10 @@
 export * from './policy.js';
+export {
+  engagement,
+  policyInboundResolver,
+  type EngagementOptions,
+  type EngagementBridge,
+} from './engagement.js';
 export * from './strategist.js';
 export { strategistMiddleware } from './strategist-middleware.js';
 export { interactiveRenderer, renderChoices } from './interactive-renderer.js';
