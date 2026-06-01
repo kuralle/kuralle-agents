@@ -1,0 +1,33 @@
+# S5-01 — scheduler tests + typecheck
+
+## Named tests (packages/kuralle-engagement/test/scheduler.test.ts)
+- scheduler_enqueue_fires — PASS
+- scheduler_cancel_prevents — PASS
+- returns deterministic incrementing job ids — PASS
+
+## sched-test (bun test packages/kuralle-engagement/test/scheduler.test.ts)
+bun test v1.3.9 (cf6cdbbb)
+
+ 3 pass
+ 0 fail
+ 9 expect() calls
+Ran 3 tests across 1 file. [51.00ms]
+
+## eng-suite (bun test packages/kuralle-engagement)
+46 pass, 0 fail (full engagement package)
+
+## typecheck:all (tail)
+swept 58 configs; 0 stale-empty
+✓ typecheck:all green
+== playground tsconfig sweep (7 configs) ==
+ok     apps/playground/acme-support-agent/tsconfig.json
+ok     apps/playground/cag-demo/tsconfig.json
+ok     apps/playground/langfuse-demo/tsconfig.json
+ok     apps/playground/livekit-starters/livekit-agent-starter/tsconfig.json
+ok     apps/playground/rag-demo/tsconfig.json
+ok     apps/playground/transport-examples/smartpbx-bridge/tsconfig.json
+ok     apps/playground/transport-examples/tsconfig.json
+
+swept 7 playground configs; 0 stale-empty
+✓ typecheck:playground green
+$ eslint 'packages/*/src/**/*.ts' 'packages/*/test/**/*.ts' 'packages/*/tests/**/*.ts'
