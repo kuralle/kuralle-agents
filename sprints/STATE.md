@@ -6,11 +6,13 @@
 
 ## Active sprint
 
-**Sprint number:** `5`
-**Sprint name:** Proactive outbound
+**Sprint number:** `6`
+**Sprint name:** Channel adapters
 **Status:** `not-started`
-**Goal:** A broadcast template is idempotent across retry and a reply hands into a flow; a drip stops on reply; re-engagement reopens the window and resumes the flow.
-**WBS section:** [`sprints/WBS.md` § Sprint 5](./WBS.md)
+**Goal:** The same bot runs on WhatsApp and Instagram via injected `ChannelPolicy` adapters (web already from Sprint 0), each rendering/recovering per its channel rules.
+**WBS section:** [`sprints/WBS.md` § Sprint 6](./WBS.md)
+
+> **Sprint 6 note:** S6-02 is a HARD verification gate (Q7) — re-verify Instagram specifics against current Meta docs before building G2; flag via `/grill-me` if Meta diverges from the RFC assumption.
 
 ## Build branch
 
@@ -20,30 +22,30 @@ Every sprint session — manager and IC — works **on this branch only**. Befor
 
 At session start: `git checkout plan/whatsapp-engagement` (or `git fetch && git checkout plan/whatsapp-engagement` if missing locally).
 
-## Load-bearing reading for sprint 5
+## Load-bearing reading for sprint 6
 
-The session running sprint 5 must read these in this order before delegating any story:
+The session running sprint 6 must read these in this order before delegating any story:
 
-1. `sprints/sprint-4/HANDOFF.md` — read-me-first; state of the world + Sprint 5 traps.
-2. `sprints/WBS.md` § Sprint 5 — the plan for this sprint.
+1. `sprints/sprint-5/HANDOFF.md` — read-me-first; state of the world + Sprint 6 traps (esp. the S6-02 Q7 gate).
+2. `sprints/WBS.md` § Sprint 6 — the plan for this sprint.
 3. `sprints/SESSION_KICKOFF_PROMPT.md` — the loop you are running.
-4. `rfcs/whatsapp-engagement/02-requirements-interfaces.md` — §4.7 (`Scheduler`, `BroadcastLedger`); REQ-12/13.
-5. `rfcs/whatsapp-engagement/03-pseudocode-blueprint.md` — §6.5 (broadcast/drip pseudocode + the R-07 ledger note).
-6. `rfcs/whatsapp-engagement/04-tasks-validation.md` — Phase E chunks (E1/E2/E3) + §9.1 tests (`broadcast_idempotent_and_reply_enters_flow`, `broadcast_ledger_idempotent_per_campaign_recipient`, `drip_stops_on_reply`, `reengagement_reopens_window_and_resumes`).
-7. `rfcs/whatsapp-engagement/05-security-rollback-open-qs.md` — R-07 (explicit `BroadcastLedger`, NOT the per-run effect log; `runId==sessionId`).
-8. Source: `packages/kuralle-engagement/src/` (new scheduler/broadcast/drip), `OutboundPipeline` (broadcast sends traverse it; consent/ownership/window gates apply), `engagement/src/consent.ts` (opted-in filter), `packages/kuralle-core/src/runtime/openRun.ts:31` (`runId == sessionId`), S2 strategist/catalog (approved templates), `messaging/src/adapter/window-store.ts` (re-engagement reopens window).
+4. `rfcs/whatsapp-engagement/02-requirements-interfaces.md` — §4.12 (`ChannelPolicy` — WhatsApp/Web/Instagram adapter rows); REQ-22.
+5. `rfcs/whatsapp-engagement/03-pseudocode-blueprint.md` — §6.1 (windowGuard via injected `policy`), §6.6 (omnichannel).
+6. `rfcs/whatsapp-engagement/04-tasks-validation.md` — Phase G chunks (G1/G2) + §9.1 tests (`same_bot_across_channels`, `web_null_policy_always_open`, `instagram_closed_window_tags_or_defers`, `whatsapp_policy_unchanged_behavior`).
+7. `rfcs/whatsapp-engagement/05-security-rollback-open-qs.md` — Q7 (Instagram constraints — **S6-02 verify vs current Meta docs**); RESEARCH §6.
+8. Source: `packages/kuralle-engagement/src/policy.ts` (`ChannelPolicy`/`ClosedWindowStrategy`, S0-04), `packages/kuralle-messaging-meta/src/instagram/client.ts` (`sendTextWithTag` ~423, `sendButtonTemplate` ~186, `sendQuickReplies` ≤13 ~299, `sendGenericTemplate` ~323), `whatsapp/client.ts`, the windowGuard/interactiveRenderer/inbound-resolver (Sprint 6 makes them read the injected policy).
 9. `~/.claude/projects/-Users-mithushancj-Documents-asyncdot-openscoped-aria-flow/memory/MEMORY.md` — standing rules (Bun usage, no-shortcuts, publish-together).
 
-### Sprint-0..4 seams Sprint 5 builds on
-- S1 `OutboundPipeline` — broadcast/drip sends traverse it (window/consent/ownership gates still apply); approved-template sends are window-agnostic.
-- S2 strategist/catalog — broadcasts send APPROVED templates.
-- S4 `ConsentStore` — broadcasts go only to opted-in recipients; STOP halts.
-- S0-03 `RunOptions.selection` + the inbound router path — a recipient reply enters a flow via the normal inbound path.
-- `runId == sessionId` (`openRun.ts:31`) — the per-run effect log dedupes WITHIN a conversation only, so broadcast idempotency needs the explicit `BroadcastLedger` (R-07).
+### Sprint-0..5 seams Sprint 6 builds on
+- S0-04 `ChannelPolicy`/`ClosedWindowStrategy` + `webPolicy()` — G1/G2 implement real WhatsApp/Instagram policies; web already exists.
+- S1 windowGuard/pipeline — Sprint 6 makes the guard read `policy.isWindowOpen`/`policy.closedWindow` (the rev3 unification) WITHOUT regressing the WhatsApp path (`whatsapp_policy_unchanged_behavior`).
+- S2 strategist — the WhatsApp policy's `closedWindow:{kind:'template',strategist}`.
+- S3 renderer/inbound-resolver — per-policy `renderInteractive`/`resolveInbound`.
+- S4 consent/ownership — `consentRequired` per policy.
 
 ## Last completed sprint
 
-`4` — Handoff & consent
+`5` — Proactive outbound
 
 ## Last completed at
 
@@ -58,6 +60,7 @@ The session running sprint 5 must read these in this order before delegating any
 | 2 | complete | 2026-06-01 | [sprint-2/WARMDOWN.md](./sprint-2/WARMDOWN.md) |
 | 3 | complete | 2026-06-01 | [sprint-3/WARMDOWN.md](./sprint-3/WARMDOWN.md) |
 | 4 | complete | 2026-06-01 | [sprint-4/WARMDOWN.md](./sprint-4/WARMDOWN.md) |
+| 5 | complete | 2026-06-01 | [sprint-5/WARMDOWN.md](./sprint-5/WARMDOWN.md) |
 
 When a sprint completes, append a row here from `WARMDOWN.md`.
 
