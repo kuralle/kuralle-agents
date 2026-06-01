@@ -81,6 +81,7 @@ const sidebar = [
       { label: 'Routing & Handoffs', link: '/guides/routing' },
       { label: 'Sessions & State', link: '/guides/sessions' },
       { label: 'Voice Agents', link: '/guides/voice' },
+      { label: 'Engagement & Messaging', link: '/guides/engagement' },
       { label: 'Deployment', link: '/guides/deployment' },
     ],
   },
