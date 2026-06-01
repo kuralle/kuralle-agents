@@ -1,0 +1,13 @@
+S3-03 — InboundResolverChain + InteractiveResolver + TextResolver
+
+Named tests (input-resolver-chain.test.ts):
+  - interactive_routes_by_id_not_label
+  - template_button_payload_routes
+  - nfm_reply_form_in_state
+  - free_text_nlu_fallback
+
+bun test packages/kuralle-messaging/test/input-resolver-chain.test.ts — 11 pass, 0 fail
+
+bun test packages/kuralle-messaging — 444 pass, 0 fail (regression: router text path intact)
+
+bun run typecheck:all — green (58 package configs + eslint)

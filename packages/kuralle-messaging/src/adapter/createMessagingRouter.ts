@@ -4,6 +4,10 @@ import type { OutboundMiddleware } from '../types/outbound.js';
 import { MessageDeduplicator } from '../shared/deduplicator.js';
 import { InMemoryWindowStore } from './window-store.js';
 import { defaultSessionResolver } from './session-resolver.js';
+import {
+  InboundResolverChain,
+  defaultInboundChain,
+} from './input-resolver-chain.js';
 import { StreamMapper } from './stream-mapper.js';
 import { OutboundPipeline } from './outbound-pipeline.js';
 import { windowGuard } from './middleware/window-guard.js';
@@ -50,6 +54,9 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
   const deduplicator = new MessageDeduplicator();
   const windowStore = config.windowStore ?? new InMemoryWindowStore();
   const sessionResolver = config.sessionResolver ?? defaultSessionResolver;
+  const inboundChain = config.inputResolver
+    ? new InboundResolverChain(config.inputResolver)
+    : defaultInboundChain();
   const streamMapper = new StreamMapper();
 
   const fallbackMessage =
@@ -65,13 +72,14 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
 
       const { sessionId, userId } = await sessionResolver.resolve(message);
 
-      const input = message.text ?? `[${message.type}]`;
+      const { input, selection } = await inboundChain.resolve(message);
 
       try {
         const handle = config.runtime.run({
           input,
           sessionId,
           userId,
+          selection,
         });
 
         await streamMapper.mapStream(handle.events, platform, message.threadId, {
