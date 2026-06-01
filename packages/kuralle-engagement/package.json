@@ -32,7 +32,8 @@
     "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
-    "@kuralle-agents/core": "workspace:*"
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/messaging": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.8.2",

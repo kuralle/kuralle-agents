@@ -432,6 +432,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/messaging": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^22.13.4",
