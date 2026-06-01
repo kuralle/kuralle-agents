@@ -1,0 +1,25 @@
+# S1-01 A1 — OutboundSink + capability detection (demo)
+
+## capability_detection (outbound-sink.test.ts)
+
+bun test v1.3.9 (cf6cdbbb)
+
+ 3 pass
+ 0 fail
+  4 expect() calls
+Ran 3 tests across 1 file.
+
+Tests:
+- OutboundSink: assigns PlatformClient to OutboundSink
+- capability_detection: is true when sendTemplate is a function
+- capability_detection: is false when sendTemplate is absent
+
+## typecheck:all (tail)
+
+swept 58 configs; 0 stale-empty
+✓ typecheck:all green
+== playground tsconfig sweep (7 configs) ==
+ok     apps/playground/acme-support-agent/tsconfig.json
+...
+✓ typecheck:playground green
+$ eslint 'packages/*/src/**/*.ts' 'packages/*/test/**/*.ts' 'packages/*/tests/**/*.ts'
