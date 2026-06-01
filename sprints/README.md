@@ -5,7 +5,7 @@ Operating system for the Kuralle Engagement build.
 | File / Folder | Role |
 |---------------|------|
 | [`WBS.md`](./WBS.md) | Work breakdown — stories, universal DoD. **The plan.** |
-| [`SESSION_KICKOFF_PROMPT.md`](./SESSION_KICKOFF_PROMPT.md) | Paste into a fresh session to advance one sprint. **The driver.** |
+| [`SESSION_KICKOFF_PROMPT.md`](./SESSION_KICKOFF_PROMPT.md) | Paste once — long-running program session, sprint after sprint. **The driver.** |
 | [`STATE.md`](./STATE.md) | Where we are now + build branch. **The pointer.** |
 | [`templates/`](./templates/) | PLAN, STORY-BRIEF, PROCEED-EVIDENCE, REVIEW-r1, WARMDOWN, HANDOFF. **The shape.** |
 | `sprint-{N}/` | Per-sprint history. |
@@ -36,7 +36,7 @@ No review workers between stories — proceed evidence only.
 
 ### Close
 
-WARMDOWN + HANDOFF + STATE update → `[S{N}-close]`. One sprint per session.
+WARMDOWN + HANDOFF + STATE update → `[S{N}-close]`. **Default:** continue to sprint N+1 in the same session (Step 4). Stop only when WBS complete, user pause, or hard flag.
 
 ---
 

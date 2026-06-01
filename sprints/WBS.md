@@ -303,6 +303,6 @@ The format below repeats per sprint. Stories use the id pattern `S{N}-{nn}` (e.g
 
 ## 6. The role of this document
 
-This WBS is the *plan*, not the *prompt*. The prompt that any new session uses to advance the project one sprint lives at [`./SESSION_KICKOFF_PROMPT.md`](./SESSION_KICKOFF_PROMPT.md). The current sprint pointer lives at [`./STATE.md`](./STATE.md). Templates for the per-sprint artifacts live under [`./templates/`](./templates/).
+This WBS is the *plan*, not the *prompt*. The program driver lives at [`./SESSION_KICKOFF_PROMPT.md`](./SESSION_KICKOFF_PROMPT.md) — paste once; the session runs sprint after sprint until stop. The current sprint pointer lives at [`./STATE.md`](./STATE.md). Templates live under [`./templates/`](./templates/).
 
 When this WBS conflicts with the source RFC, **the RFC wins** — amend `rfcs/whatsapp-engagement/` in the same commit.
