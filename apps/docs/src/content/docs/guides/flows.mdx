@@ -87,6 +87,31 @@ A node's `next` (or `onComplete`) function returns a `Transition`:
 | `{ escalate: 'reason' }` | Escalate to a human |
 | `'stay'` | Stay on the current node for another turn |
 
+## Writing node instructions
+
+A node's `instructions` is a focused micro-prompt for *that node's job* — not a system prompt. The flow already owns control flow (which node runs next); the instructions only steer what the model says and **which tool it calls** on this step. Two habits keep node prompts reliable.
+
+**Map intent to a tool call explicitly.** A node usually advances when a specific tool fires — its `next` inspects `toolResults`. Don't assume the model will infer *when* to call it: name the trigger, list the phrases that should map to it, and require the call in the same turn.
+
+```typescript
+const confirm = reply({
+  id: 'confirm',
+  instructions: `Read back the order details. When the user clearly affirms the order is
+correct — "yes", "looks good", "that's correct", "go ahead" — call complete_order
+immediately in that same turn. Use revise_order only if they want to change something.
+After any clear affirmative, you must call complete_order, not re-ask.`,
+  tools: () => buildToolSet({ complete_order: completeOrder, revise_order: reviseOrder }),
+  next: (turn) =>
+    turn.toolResults.some((r) => r.name === 'complete_order') ? end : 'stay',
+});
+```
+
+**Avoid confirmation loops.** Open-ended phrasing like *"ask if they want anything else or to make changes"* keeps the model asking — it never calls the tool, so the node never transitions. If a node should complete on agreement, tell it to *act* on agreement, not to *ask again*.
+
+<Aside type="tip">
+  If a flow "won't finish," it's almost always the prompt, not the graph: the node's instructions are eliciting another question instead of the tool call that drives the transition. Make the completion tool the obvious, mandated response to a clear affirmative.
+</Aside>
+
 ## Holding position across turns
 
 A flow records its current node on the session and resumes there on the next turn. When a node returns `'stay'` (and there's no pending input), the run is persisted and the turn ends; the next `runtime.run({ input })` re-enters the *same* node rather than restarting the flow. A `collect` node uses this to gather one field at a time over several turns.
