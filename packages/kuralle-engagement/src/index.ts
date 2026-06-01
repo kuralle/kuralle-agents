@@ -4,7 +4,15 @@ export { strategistMiddleware } from './strategist-middleware.js';
 export { interactiveRenderer, renderChoices } from './interactive-renderer.js';
 export { closedWindowRecovery } from './closed-window-recovery.js';
 export { whatsappPolicy } from './policies/whatsapp.js';
+export { instagramPolicy } from './policies/instagram.js';
 export { resolveInboundWhatsApp } from './resolve-inbound-whatsapp.js';
+export { resolveInboundInstagram } from './resolve-inbound-instagram.js';
+export {
+  renderInstagramInteractive,
+  IG_TITLE_MAX,
+  IG_BUTTON_COUNT_MAX,
+  IG_CAROUSEL_COUNT_MAX,
+} from './render-instagram-interactive.js';
 export { withChoices } from './authoring.js';
 export { smartSend } from './nodes.js';
 export {

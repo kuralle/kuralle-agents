@@ -6,6 +6,7 @@ export const windowGuard: OutboundMiddleware = {
   name: 'window-guard',
   async send(req: OutboundRequest, next: OutboundNext): Promise<SendOutcome> {
     if (req.payload.kind === 'template') return next(req);
+    if (req.payload.kind === 'text' && req.payload.tag) return next(req);
     if (req.meta.window.open) return next(req);
     return { kind: 'deferred', reason: 'window-closed' };
   },
