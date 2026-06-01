@@ -1,0 +1,97 @@
+---
+title: Engagement & Messaging
+description: Window-safe omnichannel bots with WhatsApp, Instagram, and web chat on one runtime.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The **`@kuralle-agents/engagement`** package is the channel-agnostic layer for messaging bots: consent, ownership, closed-window recovery, interactive rendering, and broadcasts. Pair it with **`@kuralle-agents/messaging`** (router + pipeline) and **`@kuralle-agents/messaging-meta`** (WhatsApp/Instagram clients).
+
+## One bot, many channels
+
+Write agents and flows once. Per-channel rules live in **`ChannelPolicy`** adapters — not duplicated bot code.
+
+```typescript
+import { createMessagingRouter, InMemoryWindowStore } from '@kuralle-agents/messaging';
+import {
+  engagement,
+  whatsappPolicy,
+  webPolicy,
+  instagramPolicy,
+} from '@kuralle-agents/engagement';
+
+const windowStore = new InMemoryWindowStore();
+
+const { bridge } = engagement({
+  policies: [
+    whatsappPolicy({ client: whatsapp, selector, windowStore, wabaId }),
+    webPolicy(),
+    instagramPolicy({ client: instagram, windowStore }),
+  ],
+  windowStore,
+});
+
+createMessagingRouter({
+  runtime,
+  platforms: { whatsapp, instagram },
+  ...bridge,
+});
+```
+
+Web chat uses **`createKuralleChatRouter`** on the same runtime; `webPolicy()` is the always-open null adapter.
+
+## Window-safe outbound
+
+`createMessagingRouter` builds:
+
+```
+[consentGate?] → [ownershipGate?] → closedWindowRecovery → interactiveRenderer → windowGuard (terminal)
+```
+
+- **`windowGuard`** is always last and is **not** part of `bridge.outbound`. When the window is closed, free-form text/media/interactive **defer** with no client call.
+- **`closedWindowRecovery`** uses each policy’s strategy: WhatsApp templates, Instagram `HUMAN_AGENT` tags (text only), or web `none`.
+
+<Aside type="caution">
+  Do not add `windowGuard` to `engagement().bridge.outbound` — the router appends it. Duplicating it breaks the terminal-guard invariant.
+</Aside>
+
+## Interactive choices
+
+Use **`withChoices`** on `collect` or `decide` nodes so the runtime emits an `interactive` stream part. **`interactiveRenderer`** turns that into channel-native UI (WhatsApp buttons/list, Instagram quick replies/templates, web controls). Route by **option id**, not label:
+
+```typescript
+import { decide, defineFlow } from '@kuralle-agents/core';
+import { withChoices } from '@kuralle-agents/engagement';
+import { z } from 'zod';
+
+const triage = withChoices(
+  decide({
+    id: 'triage',
+    instructions: 'How can we help?',
+    schema: z.object({ choice: z.string() }),
+    decide: (id) => (id === 'billing' ? billingNode : supportNode),
+  }),
+  [
+    { id: 'billing', label: 'Billing' },
+    { id: 'support', label: 'Support' },
+  ],
+);
+```
+
+## Consent, handoff, broadcasts
+
+- **`sessionConsentStore`** + **`consentGate`** — opt-in/out; STOP halts proactive sends.
+- **`sessionOwnershipStore`** + **`ownershipGate`** — while `owner(thread) === 'human'`, the bot does not send and inbound does not run flows.
+- **`broadcasts`** — pass **`broadcastPipeline`** into `engagement()` to enable `broadcasts.send()`; policies do not expose clients, so you construct the pipeline for the target platform explicitly.
+
+## Full example
+
+See the multi-platform server under `packages/kuralle-messaging-meta/examples/multi-platform/` (WhatsApp + Instagram webhooks + web SSE, one shared flow).
+
+## Install
+
+```bash
+npm install @kuralle-agents/engagement @kuralle-agents/messaging @kuralle-agents/messaging-meta @kuralle-agents/core ai zod
+```
+
+Package README: [`packages/kuralle-engagement/README.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/kuralle-engagement/README.md).
