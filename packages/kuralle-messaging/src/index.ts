@@ -62,6 +62,8 @@ export {
 export type { SessionResolverPlugin } from './adapter/session-resolver-chain.js';
 export { StreamMapper } from './adapter/stream-mapper.js';
 export { WindowTracker } from './adapter/window-tracker.js';
+export type { WindowStore, WindowState } from './adapter/window-store.js';
+export { InMemoryWindowStore } from './adapter/window-store.js';
 
 // ====================================
 // Shared
