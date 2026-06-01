@@ -41,6 +41,7 @@ export interface HarnessConfig {
   sessionStore?: SessionStore;
   defaultModel?: LanguageModel;
   maxHandoffs?: number;
+  terminalHandoffTargets?: string[];
   hooks?: Hooks;
   voiceMode?: boolean;
   hostSelect?: typeof selectHostTarget;
@@ -67,6 +68,7 @@ export class Runtime {
   private readonly sessionStore: SessionStore;
   private readonly defaultModel?: LanguageModel;
   private readonly maxHandoffs: number;
+  private readonly terminalHandoffTargets: Set<string>;
   private readonly hooks?: Hooks;
   private readonly activeTurnAborts = new Map<string, AbortController>();
 
@@ -75,6 +77,7 @@ export class Runtime {
     this.sessionStore = config.sessionStore ?? new MemoryStore();
     this.defaultModel = config.defaultModel;
     this.maxHandoffs = config.maxHandoffs ?? 5;
+    this.terminalHandoffTargets = new Set(config.terminalHandoffTargets ?? ['human']);
     this.hooks = config.hooks;
   }
 
@@ -173,6 +176,13 @@ export class Runtime {
           });
 
           if (loopResult.kind === 'handoff') {
+            if (this.terminalHandoffTargets.has(loopResult.to)) {
+              emit({ type: 'handoff', targetAgent: loopResult.to, reason: loopResult.reason });
+              runCtx.runState.status = 'paused';
+              await runCtx.runStore.putRunState(runCtx.runState);
+              break;
+            }
+
             handoffCount += 1;
             if (handoffCount > this.maxHandoffs) {
               throw new Error(`maxHandoffs exceeded (${this.maxHandoffs})`);
