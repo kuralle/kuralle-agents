@@ -93,5 +93,16 @@ export { filterStreamParts } from './stream-filter.js';
 // ====================================
 // Outbound
 // ====================================
-export type { OutboundSink, OutboundTemplate } from './types/outbound.js';
+export { OutboundPipeline } from './adapter/outbound-pipeline.js';
+export type {
+  OutboundSink,
+  OutboundTemplate,
+  OutboundMiddleware,
+  OutboundNext,
+  OutboundRequest,
+  OutboundPayload,
+  OutboundMeta,
+  SendOutcome,
+  DeferReason,
+} from './types/outbound.js';
 export { isTemplateCapable } from './types/outbound.js';
