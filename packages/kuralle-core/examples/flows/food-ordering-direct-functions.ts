@@ -89,9 +89,11 @@ const end = reply({
 
 const confirm = reply({
   id: 'confirm',
-  instructions: `Read back the complete order details to the user and ask if they want anything else or if they want to make changes. Use the available functions:
-- Use complete_order when the user confirms that the order is correct and no changes are needed
-- Use revise_order if they want to change something
+  instructions: `Read back the complete order details to the user. Use the available functions:
+- When the user clearly affirms the order is correct with no changes — e.g. "yes", "looks good", "that's correct", "go ahead", "perfect", "sounds good", or similar — call complete_order immediately in that same turn. Do not ask again for confirmation after a clear affirmative.
+- Use revise_order only when they want to change something or add items
+
+If they have not yet confirmed, you may ask once whether the order is correct. After any clear affirmative, you must call complete_order, not re-ask.
 
 Be friendly and clear when reading back the order details.`,
   model,

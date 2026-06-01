@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock, afterEach } from 'bun:test';
 import { z } from 'zod';
 import { reply } from '../../src/types/flow.js';
+import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { VoiceDriver } from '../../src/runtime/channels/VoiceDriver.js';
 import { buildToolSet, defineTool, CoreToolExecutor, ToolValidationError } from '../../src/tools/effect/index.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
@@ -15,6 +16,10 @@ import {
 async function waitForDriverReady(): Promise<void> {
   await new Promise((r) => setTimeout(r, 5));
 }
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe('LLM-brain conformance gates G1–G6', () => {
   it('G1: flow transition reconfigures session without new inference', async () => {
@@ -210,5 +215,143 @@ describe('LLM-brain conformance gates G1–G6', () => {
 
     await expect(turnPromise).rejects.toBeInstanceOf(ToolValidationError);
     expect(backendHit).toBe(false);
+  });
+
+  it('G7: flow-local tool wins over same-named registry tool (text)', async () => {
+    let registryHits = 0;
+    let localHits = 0;
+
+    const registryTool = defineTool({
+      name: 'pick_winner',
+      description: 'Registry executor',
+      execute: async () => {
+        registryHits += 1;
+        return { winner: 'registry' };
+      },
+    });
+
+    const localTool = defineTool({
+      name: 'pick_winner',
+      description: 'Flow-local executor',
+      input: z.object({ side: z.literal('local') }),
+      execute: async () => {
+        localHits += 1;
+        return { winner: 'local' };
+      },
+    });
+
+    let streamCall = 0;
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        streamText: () => {
+          streamCall += 1;
+          if (streamCall === 1) {
+            return {
+              fullStream: (async function* () {
+                yield { type: 'text-delta', text: 'Picking' };
+              })(),
+              finishReason: Promise.resolve('tool-calls'),
+              response: Promise.resolve({ messages: [] }),
+              toolCalls: Promise.resolve([
+                {
+                  toolName: 'pick_winner',
+                  toolCallId: 'call-local',
+                  input: { side: 'local' },
+                },
+              ]),
+            };
+          }
+          return {
+            fullStream: (async function* () {
+              yield { type: 'text-delta', text: ' Done' };
+            })(),
+            finishReason: Promise.resolve('stop'),
+            response: Promise.resolve({ messages: [] }),
+            toolCalls: Promise.resolve([]),
+          };
+        },
+      };
+    });
+
+    const executor = new CoreToolExecutor({ tools: { pick_winner: registryTool } });
+    const { session, runStore, runState } = await setupDurableHarness('g7-text-sess', 'g7-text-run');
+    const ctx = await createRunContext({
+      session,
+      runStore,
+      runState,
+      steps: [],
+      toolExecutor: executor,
+      model: stubModel,
+      emit: () => {},
+    });
+
+    const node = reply({
+      id: 'r',
+      instructions: 'Pick winner',
+      tools: buildToolSet({ pick_winner: localTool }),
+    });
+    const driver = new TextDriver();
+    const turn = await driver.runAgentTurn(resolveReplyNode(node, {}), ctx);
+
+    expect(turn.toolResults[0]?.result).toEqual({ winner: 'local' });
+    expect(localHits).toBe(1);
+    expect(registryHits).toBe(0);
+  });
+
+  it('G7: flow-local tool wins over same-named registry tool (voice)', async () => {
+    let registryHits = 0;
+    let localHits = 0;
+
+    const registryTool = defineTool({
+      name: 'pick_winner',
+      description: 'Registry executor',
+      execute: async () => {
+        registryHits += 1;
+        return { winner: 'registry' };
+      },
+    });
+
+    const localTool = defineTool({
+      name: 'pick_winner',
+      description: 'Flow-local executor',
+      input: z.object({ side: z.literal('local') }),
+      execute: async () => {
+        localHits += 1;
+        return { winner: 'local' };
+      },
+    });
+
+    const fakeClient = new FakeRealtimeAudioClient({ responses: {} });
+    fakeClient.stallResponse = true;
+    await fakeClient.connect({ systemInstruction: '', tools: [] });
+
+    const executor = new CoreToolExecutor({ tools: { pick_winner: registryTool } });
+    const driver = new VoiceDriver({ client: fakeClient, toolDefs: { pick_winner: registryTool } });
+    const { session, runStore, runState } = await setupDurableHarness('g7-voice-sess', 'g7-voice-run');
+    const ctx = await createRunContext({
+      session,
+      runStore,
+      runState,
+      steps: [],
+      toolExecutor: executor,
+      model: stubModel,
+      emit: () => {},
+    });
+
+    const node = reply({
+      id: 'r',
+      instructions: 'Pick winner',
+      tools: buildToolSet({ pick_winner: localTool }),
+    });
+    const turnPromise = driver.runAgentTurn(resolveReplyNode(node, {}), ctx);
+    await waitForDriverReady();
+    fakeClient.emitToolCallTurn('pick_winner', { side: 'local' });
+    const turn = await turnPromise;
+
+    expect(turn.toolResults[0]?.result).toEqual({ winner: 'local' });
+    expect(localHits).toBe(1);
+    expect(registryHits).toBe(0);
   });
 });

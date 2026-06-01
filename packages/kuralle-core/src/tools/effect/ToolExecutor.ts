@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { debug } from '../../debug.js';
 import type { Session, ToolCallRecord } from '../../types/session.js';
 import type { EffectToolExecutor, ToolContext } from '../../types/run-context.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
@@ -79,7 +80,11 @@ export class CoreToolExecutor implements EffectToolExecutor {
 
   private async executeInner(args: CoreExecuteArgs): Promise<unknown> {
     const { name, session, abortSignal, toolCallId, toolCtx } = args;
-    const def = args.def ?? this.tools.get(name);
+    const registryDef = this.tools.get(name);
+    if (args.def && registryDef) {
+      debug(`[ToolExecutor] flow-local tool "${name}" shadows a same-named registry tool`);
+    }
+    const def = args.def ?? registryDef;
     if (!def) {
       throw new Error(`Unknown tool: ${name}`);
     }
