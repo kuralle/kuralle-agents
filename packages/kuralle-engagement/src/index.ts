@@ -1,5 +1,7 @@
 export * from './policy.js';
 export * from './strategist.js';
+export { strategistMiddleware } from './strategist-middleware.js';
+export { smartSend } from './nodes.js';
 export {
   whatsappTemplateCatalog,
   mapTemplateInfoToDescriptor,
