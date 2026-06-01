@@ -7,12 +7,14 @@ import type { SignalDelivery } from './durable/types.js';
 import { setPendingUserInput } from './channels/inputBuffer.js';
 import { SessionRunStore } from './durable/SessionRunStore.js';
 import type { RunState } from './durable/types.js';
+import type { ResolvedSelection } from '../types/selection.js';
 import { recordSignalDelivery } from './durable/replay.js';
 
 export interface OpenRunOptions {
   sessionId: string;
   userId?: string;
   input?: string;
+  selection?: ResolvedSelection;
   agentId?: string;
   seedMessages?: ModelMessage[];
   historyDelta?: ModelMessage[];
@@ -74,15 +76,23 @@ export async function openRun(
     runState = (await runStore.getRunState(runId)) ?? runState;
   }
 
-  if (options.input) {
+  if (options.selection?.formData) {
+    runState.state = { ...runState.state, ...options.selection.formData };
+    runState.updatedAt = Date.now();
+    await runStore.putRunState(runState);
+  }
+
+  const effectiveInput = options.selection?.id ?? options.input;
+
+  if (effectiveInput) {
     runState.updatedAt = Date.now();
     if (runState.activeFlow) {
       await runStore.putRunState(runState);
       const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
-      setPendingUserInput(sessionAfterPersist, options.input);
+      setPendingUserInput(sessionAfterPersist, effectiveInput);
       await options.sessionStore.save(sessionAfterPersist);
     } else {
-      const userMessage: ModelMessage = { role: 'user', content: options.input };
+      const userMessage: ModelMessage = { role: 'user', content: effectiveInput };
       runState.messages = [...runState.messages, userMessage];
       runState.updatedAt = Date.now();
       await runStore.putRunState(runState);
