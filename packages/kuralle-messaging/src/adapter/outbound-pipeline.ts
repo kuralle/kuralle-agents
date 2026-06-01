@@ -4,6 +4,7 @@ import type {
   OutboundSink,
   SendOutcome,
 } from '../types/outbound.js';
+import { isTagCapable } from '../types/outbound.js';
 
 const WINDOW_GUARD = 'window-guard';
 
@@ -33,6 +34,12 @@ export class OutboundPipeline {
     const { payload, threadId } = r;
     switch (payload.kind) {
       case 'text':
+        if (payload.tag && isTagCapable(this.sink)) {
+          return {
+            kind: 'sent',
+            result: await this.sink.sendTextWithTag(threadId, payload.text, payload.tag),
+          };
+        }
         return { kind: 'sent', result: await this.sink.sendText(threadId, payload.text) };
       case 'interactive':
         return {
