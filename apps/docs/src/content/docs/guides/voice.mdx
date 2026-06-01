@@ -13,7 +13,7 @@ The same `defineAgent` you use for text works for voice. Kuralle keeps tool, flo
 
 | Path | Package | How it works |
 |---|---|---|
-| Provider-native realtime | `@kuralle-agents/realtime-audio` | Raw audio goes directly to the provider model (Gemini Live, OpenAI Realtime, xAI Grok Realtime) and audio comes back in a single connection. Lower latency; no transcript round-trip. |
+| Provider-native realtime | `@kuralle-agents/realtime-audio` | Raw audio goes directly to the provider model (Gemini Live, OpenAI Realtime; xAI Grok Realtime via the Cloudflare Workers client) and audio comes back in a single connection. Lower latency; no transcript round-trip. |
 | Cascaded STT→LLM→TTS | `@kuralle-agents/livekit-plugin` | Speech-to-text transcribes audio, a standard Kuralle turn runs, then text-to-speech synthesizes the response. Works with any LLM. |
 
 Both paths run the same Kuralle runtime — flows, tools, routing, and handoffs work identically.
@@ -26,7 +26,7 @@ Both paths run the same Kuralle runtime — flows, tools, routing, and handoffs 
 npm install @kuralle-agents/realtime-audio
 ```
 
-`VoiceEngine` is the call acceptor. It creates per-call `VoiceCallSession` workers that bridge a transport to the chosen provider:
+`VoiceEngine` is the call acceptor. It creates a per-call worker (`RealtimeCallWorker`) that bridges a transport to the chosen provider:
 
 <Code code={realtimeAudioExample} lang="typescript" title="realtime-audio.ts" />
 

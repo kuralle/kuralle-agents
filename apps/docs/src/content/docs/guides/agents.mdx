@@ -40,21 +40,26 @@ These aren't mutually exclusive. An agent can have tools, a flow, and route to s
 defineAgent({
   id: string,
   name?: string,
-  instructions?: string,
+  description?: string,
+  instructions?: Instructions,              // string | AgentPrompt | (ctx) => Instructions
   model?: LanguageModel,
-  tools?: ToolSet,                         // AI SDK ToolSet — what the model sees and can call
+  tools?: ToolSet,                          // AI SDK ToolSet — what the model sees and can call
   effectTools?: Record<string, EffectTool>, // durable executors (from defineTool)
   flows?: Flow[],                           // structured flow graphs
   routes?: Route[],                         // route entries for triage
-  routing?: RoutingPolicy,                  // { mode: 'structured', default: 'agentId' }
+  routing?: RoutingPolicy,                  // routing config — see Routing guide
   agents?: AgentConfig[],                   // composed sub-agents
   handoffs?: string[],                      // agent IDs this agent can hand off to
+  knowledge?: AgentKnowledge,               // grounding sources
+  memory?: AgentMemory,                     // long-term memory
+  guardrails?: Guardrails,                  // input / output guardrails
+  limits?: Limits,                          // step / turn limits
 })
 ```
 
 ### `instructions`
 
-A string describing the agent's role and rules. Keep it focused on persona and constraints — if you're writing more than ~20 lines of procedure here, move it to a flow.
+A string, an `AgentPrompt`, or a function of session state, describing the agent's role and rules. Keep it focused on persona and constraints — if you're writing more than ~20 lines of procedure here, move it to a flow.
 
 ### `tools` and `effectTools`
 

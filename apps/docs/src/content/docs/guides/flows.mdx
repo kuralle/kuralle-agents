@@ -45,11 +45,11 @@ const confirm = reply({
 });
 ```
 
-`next` is called after the model responds and returns the transition for the next turn.
+`next` is optional. When present it's called after the model responds (unless the turn produced a handoff or end control signal) and returns the next transition; omit it to stay on the node.
 
 ### `collect`
 
-Collects a structured schema from the user over one or more turns. The node re-enters until all `required` fields are filled.
+Collects a structured schema from the user over one or more turns. The node re-enters until all `required` fields are filled — or `maxTurns` (default 10) is reached, at which point `onComplete` runs with whatever was collected.
 
 ```typescript
 import { collect } from '@kuralle-agents/core';
@@ -64,7 +64,7 @@ const getDate = collect({
 });
 ```
 
-`instructions` receives the list of still-missing fields on each re-entry. `onComplete` is called when all required fields are collected and returns the next node.
+`instructions` receives the still-missing fields (and the current flow state) on each re-entry. `onComplete` is called when all required fields are collected and returns the next node.
 
 ### `action`
 
@@ -72,7 +72,7 @@ Runs a side effect (tool call, API request, state update) without a user-facing 
 
 ### `decide`
 
-Makes a routing decision based on the conversation state, choosing which node to enter next without prompting the user.
+Asks the model for a structured decision against a `schema` (no user-facing reply), then `decide(data, state)` returns the next transition. Use it for routing branches that depend on classifying the conversation.
 
 ## Transitions
 
@@ -80,9 +80,12 @@ A node's `next` (or `onComplete`) function returns a `Transition`:
 
 | Return value | Effect |
 |---|---|
-| `'stay'` | Stay on the current node for another turn |
+| A node object (or `() => node`) | Move to that node on the next turn |
+| `{ goto: node, data? }` | Move to `node`, merging `data` into flow state |
 | `{ end: 'label' }` | End the flow with a label |
-| A node object | Move to that node on the next turn |
+| `{ handoff: 'agentId', reason? }` | Hand off to another agent |
+| `{ escalate: 'reason' }` | Escalate to a human |
+| `'stay'` | Stay on the current node for another turn |
 
 ## Holding position across turns
 

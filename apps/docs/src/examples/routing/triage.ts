@@ -13,7 +13,7 @@ const supportAgent = defineAgent({
   model: openai('gpt-4o-mini'),
 });
 
-// mode: 'structured' routes via schema — the routing decision never surfaces to the user
+// The router always classifies via schema — the routing decision never surfaces to the user
 const triage = defineAgent({
   id: 'triage',
   instructions: 'Route the user to the right specialist.',
@@ -22,7 +22,7 @@ const triage = defineAgent({
     { agent: 'billing', when: 'billing question or payment issue' },
     { agent: 'support', when: 'product support request' },
   ],
-  routing: { mode: 'structured', default: 'support' },
+  routing: { mode: 'structured' },
 });
 
 const runtime = createRuntime({
