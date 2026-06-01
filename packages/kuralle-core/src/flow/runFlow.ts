@@ -17,6 +17,7 @@ import { reduceTransition } from './reduceTransition.js';
 import { resolveReplyNode } from './nodeBuilders.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
+import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
 
 export type FlowResult =
   | { kind: 'ended'; reason: string }
@@ -140,6 +141,7 @@ export async function runFlow(
     run.activeFlow = flow.name;
     ctx.emit({ type: 'flow-enter', flow: flow.name });
     ctx.emit({ type: 'node-enter', nodeName: node.id });
+    emitInteractiveOnNodeEnter(node, run.state, ctx.emit);
   }
 
   const edgeCounts = new Map<string, number>();

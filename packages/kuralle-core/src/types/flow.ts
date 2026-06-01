@@ -5,6 +5,7 @@ import type { ContextStrategy } from './context.js';
 import type { TurnResult } from './channel.js';
 import type { ActionContext } from './run-context.js';
 import type { NodeVerify } from '../flow/verify.js';
+import type { ChoiceOption } from './selection.js';
 
 export type FlowState = Record<string, unknown>;
 
@@ -45,6 +46,7 @@ export interface CollectNode {
   schema: StandardSchemaV1;
   required?: string[];
   instructions?: (missing: string[], state: FlowState) => Instructions;
+  choices?: ChoiceOption[];
   maxTurns?: number;
   onComplete: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
 }
@@ -62,6 +64,7 @@ export interface DecideNode {
   id: string;
   instructions: Instructions;
   schema: StandardSchemaV1;
+  choices?: ChoiceOption[];
   decide: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
 }
 

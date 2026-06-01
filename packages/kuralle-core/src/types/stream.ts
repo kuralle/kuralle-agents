@@ -1,5 +1,11 @@
 import type { ConversationOutcome } from '../outcomes/types.js';
+import type { ChoiceOption } from './selection.js';
 
+/**
+ * Authoritative runtime stream union (`runFlow` / `Runtime` emit).
+ * `types/voice.ts` defines a separate voice/realtime union that intentionally
+ * does not include `{ type: 'interactive' }`.
+ */
 export type HarnessStreamPart =
   | { type: 'text-delta'; text: string }
   | { type: 'tool-call'; toolName: string; args: unknown; toolCallId?: string }
@@ -13,6 +19,7 @@ export type HarnessStreamPart =
   | { type: 'interrupted'; reason: string; lastStep: number }
   | { type: 'paused'; waitingFor: string }
   | { type: 'conversation-outcome'; outcome: ConversationOutcome }
+  | { type: 'interactive'; nodeId: string; options: ChoiceOption[]; prompt: string }
   | { type: 'turn-end' }
   | { type: 'error'; error: string }
   | { type: 'done'; sessionId: string };

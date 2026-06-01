@@ -253,6 +253,7 @@ export type { Flow, FlowNode, Transition } from './types/flow.js';
 export type { Route } from './types/route.js';
 export type { TurnHandle } from './types/stream.js';
 export type { HarnessStreamPart } from './types/stream.js';
+export type { ChoiceOption, ResolvedSelection } from './types/selection.js';
 export type { RunState, StepRecord } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
 export type { ChannelDriver, TextDriver, VoiceDriver } from './runtime/channels/index.js';
