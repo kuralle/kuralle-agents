@@ -112,6 +112,11 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
 
       await windowStore.recordInbound(message.threadId, message.timestamp);
 
+      if (config.consent && message.text?.trim().toUpperCase() === 'STOP') {
+        await config.consent.optOut(message.customerId);
+        return;
+      }
+
       const { sessionId, userId } = await sessionResolver.resolve(message);
 
       if (config.ownership && (await config.ownership.owner(message.threadId)) === 'human') {

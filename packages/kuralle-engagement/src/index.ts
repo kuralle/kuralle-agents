@@ -18,3 +18,4 @@ export {
   ownershipGate,
   OWNERSHIP_WM_KEY,
 } from './ownership.js';
+export { sessionConsentStore, consentGate, CONSENT_WM_KEY } from './consent.js';
