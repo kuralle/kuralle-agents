@@ -4,12 +4,24 @@ import type { InteractiveMessage, MediaPayload } from './messages.js';
 import type { SendResult } from './responses.js';
 import type { PlatformClient } from './client.js';
 
-/** A channel-neutral template payload (RFC §4.2). Component-aware enrichment (`components?`) is Sprint 2 (B2). */
+/** Channel-neutral template component (R-10). Maps to the platform's native shape at the sink. */
+export interface OutboundTemplateComponent {
+  type: 'header' | 'body' | 'button';
+  /** Positional parameter values for this component. */
+  params?: string[];
+  /** Button sub-type (e.g. `quick_reply`, `url`). */
+  subType?: string;
+  /** Zero-based button index. */
+  index?: number;
+}
+
+/** A channel-neutral template payload (RFC §4.2). */
 export interface OutboundTemplate {
   name: string;
   language: string;
   namedParams?: Record<string, string>;
   positionalParams?: string[];
+  components?: OutboundTemplateComponent[];
   raw?: unknown;
 }
 

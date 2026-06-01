@@ -433,6 +433,9 @@
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
+        "@kuralle-agents/messaging-meta": "workspace:*",
+        "ai": "^6.0.0",
+        "zod": "^3.24.2",
       },
       "devDependencies": {
         "@types/node": "^22.13.4",

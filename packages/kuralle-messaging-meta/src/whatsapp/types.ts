@@ -378,6 +378,10 @@ export interface TemplateInfo {
   category: string;
   /** Template components. */
   components: TemplateDefinitionComponent[];
+  /** Quality rating (Meta `quality_score.score`), when available. */
+  quality?: string;
+  /** Whether the template is paused due to quality. */
+  paused?: boolean;
 }
 
 // ====================================

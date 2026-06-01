@@ -23,12 +23,33 @@
  * ```
  */
 
+import type { OutboundTemplateComponent } from '@kuralle-agents/messaging';
+
 import type {
   TemplateMessage,
   TemplateComponent,
   TemplateParameter,
   MediaObject,
 } from './types.js';
+
+/** Map channel-neutral template components to Meta {@link TemplateComponent} shape. */
+export function mapOutboundTemplateComponents(
+  components: OutboundTemplateComponent[] | undefined,
+): TemplateComponent[] | undefined {
+  if (!components?.length) return undefined;
+  return components.map((c) => {
+    const parameters: TemplateParameter[] | undefined = c.params?.map((text) => ({
+      type: 'text' as const,
+      text,
+    }));
+    return {
+      type: c.type,
+      sub_type: c.subType,
+      index: c.index,
+      parameters: parameters?.length ? parameters : undefined,
+    };
+  });
+}
 
 // ====================================
 // TYPED BUILDER
