@@ -1,0 +1,102 @@
+---
+title: Durable Execution
+description: How Kuralle records effects and replays them for exactly-once tool execution and durable pause/resume.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import approvalFlowExample from '../../../examples/durable/approval-flow.ts?raw';
+
+Every run in Kuralle is **deterministically replayable**. The runtime does not re-run a conversation from scratch when it resumes — it records each side effect (tool call, clock read, pause) in an append-only log and, on re-entry, *replays* those records instead of executing them again.
+
+This is the same model used by durable workflow engines like Temporal and DBOS. It is what gives Kuralle two guarantees:
+
+- **Exactly-once tool execution** — a payment tool won't charge twice if a turn retries.
+- **Durable pause/resume** — a run can suspend for human approval (or any external signal) and resume later, even in a different process, without losing its place.
+
+<Aside type="note">
+  You get this for free. Any tool wired through `effectTools` is logged and replayed; any `ctx.approve()` / `ctx.signal()` call suspends durably. The rules below matter only when you write `action` node logic.
+</Aside>
+
+## The effect log
+
+A run is stored as two things:
+
+- **`RunState`** — the mutable snapshot: status (`running` / `paused` / `finished` / `error` / `aborted`), the active agent, active flow and node, the flow `state` bag, the message history, and `waitingFor` (set while suspended).
+- **`StepRecord[]`** — the append-only log. Each record holds an `index`, an idempotency `key`, a `kind` (`tool` / `approval` / `signal` / `now` / `uuid`), and either a `result` or an `error`.
+
+Both live inside the session under a `durableRuns` key, so durability is inherited from whichever [`SessionStore`](/guides/sessions) you configured — Memory in development, Redis or Postgres in production.
+
+The **run id equals the session id**: there is exactly one durable run per session, and the run *is* the conversation.
+
+## Replay: record once, replay forever
+
+Every durable effect funnels through one decision:
+
+```typescript
+// Conceptually, for each effect:
+const recorded = findStepByKey(steps, key);
+if (recorded) {
+  if (recorded.error) throw recorded.error; // errors replay too
+  return recorded.result;                   // cached — do NOT re-run
+}
+const result = await execute();             // first time only
+appendStep({ key, kind, result });
+return result;
+```
+
+On the **first** pass an effect runs and its outcome is appended to the log. On **every** subsequent pass — a retry, a resume after a pause, or a later turn — the recorded outcome is returned without touching the outside world.
+
+The `RunContext` exposes five durable effects, all built on this mechanism:
+
+| Effect | Purpose |
+|---|---|
+| `ctx.tool(name, args)` | Run an effect tool, logged and replayed |
+| `ctx.approve(req)` | Suspend for human approval (a built-in signal) |
+| `ctx.signal(name)` | Suspend until an external signal is delivered |
+| `ctx.now()` | Deterministic wall-clock read |
+| `ctx.uuid()` | Deterministic id generation |
+
+Inside `action` nodes, these are available on the `ctx` argument (`ctx.tool`, `ctx.approve`, `ctx.signal`, `ctx.now`, `ctx.uuid`, `ctx.emit`).
+
+## Idempotency keys
+
+Each effect's key is a hash of `{ runId, callsite, payload }`, where the **`callsite` is the effect's ordinal position in the run** — the first effect is `0`, the second `1`, and so on. This is what makes replay align: the Nth effect this pass must match the Nth effect recorded last pass.
+
+<Aside type="caution">
+  **Effects must run in the same order on every replay.** Branching flow-control logic on a non-replayed value (`Date.now()`, `Math.random()`, an un-logged external read) can change the effect order and misalign the log. That is exactly why `ctx.now()` and `ctx.uuid()` exist — use them instead of `Date.now()` / `randomUUID()` in `action` node logic.
+</Aside>
+
+## Pause and resume
+
+`ctx.approve()` and `ctx.signal()` suspend the run durably:
+
+1. If a matching record already exists (you are resuming *past* the pause), its payload is returned and execution continues.
+2. Otherwise the runtime sets `waitingFor`, flips status to `paused`, persists the run, emits a `paused` stream part, and throws a `SuspendError`. The host loop catches it and ends the turn cleanly — the run is now frozen on disk.
+
+To resume, deliver a signal on a later run:
+
+```typescript
+runtime.run({
+  sessionId,
+  signalDelivery: { signalId: 'sup-123', name: '__approval', payload: { approved: true, by: 'supervisor' } },
+});
+```
+
+`recordSignalDelivery` validates the name against `waitingFor`, dedupes by `signalId`, appends the payload as a record, and clears `waitingFor`. The run then re-executes from the top — but now the approval is in the log, so the previously-suspending `ctx.approve()` returns the delivered payload and execution flows past it. (`ctx.approve()` is just a signal named `__approval`.)
+
+## Example: a refund flow with an approval gate
+
+The `action` node collects an amount, pauses for a supervisor decision, and runs the refund tool exactly once on approval.
+
+<Code code={approvalFlowExample} lang="typescript" title="approval-flow.ts" />
+
+## Two sharp edges
+
+- **Errors are frozen, not retried.** A failed effect's error is recorded and **re-thrown on every replay** — a resumed run will not get a second attempt. Put retry logic *inside* the tool's `execute`, or start a fresh logical step (different args produce a different key).
+- **The log grows with the session.** Steps accumulate in the session for the life of the conversation. For long-lived sessions with many tool calls, account for this when choosing a `SessionStore` and its retention.
+
+## Related
+
+- [Tools](/guides/tools) — how `effectTools` wires the durable executor.
+- [Flow Execution Model](/guides/flow-execution) — `action` nodes, where you call `ctx.approve` / `ctx.tool` directly.
+- [Sessions & State](/guides/sessions) — the backend that persists the run log.

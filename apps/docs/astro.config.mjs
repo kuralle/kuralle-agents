@@ -75,7 +75,9 @@ const sidebar = [
     items: [
       { label: 'Agents', link: '/guides/agents' },
       { label: 'Flows', link: '/guides/flows' },
+      { label: 'Flow Execution Model', link: '/guides/flow-execution' },
       { label: 'Tools', link: '/guides/tools' },
+      { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Routing & Handoffs', link: '/guides/routing' },
       { label: 'Sessions & State', link: '/guides/sessions' },
       { label: 'Voice Agents', link: '/guides/voice' },
