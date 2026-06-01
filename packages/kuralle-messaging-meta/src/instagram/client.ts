@@ -469,6 +469,7 @@ export class InstagramClient extends BaseMetaClient<
             description: msg.interactive.list_reply?.description,
           }
         : undefined,
+      button: msg.button,
       context: msg.context
         ? { messageId: msg.context.message_id, from: msg.context.from }
         : undefined,

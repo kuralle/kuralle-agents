@@ -205,6 +205,21 @@ describe('windowGuard', () => {
     expect(outcome.kind).toBe('sent');
     expect(sink.sendTextCalls).toBe(1);
   });
+
+  it('passes tagged text when window is closed (message-tag recovery)', async () => {
+    const sink = createRecordingSink();
+    sink.sendTextWithTag = async (to, _text, _tag) => makeSendResult(to);
+    const pipeline = new OutboundPipeline([windowGuard], sink);
+
+    const outcome = await pipeline.send(
+      closedWindowRequest({
+        payload: { kind: 'text', text: 'agent follow-up', tag: 'HUMAN_AGENT' },
+      }),
+    );
+
+    expect(outcome.kind).toBe('sent');
+    expect(sink.sendTextCalls).toBe(0);
+  });
 });
 
 describe('router pipeline integration', () => {
