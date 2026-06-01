@@ -13,3 +13,8 @@ export {
 export { aiTemplateSelector } from './selector.js';
 export type { OutboundTemplateComponent } from '@kuralle-agents/messaging';
 export { webPolicy } from './policies/web.js';
+export {
+  sessionOwnershipStore,
+  ownershipGate,
+  OWNERSHIP_WM_KEY,
+} from './ownership.js';

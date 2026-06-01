@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import type { Session } from '@kuralle-agents/core';
 import type { MessagingRouterConfig, ErrorContext } from '../types.js';
+import type { InboundMessage } from '../types/messages.js';
 import type { OutboundMiddleware } from '../types/outbound.js';
 import { MessageDeduplicator } from '../shared/deduplicator.js';
 import { InMemoryWindowStore } from './window-store.js';
@@ -14,6 +16,46 @@ import { windowGuard } from './middleware/window-guard.js';
 
 function buildOutboundChain(extra?: OutboundMiddleware[]): OutboundMiddleware[] {
   return [...(extra ?? []), windowGuard];
+}
+
+function emptySession(sessionId: string, userId?: string): Session {
+  const now = new Date();
+  return {
+    id: sessionId,
+    conversationId: sessionId,
+    channelId: 'api',
+    userId,
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+    workingMemory: {},
+    currentAgent: 'main',
+    agentStates: {},
+    handoffHistory: [],
+    metadata: {
+      createdAt: now,
+      lastActiveAt: now,
+      totalTokens: 0,
+      totalSteps: 0,
+      handoffHistory: [],
+    },
+  };
+}
+
+async function recordInboundToHistory(
+  config: MessagingRouterConfig,
+  sessionId: string,
+  message: InboundMessage,
+  userId?: string,
+): Promise<void> {
+  const store = config.runtime.getSessionStore();
+  let session = await store.get(sessionId);
+  if (!session) {
+    session = emptySession(sessionId, userId);
+  }
+  session.messages.push({ role: 'user', content: message.text ?? '' });
+  session.updatedAt = new Date();
+  await store.save(session);
 }
 
 /**
@@ -72,6 +114,11 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
 
       const { sessionId, userId } = await sessionResolver.resolve(message);
 
+      if (config.ownership && (await config.ownership.owner(message.threadId)) === 'human') {
+        await recordInboundToHistory(config, sessionId, message, userId);
+        return;
+      }
+
       const { input, selection } = await inboundChain.resolve(message);
 
       try {
@@ -82,13 +129,20 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
           selection,
         });
 
-        await streamMapper.mapStream(handle.events, platform, message.threadId, {
+        const parts = await streamMapper.mapStream(handle.events, platform, message.threadId, {
           responseMapper: config.responseMapper,
           pipeline,
           windowStore,
           sessionId,
           userId,
         });
+
+        if (
+          config.ownership &&
+          parts.some((p) => p.type === 'handoff' && p.targetAgent === 'human')
+        ) {
+          await config.ownership.claim(message.threadId, 'human');
+        }
       } catch (error) {
         try {
           const window = await windowStore.get(message.threadId);
