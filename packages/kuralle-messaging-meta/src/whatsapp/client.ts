@@ -283,6 +283,9 @@ export class WhatsAppClient extends BaseMetaClient<
   /**
    * Send a text message with automatic template fallback on a
    * {@link WindowClosedError} (24-hour customer-service window expired).
+   *
+   * @deprecated Bypasses the window-safe {@link OutboundPipeline}. Route outbound
+   * through `createMessagingRouter` / `OutboundPipeline` with `windowGuard` instead.
    */
   async sendTextOrTemplate(to: string, opts: TextOrTemplateOptions): Promise<SendResult> {
     try {

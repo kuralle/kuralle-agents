@@ -1,0 +1,32 @@
+# S1-03 — windowGuard + pipeline wiring (demo)
+
+## window-guard.test.ts (closed window ⇒ zero sink calls)
+
+```
+bun test packages/kuralle-messaging/test/window-guard.test.ts
+```
+
+```
+(pass) windowGuard > window_closed_blocks_freeform
+(pass) windowGuard > window_closed_blocks_media_and_interactive
+(pass) router pipeline integration > fallback_and_custom_mapper_route_through_pipeline
+(pass) router pipeline integration > open-window reply still reaches the client
+```
+
+Closed-window text send: outcome `{ kind: 'deferred', reason: 'window-closed' }`, `sink.sendTextCalls === 0`.
+Closed-window media/interactive: deferred, `sendMediaCalls === 0`, `sendInteractiveCalls === 0`.
+Router fallback + custom `responseMapper` with `alwaysClosedWindowStore`: `_sendTextCalls === 0`.
+
+## Full messaging suite (open-window regression)
+
+```
+bun test packages/kuralle-messaging
+```
+433 tests pass (includes unhappy-paths router fallback with open window after `recordInbound`).
+
+## typecheck:all (tail)
+
+```
+swept 58 configs; 0 stale-empty
+✓ typecheck:playground green
+```

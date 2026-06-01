@@ -4,6 +4,10 @@ import { WindowTracker } from '../src/adapter/window-tracker.js';
 import { defaultSessionResolver } from '../src/adapter/session-resolver.js';
 import { StreamMapper } from '../src/adapter/stream-mapper.js';
 import { createMessagingRouter } from '../src/adapter/createMessagingRouter.js';
+import { InMemoryWindowStore } from '../src/adapter/window-store.js';
+import { OutboundPipeline } from '../src/adapter/outbound-pipeline.js';
+import { windowGuard } from '../src/adapter/middleware/window-guard.js';
+import type { StreamMapperOptions } from '../src/types.js';
 import type {
   InboundMessage,
   PlatformClient,
@@ -114,6 +118,22 @@ async function* nonTextStream(): AsyncGenerator<HarnessStreamPart> {
   yield { type: 'node-enter' as const, nodeName: 'greeting' };
   yield { type: 'node-exit' as const, nodeName: 'greeting' };
   yield { type: 'done' as const, sessionId: 'sess1' };
+}
+
+async function openWindowMapperOptions(
+  platform: PlatformClient,
+  threadId: string,
+  extra?: Partial<StreamMapperOptions>,
+): Promise<StreamMapperOptions> {
+  const windowStore = new InMemoryWindowStore();
+  await windowStore.recordInbound(threadId, new Date());
+  const pipeline = new OutboundPipeline([windowGuard], platform);
+  return {
+    pipeline,
+    windowStore,
+    sessionId: 'sess-1',
+    ...extra,
+  };
 }
 
 // ===========================================================================
@@ -313,7 +333,12 @@ describe('StreamMapper — unhappy paths', () => {
       },
     });
 
-    const parts = await mapper.mapStream(emptyStream(), platform, 'thread-1');
+    const parts = await mapper.mapStream(
+      emptyStream(),
+      platform,
+      'thread-1',
+      await openWindowMapperOptions(platform, 'thread-1'),
+    );
     expect(parts).toEqual([]);
     expect(sendTextCalled).toBe(false);
   });
@@ -328,7 +353,12 @@ describe('StreamMapper — unhappy paths', () => {
       },
     });
 
-    const parts = await mapper.mapStream(nonTextStream(), platform, 'thread-1');
+    const parts = await mapper.mapStream(
+      nonTextStream(),
+      platform,
+      'thread-1',
+      await openWindowMapperOptions(platform, 'thread-1'),
+    );
     expect(parts.length).toBe(3);
     // No text was accumulated, so sendText should NOT be called
     expect(sentTexts).toEqual([]);
@@ -339,7 +369,12 @@ describe('StreamMapper — unhappy paths', () => {
     const platform = createMockPlatform();
 
     await expect(
-      mapper.mapStream(errorStream(), platform, 'thread-1'),
+      mapper.mapStream(
+        errorStream(),
+        platform,
+        'thread-1',
+        await openWindowMapperOptions(platform, 'thread-1'),
+      ),
     ).rejects.toThrow('stream crashed');
 
     // The typing indicator interval was cleared via the finally block.
@@ -359,7 +394,12 @@ describe('StreamMapper — unhappy paths', () => {
       },
     });
 
-    const parts = await mapper.mapStream(errorPartStream(), platform, 'thread-1');
+    const parts = await mapper.mapStream(
+      errorPartStream(),
+      platform,
+      'thread-1',
+      await openWindowMapperOptions(platform, 'thread-1'),
+    );
     expect(parts.length).toBe(1);
     expect(parts[0].type).toBe('error');
     // No text was accumulated so sendText should not be called
@@ -376,7 +416,12 @@ describe('StreamMapper — unhappy paths', () => {
       },
     });
 
-    const parts = await mapper.mapStream(emptyTextStream(), platform, 'thread-1');
+    const parts = await mapper.mapStream(
+      emptyTextStream(),
+      platform,
+      'thread-1',
+      await openWindowMapperOptions(platform, 'thread-1'),
+    );
     // text-delta with '' yields empty buffer; trim().length === 0 so no send
     expect(sentTexts).toEqual([]);
     expect(parts.length).toBe(2);
@@ -393,6 +438,7 @@ describe('StreamMapper — unhappy paths', () => {
     }
 
     await mapper.mapStream(slowStream(), platform, 'thread-1', {
+      ...(await openWindowMapperOptions(platform, 'thread-1')),
       typingIntervalMs: 30,
     });
 
@@ -410,7 +456,12 @@ describe('StreamMapper — unhappy paths', () => {
     });
 
     await expect(
-      mapper.mapStream(textStream('hello world'), platform, 'thread-1'),
+      mapper.mapStream(
+        textStream('hello world'),
+        platform,
+        'thread-1',
+        await openWindowMapperOptions(platform, 'thread-1'),
+      ),
     ).rejects.toThrow('platform send failed');
   });
 });

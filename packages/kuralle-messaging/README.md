@@ -17,7 +17,16 @@ Provides the `PlatformClient` interface that every messaging vendor package impl
 - **`SessionResolver`** — maps inbound messages to Kuralle session IDs. Default: `{platform}:{threadId}`. Swap in `ThreadIdResolver`, `PhoneLookupResolver`, or a custom `SessionResolverChain`.
 - **`StreamMapper`** — consumes `AsyncIterable<HarnessStreamPart>`, sends typing indicators during streaming, delegates final output to a `ResponseMapper`.
 - **`MessageDeduplicator`** — LRU cache that prevents duplicate webhook processing.
-- **`WindowTracker`** — tracks 24-hour messaging windows per thread; used by `createMessagingRouter` to detect expired windows.
+- **`WindowTracker`** / **`WindowStore`** — tracks 24-hour messaging windows per thread; used by `createMessagingRouter` to detect expired windows.
+- **`OutboundPipeline`** + **`windowGuard`** — window-safe outbound path (see below).
+
+### Window-safe outbound
+
+Every outbound send — default `StreamMapper` text replies, custom `responseMapper` (`ResponseContext.sendText` / `sendInteractive` / `sendMedia`), and router `fallbackMessage` on runtime errors — traverses an `OutboundPipeline` with a non-removable, terminal `windowGuard` middleware. The driver reads `WindowStore.get(threadId)` once per send and sets `req.meta.window`; when the window is closed, free-form payloads (text, media, interactive) **defer** (`{ kind: 'deferred', reason: 'window-closed' }`) with zero client calls. Templates are window-agnostic and pass through.
+
+`createMessagingRouter` accepts optional `windowStore` (default `InMemoryWindowStore`) and `outbound` (extra middleware installed **before** `windowGuard`). Custom `responseMapper` closures still return `Promise<SendResult>`; deferred sends resolve to a synthetic result with an empty `messageId` (not delivered).
+
+`WhatsAppClient.sendTextOrTemplate` is **deprecated** — it bypasses this pipeline. Use `OutboundPipeline` / the router instead.
 - Error classes: `MessagingError`, `RateLimitError` (with `retryAfterMs`), `WindowClosedError` (with `suggestedTemplates`), `AuthenticationError`, `PermissionError`, `RecipientError`, `TemplateError`, `MediaError`, `WebhookVerificationError`.
 
 ## Usage

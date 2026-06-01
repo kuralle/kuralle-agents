@@ -1,60 +1,41 @@
 import type { HarnessStreamPart } from '@kuralle-agents/core';
-import type {
-  PlatformClient,
-  ResponseMapper,
-  StreamMapperOptions,
-  InteractiveMessage,
-} from '../types.js';
+import type { PlatformClient, StreamMapperOptions } from '../types.js';
+import type { OutboundMeta, OutboundPayload, SendOutcome } from '../types/outbound.js';
+import type { SendResult } from '../types/responses.js';
+import type { OutboundPipeline } from './outbound-pipeline.js';
+import type { WindowStore } from './window-store.js';
 
 /** Default interval for sending typing indicators during streaming (ms). */
 const DEFAULT_TYPING_INTERVAL_MS = 5_000;
 
-/**
- * Maps an Kuralle runtime stream to platform messages.
- *
- * The mapper:
- * 1. Starts a typing indicator interval on the platform
- * 2. Buffers all `text-delta` events into a complete response string
- * 3. Collects metadata events (suggested-questions, handoff, flow-end, done)
- * 4. When the stream completes, either delegates to a custom `ResponseMapper`
- *    or uses the default behavior:
- *    - Sends the accumulated text via `platform.sendText()`
- *    - If suggested questions exist, sends them as interactive buttons
- * 5. Clears the typing indicator
- * 6. Returns all collected stream parts
- */
+function outcomeToSendResult(threadId: string, outcome: SendOutcome): SendResult {
+  if (outcome.kind === 'sent' || outcome.kind === 'converted') {
+    return outcome.result;
+  }
+  return { messageId: '', threadId, timestamp: new Date() };
+}
+
 export class StreamMapper {
-  /**
-   * Consume an Kuralle runtime stream and send the response to a platform.
-   *
-   * @param stream - The async iterable from `runtime.stream()`.
-   * @param platform - The platform client to send messages through.
-   * @param threadId - The thread to send responses to.
-   * @param options - Optional configuration for response mapping and typing interval.
-   * @returns All collected stream parts for inspection or logging.
-   */
   async mapStream(
     stream: AsyncIterable<HarnessStreamPart>,
     platform: PlatformClient,
     threadId: string,
-    options?: StreamMapperOptions,
+    options: StreamMapperOptions,
   ): Promise<HarnessStreamPart[]> {
     const parts: HarnessStreamPart[] = [];
     let textBuffer = '';
-    const typingIntervalMs = options?.typingIntervalMs ?? DEFAULT_TYPING_INTERVAL_MS;
+    const typingIntervalMs = options.typingIntervalMs ?? DEFAULT_TYPING_INTERVAL_MS;
 
-    // Start typing indicator loop
     let typingActive = true;
     const typingInterval = setInterval(async () => {
       if (!typingActive) return;
       try {
         await platform.sendTypingIndicator(threadId);
       } catch {
-        // Typing indicator failures are non-critical — silently ignore
+        // Non-critical
       }
     }, typingIntervalMs);
 
-    // Send an initial typing indicator immediately
     try {
       await platform.sendTypingIndicator(threadId);
     } catch {
@@ -64,34 +45,55 @@ export class StreamMapper {
     try {
       for await (const part of stream) {
         parts.push(part);
-
-        switch (part.type) {
-          case 'text-delta':
-            textBuffer += part.text;
-            break;
-          // All other event types are collected for the response mapper
-          // but don't require special handling during streaming
+        if (part.type === 'text-delta') {
+          textBuffer += part.text;
         }
       }
 
-      // Stop typing indicator
       typingActive = false;
       clearInterval(typingInterval);
 
-      // Delegate to custom response mapper or use default behavior
-      if (options?.responseMapper) {
+      const meta = await this.buildMeta(
+        options.windowStore,
+        threadId,
+        parts,
+        options.sessionId,
+        options.userId,
+      );
+
+      if (options.responseMapper) {
         await options.responseMapper.mapResponse(parts, {
           threadId,
           platform: platform.platform,
-          sendText: (text: string) => platform.sendText(threadId, text),
-          sendInteractive: (msg: InteractiveMessage) => platform.sendInteractive(threadId, msg),
-          sendMedia: (media) => platform.sendMedia(threadId, media),
+          sendText: (text) =>
+            this.sendFreeform(options.pipeline, platform, threadId, { kind: 'text', text }, meta),
+          sendInteractive: (msg) =>
+            this.sendFreeform(
+              options.pipeline,
+              platform,
+              threadId,
+              { kind: 'interactive', interactive: msg },
+              meta,
+            ),
+          sendMedia: (media) =>
+            this.sendFreeform(
+              options.pipeline,
+              platform,
+              threadId,
+              { kind: 'media', media },
+              meta,
+            ),
         });
       } else {
-        await this.defaultMapResponse(platform, threadId, textBuffer, parts);
+        await this.defaultMapResponse(
+          options.pipeline,
+          platform,
+          threadId,
+          textBuffer,
+          meta,
+        );
       }
     } finally {
-      // Ensure typing indicator is always cleaned up
       typingActive = false;
       clearInterval(typingInterval);
     }
@@ -99,19 +101,61 @@ export class StreamMapper {
     return parts;
   }
 
-  /**
-   * Default response mapping: send accumulated text and optional suggested questions.
-   */
+  private async buildMeta(
+    windowStore: WindowStore,
+    threadId: string,
+    parts: HarnessStreamPart[],
+    sessionId: string,
+    userId?: string,
+  ): Promise<OutboundMeta> {
+    const window = await windowStore.get(threadId);
+    return { window, parts, sessionId, userId };
+  }
+
+  private async sendFreeform(
+    pipeline: OutboundPipeline,
+    platform: PlatformClient,
+    threadId: string,
+    payload: OutboundPayload,
+    meta: OutboundMeta,
+  ): Promise<SendResult> {
+    const outcome = await pipeline.send({
+      threadId,
+      platform: platform.platform,
+      payload,
+      meta,
+    });
+    if (outcome.kind === 'deferred' || outcome.kind === 'suppressed') {
+      return outcomeToSendResult(threadId, outcome);
+    }
+    if (outcome.kind === 'sent' || outcome.kind === 'converted') {
+      return outcome.result;
+    }
+    return outcomeToSendResult(threadId, outcome);
+  }
+
   private async defaultMapResponse(
+    pipeline: OutboundPipeline,
     platform: PlatformClient,
     threadId: string,
     text: string,
-    parts: HarnessStreamPart[],
+    meta: OutboundMeta,
   ): Promise<void> {
-    // Send the accumulated text response
-    if (text.trim().length > 0) {
-      const formatted = platform.formatConverter.toPlatformFormat(text);
-      await platform.sendText(threadId, formatted);
+    if (text.trim().length === 0) return;
+
+    const formatted = platform.formatConverter.toPlatformFormat(text);
+    const outcome = await pipeline.send({
+      threadId,
+      platform: platform.platform,
+      payload: { kind: 'text', text: formatted },
+      meta,
+    });
+
+    if (outcome.kind === 'sent' || outcome.kind === 'converted') {
+      return;
+    }
+    if (outcome.kind === 'deferred' || outcome.kind === 'suppressed') {
+      return;
     }
   }
 }
