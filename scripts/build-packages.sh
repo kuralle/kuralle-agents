@@ -18,7 +18,7 @@ tier voice-protocol rag http-client analytics-sdk eval widget ws-bench   # T0 le
 tier core                                                                                  # T1 hub
 tier realtime-audio tools messaging                                                        # T2 (need core/rag/voice-protocol)
 tier rag-loaders lancedb-store postgres-store redis-store upstash-store \
-     vectorize-store hono-server cf-agent livekit-plugin messaging-meta                    # T3 (need core/rag/realtime-audio/tools)
+     vectorize-store hono-server cf-agent livekit-plugin messaging-meta engagement         # T3 (need core/rag/realtime-audio/tools)
 tier transport-base                                                                        # T4
 tier livekit-plugin-transport-ws livekit-plugin-transport-sip livekit-plugin-transport-http \
      livekit-plugin-transport-twilio livekit-plugin-transport-smartpbx                     # T5 transports

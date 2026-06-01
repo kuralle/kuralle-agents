@@ -427,6 +427,17 @@
         "typescript": "^5.3.0",
       },
     },
+    "packages/kuralle-engagement": {
+      "name": "@kuralle-agents/engagement",
+      "version": "0.0.0",
+      "dependencies": {
+        "@kuralle-agents/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "^22.13.4",
+        "typescript": "^5.8.2",
+      },
+    },
     "packages/kuralle-eval": {
       "name": "@kuralle-agents/eval",
       "version": "0.2.0",
@@ -1276,6 +1287,8 @@
     "@kuralle-agents/core": ["@kuralle-agents/core@workspace:packages/kuralle-core"],
 
     "@kuralle-agents/e2e-tests": ["@kuralle-agents/e2e-tests@workspace:packages/kuralle-e2e-tests"],
+
+    "@kuralle-agents/engagement": ["@kuralle-agents/engagement@workspace:packages/kuralle-engagement"],
 
     "@kuralle-agents/eval": ["@kuralle-agents/eval@workspace:packages/kuralle-eval"],
 
@@ -2934,6 +2947,8 @@
     "@grpc/proto-loader/yargs": ["yargs@17.7.2", "", { "dependencies": { "cliui": "^8.0.1", "escalade": "^3.1.1", "get-caller-file": "^2.0.5", "require-directory": "^2.1.1", "string-width": "^4.2.3", "y18n": "^5.0.5", "yargs-parser": "^21.1.1" } }, "sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w=="],
 
     "@kuralle-agents/e2e-tests/@ai-sdk/google": ["@ai-sdk/google@2.0.74", "", { "dependencies": { "@ai-sdk/provider": "2.0.3", "@ai-sdk/provider-utils": "3.0.25" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-Lhw1742RXc+4pRIvqVXa0jdl5+qdpmw8lj0lm6OchUg9rVGHzymlaxe7CDiYX5U2af4jbjKeTY22LDi3bIycgQ=="],
+
+    "@kuralle-agents/engagement/@types/node": ["@types/node@22.19.19", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-dyh/xO2Fh5bYrfWaaqGrRQQGkNdmYw6AmaAUvYeUMNTWQtvb796ikLdmTchRmOlOiIJ1TDXfWgVx1QkUlQ6Hew=="],
 
     "@kuralle-agents/http-client/@types/node": ["@types/node@22.19.19", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-dyh/xO2Fh5bYrfWaaqGrRQQGkNdmYw6AmaAUvYeUMNTWQtvb796ikLdmTchRmOlOiIJ1TDXfWgVx1QkUlQ6Hew=="],
 
