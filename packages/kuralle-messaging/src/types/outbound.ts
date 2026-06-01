@@ -1,3 +1,5 @@
+import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { WindowState } from '../adapter/window-store.js';
 import type { InteractiveMessage, MediaPayload } from './messages.js';
 import type { SendResult } from './responses.js';
 import type { PlatformClient } from './client.js';
@@ -24,4 +26,39 @@ export function isTemplateCapable(
   c: PlatformClient,
 ): c is PlatformClient & Required<Pick<OutboundSink, 'sendTemplate'>> {
   return typeof (c as { sendTemplate?: unknown }).sendTemplate === 'function';
+}
+
+export type OutboundPayload =
+  | { kind: 'text'; text: string }
+  | { kind: 'interactive'; interactive: InteractiveMessage }
+  | { kind: 'media'; media: MediaPayload }
+  | { kind: 'template'; template: OutboundTemplate };
+
+export interface OutboundMeta {
+  window: WindowState;
+  parts: HarnessStreamPart[];
+  sessionId: string;
+  userId?: string;
+}
+
+export interface OutboundRequest {
+  threadId: string;
+  platform: string;
+  payload: OutboundPayload;
+  meta: OutboundMeta;
+}
+
+export type DeferReason = 'window-closed' | 'window-closed-no-recovery' | (string & {});
+
+export type SendOutcome =
+  | { kind: 'sent'; result: SendResult }
+  | { kind: 'converted'; result: SendResult; template: string; from: string }
+  | { kind: 'deferred'; reason: DeferReason }
+  | { kind: 'suppressed'; reason: string };
+
+export type OutboundNext = (req: OutboundRequest) => Promise<SendOutcome>;
+
+export interface OutboundMiddleware {
+  readonly name: string;
+  send(req: OutboundRequest, next: OutboundNext): Promise<SendOutcome>;
 }
