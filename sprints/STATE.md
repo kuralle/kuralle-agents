@@ -6,13 +6,13 @@
 
 ## Active sprint
 
-**Sprint number:** `7`
-**Sprint name:** Integration, proof & release
-**Status:** `not-started`
-**Goal:** The multi-platform example demonstrates one bot answering on WhatsApp + Web + Instagram, window-safe, with the full §9 test matrix green and a publish-together dry-run clean.
-**WBS section:** [`sprints/WBS.md` § Sprint 7](./WBS.md)
+**Sprint number:** `—`
+**Sprint name:** `(none — PROGRAM COMPLETE)`
+**Status:** `program-complete`
+**Goal:** `(WBS Sprints 0–7 all shipped — nothing active)`
+**WBS section:** `(exhausted)`
 
-> **Sprint 7 is the FINAL sprint** — after its closeout the WBS is exhausted and the program stops (per the driver's § When to stop). F3 runs the publish-together dry-run (`pnpm publish -r --dry-run`) from a neutral cwd; publish the whole `@kuralle-agents/*` graph together.
+> **PROGRAM COMPLETE.** All WBS sprints (0–7) are shipped on `plan/whatsapp-engagement`: `typecheck:all` green, §9 matrix 1210 pass / 0 fail, publish-together dry-run clean. The program stops here (driver § When to stop — "WBS complete"). Next: a human PR to `main` + a real `pnpm release` + live smoke (see `sprints/sprint-7/HANDOFF.md`). Pasting the kickoff prompt will find no Sprint 8 → report the program done.
 
 ## Build branch
 
@@ -44,7 +44,7 @@ The session running sprint 7 must read these in this order before delegating any
 
 ## Last completed sprint
 
-`6` — Channel adapters
+`7` — Integration, proof & release **(FINAL — program complete)**
 
 ## Last completed at
 
@@ -61,6 +61,9 @@ The session running sprint 7 must read these in this order before delegating any
 | 4 | complete | 2026-06-01 | [sprint-4/WARMDOWN.md](./sprint-4/WARMDOWN.md) |
 | 5 | complete | 2026-06-01 | [sprint-5/WARMDOWN.md](./sprint-5/WARMDOWN.md) |
 | 6 | complete | 2026-06-01 | [sprint-6/WARMDOWN.md](./sprint-6/WARMDOWN.md) |
+| 7 | complete | 2026-06-01 | [sprint-7/WARMDOWN.md](./sprint-7/WARMDOWN.md) |
+
+**🏁 Program complete — WBS Sprints 0–7 all shipped. No Sprint 8.**
 
 When a sprint completes, append a row here from `WARMDOWN.md`.
 
