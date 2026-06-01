@@ -413,6 +413,7 @@ export class MessengerClient extends BaseMetaClient<
       id: msg.id,
       platform: 'messenger',
       threadId,
+      customerId: msg.from,
       from: { id: msg.from, name: msg.contactName },
       timestamp: new Date(parseInt(msg.timestamp, 10) * 1000),
       type: this.mapMessageType(msg.type),

@@ -11,6 +11,7 @@ function msg(overrides: Partial<InboundMessage> = {}): InboundMessage {
     id: 'm-1',
     platform: 'whatsapp',
     threadId: '+15551234567',
+    customerId: 'u-1',
     from: { id: 'u-1', phone: '+15551234567' },
     timestamp: new Date(),
     type: 'text',
