@@ -91,7 +91,7 @@ The `handle.events` async iterable emits `HarnessStreamPart` events. The most co
 | Event type | When | Key fields |
 |---|---|---|
 | `text-delta` | Each text chunk from the model | `part.text: string` |
-| `tool-call` | Before a tool executes | `part.toolName`, `part.input` |
+| `tool-call` | Before a tool executes | `part.toolName`, `part.args` |
 | `tool-result` | After a tool executes | `part.toolName`, `part.result` |
 | `done` | Turn complete | `part.sessionId` |
 

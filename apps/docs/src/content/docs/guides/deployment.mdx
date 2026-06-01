@@ -103,7 +103,9 @@ Use `handle.toResponseStream('sse')` to pipe a `TurnHandle` directly to an HTTP 
 app.post('/chat', async (c) => {
   const { input, sessionId } = await c.req.json();
   const handle = runtime.run({ input, sessionId });
-  return handle.toResponseStream('sse');
+  return new Response(handle.toResponseStream('sse'), {
+    headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+  });
 });
 ```
 

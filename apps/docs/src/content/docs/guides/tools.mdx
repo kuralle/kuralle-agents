@@ -34,7 +34,7 @@ There are two wiring steps — both are required:
 
 **`tools: buildToolSet(...)`** — makes the tool model-visible. The model sees the schema and can decide to call it.
 
-**`effectTools: { ... }`** — wires the durable executor. The runtime logs each call and result in the effect log, enabling exactly-once replay on retry.
+**`effectTools: { ... }`** — registers the executors on the agent so the runtime can resolve them by name (for example when a flow node calls a tool). Tool calls run through the runtime's effect log, which gives exactly-once replay on retry.
 
 ```typescript
 import { defineAgent, buildToolSet } from '@kuralle-agents/core';
@@ -51,7 +51,7 @@ const agent = defineAgent({
 ```
 
 <Aside type="note">
-  If you only pass `effectTools`, the model won't know the tool exists. If you only pass `tools`, calls route through the AI SDK executor (not the effect log) and won't replay correctly on retry. Pass both.
+  If you only pass `effectTools`, the model won't know the tool exists. The model-facing entry is schema-only, so execution always runs through the runtime's effect log — never the AI SDK — and replays on retry. Passing both is the safe default: `tools` for visibility, `effectTools` so the executor is also registered for calls made by name (such as from a flow node).
 </Aside>
 
 ## What `buildToolSet` does
@@ -64,18 +64,18 @@ buildToolSet({ echo, lookup_order })
 //   inputSchema — the shape the model needs to know a tool exists and how to call it.
 ```
 
-It copies each tool's `name`, `description`, and `input` schema into an AI SDK `ToolSet`. It deliberately does **not** copy `execute` into the model-facing tool — the AI SDK entry is schema-only. The actual execution runs through `effectTools`, which is what gives you the durable effect log and exactly-once replay.
+It copies each tool's `name`, `description`, and `input` schema into an AI SDK `ToolSet`. It deliberately does **not** copy `execute` into the model-facing tool — the AI SDK entry is schema-only. The actual execution runs through the runtime, which routes every model-issued call through the durable effect log for exactly-once replay. (`buildToolSet` keeps each tool's executor recoverable, so a model-issued call replays even before you register it in `effectTools`.)
 
 That's why the two fields are complementary rather than redundant:
 
 - **`tools: buildToolSet(tools)`** — *what the model can see and decide to call* (name + description + input schema).
-- **`effectTools: tools`** — *how the call actually runs* (durable, logged, replay-safe).
+- **`effectTools: tools`** — *the executor registry* the runtime resolves by name (e.g. from flow nodes), and the fallback for tools not built with `buildToolSet`.
 
 You author each tool once with `defineTool`; `buildToolSet` derives the model-facing view from it.
 
 ## Durable execution
 
-Every tool call is written to an append-only effect log before `execute` is called. On retry, the runtime checks the log first — if the call already ran, it returns the logged result without calling `execute` again.
+Every tool call is keyed in an append-only effect log. The runtime checks that key before calling `execute` — if the call already ran, it returns the logged result without calling `execute` again.
 
 This means a payment tool won't charge twice if the turn fails mid-execution, and a booking tool won't double-book a slot.
 

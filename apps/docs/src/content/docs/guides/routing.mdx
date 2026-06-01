@@ -24,21 +24,19 @@ const triage = defineAgent({
     { agent: 'billing', when: 'billing question or payment issue' },
     { agent: 'support', when: 'product support request' },
   ],
-  routing: { mode: 'structured', default: 'support' },
+  routing: { mode: 'structured' },
 });
 ```
 
-Each `routes` entry has an `agent` (the destination agent's `id`) and a `when` description. The model uses these descriptions to select the right route.
+Each `routes` entry needs a `when` description and a target — either an `agent` (a destination agent's `id`) or a `flow` (a flow on this agent). The model uses the `when` descriptions to select the right route.
 
 ## Structured routing
 
-`mode: 'structured'` routes via schema — the model outputs a structured decision object, not a user-facing message. The routing choice never appears in the user's conversation.
+The router always classifies via schema: an internal classifier model returns a structured decision, so the routing choice never reaches the user as prose. By default the router runs only when no flow is active — set `routing: { always: true }` to re-run it on every turn, and `routing: { model }` to classify with a separate (e.g. cheaper) model.
 
 <Aside type="note">
-  Without `mode: 'structured'`, the model might explain the handoff out loud — "I'll transfer you to billing now." Structured mode prevents that.
+  `mode` and `default` are accepted on `routing` but the runtime does not yet act on them — routing is always structured, and an unmatched turn is handled by the triage agent's own reply rather than routed to a fallback. Give every specialist a clear `when` so the classifier can place each request.
 </Aside>
-
-`default` is the fallback agent when no route matches closely enough.
 
 ## Handoffs
 
@@ -69,7 +67,7 @@ const englishAgent = defineAgent({
 });
 ```
 
-The runtime intercepts `{ __handoff: true, targetAgentId }` in the tool result and routes the session to the target agent.
+The runtime intercepts `{ __handoff: true, targetAgentId }` in the tool result and routes the session to the target agent. Kuralle also ships a `createHandoffTool` helper that builds this transfer tool for you.
 
 ## Example: triage router
 
