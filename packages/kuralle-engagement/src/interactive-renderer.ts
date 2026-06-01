@@ -7,6 +7,8 @@ import type {
   SendOutcome,
 } from '@kuralle-agents/messaging';
 
+import type { ChannelPolicy } from './policy.js';
+
 /** WhatsApp reply-button title limit (R-11). */
 export const BUTTON_TITLE_MAX = 20;
 /** WhatsApp list row title limit (R-11). */
@@ -124,13 +126,20 @@ export function renderChoices(options: ChoiceOption[], prompt: string): Interact
   };
 }
 
-export function interactiveRenderer(): OutboundMiddleware {
+function policyFor(policies: ChannelPolicy[], platform: string): ChannelPolicy | undefined {
+  return policies.find((p) => p.channel === platform);
+}
+
+export function interactiveRenderer(policies?: ChannelPolicy[]): OutboundMiddleware {
   return {
     name: 'interactive-renderer',
     async send(req: OutboundRequest, next: OutboundNext): Promise<SendOutcome> {
       const part = req.meta.parts.find((p) => p.type === 'interactive');
       if (!part) return next(req);
-      const interactive = renderChoices(part.options, part.prompt);
+      const policy = policies ? policyFor(policies, req.platform) : undefined;
+      const interactive = policy
+        ? policy.renderInteractive(part.options, part.prompt)
+        : renderChoices(part.options, part.prompt);
       return next({ ...req, payload: { kind: 'interactive', interactive } });
     },
   };

@@ -28,6 +28,7 @@ export interface OutboundTemplate {
 /** The channel-neutral send surface the OutboundPipeline terminates in (RFC §4.2). */
 export interface OutboundSink {
   sendText(to: string, text: string): Promise<SendResult>;
+  sendTextWithTag?(to: string, text: string, tag: string): Promise<SendResult>;
   sendInteractive(to: string, msg: InteractiveMessage): Promise<SendResult>;
   sendMedia(to: string, media: MediaPayload): Promise<SendResult>;
   sendTemplate?(to: string, t: OutboundTemplate): Promise<SendResult>;
@@ -40,8 +41,15 @@ export function isTemplateCapable(
   return typeof (c as { sendTemplate?: unknown }).sendTemplate === 'function';
 }
 
+/** Capability detection — true when the sink can send tagged text (RFC §4.12 message-tag). */
+export function isTagCapable(
+  c: OutboundSink,
+): c is OutboundSink & Required<Pick<OutboundSink, 'sendTextWithTag'>> {
+  return typeof c.sendTextWithTag === 'function';
+}
+
 export type OutboundPayload =
-  | { kind: 'text'; text: string }
+  | { kind: 'text'; text: string; tag?: string }
   | { kind: 'interactive'; interactive: InteractiveMessage }
   | { kind: 'media'; media: MediaPayload }
   | { kind: 'template'; template: OutboundTemplate };

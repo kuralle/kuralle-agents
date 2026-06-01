@@ -2,6 +2,9 @@ export * from './policy.js';
 export * from './strategist.js';
 export { strategistMiddleware } from './strategist-middleware.js';
 export { interactiveRenderer, renderChoices } from './interactive-renderer.js';
+export { closedWindowRecovery } from './closed-window-recovery.js';
+export { whatsappPolicy } from './policies/whatsapp.js';
+export { resolveInboundWhatsApp } from './resolve-inbound-whatsapp.js';
 export { withChoices } from './authoring.js';
 export { smartSend } from './nodes.js';
 export {

@@ -116,4 +116,4 @@ export type {
   SendOutcome,
   DeferReason,
 } from './types/outbound.js';
-export { isTemplateCapable } from './types/outbound.js';
+export { isTemplateCapable, isTagCapable } from './types/outbound.js';
