@@ -22,6 +22,7 @@ import {
   toolEffectKey,
 } from './durable/idempotency.js';
 import { findStepByKey } from './durable/replay.js';
+import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
 
 const APPROVAL_SIGNAL = '__approval';
 
@@ -182,6 +183,22 @@ function makeCtx(deps: CtxDeps): RunContext {
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
     tool: async (name, args, options) => {
+      // needsApproval gate: a tool flagged `needsApproval` must be approved by a human
+      // before it runs. Approval is a durable pause (the `__approval` signal); on resume
+      // the recorded decision is replayed, then the tool effect runs exactly once. The
+      // approval pause consumes its own callsite ordinal before the tool effect, so the
+      // ordering is deterministic across replays. NOTE: the surrounding agent turn is not
+      // itself a replayable effect — this is fully deterministic for flow `action` tools;
+      // for model-issued tool calls, resume re-enters the agent turn.
+      const def = options?.def ?? deps.toolExecutor.getTool?.(name);
+      if (def?.needsApproval) {
+        const decision = (await pauseEffect(APPROVAL_SIGNAL, {
+          approval: { title: `Approve tool: ${name}` },
+        })) as { approved: boolean; by?: string };
+        if (!decision.approved) {
+          throw new ToolApprovalDeniedError(name, decision.by);
+        }
+      }
       const callsite = consumeCallsite();
       const key = toolEffectKey(deps.runState.runId, callsite, name, args);
       return replayOrExecute(key, 'tool', name, () =>

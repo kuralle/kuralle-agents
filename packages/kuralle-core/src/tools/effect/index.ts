@@ -15,3 +15,4 @@ export type {
   InProgressToolResult,
 } from './pairing.js';
 export { validateAndSanitize, validateOutput, ToolValidationError } from './schema.js';
+export { ToolApprovalDeniedError } from './errors.js';
