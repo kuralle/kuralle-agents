@@ -8,6 +8,7 @@
 import type { RuntimeLike, HarnessStreamPart } from '@kuralle-agents/core';
 import type { OutboundPipeline } from '../adapter/outbound-pipeline.js';
 import type { WindowStore } from '../adapter/window-store.js';
+import type { ConsentStore } from '../adapter/consent-store.js';
 import type { OwnershipStore } from '../adapter/ownership-store.js';
 import type { InboundResolverPlugin } from '../adapter/input-resolver-chain.js';
 import type { OutboundMiddleware } from './outbound.js';
@@ -65,6 +66,8 @@ export interface MessagingRouterConfig {
   windowStore?: WindowStore;
   /** When set, human-owned threads skip `runtime.run` on inbound (REQ-21). */
   ownership?: OwnershipStore;
+  /** When set, STOP inbound opts the customer out; outbound uses `consentGate` (REQ-11). */
+  consent?: ConsentStore;
 }
 
 /** Options for the stream mapper. */
