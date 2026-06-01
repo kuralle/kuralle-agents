@@ -1,46 +1,50 @@
-# Multi-Platform Agent Example
+# Multi-Platform Agent Example (WhatsApp + Instagram + Web)
 
-A single Kuralle Runtime serving WhatsApp, Messenger, and web chat simultaneously. All three channels share the same agents, session store, and conversation logic.
+One Kuralle **Runtime**, one **flow/agent** set, three channels. Channel differences (24h windows, template recovery, interactive rendering, inbound id routing) live in **`@kuralle-agents/engagement`** policies — not in the bot code.
 
 ## Architecture
 
 ```
-                         ┌──────────────────────────┐
-  WhatsApp user ──────>  │  /messaging/whatsapp/webhook  │──┐
-                         └──────────────────────────┘   │
-                         ┌──────────────────────────┐   │   ┌──────────┐
-  Messenger user ─────>  │ /messaging/messenger/webhook │──┼──>│  Runtime  │
-                         └──────────────────────────┘   │   │ (shared)  │
-                         ┌──────────────────────────┐   │   └──────────┘
-  Browser user ────────> │      /api/chat/sse        │──┘
-                         └──────────────────────────┘
+                         ┌─────────────────────────────────────┐
+  WhatsApp user ──────>  │  /messaging/whatsapp/webhook        │──┐
+                         └─────────────────────────────────────┘  │
+                         ┌─────────────────────────────────────┐  │   engagement({ policies:
+  Instagram user ─────>  │  /messaging/instagram/webhook       │──┼──> [whatsapp, web, instagram] })
+                         └─────────────────────────────────────┘  │        │
+                         ┌─────────────────────────────────────┐  │        ▼
+  Browser user ────────> │      /api/chat/sse (web)          │──┘   createMessagingRouter
+                         └─────────────────────────────────────┘         + shared Runtime
 ```
 
-One `Runtime` instance. One `MemoryStore`. Three entry points.
+- **`engagement({ policies })`** → `{ bridge, broadcasts }`. Spread **`...eng.bridge`** into `createMessagingRouter` (outbound chain, inbound resolver, window store, consent, ownership).
+- **`webPolicy()`** is the null adapter (`hasWindow: false`) — web chat uses the same runtime via `createKuralleChatRouter`; Meta channels use webhook clients.
+- The example flow uses **`withChoices`** on a `decide` node so the runtime emits `{ type: 'interactive' }` parts; each policy renders them for its channel (buttons/list vs carousel, same option ids).
 
 ## Prerequisites
 
-1. A **Meta Developer Account** with a registered app
-2. A **WhatsApp Business** phone number (Cloud API)
-3. A **Facebook Page** with Messenger enabled
-4. **ngrok** (or similar) for local webhook forwarding
+1. A **Meta Developer** app with **WhatsApp Cloud API** and **Instagram Messaging** products
+2. **OpenAI** API key (support agent + template selector)
+3. **ngrok** (or similar) for local webhook forwarding
 
 ## Environment Variables
 
+Required when **running** the server (not for `typecheck:all`):
+
 ```bash
 # WhatsApp Cloud API
-WHATSAPP_ACCESS_TOKEN=        # System user or temporary token
-WHATSAPP_APP_SECRET=          # App secret from Meta dashboard
-WHATSAPP_PHONE_NUMBER_ID=     # Phone number ID (not the phone number itself)
-WHATSAPP_VERIFY_TOKEN=        # Any string you choose for webhook verification
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_APP_SECRET=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_VERIFY_TOKEN=
+WHATSAPP_WABA_ID=
 
-# Messenger Platform
-MESSENGER_PAGE_ACCESS_TOKEN=  # Page access token from Meta dashboard
-MESSENGER_APP_SECRET=         # App secret (can be the same Meta app)
-MESSENGER_PAGE_ID=            # Facebook Page ID
-MESSENGER_VERIFY_TOKEN=       # Any string you choose for webhook verification
+# Instagram Messaging API
+INSTAGRAM_ACCESS_TOKEN=
+INSTAGRAM_APP_SECRET=
+INSTAGRAM_ACCOUNT_ID=
+INSTAGRAM_VERIFY_TOKEN=
 
-# OpenAI (for the support agent)
+# OpenAI
 OPENAI_API_KEY=
 
 # Optional
@@ -50,33 +54,28 @@ PORT=3333
 ## Running
 
 ```bash
-# Install dependencies (from repo root)
+# From repo root
 bun install
+bun run build
 
-# Start the server
+# From packages/kuralle-messaging-meta
 npx tsx examples/multi-platform/server.ts
 ```
 
 ## Webhook Setup with ngrok
 
-Meta requires HTTPS endpoints for webhooks. Use ngrok to expose your local server:
-
 ```bash
 ngrok http 3333
 ```
 
-Then configure the webhook URLs in the Meta Developer Dashboard:
-
-| Platform  | Webhook URL                                        |
-|-----------|----------------------------------------------------|
-| WhatsApp  | `https://<ngrok-id>.ngrok.io/messaging/whatsapp/webhook`  |
-| Messenger | `https://<ngrok-id>.ngrok.io/messaging/messenger/webhook` |
+| Platform  | Webhook URL |
+|-----------|-------------|
+| WhatsApp  | `https://<ngrok-id>.ngrok.io/messaging/whatsapp/webhook` |
+| Instagram | `https://<ngrok-id>.ngrok.io/messaging/instagram/webhook` |
 
 Subscribe to the `messages` field for both products.
 
 ## Testing Web Chat
-
-The SSE endpoint works with any HTTP client:
 
 ```bash
 curl -X POST http://localhost:3333/api/chat/sse \
@@ -84,9 +83,17 @@ curl -X POST http://localhost:3333/api/chat/sse \
   -d '{"message": "Hello", "sessionId": "test-session"}'
 ```
 
+## Offline proof
+
+The **`same_bot_across_channels`** test in `@kuralle-agents/engagement` drives mock platforms and the composed engagement pipeline without live Meta or model calls:
+
+```bash
+bun test packages/kuralle-engagement/test/same-bot-across-channels.test.ts
+```
+
 ## How It Works
 
-- `createWhatsAppClient` and `createMessengerClient` handle platform-specific webhook verification, signature checks, message normalization, and outbound delivery.
-- `createMessagingRouter` wires both clients to the shared `Runtime`. When a message arrives, it normalizes the input, calls `runtime.run()`, and maps events from `handle.events` back through the originating platform client.
-- `createKuralleChatRouter` exposes the same `Runtime` over HTTP/SSE for browser clients.
-- The `Runtime` does not know or care which channel a message came from. Session IDs are scoped per platform thread (e.g., `whatsapp:<phoneNumberId>:<userPhone>`), so conversations stay isolated.
+- **`whatsappPolicy` / `instagramPolicy` / `webPolicy`** implement `ChannelPolicy` (window model, closed-window strategy, `renderInteractive`, `resolveInbound`).
+- **`createMessagingRouter`** appends terminal **`windowGuard`** after `bridge.outbound` (consent → ownership → closed-window recovery → interactive renderer).
+- **`createKuralleChatRouter`** exposes the same **`runtime`** over HTTP/SSE for browser clients.
+- Session IDs stay scoped per platform thread; the bot never branches on `platform`.
