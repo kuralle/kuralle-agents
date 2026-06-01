@@ -11,6 +11,7 @@ import type { Tool, AnyTool } from '../types/effectTool.js';
 import type { TurnResult } from '../types/channel.js';
 import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
 import type { SignalDelivery } from './durable/types.js';
+import type { ResolvedSelection } from '../types/selection.js';
 import type { ConversationOutcome, ConversationOutcomeMarkedBy } from '../outcomes/types.js';
 import { MemoryStore } from '../session/stores/MemoryStore.js';
 import { TextDriver } from './channels/TextDriver.js';
@@ -51,6 +52,7 @@ export interface HarnessConfig {
 export interface RunOptions {
   sessionId?: string;
   input?: string;
+  selection?: ResolvedSelection;
   userId?: string;
   agentId?: string;
   seedMessages?: ModelMessage[];
@@ -96,6 +98,7 @@ export class Runtime {
         sessionId,
         userId: opts.userId,
         input: opts.input,
+        selection: opts.selection,
         agentId: opts.agentId,
         seedMessages: opts.seedMessages,
         historyDelta: opts.historyDelta,

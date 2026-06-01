@@ -1,3 +1,4 @@
+export * from './selection.js';
 export * from './telemetry.js';
 export * from './processors.js';
 export * from './agentConfig.js';
