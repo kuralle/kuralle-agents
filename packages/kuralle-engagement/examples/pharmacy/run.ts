@@ -10,11 +10,8 @@ import type {
   PlatformClient,
   SendResult,
 } from '@kuralle-agents/messaging';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createXai } from '@ai-sdk/xai';
-import type { LanguageModel } from 'ai';
 import { buildPharmacyRouter, buildRefillReminderText } from './bot.js';
+import { resolveLiveModel } from '../_shared/resolveLiveModel.js';
 
 function loadEnv(): void {
   const dir = dirname(fileURLToPath(import.meta.url));
@@ -44,28 +41,6 @@ function loadEnv(): void {
     }
     break;
   }
-}
-
-function resolveLiveModel(): { model: LanguageModel; label: string } | null {
-  const google = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  if (google) {
-    return {
-      model: createGoogleGenerativeAI({ apiKey: google })('gemini-2.0-flash'),
-      label: 'google:gemini-2.0-flash',
-    };
-  }
-  const xai = process.env.XAI_API_KEY;
-  if (xai) {
-    return { model: createXai({ apiKey: xai })('grok-2-1212'), label: 'xai:grok-2-1212' };
-  }
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (openaiKey) {
-    return {
-      model: createOpenAI({ apiKey: openaiKey })(process.env.OPENAI_MODEL ?? 'gpt-4o-mini'),
-      label: `openai:${process.env.OPENAI_MODEL ?? 'gpt-4o-mini'}`,
-    };
-  }
-  return null;
 }
 
 type RecordedSend = { kind: 'text' | 'template' | 'interactive'; detail: string };

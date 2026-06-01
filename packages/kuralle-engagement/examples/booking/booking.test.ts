@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { LanguageModel } from 'ai';
 import {
   createRuntime,
@@ -24,6 +24,10 @@ import {
 } from './bot.js';
 
 const stubModel = {} as LanguageModel;
+
+afterEach(() => {
+  mock.restore();
+});
 
 type SessionWithRuns = Session & {
   durableRuns?: Record<string, { runState: RunState; steps: unknown[] }>;
@@ -235,6 +239,103 @@ describe('booking_example', () => {
     expect(sink.sendTemplateCalls[0]![1].name).toBe('booking_hold');
     expect(sink.sendTextCalls).toBe(0);
     expect(buildHoldReminderText({ partySize: 4, date: '2026-06-12' })).toContain('4');
+  });
+
+  it('booking_no_oscillation', async () => {
+    const { agent, flow, confirm, pickSlot, collectDetails } = buildBookingBot(stubModel);
+    const state: Record<string, unknown> = {
+      partySize: 4,
+      date: '2026-06-12',
+      availableSlots: ['18:30', '19:00', '20:15'],
+    };
+
+    expect(pickSlot.decide({ choice: 'not-a-slot' }, state)).toBe('stay');
+    expect(confirm.decide({ choice: '19:00' }, { ...state, confirmedTime: '19:00' })).toBe(
+      'stay',
+    );
+    const changeTransition = await Promise.resolve(
+      confirm.decide({ choice: 'no' }, { ...state, confirmedTime: '19:00' }),
+    );
+    expect(changeTransition).toBe(collectDetails);
+
+    let streamCall = 0;
+    let generateCall = 0;
+    const bookingPayload = {
+      partySize: 4,
+      date: '2026-06-12',
+      time: '19:00',
+      name: 'Alex',
+    };
+
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        streamText: () => {
+          streamCall += 1;
+          if (streamCall === 1) {
+            return {
+              fullStream: (async function* () {
+                yield { type: 'text-delta', text: 'Welcome!' };
+              })(),
+              finishReason: Promise.resolve('stop'),
+              response: Promise.resolve({ messages: [] }),
+              toolCalls: Promise.resolve([]),
+            };
+          }
+          return {
+            fullStream: (async function* () {
+              yield { type: 'text-delta', text: 'Got it.' };
+            })(),
+            finishReason: Promise.resolve('tool-calls'),
+            response: Promise.resolve({
+              messages: [{ role: 'assistant', content: [{ type: 'text', text: 'Got it.' }] }],
+            }),
+            toolCalls: Promise.resolve([
+              {
+                toolName: 'submit_collectdetails_data',
+                toolCallId: 'collect-1',
+                input: bookingPayload,
+              },
+            ]),
+          };
+        },
+        generateObject: async () => {
+          generateCall += 1;
+          if (generateCall === 1) {
+            return { object: { choice: '19:00' } };
+          }
+          return { object: { choice: 'Alex' } };
+        },
+      };
+    });
+
+    const sessionStore = new MemoryStore();
+    const sessionId = 'osc-sess';
+    const runtime = createRuntime({
+      agents: [agent],
+      defaultAgentId: agent.id,
+      sessionStore,
+      defaultModel: stubModel,
+      hostSelect: async () => ({ kind: 'enterFlow' as const, flow }),
+    });
+
+    for (const input of ['Hi, I need a table', 'Table for 4 on 2026-06-12 around 7pm, name Alex']) {
+      const handle = runtime.run({ sessionId, input });
+      const errors: string[] = [];
+      for await (const part of handle.events) {
+        if (part.type === 'error') errors.push(part.error);
+      }
+      await handle;
+      expect(errors.some((e) => e.includes('Flow oscillation'))).toBe(false);
+    }
+
+    const session = await sessionStore.get(sessionId);
+    const run = persistedRunState(session, sessionId);
+    expect(run?.activeNode).toBe('confirm');
+    expect(run?.state.partySize).toBe(4);
+    expect(run?.state.date).toBe('2026-06-12');
+    expect(run?.state.confirmedTime).toBe('19:00');
   });
 
   it('open_window_sends_freeform', async () => {
