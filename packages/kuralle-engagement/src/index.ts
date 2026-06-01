@@ -33,3 +33,10 @@ export {
   type Campaign,
   type BroadcastApi,
 } from './broadcast.js';
+export {
+  createDrip,
+  DRIP_WM_KEY,
+  type DripStep,
+  type DripCampaignState,
+  type DripApi,
+} from './drip.js';
