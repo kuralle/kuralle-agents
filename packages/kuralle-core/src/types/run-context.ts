@@ -19,6 +19,8 @@ export interface EffectToolExecutor {
     toolCtx?: ToolContext;
     def?: AnyTool;
   }): Promise<unknown>;
+  /** Resolve a registered tool definition by name (used to read flags like `needsApproval`). */
+  getTool?(name: string): AnyTool | undefined;
 }
 
 export interface AutoRetrieveProvider {

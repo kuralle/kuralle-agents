@@ -62,6 +62,15 @@ export type ChatResponse = {
   timestamp: string;
 };
 
+/**
+ * Body for `POST /api/chat/resume` — delivers a signal (e.g. a human approval)
+ * to a paused durable run and streams the resumed turn as SSE.
+ */
+export type ResumeRequest = {
+  sessionId: string;
+  signal: { signalId: string; name: string; payload?: unknown };
+};
+
 export type FlowRequest = {
   message: string;
   sessionId?: string;
@@ -419,6 +428,38 @@ export const createKuralleChatRouter = ({
         }
       } catch (error) {
         console.error('[Kuralle] SSE stream error:', error);
+        const message =
+          streamFilter === 'all'
+            ? (error as Error).message
+            : 'An error occurred. Please try again.';
+        await stream.writeSSE({
+          event: 'error',
+          data: JSON.stringify({ error: message }),
+        });
+      }
+    });
+  });
+
+  app.post('/api/chat/resume', async (c) => {
+    const body = await parseJsonBody<ResumeRequest>(c);
+    if (!body?.sessionId || !body.signal?.signalId || !body.signal?.name) {
+      return c.json({ error: 'sessionId and signal { signalId, name } required' }, 400);
+    }
+
+    return streamSSE(c, async (stream) => {
+      try {
+        for await (const part of iterateRuntimeParts(runtime, {
+          sessionId: body.sessionId,
+          signalDelivery: {
+            signalId: body.signal.signalId,
+            name: body.signal.name,
+            payload: body.signal.payload,
+          },
+        })) {
+          await sendSSEPart(stream, part, streamFilter);
+        }
+      } catch (error) {
+        console.error('[Kuralle] SSE resume error:', error);
         const message =
           streamFilter === 'all'
             ? (error as Error).message
