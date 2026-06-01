@@ -1,0 +1,17 @@
+=== escalate_to_human_does_not_throw + direct handoff (terminal-handoff.test.ts) ===
+bun test v1.3.9 (cf6cdbbb)
+
+ 2 pass
+ 0 fail
+ 12 expect() calls
+Ran 2 tests across 1 file. [161.00ms]
+
+=== typecheck:all (tail) ===
+ok     apps/playground/livekit-starters/livekit-agent-starter/tsconfig.json
+ok     apps/playground/rag-demo/tsconfig.json
+ok     apps/playground/transport-examples/smartpbx-bridge/tsconfig.json
+ok     apps/playground/transport-examples/tsconfig.json
+
+swept 7 playground configs; 0 stale-empty
+✓ typecheck:playground green
+$ eslint 'packages/*/src/**/*.ts' 'packages/*/test/**/*.ts' 'packages/*/tests/**/*.ts'
