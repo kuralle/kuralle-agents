@@ -6,13 +6,13 @@
 
 ## Active sprint
 
-**Sprint number:** `6`
-**Sprint name:** Channel adapters
+**Sprint number:** `7`
+**Sprint name:** Integration, proof & release
 **Status:** `not-started`
-**Goal:** The same bot runs on WhatsApp and Instagram via injected `ChannelPolicy` adapters (web already from Sprint 0), each rendering/recovering per its channel rules.
-**WBS section:** [`sprints/WBS.md` § Sprint 6](./WBS.md)
+**Goal:** The multi-platform example demonstrates one bot answering on WhatsApp + Web + Instagram, window-safe, with the full §9 test matrix green and a publish-together dry-run clean.
+**WBS section:** [`sprints/WBS.md` § Sprint 7](./WBS.md)
 
-> **Sprint 6 note:** S6-02 is a HARD verification gate (Q7) — re-verify Instagram specifics against current Meta docs before building G2; flag via `/grill-me` if Meta diverges from the RFC assumption.
+> **Sprint 7 is the FINAL sprint** — after its closeout the WBS is exhausted and the program stops (per the driver's § When to stop). F3 runs the publish-together dry-run (`pnpm publish -r --dry-run`) from a neutral cwd; publish the whole `@kuralle-agents/*` graph together.
 
 ## Build branch
 
@@ -22,30 +22,29 @@ Every sprint session — manager and IC — works **on this branch only**. Befor
 
 At session start: `git checkout plan/whatsapp-engagement` (or `git fetch && git checkout plan/whatsapp-engagement` if missing locally).
 
-## Load-bearing reading for sprint 6
+## Load-bearing reading for sprint 7 (final)
 
-The session running sprint 6 must read these in this order before delegating any story:
+The session running sprint 7 must read these in this order before delegating any story:
 
-1. `sprints/sprint-5/HANDOFF.md` — read-me-first; state of the world + Sprint 6 traps (esp. the S6-02 Q7 gate).
-2. `sprints/WBS.md` § Sprint 6 — the plan for this sprint.
+1. `sprints/sprint-6/HANDOFF.md` — read-me-first; state of the world + Sprint 7 traps (esp. F1 chain composition + F3 publish-together).
+2. `sprints/WBS.md` § Sprint 7 — the plan for this (final) sprint.
 3. `sprints/SESSION_KICKOFF_PROMPT.md` — the loop you are running.
-4. `rfcs/whatsapp-engagement/02-requirements-interfaces.md` — §4.12 (`ChannelPolicy` — WhatsApp/Web/Instagram adapter rows); REQ-22.
-5. `rfcs/whatsapp-engagement/03-pseudocode-blueprint.md` — §6.1 (windowGuard via injected `policy`), §6.6 (omnichannel).
-6. `rfcs/whatsapp-engagement/04-tasks-validation.md` — Phase G chunks (G1/G2) + §9.1 tests (`same_bot_across_channels`, `web_null_policy_always_open`, `instagram_closed_window_tags_or_defers`, `whatsapp_policy_unchanged_behavior`).
-7. `rfcs/whatsapp-engagement/05-security-rollback-open-qs.md` — Q7 (Instagram constraints — **S6-02 verify vs current Meta docs**); RESEARCH §6.
-8. Source: `packages/kuralle-engagement/src/policy.ts` (`ChannelPolicy`/`ClosedWindowStrategy`, S0-04), `packages/kuralle-messaging-meta/src/instagram/client.ts` (`sendTextWithTag` ~423, `sendButtonTemplate` ~186, `sendQuickReplies` ≤13 ~299, `sendGenericTemplate` ~323), `whatsapp/client.ts`, the windowGuard/interactiveRenderer/inbound-resolver (Sprint 6 makes them read the injected policy).
-9. `~/.claude/projects/-Users-mithushancj-Documents-asyncdot-openscoped-aria-flow/memory/MEMORY.md` — standing rules (Bun usage, no-shortcuts, publish-together).
+4. `rfcs/whatsapp-engagement/02-requirements-interfaces.md` — §4.5 (`engagement({policies})` → `{bridge, broadcasts}`); §9 validation matrix.
+5. `rfcs/whatsapp-engagement/04-tasks-validation.md` — Phase F chunks (F1/F2/F3) + §9 full test matrix.
+6. `CLAUDE.md` (repo root) — publish-together rule, no source maps, `pnpm publish -r`.
+7. Source: `packages/kuralle-engagement/src/index.ts` (F1 `engagement()` wiring — composes `[consentGate, ownershipGate, closedWindowRecovery, interactiveRenderer, windowGuard]` from policies+stores), `packages/kuralle-messaging/src/adapter/createMessagingRouter.ts` (`.bridge` spreads `outbound`/`inputResolver`/`windowStore`/`ownership`/`consent`/`onStatus`), `packages/kuralle-messaging-meta/examples/multi-platform/` (F2), root `package.json` + `scripts/check-no-source-maps.sh` (F3).
+8. `~/.claude/projects/-Users-mithushancj-Documents-asyncdot-openscoped-aria-flow/memory/MEMORY.md` — standing rules (Bun usage, no-shortcuts, **publish-together**).
 
-### Sprint-0..5 seams Sprint 6 builds on
-- S0-04 `ChannelPolicy`/`ClosedWindowStrategy` + `webPolicy()` — G1/G2 implement real WhatsApp/Instagram policies; web already exists.
-- S1 windowGuard/pipeline — Sprint 6 makes the guard read `policy.isWindowOpen`/`policy.closedWindow` (the rev3 unification) WITHOUT regressing the WhatsApp path (`whatsapp_policy_unchanged_behavior`).
-- S2 strategist — the WhatsApp policy's `closedWindow:{kind:'template',strategist}`.
-- S3 renderer/inbound-resolver — per-policy `renderInteractive`/`resolveInbound`.
-- S4 consent/ownership — `consentRequired` per policy.
+### Sprint-0..6 seams Sprint 7 wires together
+- All gates/middleware: `consentGate`/`ownershipGate` (S4), `closedWindowRecovery` (S6), `interactiveRenderer` (S3/S6), terminal `windowGuard` (S1) — F1 composes the default chain (windowGuard terminal) from the injected `policies[]` + stores.
+- `whatsappPolicy`/`webPolicy`/`instagramPolicy` (S0-04/S6) — `engagement({policies:[...]})`.
+- `broadcasts` (S5) — `engagement().broadcasts`.
+- Inbound ownership gate + resolver chain (S3/S4) — wired via `.bridge` into `createMessagingRouter`.
+- **Publish-together (CLAUDE.md):** version+publish the whole changed `@kuralle-agents/*` graph together (core/messaging/messaging-meta/engagement); dry-run from a neutral cwd; no split-graph pin; no `.map` in tarballs.
 
 ## Last completed sprint
 
-`5` — Proactive outbound
+`6` — Channel adapters
 
 ## Last completed at
 
@@ -61,6 +60,7 @@ The session running sprint 6 must read these in this order before delegating any
 | 3 | complete | 2026-06-01 | [sprint-3/WARMDOWN.md](./sprint-3/WARMDOWN.md) |
 | 4 | complete | 2026-06-01 | [sprint-4/WARMDOWN.md](./sprint-4/WARMDOWN.md) |
 | 5 | complete | 2026-06-01 | [sprint-5/WARMDOWN.md](./sprint-5/WARMDOWN.md) |
+| 6 | complete | 2026-06-01 | [sprint-6/WARMDOWN.md](./sprint-6/WARMDOWN.md) |
 
 When a sprint completes, append a row here from `WARMDOWN.md`.
 
