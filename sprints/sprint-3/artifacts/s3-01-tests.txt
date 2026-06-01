@@ -1,0 +1,22 @@
+# S3-01 — verification artifact
+
+## Named tests (packages/kuralle-core/test/core-flow/interactive-stream-part.test.ts)
+
+- interactive_part_is_additive — PASS
+- interactive_emitted_on_node_entry — PASS
+
+## Core suite
+
+bun test packages/kuralle-core — 395 pass, 0 fail
+
+## Engagement suite
+
+bun test packages/kuralle-engagement — 21 pass, 0 fail
+
+## typecheck:all (tail)
+
+swept 58 configs; 0 stale-empty
+✓ typecheck:all green
+== playground tsconfig sweep (7 configs) ==
+swept 7 playground configs; 0 stale-empty
+✓ typecheck:playground green

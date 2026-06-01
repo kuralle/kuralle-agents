@@ -1,6 +1,6 @@
 import type { InboundMessage, InteractiveMessage } from '@kuralle-agents/messaging';
-import type { ResolvedSelection } from '@kuralle-agents/core';
-import type { ChannelPolicy, ChoiceOption } from '../policy.js';
+import type { ChoiceOption, ResolvedSelection } from '@kuralle-agents/core';
+import type { ChannelPolicy } from '../policy.js';
 
 /** Web/SSE null policy — no window, no consent (RFC §4.12). Proves the abstraction. */
 export function webPolicy(): ChannelPolicy {

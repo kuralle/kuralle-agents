@@ -3,6 +3,7 @@ import type { Flow, FlowNode } from '../types/flow.js';
 import type { RunState } from '../runtime/durable/types.js';
 import type { HarnessStreamPart } from '../types/stream.js';
 import { applyContextStrategy, resolveContextStrategy } from './contextStrategy.js';
+import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
 
 export interface ReduceTransitionInput {
   fromNodeId: string;
@@ -28,6 +29,7 @@ export async function reduceTransition(input: ReduceTransitionInput): Promise<vo
   emit({ type: 'node-exit', nodeName: fromNodeId });
   emit({ type: 'flow-transition', from: fromNodeId, to: toNode.id });
   emit({ type: 'node-enter', nodeName: toNode.id });
+  emitInteractiveOnNodeEnter(toNode, run.state, emit);
 
   await applyContextStrategy({
     strategy: resolveNodeContext(toNode, flow),

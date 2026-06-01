@@ -1,17 +1,9 @@
 import type { InboundMessage, InteractiveMessage } from '@kuralle-agents/messaging';
-import type { ResolvedSelection } from '@kuralle-agents/core';
+import type { ChoiceOption, ResolvedSelection } from '@kuralle-agents/core';
 import type { SmartSendStrategist } from './strategist.js';
 
 export type { SmartSendStrategist } from './strategist.js';
-
-/** Author-facing choice option (RFC §4.5). Stable shape. */
-export interface ChoiceOption {
-  id: string;
-  label: string;
-  description?: string;
-  url?: string;
-  flow?: { flowId: string; cta: string };
-}
+export type { ChoiceOption } from '@kuralle-agents/core';
 
 export type ClosedWindowStrategy =
   | { kind: 'template'; strategist: SmartSendStrategist }
