@@ -1,0 +1,19 @@
+S3-04 — withChoices + interactive end-to-end
+
+Named tests (packages/kuralle-engagement/test/interactive-e2e.test.ts):
+  withchoices_attaches — decide + collect preserve kind; choices attached
+  interactive_end_to_end — emit → render(3 buttons) → resolve by id → formData
+
+bun test packages/kuralle-engagement/test/interactive-e2e.test.ts
+  3 pass / 0 fail
+
+bun test packages/kuralle-engagement
+  35 pass / 0 fail
+
+bun test packages/kuralle-messaging packages/kuralle-core
+  (included in acceptance run — 853 pass / 0 fail)
+
+bun run typecheck:all
+  ✓ typecheck:all green
+  ✓ typecheck:playground green
+  eslint: clean
