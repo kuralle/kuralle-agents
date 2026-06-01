@@ -1,5 +1,8 @@
 import type { InboundMessage, InteractiveMessage } from '@kuralle-agents/messaging';
 import type { ResolvedSelection } from '@kuralle-agents/core';
+import type { SmartSendStrategist } from './strategist.js';
+
+export type { SmartSendStrategist } from './strategist.js';
 
 /** Author-facing choice option (RFC §4.5). Stable shape. */
 export interface ChoiceOption {
@@ -8,13 +11,6 @@ export interface ChoiceOption {
   description?: string;
   url?: string;
   flow?: { flowId: string; cta: string };
-}
-
-// TODO(S2-01): replace this forward-declaration with the real SmartSendStrategist
-// from `strategist.ts` (RFC §4.4). Sprint 0 only needs the type to exist so
-// ClosedWindowStrategy's 'template' variant compiles.
-export interface SmartSendStrategist {
-  decide(input: unknown): Promise<unknown>;
 }
 
 export type ClosedWindowStrategy =

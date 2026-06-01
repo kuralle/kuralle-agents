@@ -1,0 +1,20 @@
+S2-01 B1 — SmartSendStrategist test run (2026-06-01)
+
+Named tests (packages/kuralle-engagement/test/strategist.test.ts):
+  ✓ window_open_no_selector_call — returns freeform without calling the selector
+  ✓ strategist_filters_paused_templates — passes only catalog.approved() candidates to the selector
+  ✓ strategist_defers_on_bad_params — defers when validateParams fails (+ selector throw/null/empty/out-of-set)
+  ✓ strategist_audits_conversion — records audit once then returns template decision
+
+bun test packages/kuralle-engagement/test/strategist.test.ts
+  8 pass, 0 fail
+
+bun test packages/kuralle-engagement
+  9 pass, 0 fail
+
+typecheck:all tail:
+swept 58 configs; 0 stale-empty
+✓ typecheck:all green
+swept 7 playground configs; 0 stale-empty
+✓ typecheck:playground green
+$ eslint 'packages/*/src/**/*.ts' 'packages/*/test/**/*.ts' 'packages/*/tests/**/*.ts'
