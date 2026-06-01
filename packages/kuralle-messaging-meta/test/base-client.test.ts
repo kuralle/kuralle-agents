@@ -66,6 +66,7 @@ class StubMetaClient extends BaseMetaClient<NormalizedMessage, Record<string, un
       id: msg.id,
       platform: this.platform,
       threadId: msg.from,
+      customerId: msg.from,
       from: { id: msg.from, name: msg.contactName },
       timestamp: new Date(Number(msg.timestamp) * 1000),
       type: 'text',

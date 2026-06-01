@@ -125,6 +125,8 @@ export interface InteractiveReply {
   description?: string;
   /** Raw payload from the platform. */
   payload?: string;
+  /** Parsed Flow submission (`nfm_reply.response_json`). */
+  formResponse?: Record<string, unknown>;
 }
 
 // ====================================
@@ -195,6 +197,8 @@ export interface InboundMessage {
   platform: string;
   /** Conversation or thread identifier. */
   threadId: string;
+  /** Platform-scoped customer identity (e.g. WhatsApp wa_id), distinct from session/thread. */
+  customerId: string;
   /** Sender information. */
   from: ContactInfo;
   /** When the message was sent. */
@@ -211,6 +215,8 @@ export interface InboundMessage {
   contacts?: ContactInfo[];
   /** Interactive reply data (for interactive responses). */
   interactive?: InteractiveReply;
+  /** Template quick-reply tap (top-level `button`, not `interactive.button_reply`). */
+  button?: { payload: string; text: string };
   /** Reaction data (for reaction events). */
   reaction?: ReactionData;
   /** Reply context if this message is a reply. */

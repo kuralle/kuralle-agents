@@ -596,6 +596,7 @@ export class WhatsAppClient extends BaseMetaClient<
       id: msg.id,
       platform: 'whatsapp',
       threadId,
+      customerId: msg.from,
       from: {
         id: msg.from,
         name: msg.contactName,
@@ -606,6 +607,9 @@ export class WhatsAppClient extends BaseMetaClient<
       text: msg.text?.body ?? this.extractTextFallback(msg),
       media: this.extractMedia(msg),
       location: msg.location,
+      button: msg.button
+        ? { payload: msg.button.payload, text: msg.button.text }
+        : undefined,
       interactive: msg.interactive
         ? {
             type: msg.interactive.type,
@@ -617,6 +621,7 @@ export class WhatsAppClient extends BaseMetaClient<
               msg.interactive.button_reply?.title ??
               msg.interactive.list_reply?.title,
             description: msg.interactive.list_reply?.description,
+            formResponse: parseNfmReply(msg.interactive.nfm_reply),
           }
         : undefined,
       context: msg.context
@@ -755,6 +760,21 @@ export class WhatsAppClient extends BaseMetaClient<
 // ---------------------------------------------------------------------------
 // Utility
 // ---------------------------------------------------------------------------
+
+function parseNfmReply(
+  nfm?: { name?: string; response_json: string },
+): Record<string, unknown> | undefined {
+  if (!nfm?.response_json) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(nfm.response_json);
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
   const chunks: Uint8Array[] = [];

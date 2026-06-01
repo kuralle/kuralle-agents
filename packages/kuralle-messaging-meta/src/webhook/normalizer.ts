@@ -55,6 +55,7 @@ export interface NormalizedMessage {
     type: string;
     button_reply?: { id: string; title: string };
     list_reply?: { id: string; title: string; description?: string };
+    nfm_reply?: { name?: string; response_json: string };
   };
   button?: { text: string; payload: string };
   /** Quoted/replied-to message context. */

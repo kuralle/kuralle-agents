@@ -2,6 +2,14 @@ import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { createHmac } from 'node:crypto';
 import { WhatsAppClient } from '../src/whatsapp/client.ts';
 import type { WhatsAppClientConfig } from '../src/whatsapp/types.ts';
+import type { NormalizedMessage } from '../src/webhook/normalizer.ts';
+import type { InboundMessage } from '@kuralle-agents/messaging';
+
+class WhatsAppClientTestHarness extends WhatsAppClient {
+  convert(msg: NormalizedMessage): InboundMessage {
+    return this.toInboundMessage(msg);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -246,6 +254,61 @@ describe('WhatsAppClient — toInboundMessage format', () => {
       makeSignedRequest(makeTextPayload('Hi', '441234567890')),
     );
     expect(threadId).toBe(`whatsapp:${PHONE_NUMBER_ID}:441234567890`);
+  });
+});
+
+describe('nfm_reply_and_template_button_parsed', () => {
+  const harness = new WhatsAppClientTestHarness(baseConfig);
+
+  function baseNormalized(overrides: Partial<NormalizedMessage> = {}): NormalizedMessage {
+    return {
+      id: 'wamid.test',
+      from: '5511999999999',
+      timestamp: '1700000000',
+      type: 'interactive',
+      phoneNumberId: PHONE_NUMBER_ID,
+      ...overrides,
+    };
+  }
+
+  it('parses nfm_reply.response_json into interactive.formResponse', () => {
+    const formData = { order_id: 'ord-1', rating: 5 };
+    const inbound = harness.convert(
+      baseNormalized({
+        interactive: {
+          type: 'nfm_reply',
+          nfm_reply: {
+            name: 'flow',
+            response_json: JSON.stringify(formData),
+          },
+        },
+      }),
+    );
+    expect(inbound.interactive?.formResponse).toEqual(formData);
+    expect(inbound.customerId).toBe('5511999999999');
+  });
+
+  it('maps template button payload and text', () => {
+    const inbound = harness.convert(
+      baseNormalized({
+        type: 'button',
+        button: { text: 'Yes', payload: 'confirm_yes' },
+      }),
+    );
+    expect(inbound.button).toEqual({ text: 'Yes', payload: 'confirm_yes' });
+    expect(inbound.customerId).toBe('5511999999999');
+  });
+
+  it('malformed nfm_reply JSON yields undefined formResponse without throwing', () => {
+    const inbound = harness.convert(
+      baseNormalized({
+        interactive: {
+          type: 'nfm_reply',
+          nfm_reply: { response_json: '{not-json' },
+        },
+      }),
+    );
+    expect(inbound.interactive?.formResponse).toBeUndefined();
   });
 });
 

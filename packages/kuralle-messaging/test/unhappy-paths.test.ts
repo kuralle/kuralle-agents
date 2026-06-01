@@ -24,6 +24,7 @@ function makeMessage(overrides: Partial<InboundMessage> = {}): InboundMessage {
     id: 'msg-1',
     platform: 'whatsapp',
     threadId: '1234567890',
+    customerId: 'user-1',
     from: { id: 'user-1', name: 'Test User' },
     timestamp: new Date(),
     type: 'text',
@@ -271,29 +272,29 @@ describe('defaultSessionResolver — unhappy paths', () => {
   it('message with empty string platform and threadId', async () => {
     const msg = makeMessage({ platform: '', threadId: '' });
     const result = await defaultSessionResolver.resolve(msg);
-    expect(result.sessionId).toBe(':');
+    expect(result.sessionId).toBe('');
   });
 
-  it('message with from.id as undefined — still returns sessionId', async () => {
+  it('message with from.id missing still uses customerId as userId', async () => {
     const msg = makeMessage();
     delete (msg.from as { id?: string }).id;
     const result = await defaultSessionResolver.resolve(msg);
-    expect(result.sessionId).toBe('whatsapp:1234567890');
-    expect(result.userId).toBeUndefined();
+    expect(result.sessionId).toBe('1234567890');
+    expect(result.userId).toBe('user-1');
   });
 
   it('very long thread IDs (1000+ chars)', async () => {
     const longThread = 'T'.repeat(2000);
     const msg = makeMessage({ threadId: longThread });
     const result = await defaultSessionResolver.resolve(msg);
-    expect(result.sessionId).toBe(`whatsapp:${longThread}`);
-    expect(result.sessionId.length).toBe(2000 + 'whatsapp:'.length);
+    expect(result.sessionId).toBe(longThread);
+    expect(result.sessionId.length).toBe(2000);
   });
 
-  it('special characters in platform and threadId', async () => {
+  it('special characters in threadId are preserved verbatim', async () => {
     const msg = makeMessage({ platform: 'plat:form', threadId: 'thread:id:with:colons' });
     const result = await defaultSessionResolver.resolve(msg);
-    expect(result.sessionId).toBe('plat:form:thread:id:with:colons');
+    expect(result.sessionId).toBe('thread:id:with:colons');
   });
 });
 
