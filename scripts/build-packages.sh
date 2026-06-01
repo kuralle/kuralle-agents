@@ -14,7 +14,7 @@ tier() {
   bun run "${args[@]}" build
 }
 
-tier voice-protocol rag http-client analytics-sdk eval widget ws-bench wavekat-vad-node   # T0 leaves
+tier voice-protocol rag http-client analytics-sdk eval widget ws-bench   # T0 leaves
 tier core                                                                                  # T1 hub
 tier realtime-audio tools messaging                                                        # T2 (need core/rag/voice-protocol)
 tier rag-loaders lancedb-store postgres-store redis-store upstash-store \
