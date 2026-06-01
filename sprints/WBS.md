@@ -15,9 +15,9 @@
 ### 1.2 Definition of Done (universal)
 A sprint's stories are collectively Done when **all** of the following hold:
 
-1. Every story commits atomically (`[S{N}-{nn}] {title}`) to `main` behind a green CI run on the project's supported runtimes (Bun + Node; `bun run typecheck:all` is the full gate).
+1. Every story commits atomically (`[S{N}-{nn}] {title}`) on the **active build branch** (`plan/whatsapp-engagement` — see `sprints/STATE.md` § Build branch) with green CI on the project's supported runtimes (Bun + Node; `bun run typecheck:all` is the full gate).
 2. Unit tests written for every new exported function / class. **Coverage is not the metric**; *behavioral coverage* is — every public surface tested with at least one happy-path and one failure-path test, using the offline fake-client pattern (`packages/kuralle-messaging/test`, `kuralle-messaging-meta/test`, `kuralle-e2e-tests`).
-3. **Passes the four-role sprint-level review pipeline:** spec + code-quality gate by `pi`, manager critical r1 review, and (when source/test code shipped) adversarial r2 review by an independent `codex` worker.
+3. **Passes sprint-level manager review (Phase B):** sandwich review on full diff + briefs + proceed artifacts; blockers/majors resolved in fix pass. Optional `/delegate-review` when adversarial second opinion is explicitly needed.
 4. **Public surfaces match the source RFC.** Diffs to the RFC require an explicit RFC amendment (in `rfcs/whatsapp-engagement/`) in the same sprint.
 5. Stream events match the documented taxonomy (`HarnessStreamPart`). New variants are additive only and require a doc note; `typecheck:all` proves exhaustive switches still compile.
 6. Docs updated: at minimum the package's README; at most an RFC delta (the repo rule is "docs in the same change").
@@ -25,19 +25,25 @@ A sprint's stories are collectively Done when **all** of the following hold:
 8. **No `--no-verify`, no type-suppression, no silent-catch shortcuts.** If you can't meet a check, change the design, not the gate.
 
 ### 1.3 Branching and commits
-- Trunk-based. Cursor commits per-story atomic implementations directly. Manager commits the fix pass + closeout commits.
+- **Build branch:** `plan/whatsapp-engagement` (see `sprints/STATE.md` § Build branch). All Phase A story commits and Phase B fix/closeout commits land on this branch. **Do not commit to `main` during a sprint session** — merge to trunk happens via PR after the sprint ships, not story-by-story on `main`.
+- IC commits per-story atomic implementations on the build branch. Manager commits the fix pass + closeout commits on the same branch.
 - Every commit message includes the story id (or `[S{N}-fix]` / `[S{N}-close]` for manager commits) and a body summarizing the diff. **Monorepo rule: version + publish the whole `@kuralle-agents/*` graph together** — never publish `core` alone (consumers would install two copies).
 - Demo artifact links live in the commit body.
 
-### 1.4 The review loop (four roles, sprint-level cadence)
+### 1.4 The review loop (proceed evidence in Phase A; manager review in Phase B)
 
-The review pipeline runs **once per sprint**, after every story is committed. Four roles, four workers, four distinct value adds:
+**Phase A — IC + proceed evidence:**
 
-1. **Phase A — IC implementation.** `cursor` is fired as a fresh process per story. Writes the diff against the brief, runs build/test, **commits atomically** before exiting. Each story = one fresh cursor invocation = one clean context window.
-2. **Phase B begins — Spec + code-quality gate.** `pi` reads every story brief + the entire sprint diff. Verifies acceptance criteria, file-list adherence, wiring, test quality. **Same team as the IC; NOT adversarial.** Output: `sprints/sprint-N/gate-sprint.md` with verdict `green` / `yellow` / `red`.
-3. **Manager critical review (r1).** Main session reads the gate report + the diff and writes `sprints/sprint-N/review-sprint-r1.md` using the sandwich method — strengths, critique with severity, constructive close. Manager owns the final diff.
-4. **Adversarial second-opinion review (r2).** When the sprint includes source/test code, `codex` reads gate + r1 + diff and writes `sprints/sprint-N/review-sprint-r2.md`. Finds non-obvious bugs (race conditions, type holes, untested paths). Critiques r1 itself if wrong. **Skip rule:** if the sprint has zero source/test changes, r2 is skipped; document in the fix-pass commit body.
-5. **Manager fix pass.** Apply every `Apply now` item from gate + r1 + r2. Commit `[S{N}-fix] {description}`. Sprint closes when WARMDOWN + HANDOFF + STATE-update commit lands.
+1. **IC implementation.** Fresh `cursor` per story. Proof JSON, atomic commit.
+2. **Code map (when needed).** `/code-understand` before briefing unfamiliar code; link `.understanding/<slug>.md` in brief.
+3. **Proceed evidence (manager).** Diff + `verify-handoff-proof.sh` → `proceed-S{N}-{nn}.md`. **`PROCEED`** → next story. **`HOLD`** → re-delegate IC.
+4. Repeat until every story has **`PROCEED`**.
+
+**Phase B — manager review (after Phase A complete):**
+
+5. **Manager sandwich review.** Full sprint diff + briefs + proceed files → `review-sprint.md` (`REVIEW-r1.md` shape).
+6. **Fix pass.** `[S{N}-fix]`. Optional `/delegate-review` — not default.
+7. Sprint closes when WARMDOWN + HANDOFF + STATE commit lands.
 
 ### 1.5 Sprint warm-down (handoff to the next session)
 Last hour of every sprint. Two artifacts:

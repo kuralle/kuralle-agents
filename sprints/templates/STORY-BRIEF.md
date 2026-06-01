@@ -2,7 +2,7 @@
 
 > **You are the IC engineer (`cursor` worker, default for this project — fresh process for this story; clean context window) with no prior context.** This brief is self-contained. Read it end-to-end before writing any code. If anything in this brief is ambiguous or contradicts what you find on disk, **stop and ask** rather than guess.
 >
-> **Atomic-commit policy:** when you finish, stage every file you create / modify and commit atomically with `[S{N}-{nn}] {short title}`. Do NOT push. Do NOT make multiple commits per story. Manager handles fix-pass and closeout commits later.
+> **Atomic-commit policy:** when you finish, stage every file you create / modify and commit atomically with `[S{N}-{nn}] {short title}` on **`plan/whatsapp-engagement`** (see `sprints/STATE.md` § Build branch). Do NOT push. Do NOT checkout `main`. Do NOT make multiple commits per story. Manager handles proceed evidence, fix-pass, and closeout commits later.
 
 ---
 
