@@ -1,0 +1,111 @@
+---
+title: Flow Execution Model
+description: How the flow engine dispatches nodes, normalizes transitions, reshapes context, and pauses for the next turn.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import flowExecutionExample from '../../../examples/flows/flow-execution.ts?raw';
+
+The [Flows guide](/guides/flows) covers *authoring* a flow. This page covers what the engine does with it at runtime: how a node is dispatched, how its return value becomes the next move, how history is reshaped between nodes, and how a flow pauses and resumes.
+
+A flow is a [core primitive](/guides/flows) — a directed graph of typed nodes. Each node returns a **transition**, and that transition is the only thing that drives control flow. Nothing the model says, and no tool result, moves the graph — only transitions do.
+
+## The engine loop
+
+When a flow is active, the runtime runs one loop over the graph:
+
+1. **Resolve the entry node** — the active node recorded on the run, or the flow's `start` on first entry. This is the resume point: a flow that suspended mid-graph re-enters at the node it left, not at the beginning.
+2. **Dispatch the node** — run it according to its kind (below) and get back a transition.
+3. **Act on the transition:**
+   - `end` / `handoff` / `escalate` → leave the flow.
+   - `stay` → pause for the next user turn, or consume buffered input and continue.
+   - a node (`goto`) → **verify** the current node, check the **oscillation guard**, **reduce** the transition (reshape context, merge data, emit events), persist, and advance.
+4. Repeat until a terminal transition or a pause.
+
+The loop returns one of three results to the host: the flow **ended**, it wants a **handoff**, or it is **awaiting user** input.
+
+## How each node kind is dispatched
+
+| Kind | What runs | How the next move is chosen |
+|---|---|---|
+| `action` | Your `run(state, ctx)` — no model call | Its return value, normalized |
+| `decide` | A structured model call against the node's `schema` | `decide(data, state)` branches on the result |
+| `reply` | A model turn (the node speaks) | `next(turn, state)`, or `stay` if no `next` |
+| `collect` | The extraction loop (below) | `onComplete(data, state)` once the schema is satisfied |
+
+`action` is the only kind handed the durable `ctx` directly — `ctx.tool`, `ctx.approve`, `ctx.signal`, `ctx.now`, `ctx.uuid`, `ctx.emit`. The [durable-execution rules](/guides/durable-execution) (use `ctx.now()` not `Date.now()`, keep effect order stable) apply specifically to `action` logic.
+
+`decide` requires a channel driver that supports structured output; it produces *data*, and your `decide` function turns that data into a transition.
+
+A `reply` node also handles **interruption**: if the turn is interrupted (barge-in), the engine waits for the user, appends their input, and re-dispatches the same node.
+
+<Aside type="caution">
+  There is no automatic "answer an off-topic question, then resume the flow" behavior in the engine today. A `reply` node will answer whatever the model produces for its instructions, and the flow holds its position via `stay` — but off-flow Q&A is not a configured feature. Don't rely on it as one.
+</Aside>
+
+## Transitions
+
+Every node's return value is normalized into one of five internal moves:
+
+| You return | Normalized move |
+|---|---|
+| a node, or `() => node` | `goto` that node |
+| `{ goto, data }` | `goto`, merging `data` into flow state |
+| `{ end: reason }` | finish the flow |
+| `{ handoff, reason }` | hand off to another agent |
+| `{ escalate: reason }` | fire an `__escalate` signal, then hand off to `human` |
+| `'stay'` | stay on this node for another user turn |
+
+Anything else throws — a malformed transition fails loudly rather than silently doing nothing.
+
+## Reducing a transition: context and data
+
+When the engine moves from one node to the next, it emits `node-exit` → `flow-transition` → `node-enter`, merges any `data` into the flow state, and applies the **context strategy** for the node being entered.
+
+Context strategy controls the message history the next model call sees. Resolution order is **node `context` (reply nodes only) → flow `context` → `append`**:
+
+- `append` *(default)* — keep the full history.
+- `reset` — keep system messages and the last user message only.
+- `reset_with_summary` — summarize the prior turns into a single system message (falls back to `reset` if the summary is empty).
+
+This is how a long flow keeps the model focused per stage instead of dragging the entire transcript through every node.
+
+## Two safety gates
+
+**Verify** runs on a node *before* a `goto` out of it commits. A node's `outputSchema` (or a `verify.check` predicate) validates the merged `{ ...state, ...data }`; the `check` form can also inspect the durable step log. On failure the flow does **not** advance — it holds position and returns *awaiting user*, so the next turn can supply what's missing.
+
+**Oscillation guard** counts how many times each `from → to` edge is traversed. Exceeding the flow's `maxOscillations` (default `2`) throws — the backstop against two nodes ping-ponging forever.
+
+## The `collect` extraction loop
+
+`collect` is the most involved node. Each pass:
+
+1. If the schema's `required` fields are all populated, project that data and call `onComplete`.
+2. Otherwise, if `maxTurns` (default `10`) is exceeded, bail out through `onComplete` with whatever was gathered.
+3. Build a per-turn **extraction tool** named `submit_<nodeId>_data`. Its schema is the node schema made partial and nullable (so the model can submit just-learned fields), and its description embeds the still-missing fields plus the user's latest verbatim message to anchor extraction.
+4. Run the model turn, merge any submitted fields into flow state, and loop. If still incomplete and there's no buffered input, `stay` (wait for the user).
+
+Collected fields are stored under an internal `__collect_<nodeId>` key, and the turn counter under `__collectTurns_<nodeId>` — namespaced so they don't collide with your domain state. `onComplete` receives only the projected required fields.
+
+## Pause and resume
+
+A flow persists its position on every transition, so a crash mid-flow resumes at the last committed node. It pauses in two ways:
+
+- **`stay` with no buffered input** — the engine saves the run and returns *awaiting user*. The next `runtime.run({ input })` re-enters at the same node. (While a flow is active, user input is buffered for the node to consume rather than appended as a free-conversation message.)
+- **`ctx.approve()` / `ctx.signal()` inside an `action`** — a durable suspend; see [Durable Execution](/guides/durable-execution).
+
+## Events
+
+A flow narrates itself through the stream: `flow-enter`, `node-enter`, `node-exit`, `flow-transition`, `flow-end`, plus `handoff` and `error`. This is what an inspector UI or SSE consumer renders as flow progress.
+
+## Example
+
+Collect an address, book the shipment in an `action` (gated by `verify`), then confirm in a `reply` that resets context to a summary first.
+
+<Code code={flowExecutionExample} lang="typescript" title="flow-execution.ts" />
+
+## Related
+
+- [Flows](/guides/flows) — authoring nodes and transitions.
+- [Durable Execution](/guides/durable-execution) — the effect log behind `action` nodes and pauses.
+- [Tools](/guides/tools) — wiring the tools an `action` or `reply` node calls.

@@ -84,9 +84,11 @@ A node's `next` (or `onComplete`) function returns a `Transition`:
 | `{ end: 'label' }` | End the flow with a label |
 | A node object | Move to that node on the next turn |
 
-## Hybrid mode
+## Holding position across turns
 
-A flow agent can answer off-flow questions without losing its position in the flow. If the user asks something outside the current node's scope, the agent responds naturally and then returns to the flow. No extra configuration needed.
+A flow records its current node on the session and resumes there on the next turn. When a node returns `'stay'` (and there's no pending input), the run is persisted and the turn ends; the next `runtime.run({ input })` re-enters the *same* node rather than restarting the flow. A `collect` node uses this to gather one field at a time over several turns.
+
+This means the flow keeps its place across turns automatically — you don't wire anything for it. For the full picture of how nodes are dispatched, how context is reshaped between them, and how a flow pauses and resumes, see the [Flow Execution Model](/guides/flow-execution).
 
 ## Example: booking flow
 
