@@ -6,11 +6,11 @@
 
 ## Active sprint
 
-**Sprint number:** `3`
-**Sprint name:** Interactive fidelity
+**Sprint number:** `4`
+**Sprint name:** Handoff & consent
 **Status:** `not-started`
-**Goal:** A `collect`/`decide` renders WhatsApp buttons/list and inbound button/list/`nfm_reply` routes the flow by stable id (label-independent), with free-text NLU fallback.
-**WBS section:** [`sprints/WBS.md` § Sprint 3](./WBS.md)
+**Goal:** A human-owned conversation suppresses the bot on inbound and resumes on release; un-opted-in/STOP customers are never messaged.
+**WBS section:** [`sprints/WBS.md` § Sprint 4](./WBS.md)
 
 ## Build branch
 
@@ -20,29 +20,29 @@ Every sprint session — manager and IC — works **on this branch only**. Befor
 
 At session start: `git checkout plan/whatsapp-engagement` (or `git fetch && git checkout plan/whatsapp-engagement` if missing locally).
 
-## Load-bearing reading for sprint 3
+## Load-bearing reading for sprint 4
 
-The session running sprint 3 must read these in this order before delegating any story:
+The session running sprint 4 must read these in this order before delegating any story:
 
-1. `sprints/sprint-2/HANDOFF.md` — read-me-first; state of the world + Sprint 3 traps.
-2. `sprints/WBS.md` § Sprint 3 — the plan for this sprint.
+1. `sprints/sprint-3/HANDOFF.md` — read-me-first; state of the world + Sprint 4 traps.
+2. `sprints/WBS.md` § Sprint 4 — the plan for this sprint.
 3. `sprints/SESSION_KICKOFF_PROMPT.md` — the loop you are running.
-4. `rfcs/whatsapp-engagement/02-requirements-interfaces.md` — §4.3 (`InboundResolverChain`/`InteractiveResolver`/`TextResolver`/`ResolvedSelection`), §4.6 (additive `{type:'interactive'}` `HarnessStreamPart`), §4.5 (`withChoices`, `ChoiceOption`); REQ-7/8/9.
-5. `rfcs/whatsapp-engagement/03-pseudocode-blueprint.md` — §6.3 (inbound resolution / stable-id routing), §6.4 (interactive render on node entry).
-6. `rfcs/whatsapp-engagement/04-tasks-validation.md` — Phase C chunks (C1–C4) + §9.1 tests (`render_picks_buttons_then_list`, `renderer_rejects_over_limit`, `interactive_routes_by_id_not_label`, `template_button_payload_routes`, `nfm_reply_form_in_state`, `free_text_nlu_fallback`).
-7. `rfcs/whatsapp-engagement/05-security-rollback-open-qs.md` — R-11 (renderer rejects over-limit, no silent slice).
-8. Source: `packages/kuralle-core/src/types/stream.ts` (add the additive `interactive` variant — tracked risk; check `types/voice.ts` for a 2nd union), `packages/kuralle-core/src/flow/{flow.ts,runFlow.ts}` (choice metadata + emit on node entry), `packages/kuralle-engagement/src/policy.ts` (`ChoiceOption` — likely relocate to core), `packages/kuralle-messaging/src/adapter/createMessagingRouter.ts` (`input = message.text ?? '[type]'` → resolver chain; `RunOptions.selection` from S0-03), `packages/kuralle-messaging-meta/src/whatsapp/client.ts` (`toInboundMessage` button/`nfm_reply` from S0-02; renderer limits ~340).
+4. `rfcs/whatsapp-engagement/02-requirements-interfaces.md` — §4.7 (`OwnershipStore`/`ConsentStore`/`ownershipGate`/`consentGate`), §4.11 (inbound ownership gate + handoff-to-human seam); REQ-10/11/21.
+5. `rfcs/whatsapp-engagement/03-pseudocode-blueprint.md` — §6.1 (consent/ownership gates), §6.5 (inbound ownership gate before `runtime.run`).
+6. `rfcs/whatsapp-engagement/04-tasks-validation.md` — Phase D chunks (D1/D2) + §9.1 tests (`human_owned_inbound_does_not_run_flow`, `not_opted_in_blocks_send`, `stop_opts_out_and_halts_drip`).
+7. `rfcs/whatsapp-engagement/05-security-rollback-open-qs.md` — R-08 (inbound ownership gate; outbound suppression insufficient).
+8. Source: `packages/kuralle-messaging/src/adapter/createMessagingRouter.ts` (inbound gate before `runtime.run` in `onMessage`), `packages/kuralle-core/src/runtime/Runtime.ts` (S0-05 `terminalHandoffTargets` — `escalate→'human'` pauses + emits `handoff`), `packages/kuralle-messaging/src/types/outbound.ts` (`SendOutcome.suppressed`; gates are `OutboundMiddleware`), the `SessionStore` interface (ownership/consent backing).
 9. `~/.claude/projects/-Users-mithushancj-Documents-asyncdot-openscoped-aria-flow/memory/MEMORY.md` — standing rules (Bun usage, no-shortcuts, publish-together).
 
-### Sprint-0/1/2 seams Sprint 3 builds on
-- `InboundMessage.button`/`interactive.formResponse`/`customerId` (S0-02) — the `InteractiveResolver` reads these (`toInboundMessage` already populates them).
-- `RunOptions.selection` + `ResolvedSelection` in core (S0-03) — the resolver's `{input, selection}` propagates via `runtime.run({input, selection})`; `selection.formData` merges into flow state, `selection.id` is the routing input.
-- `ChoiceOption` in `engagement/src/policy.ts` (S0-04) — relocate to `@kuralle-agents/core` for the stream variant (core can't import engagement); re-export from engagement. `webPolicy.renderInteractive` already maps `ChoiceOption[]`→buttons.
-- `OutboundPipeline`/`windowGuard`/`strategistMiddleware` (S1/S2) — the interactive payload is a free-form `{kind:'interactive'}` that still traverses the window-safe pipeline.
+### Sprint-0..3 seams Sprint 4 builds on
+- S0-05 terminal handoff: `escalate→'human'` pauses the run + emits a `handoff` stream part (no missing-agent throw) — the `ownershipGate` consumes it to `ownership.claim`.
+- S0-02 `customerId` — consent is keyed by `customerId` (not thread); ownership/window by conversation (`threadId`).
+- S1 pipeline + `config.outbound` middleware slot + `SendOutcome.suppressed` — `consentGate`/`ownershipGate` install before the terminal `windowGuard` and short-circuit to `suppressed`/`deferred`.
+- `createMessagingRouter.onMessage` (S3 added the inbound resolver chain) — the inbound ownership gate runs in `onMessage` **before** `runtime.run`.
 
 ## Last completed sprint
 
-`2` — Smart-send strategist
+`3` — Interactive fidelity
 
 ## Last completed at
 
@@ -55,6 +55,7 @@ The session running sprint 3 must read these in this order before delegating any
 | 0 | complete | 2026-06-01 | [sprint-0/WARMDOWN.md](./sprint-0/WARMDOWN.md) |
 | 1 | complete | 2026-06-01 | [sprint-1/WARMDOWN.md](./sprint-1/WARMDOWN.md) |
 | 2 | complete | 2026-06-01 | [sprint-2/WARMDOWN.md](./sprint-2/WARMDOWN.md) |
+| 3 | complete | 2026-06-01 | [sprint-3/WARMDOWN.md](./sprint-3/WARMDOWN.md) |
 
 When a sprint completes, append a row here from `WARMDOWN.md`.
 
