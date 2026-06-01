@@ -89,3 +89,9 @@ export type {
 // Stream filter
 // ====================================
 export { filterStreamParts } from './stream-filter.js';
+
+// ====================================
+// Outbound
+// ====================================
+export type { OutboundSink, OutboundTemplate } from './types/outbound.js';
+export { isTemplateCapable } from './types/outbound.js';
