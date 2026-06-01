@@ -71,6 +71,7 @@ export { StreamMapper } from './adapter/stream-mapper.js';
 export { WindowTracker } from './adapter/window-tracker.js';
 export type { WindowStore, WindowState } from './adapter/window-store.js';
 export { InMemoryWindowStore } from './adapter/window-store.js';
+export type { OwnershipStore, ConversationOwner } from './adapter/ownership-store.js';
 
 // ====================================
 // Shared

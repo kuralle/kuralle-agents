@@ -1,0 +1,13 @@
+S4-01 — OwnershipStore + inbound ownership gate (verification capture)
+
+Named tests (ownership-gate.test.ts + ownership.test.ts):
+  ✓ human_owned_inbound_does_not_run_flow
+  ✓ escalate_claims_ownership
+  ✓ ownership_gate_suppresses
+  ✓ sessionOwnershipStore defaults / claim / release
+
+Commands:
+  bun test packages/kuralle-messaging/test/ownership-gate.test.ts  → 2 pass
+  bun test packages/kuralle-engagement                              → 38 pass
+  bun test packages/kuralle-messaging                               → 446 pass
+  bun run typecheck:all                                             → green

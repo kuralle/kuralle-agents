@@ -8,6 +8,7 @@
 import type { RuntimeLike, HarnessStreamPart } from '@kuralle-agents/core';
 import type { OutboundPipeline } from '../adapter/outbound-pipeline.js';
 import type { WindowStore } from '../adapter/window-store.js';
+import type { OwnershipStore } from '../adapter/ownership-store.js';
 import type { InboundResolverPlugin } from '../adapter/input-resolver-chain.js';
 import type { OutboundMiddleware } from './outbound.js';
 import type { InboundMessage, InteractiveMessage, MediaPayload, StatusUpdate } from './messages.js';
@@ -62,6 +63,8 @@ export interface MessagingRouterConfig {
   outbound?: OutboundMiddleware[];
   /** Pluggable window store; defaults to in-memory (fail-closed on miss). */
   windowStore?: WindowStore;
+  /** When set, human-owned threads skip `runtime.run` on inbound (REQ-21). */
+  ownership?: OwnershipStore;
 }
 
 /** Options for the stream mapper. */
