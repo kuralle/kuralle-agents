@@ -138,6 +138,39 @@ Window keys expire automatically (`win:<threadId>` → expiry epoch-ms). Broadca
 - **Fake platform clients** (record sends; no live Meta) — mirror `packages/kuralle-messaging/test/unhappy-paths.test.ts` `createMockPlatform`. Assert observable `SendOutcome`s / recorded sends, not model wording.
 - **Assert the framework mechanics** (model-independent): free-form extraction lands in `state`; a closed-window send converts to the expected template (mock selector) or defers; interactive choices render per channel and route by stable id; `consentGate`/STOP block; broadcast/drip idempotent.
 
+### Local simulator (`createSimulator` / `kuralle dev` inner loop)
+
+`createSimulator` from `@kuralle-agents/engagement` drives the **real** `engagement()` + `createMessagingRouter` stack with fake recording platform clients (no live Meta). Use it in example `run.ts` scripts and in unit tests for deterministic multi-turn transcripts.
+
+```ts
+import { createSimulator } from '@kuralle-agents/engagement';
+import { createRuntime } from '@kuralle-agents/core';
+import { InMemoryWindowStore } from '@kuralle-agents/messaging';
+
+const windowStore = new InMemoryWindowStore();
+const eng = engagement({ policies: [...], windowStore });
+const runtime = createRuntime({ agents: [bot], defaultAgentId: bot.id, defaultModel: model });
+
+const sim = createSimulator({
+  runtime,
+  bridge: eng.bridge,
+  channels: ['whatsapp', 'web', 'instagram'],
+  windowStore,
+  defaultCustomerId: () => 'guest-1',
+});
+
+const turnSends = await sim.send('whatsapp', 'thread-1', { text: 'Book a table' });
+await sim.send('whatsapp', 'thread-1', { interactive: { id: '19:00', title: '7pm' } });
+
+const window = await sim.window('thread-1');
+const allWa = sim.sends('whatsapp');
+```
+
+- **`send(channel, threadId, input)`** — delivers an inbound turn; returns rendered outbound sends for that turn (`text`, `interactive` as `[buttons] body :: (id:title)…` or `[list]…`, `template`, `media`, `tagged-text` as `text[tag=…]`).
+- **`window(threadId)`** — reads the shared `windowStore` (open after inbound on windowed channels).
+- **`sends(channel?)`** — full transcript; optional per-channel filter.
+- Example apps: pass `simulatorChannels: ['whatsapp', 'web']` to `buildBookingRouter` / `buildPharmacyRouter` / `buildClothingRouter` to wire the simulator and expose `bundle.simulator`. Runnable driver: `bun packages/kuralle-engagement/examples/sim.ts` (booking scripted transcript, live model if a key is set).
+
 ---
 
 ## 6. App layout (per example)

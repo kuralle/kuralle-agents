@@ -3,13 +3,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type {
-  InboundMessage,
-  OutboundSink,
-  OutboundTemplate,
-  PlatformClient,
-  SendResult,
-} from '@kuralle-agents/messaging';
 import { buildPharmacyRouter, buildRefillReminderText } from './bot.js';
 import { resolveLiveModel } from '../_shared/resolveLiveModel.js';
 
@@ -43,118 +36,6 @@ function loadEnv(): void {
   }
 }
 
-type RecordedSend = { kind: 'text' | 'template' | 'interactive'; detail: string };
-
-function createFakePlatform(
-  name: string,
-  transcript: RecordedSend[],
-): PlatformClient & OutboundSink & {
-  deliver: (message: InboundMessage) => Promise<void>;
-} {
-  const handlers: Array<(message: InboundMessage, raw: unknown) => Promise<void>> = [];
-  const makeResult = (threadId: string): SendResult => ({
-    messageId: `msg-${transcript.length}`,
-    threadId,
-    timestamp: new Date(),
-  });
-
-  return {
-    platform: name,
-    handleWebhook: async () => new Response('OK'),
-    onMessage: (handler) => {
-      handlers.push(handler);
-    },
-    onStatus: () => {},
-    onReaction: () => {},
-    sendText: async (to, text) => {
-      transcript.push({ kind: 'text', detail: text });
-      return makeResult(to);
-    },
-    sendTemplate: async (to: string, template: OutboundTemplate) => {
-      transcript.push({ kind: 'template', detail: template.name });
-      return makeResult(to);
-    },
-    sendInteractive: async (to, interactive) => {
-      const ids =
-        interactive.action.type === 'buttons'
-          ? interactive.action.buttons.map((b) => b.id).join(',')
-          : 'list';
-      transcript.push({ kind: 'interactive', detail: ids });
-      return makeResult(to);
-    },
-    sendMedia: async (to) => makeResult(to),
-    sendRaw: async (to) => makeResult(to),
-    markAsRead: async () => {},
-    sendTypingIndicator: async () => {},
-    uploadMedia: async () => ({ mediaId: 'mock' }),
-    downloadMedia: async () => ({ data: Buffer.from(''), mimeType: 'text/plain' }),
-    formatConverter: {
-      toPlainText: (t) => t,
-      toMarkdown: (t) => t,
-      toPlatformFormat: (t) => t,
-    },
-    webhookRouter: () => {
-      throw new Error('webhook not used in example run');
-    },
-    deliver: async (message) => {
-      for (const handler of handlers) {
-        await handler(message, message);
-      }
-    },
-  };
-}
-
-function inboundText(
-  platform: string,
-  threadId: string,
-  customerId: string,
-  text: string,
-  id: string,
-): InboundMessage {
-  return {
-    id,
-    platform,
-    threadId,
-    customerId,
-    from: { id: customerId, name: 'Demo Patient' },
-    timestamp: new Date(),
-    type: 'text',
-    text,
-  };
-}
-
-function inboundButton(
-  platform: string,
-  threadId: string,
-  customerId: string,
-  buttonId: string,
-  title: string,
-  id: string,
-): InboundMessage {
-  if (platform === 'whatsapp') {
-    return {
-      id,
-      platform,
-      threadId,
-      customerId,
-      from: { id: customerId },
-      timestamp: new Date(),
-      type: 'interactive',
-      interactive: { type: 'button_reply', id: buttonId, title },
-    };
-  }
-  return {
-    id,
-    platform,
-    threadId,
-    customerId,
-    from: { id: customerId },
-    timestamp: new Date(),
-    type: 'text',
-    text: buttonId,
-  };
-}
-
 async function main(): Promise<void> {
   loadEnv();
   const live = resolveLiveModel();
@@ -163,83 +44,68 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const waTranscript: RecordedSend[] = [];
-  const webTranscript: RecordedSend[] = [];
-  const whatsapp = createFakePlatform('whatsapp', waTranscript);
-  const web = createFakePlatform('web', webTranscript);
-
   const customerId = 'patient-demo-1';
   const threadWa = 'demo-pharm-wa';
   const threadWeb = 'demo-pharm-web';
 
-  const { sendRefillReminder, consent, broadcasts, windowStore } = buildPharmacyRouter({
+  const { sendRefillReminder, consent, broadcasts, windowStore, simulator } = buildPharmacyRouter({
     model: live.model,
-    platforms: { whatsapp, web },
+    simulatorChannels: ['whatsapp', 'web'],
+    simulatorDefaultCustomerId: customerId,
   });
+  if (!simulator) {
+    throw new Error('expected simulator from buildPharmacyRouter');
+  }
 
   console.log(`\n=== Acme Pharmacy (${live.label}) ===\n`);
 
   const steps: Array<{ label: string; run: () => Promise<void> }> = [
     {
       label: 'WA greet',
-      run: () =>
-        whatsapp.deliver(
-          inboundText('whatsapp', threadWa, customerId, 'Hi, I need a refill', 'wa-1'),
-        ),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, { text: 'Hi, I need a refill' });
+      },
     },
     {
       label: 'WA identity',
-      run: () =>
-        whatsapp.deliver(
-          inboundText(
-            'whatsapp',
-            threadWa,
-            customerId,
-            'Jane Demo, date of birth 1990-05-15',
-            'wa-2',
-          ),
-        ),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, {
+          text: 'Jane Demo, date of birth 1990-05-15',
+        });
+      },
     },
     {
       label: 'WA pick rx (id routes)',
-      run: () =>
-        whatsapp.deliver(
-          inboundButton('whatsapp', threadWa, customerId, 'rx-amox', 'Wrong label', 'wa-3'),
-        ),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, {
+          interactive: { id: 'rx-amox', title: 'Wrong label' },
+        });
+      },
     },
     {
       label: 'WA insurance',
-      run: () =>
-        whatsapp.deliver(
-          inboundText(
-            'whatsapp',
-            threadWa,
-            customerId,
-            'BlueCross member 12345',
-            'wa-4',
-          ),
-        ),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, {
+          text: 'BlueCross member 12345',
+        });
+      },
     },
     {
       label: 'WA delivery + address',
       run: async () => {
-        await whatsapp.deliver(
-          inboundButton('whatsapp', threadWa, customerId, 'delivery', 'Delivery', 'wa-5'),
-        );
-        await whatsapp.deliver(
-          inboundText('whatsapp', threadWa, customerId, '123 Main St, Springfield', 'wa-6'),
-        );
+        await simulator.send('whatsapp', threadWa, {
+          interactive: { id: 'delivery', title: 'Delivery' },
+        });
+        await simulator.send('whatsapp', threadWa, {
+          text: '123 Main St, Springfield',
+        });
       },
     },
     {
       label: 'Web greet + identity',
       run: async () => {
-        await web.deliver(
-          inboundText('web', threadWeb, customerId, 'Refill please', 'web-1'),
-        );
-        await web.deliver(
-          inboundText('web', threadWeb, customerId, 'Jane Demo 1990-05-15', 'web-2'),
-        );
+        await simulator.send('web', threadWeb, { text: 'Refill please' });
+        await simulator.send('web', threadWeb, { text: 'Jane Demo 1990-05-15' });
       },
     },
   ];
@@ -251,7 +117,7 @@ async function main(): Promise<void> {
   }
 
   console.log('\n--- WhatsApp transcript ---');
-  for (const line of waTranscript) {
+  for (const line of simulator.sends('whatsapp')) {
     console.log(`  [${line.kind}] ${line.detail.slice(0, 120)}`);
   }
 
@@ -268,7 +134,10 @@ async function main(): Promise<void> {
   );
   console.log(`  outcome: ${closedOutcome.kind}`);
   console.log(`  reminder text: ${buildRefillReminderText(reminderState)}`);
-  const closedTemplate = waTranscript.filter((t) => t.kind === 'template').pop();
+  const closedTemplate = simulator
+    .sends('whatsapp')
+    .filter((t) => t.kind === 'template')
+    .pop();
   console.log(`  sent template: ${closedTemplate?.detail ?? '(none)'}`);
 
   const bcast = await broadcasts.send({
@@ -289,9 +158,7 @@ async function main(): Promise<void> {
   console.log(`  outcome: ${openOutcome.kind}`);
 
   console.log('\n> STOP opts out of reminders');
-  await whatsapp.deliver(
-    inboundText('whatsapp', threadWa, customerId, 'STOP', 'wa-stop'),
-  );
+  await simulator.send('whatsapp', threadWa, { text: 'STOP' });
   const blocked = await sendRefillReminder(
     threadWa,
     customerId,
