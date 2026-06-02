@@ -71,6 +71,9 @@ export { StreamMapper } from './adapter/stream-mapper.js';
 export { WindowTracker } from './adapter/window-tracker.js';
 export type { WindowStore, WindowState } from './adapter/window-store.js';
 export { InMemoryWindowStore } from './adapter/window-store.js';
+export type { RedisLikeClient } from './adapter/redis-client.js';
+export { redisSetSucceeded } from './adapter/redis-client.js';
+export { createRedisWindowStore } from './adapter/redis-window-store.js';
 export type { OwnershipStore, ConversationOwner } from './adapter/ownership-store.js';
 export type { ConsentStore } from './adapter/consent-store.js';
 
