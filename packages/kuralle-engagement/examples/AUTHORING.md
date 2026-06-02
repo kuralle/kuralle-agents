@@ -96,6 +96,35 @@ const ownership = sessionOwnershipStore(sessionStore);
 - `ownership` (conversation-keyed): `escalate:'human'` claims ownership; while human-owned the inbound gate skips the flow; `ownership.release(threadId)` resumes.
 - `sessionStore`: pass `runtime.getSessionStore()` (the same store the runtime uses) so consent/ownership share state.
 
+### Durable stores (multi-process / serverless)
+
+`InMemoryWindowStore` and `createInMemoryBroadcastLedger` are single-process defaults. For horizontal scale, inject any Redis-compatible client through the minimal `RedisLikeClient` surface (`get` / `set` with optional `PX`+`NX` / `del`). ioredis, node-redis, and Upstash clients all work via a thin adapter — no dependency on `@kuralle-agents/redis-store`.
+
+```ts
+import type { RedisLikeClient } from '@kuralle-agents/messaging';
+import { createRedisWindowStore } from '@kuralle-agents/messaging';
+import { createRedisBroadcastLedger } from '@kuralle-agents/engagement';
+
+// Example: ioredis — map set() to PX/NX when opts is present
+const client: RedisLikeClient = {
+  get: (key) => redis.get(key),
+  del: (key) => redis.del(key),
+  set: (key, value, opts) =>
+    opts?.nx
+      ? redis.set(key, value, 'PX', opts.pxMs ?? 0, 'NX')
+      : opts?.pxMs != null
+        ? redis.set(key, value, 'PX', opts.pxMs)
+        : redis.set(key, value),
+};
+
+const windowStore = createRedisWindowStore(client, { keyPrefix: 'myapp:' });
+const ledger = createRedisBroadcastLedger(client, { keyPrefix: 'myapp:' });
+
+const eng = engagement({ policies: [...], windowStore, ledger, ... });
+```
+
+Window keys expire automatically (`win:<threadId>` → expiry epoch-ms). Broadcast ledger keys use `SET NX` for campaign idempotency (optional `ttlMs`; omit for durable campaign dedupe).
+
 ---
 
 ## 5. Testing — deterministic, offline (no live model, no live Meta)
