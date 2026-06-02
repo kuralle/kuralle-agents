@@ -26,3 +26,7 @@ bun run typecheck:all                     # sweeps each example tsconfig
 ```
 
 > The runnable `run.ts` demos are part of the validation, not just the tests: a live booking run surfaced (and we fixed) a flow oscillation that the offline tests missed — "an untested example is a broken example" (see the repo's `CLAUDE.md` gotchas).
+
+## Deploy on a real WhatsApp number
+
+These apps run offline (fake Meta clients). To deploy a bot against a real WhatsApp Cloud API number (bring your own token, no Embedded Signup), see the self-hostable server at [`packages/kuralle-messaging-meta/examples/whatsapp-server/`](../../kuralle-messaging-meta/examples/whatsapp-server/) — same `engagement({ policies })` wiring, served on Bun or Node with an optional Redis `WindowStore`.

@@ -84,9 +84,15 @@ const triage = withChoices(
 - **`sessionOwnershipStore`** + **`ownershipGate`** — while `owner(thread) === 'human'`, the bot does not send and inbound does not run flows.
 - **`broadcasts`** — pass **`broadcastPipeline`** into `engagement()` to enable `broadcasts.send()`; policies do not expose clients, so you construct the pipeline for the target platform explicitly.
 
-## Full example
+## Examples
 
-See the multi-platform server under `packages/kuralle-messaging-meta/examples/multi-platform/` (WhatsApp + Instagram webhooks + web SSE, one shared flow).
+- **Deep, end-to-end bots** — `packages/kuralle-engagement/examples/` (booking, pharmacy, clothing): free-form extraction, template-based closed-window sends, and mixed conversations across WhatsApp / web / Instagram. See [`AUTHORING.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/kuralle-engagement/examples/AUTHORING.md) for the API + patterns.
+- **Multi-platform server** — `packages/kuralle-messaging-meta/examples/multi-platform/` (WhatsApp + Instagram webhooks + web SSE, one shared flow; offline-friendly).
+- **Deployable WhatsApp server** — `packages/kuralle-messaging-meta/examples/whatsapp-server/`: a self-hostable bot wiring `engagement()` + `createMessagingRouter` to a real WhatsApp Cloud API number (bring your own token, no Embedded Signup). Boots on Bun or Node, optional Redis `WindowStore` via `REDIS_URL`. See [Deployment](/guides/deployment/).
+
+## Dev loop — simulate before you deploy
+
+`createSimulator({ runtime, bridge, channels, windowStore })` drives the **real** router + engagement through fake recording clients — multi-turn conversations across channels with no live model and no live Meta. Use it as the `kuralle dev` inner loop and in deterministic tests (`send()` / `window()` / `sends()`).
 
 ## Install
 
