@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import { action, decide, defineFlow, reply } from '../../src/types/flow.js';
+import { action, collect, decide, defineFlow, reply } from '../../src/types/flow.js';
 import { runFlow, FlowOscillationError } from '../../src/flow/runFlow.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
@@ -248,8 +248,6 @@ describe('runFlow interactive decide awaits fresh input', () => {
     };
 
     const { session, runStore, runState } = await setupDurableHarness('await-sess', 'await-run');
-    // No pending input: the turn's input is already spent by the time the flow
-    // cascades into the interactive decide.
     const ctx = await createRunContext({
       session,
       runState,
@@ -259,11 +257,60 @@ describe('runFlow interactive decide awaits fresh input', () => {
       model: {} as import('ai').LanguageModel,
       emit: () => {},
     });
+    // The turn's input was already consumed by a prior node, and nothing is
+    // pending — so the interactive decide must wait for the user's pick.
+    ctx.turnInputConsumed = true;
 
     const result = await runFlow(flow, runState, driver, ctx);
 
     // It should park for the user's pick — NOT auto-decide from context.
     expect(result).toEqual({ kind: 'awaitingUser' });
     expect(decided).toBe(0);
+  });
+});
+
+describe('runFlow collect does not fabricate from stale context', () => {
+  it('a collect reached after the turn input was consumed pauses instead of extracting', async () => {
+    let extractions = 0;
+    const ask = collect({
+      id: 'ask',
+      schema: z.object({ name: z.string() }),
+      required: ['name'],
+      instructions: () => 'What is your name?',
+      onComplete: () => ({ end: 'done' }),
+    });
+    const start = action({ id: 'start', run: async () => ask });
+    const flow = defineFlow({ name: 'ask-flow', description: 'x', start, nodes: [start, ask] });
+
+    const driver = {
+      async runAgentTurn() {
+        // If this ever runs with no fresh input, it's the fabrication bug.
+        extractions += 1;
+        return { text: '', toolResults: [{ name: 'submit_ask_data', args: { name: 'Ghost' }, result: { name: 'Ghost' } }] };
+      },
+      async awaitUser(ctx: import('../../src/types/run-context.js').RunContext) {
+        return { type: 'message' as const, input: consumePendingUserInput(ctx.session) };
+      },
+    };
+
+    const { session, runStore, runState } = await setupDurableHarness('ask-sess', 'ask-run');
+    const ctx = await createRunContext({
+      session,
+      runState,
+      runStore,
+      steps: [],
+      toolExecutor: new CoreToolExecutor({ tools: {} }),
+      model: {} as import('ai').LanguageModel,
+      emit: () => {},
+    });
+    // Prior node already consumed this turn's input; nothing pending.
+    ctx.turnInputConsumed = true;
+
+    const result = await runFlow(flow, runState, driver, ctx);
+
+    // It must wait for the user — never extract (fabricate) a name from context.
+    expect(result).toEqual({ kind: 'awaitingUser' });
+    expect(extractions).toBe(0);
+    expect((runState.state as { name?: string }).name).toBeUndefined();
   });
 });

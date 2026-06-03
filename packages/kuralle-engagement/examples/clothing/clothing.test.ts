@@ -123,8 +123,16 @@ function clothingDriver(overrides?: {
       }
       return { text: `[${resolved.node.id}]`, toolResults: [] };
     },
-    async awaitUser() {
-      return { type: 'message', input: '' };
+    async awaitUser(ctx: { session?: { workingMemory?: Record<string, unknown> } }) {
+      // Consume the buffered pending input (matches the real TextDriver). Now
+      // that input-nodes pause + re-await per turn, returning '' loops forever.
+      const key = '__v2_pendingUserInput';
+      const wm = ctx.session?.workingMemory;
+      const input = typeof wm?.[key] === 'string' ? (wm[key] as string) : '';
+      if (wm) {
+        delete wm[key];
+      }
+      return { type: 'message' as const, input };
     },
     async runStructured(node) {
       if (node.id === 'pickProduct') {
@@ -221,26 +229,16 @@ describe('clothing_example', () => {
   it('cart_grows_and_shrinks_across_turns', async () => {
     const sessionId = 'cart-sess';
 
+    // Interactive picks now wait for the user each turn (one choice per turn).
     const run = await runShopSession(sessionId, [
-      {
-        input: 'shop',
-        driver: clothingDriver({
-          productChoice: 'tee',
-          sizeChoice: 'm',
-          colorChoice: 'black',
-        }),
-      },
-      {
-        driver: clothingDriver({
-          cartChoice: 'more',
-          productChoice: 'jeans',
-          sizeChoice: 'l',
-          colorChoice: 'navy',
-        }),
-      },
-      {
-        driver: clothingDriver({ cartChoice: 'remove' }),
-      },
+      { input: 'shop', driver: clothingDriver({ productChoice: 'tee' }) },
+      { input: 'M', driver: clothingDriver({ sizeChoice: 'm' }) },
+      { input: 'black', driver: clothingDriver({ colorChoice: 'black' }) },
+      { input: 'add another', driver: clothingDriver({ cartChoice: 'more' }) },
+      { input: 'jeans', driver: clothingDriver({ productChoice: 'jeans' }) },
+      { input: 'L', driver: clothingDriver({ sizeChoice: 'l' }) },
+      { input: 'navy', driver: clothingDriver({ colorChoice: 'navy' }) },
+      { input: 'remove last', driver: clothingDriver({ cartChoice: 'remove' }) },
     ]);
     expect((run?.state.cart as unknown[] | undefined)?.length).toBe(1);
   });
@@ -267,23 +265,14 @@ describe('clothing_example', () => {
   it('checkout_extracts_address_into_state', async () => {
     const sessionId = 'addr-sess';
     const run = await runShopSession(sessionId, [
+      { input: 'shop', driver: clothingDriver({ productChoice: 'jeans' }) },
+      { input: 'L', driver: clothingDriver({ sizeChoice: 'l' }) },
+      { input: 'black', driver: clothingDriver({ colorChoice: 'black' }) },
+      { input: 'checkout', driver: clothingDriver({ cartChoice: 'checkout' }) },
       {
-        input: 'shop',
+        input: 'Jane Doe, 22 Main St, Austin 78701',
         driver: clothingDriver({
-          productChoice: 'jeans',
-          sizeChoice: 'l',
-          colorChoice: 'black',
-        }),
-      },
-      {
-        driver: clothingDriver({
-          cartChoice: 'checkout',
-          addressPayload: {
-            name: 'Jane Doe',
-            street: '22 Main St',
-            city: 'Austin',
-            zip: '78701',
-          },
+          addressPayload: { name: 'Jane Doe', street: '22 Main St', city: 'Austin', zip: '78701' },
         }),
       },
     ]);

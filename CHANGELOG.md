@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.3 — Collect grounding: one input per turn (no fabrication / no premature mutation)
+
+Patch across the package graph (`0.3.2 → 0.3.3`). Completes the turn-by-turn flow
+model so input-nodes never act on stale context.
+
+### Fixed (`@kuralle-agents/core`)
+
+- **`collect` nodes no longer fabricate fields from stale history.** A collect
+  reached after the turn's input was already consumed by a prior node now
+  **pauses** (presents its prompt, awaits the next turn) instead of running
+  extraction over the whole transcript — which let a chatty model invent required
+  fields (e.g. a sender name copied from the recipient). It now extracts only the
+  current turn's fresh input.
+- **The decide pause is now anchored to "input consumed this turn,"** not merely
+  "no pending input" — so an interactive `decide` that IS the turn's first
+  input-node still decides on that input (fixes a 0.3.2 edge where a withChoices
+  decide as a flow's entry would wrongly pause).
+- New ephemeral `RunContext.turnInputConsumed` tracks this per turn.
+
+Net effect: a flow advances **one input-node per user turn**. Combined with
+0.3.1/0.3.2, mutating steps (e.g. order creation) require an explicit
+confirmation turn and fields are never inferred from old context. Regression
+tests in `test/core-flow/runFlow.test.ts`; full core suite 378/378, engagement
+107/107, hono-server 52/52.
+
 ## 0.3.2 — Interactive nodes wait for the user (no auto-advance)
 
 Patch across the package graph (`0.3.1 → 0.3.2`). Stops a flow from racing
