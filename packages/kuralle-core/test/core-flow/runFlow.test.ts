@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { action, defineFlow, reply } from '../../src/types/flow.js';
+import { z } from 'zod';
+import { action, decide, defineFlow, reply } from '../../src/types/flow.js';
 import { runFlow, FlowOscillationError } from '../../src/flow/runFlow.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, reloadRunState } from '../core-durable/helpers.js';
+import { setPendingUserInput, consumePendingUserInput } from '../../src/runtime/channels/inputBuffer.js';
 import type { HarnessStreamPart } from '../../src/types/stream.js';
 
 describe('runFlow action exactly-once via effect log', () => {
@@ -160,5 +162,56 @@ describe('runFlow transition events', () => {
       true,
     );
     expect(parts.some((part) => part.type === 'node-exit' && part.nodeName === 'source')).toBe(true);
+  });
+});
+
+describe('runFlow decide resume consumes pending user input', () => {
+  it('feeds the resumed turn input to the decision on the first attempt (not stale context)', async () => {
+    let firstCallSawInput: boolean | undefined;
+    const pick = decide({
+      id: 'pick',
+      instructions: 'Pick checkout or more',
+      schema: z.object({ choice: z.string() }),
+      decide: (sel) => ((sel as { choice: string }).choice === 'checkout' ? { end: 'done' } : 'stay'),
+    });
+    const flow = defineFlow({ name: 'pick-flow', description: 'pick', start: pick, nodes: [pick] });
+
+    const driver = {
+      async runAgentTurn() {
+        return { text: '', toolResults: [] };
+      },
+      async awaitUser(ctx: import('../../src/types/run-context.js').RunContext) {
+        return { type: 'message' as const, input: consumePendingUserInput(ctx.session) };
+      },
+      async runStructured(_node: unknown, ctx: import('../../src/types/run-context.js').RunContext) {
+        const sawInput = ctx.runState.messages.some((m) => String(m.content).includes('checkout'));
+        if (firstCallSawInput === undefined) firstCallSawInput = sawInput;
+        return { choice: sawInput ? 'checkout' : 'none' };
+      },
+    };
+
+    const { session, runStore, runState } = await setupDurableHarness('decide-resume-sess', 'decide-resume-run');
+    // Simulate a paused flow parked at the decide node, with the user's next-turn
+    // reply buffered (exactly what openRun does on an HTTP resume).
+    runState.activeFlow = 'pick-flow';
+    runState.activeNode = 'pick';
+    setPendingUserInput(session, 'checkout');
+
+    const ctx = await createRunContext({
+      session,
+      runState,
+      runStore,
+      steps: [],
+      toolExecutor: new CoreToolExecutor({ tools: {} }),
+      model: {} as import('ai').LanguageModel,
+      emit: () => {},
+    });
+
+    const result = await runFlow(flow, runState, driver, ctx);
+
+    // Before the fix the decide ran runStructured over stale messages (no input),
+    // so the very first decision could never see the user's reply.
+    expect(firstCallSawInput).toBe(true);
+    expect(result).toEqual({ kind: 'ended', reason: 'done' });
   });
 });

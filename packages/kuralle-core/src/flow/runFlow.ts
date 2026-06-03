@@ -92,6 +92,15 @@ async function dispatchNode(
     if (!driver.runStructured) {
       throw new Error('ChannelDriver.runStructured is required for decide nodes');
     }
+    // On resume, the new turn's input is buffered as pending and is not yet in
+    // the message history the decision reads. Consume it first (mirrors the
+    // collect path) so the decision sees the user's actual reply instead of
+    // stale context — without this, a multi-turn flow stalls at the first
+    // interactive decide because the reply never reaches `decide()`.
+    if (hasPendingUserInput(ctx.session)) {
+      const signal = await driver.awaitUser(ctx);
+      appendUserMessage(run, signal.input);
+    }
     const structured = await driver.runStructured(node, ctx);
     return normalizeTransition(await node.decide(structured, run.state));
   }

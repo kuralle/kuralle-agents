@@ -156,8 +156,17 @@ export class TextDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const system = resolveInstructions(node.instructions, ctx.runState.state);
+    const base = resolveInstructions(node.instructions, ctx.runState.state);
     const schema = node.schema as z.ZodType;
+    // When the node offers choices (e.g. via withChoices), constrain the model
+    // to return exactly one option id. Otherwise an unconstrained string schema
+    // lets the model reply with free-form prose that `decide()` can't match,
+    // stalling the flow at every interactive node.
+    const system = node.choices?.length
+      ? `${base}\n\nYou MUST pick exactly ONE option by its id. Valid ids: ${node.choices
+          .map((c) => c.id)
+          .join(', ')}. Respond with only the chosen id, nothing else.`
+      : base;
     const { object } = await generateObject({
       model: ctx.model,
       schema,
