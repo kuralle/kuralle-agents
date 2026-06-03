@@ -92,6 +92,15 @@ async function dispatchNode(
     if (!driver.runStructured) {
       throw new Error('ChannelDriver.runStructured is required for decide nodes');
     }
+    // An interactive choice node (withChoices) reached without the user's reply
+    // this turn: its choices were already presented on node-enter, so wait for
+    // the user to actually pick rather than auto-deciding on stale conversation
+    // context. Returning `stay` lets the loop park as `awaitingUser` (it already
+    // persists state + ends the turn when no input is pending). (A plain decide
+    // with no choices is a pure branch and still runs.)
+    if (node.choices?.length && !hasPendingUserInput(ctx.session)) {
+      return { kind: 'stay' };
+    }
     // On resume, the new turn's input is buffered as pending and is not yet in
     // the message history the decision reads. Consume it first (mirrors the
     // collect path) so the decision sees the user's actual reply instead of

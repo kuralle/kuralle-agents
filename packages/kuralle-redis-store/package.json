@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-redis-store"
   },
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Redis-backed SessionStore for Kuralle (supports Upstash and common Redis clients)",
   "type": "module",
   "main": "dist/index.js",

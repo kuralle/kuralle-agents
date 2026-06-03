@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.2 — Interactive nodes wait for the user (no auto-advance)
+
+Patch across the package graph (`0.3.1 → 0.3.2`). Stops a flow from racing
+through interactive steps on ambient context.
+
+### Fixed (`@kuralle-agents/core`)
+
+- **An interactive `decide` (a `withChoices` node) now waits for the user's
+  reply instead of auto-deciding from stale context.** Previously, when the flow
+  cascaded into a choice node *without a fresh user turn*, `runFlow` immediately
+  ran `runStructured` and picked from existing context — so one rich message
+  could auto-pick a product, auto-confirm an order, etc. Now such a node returns
+  `stay` (parking as `awaitingUser`) after its choices are presented; it only
+  decides once the user actually replies. A plain `decide` with no choices is a
+  pure branch and still runs. Regression test in `test/core-flow/runFlow.test.ts`.
+
+This complements 0.3.1 (which fixed the *resume* side). Together: interactive
+flows are now strictly turn-by-turn — present choices, wait, then act — so
+mutating steps (e.g. order creation) require an explicit confirmation turn.
+
 ## 0.3.1 — Multi-turn flow resume fix
 
 Patch across the package graph (`0.3.0 → 0.3.1`). Fixes a bug that stalled any

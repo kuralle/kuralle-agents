@@ -215,3 +215,55 @@ describe('runFlow decide resume consumes pending user input', () => {
     expect(result).toEqual({ kind: 'ended', reason: 'done' });
   });
 });
+
+describe('runFlow interactive decide awaits fresh input', () => {
+  it('a withChoices decide reached with no pending input pauses instead of auto-deciding on stale context', async () => {
+    let decided = 0;
+    const pick = decide({
+      id: 'pick',
+      instructions: 'Pick A or B',
+      schema: z.object({ choice: z.string() }),
+      decide: () => {
+        decided += 1;
+        return { end: 'done' };
+      },
+    });
+    pick.choices = [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B' },
+    ];
+    const start = action({ id: 'start', run: async () => pick });
+    const flow = defineFlow({ name: 'await-flow', description: 'x', start, nodes: [start, pick] });
+
+    const driver = {
+      async runAgentTurn() {
+        return { text: '', toolResults: [] };
+      },
+      async awaitUser(ctx: import('../../src/types/run-context.js').RunContext) {
+        return { type: 'message' as const, input: consumePendingUserInput(ctx.session) };
+      },
+      async runStructured() {
+        return { choice: 'a' };
+      },
+    };
+
+    const { session, runStore, runState } = await setupDurableHarness('await-sess', 'await-run');
+    // No pending input: the turn's input is already spent by the time the flow
+    // cascades into the interactive decide.
+    const ctx = await createRunContext({
+      session,
+      runState,
+      runStore,
+      steps: [],
+      toolExecutor: new CoreToolExecutor({ tools: {} }),
+      model: {} as import('ai').LanguageModel,
+      emit: () => {},
+    });
+
+    const result = await runFlow(flow, runState, driver, ctx);
+
+    // It should park for the user's pick — NOT auto-decide from context.
+    expect(result).toEqual({ kind: 'awaitingUser' });
+    expect(decided).toBe(0);
+  });
+});
