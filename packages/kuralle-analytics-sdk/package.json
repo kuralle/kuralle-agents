@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/analytics-sdk",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "type": "module",
   "description": "Type-safe SDK for sending analytics events to Kuralle Analytics Platform",
   "exports": {

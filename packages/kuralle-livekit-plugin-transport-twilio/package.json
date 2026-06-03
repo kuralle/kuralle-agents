@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/livekit-plugin-transport-twilio",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Twilio Media Streams transport adapter for Kuralle agents. Works with Node.js, Bun, Deno, and any WebSocket-compatible runtime.",
   "type": "module",
   "main": "dist/index.js",
