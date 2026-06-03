@@ -19,15 +19,30 @@
       "@kuralle-agents/cf-agent",
       "@kuralle-agents/redis-store",
       "@kuralle-agents/postgres-store",
-      "@kuralle-agents/messaging",
-      "@kuralle-agents/messaging-meta",
       "@kuralle-agents/analytics-sdk",
       "@kuralle-agents/widget"
+    ],
+    [
+      "@kuralle-agents/messaging",
+      "@kuralle-agents/messaging-meta",
+      "@kuralle-agents/engagement"
     ]
   ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": []
+  "ignore": [
+    "acme-support-agent",
+    "agent-starter-node",
+    "cag-demo",
+    "langfuse-demo",
+    "rag-demo",
+    "transport-examples",
+    "smartpbx-bridge",
+    "cf-voice-realtime-gemini",
+    "cf-voice-realtime-gemini-flow",
+    "cf-voice-realtime-grok",
+    "cf-voice-realtime-openai"
+  ]
 }
