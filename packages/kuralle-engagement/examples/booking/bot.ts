@@ -28,6 +28,8 @@ import {
   whatsappPolicy,
   withChoices,
   createSmartSendStrategist,
+  createSimulator,
+  type Simulator,
   type TemplateCatalog,
   type TemplateSelector,
 } from '@kuralle-agents/engagement';
@@ -251,6 +253,8 @@ export function buildBookingBot(model: LanguageModel) {
 export interface BuildBookingRouterOptions {
   model: LanguageModel;
   platforms?: Record<string, PlatformClient>;
+  simulatorChannels?: string[];
+  simulatorDefaultCustomerId?: string;
   windowStore?: InMemoryWindowStore;
   selector?: TemplateSelector;
   catalog?: TemplateCatalog;
@@ -263,6 +267,7 @@ export interface BookingRouterBundle {
   runtime: ReturnType<typeof createRuntime>;
   eng: ReturnType<typeof engagement>;
   windowStore: InMemoryWindowStore;
+  simulator?: Simulator;
   sendHoldReminder: (
     threadId: string,
     platform: string,
@@ -302,12 +307,29 @@ export function buildBookingRouter(opts: BuildBookingRouterOptions): BookingRout
     windowStore,
   });
 
-  const defaultPlatforms = opts.platforms ?? {};
-  const router = createMessagingRouter({
-    runtime,
-    platforms: defaultPlatforms,
-    ...eng.bridge,
-  });
+  let simulator: Simulator | undefined;
+  let defaultPlatforms = opts.platforms ?? {};
+  let router: ReturnType<typeof createMessagingRouter>;
+
+  if (opts.simulatorChannels && opts.simulatorChannels.length > 0) {
+    simulator = createSimulator({
+      runtime,
+      bridge: eng.bridge,
+      channels: opts.simulatorChannels,
+      windowStore,
+      defaultCustomerId: opts.simulatorDefaultCustomerId
+        ? () => opts.simulatorDefaultCustomerId!
+        : undefined,
+    });
+    defaultPlatforms = simulator.platforms;
+    router = simulator.router;
+  } else {
+    router = createMessagingRouter({
+      runtime,
+      platforms: defaultPlatforms,
+      ...eng.bridge,
+    });
+  }
 
   const outboundPipeline = (platform: PlatformClient) =>
     new OutboundPipeline([...(eng.bridge.outbound ?? []), windowGuard], platform);
@@ -358,6 +380,7 @@ export function buildBookingRouter(opts: BuildBookingRouterOptions): BookingRout
     runtime,
     eng,
     windowStore,
+    simulator,
     sendHoldReminder,
     outboundPipeline,
   };

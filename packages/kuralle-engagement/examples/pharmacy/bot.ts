@@ -32,6 +32,8 @@ import {
   sessionOwnershipStore,
   createInMemoryBroadcastLedger,
   createBroadcasts,
+  createSimulator,
+  type Simulator,
   type TemplateCatalog,
   type TemplateSelector,
   type BroadcastApi,
@@ -358,6 +360,8 @@ export function buildPharmacyBot(model: LanguageModel) {
 export interface BuildPharmacyRouterOptions {
   model: LanguageModel;
   platforms?: Record<string, PlatformClient>;
+  simulatorChannels?: string[];
+  simulatorDefaultCustomerId?: string;
   windowStore?: InMemoryWindowStore;
   selector?: TemplateSelector;
   catalog?: TemplateCatalog;
@@ -370,6 +374,7 @@ export interface PharmacyRouterBundle {
   runtime: ReturnType<typeof createRuntime>;
   eng: ReturnType<typeof engagement>;
   windowStore: InMemoryWindowStore;
+  simulator?: Simulator;
   consent: ConsentStore;
   ownership: OwnershipStore;
   broadcasts: BroadcastApi;
@@ -404,7 +409,6 @@ export function buildPharmacyRouter(opts: BuildPharmacyRouterOptions): PharmacyR
   const consent = sessionConsentStore(sessionStore, { defaultOptedIn: false });
   const ownership = sessionOwnershipStore(sessionStore);
 
-  const defaultPlatforms = opts.platforms ?? {};
   const ledger = createInMemoryBroadcastLedger();
 
   const eng = engagement({
@@ -423,6 +427,30 @@ export function buildPharmacyRouter(opts: BuildPharmacyRouterOptions): PharmacyR
     ledger,
   });
 
+  let simulator: Simulator | undefined;
+  let defaultPlatforms = opts.platforms ?? {};
+  let router: ReturnType<typeof createMessagingRouter>;
+
+  if (opts.simulatorChannels && opts.simulatorChannels.length > 0) {
+    simulator = createSimulator({
+      runtime,
+      bridge: eng.bridge,
+      channels: opts.simulatorChannels,
+      windowStore,
+      defaultCustomerId: opts.simulatorDefaultCustomerId
+        ? () => opts.simulatorDefaultCustomerId!
+        : undefined,
+    });
+    defaultPlatforms = simulator.platforms;
+    router = simulator.router;
+  } else {
+    router = createMessagingRouter({
+      runtime,
+      platforms: defaultPlatforms,
+      ...eng.bridge,
+    });
+  }
+
   const waPlatform = defaultPlatforms.whatsapp;
   const broadcasts = waPlatform
     ? createBroadcasts({
@@ -432,12 +460,6 @@ export function buildPharmacyRouter(opts: BuildPharmacyRouterOptions): PharmacyR
         platform: 'whatsapp',
       })
     : eng.broadcasts;
-
-  const router = createMessagingRouter({
-    runtime,
-    platforms: defaultPlatforms,
-    ...eng.bridge,
-  });
 
   const outboundPipeline = (platform: PlatformClient) =>
     new OutboundPipeline([...(eng.bridge.outbound ?? []), windowGuard], platform);
@@ -481,6 +503,7 @@ export function buildPharmacyRouter(opts: BuildPharmacyRouterOptions): PharmacyR
     runtime,
     eng,
     windowStore,
+    simulator,
     consent,
     ownership,
     broadcasts,

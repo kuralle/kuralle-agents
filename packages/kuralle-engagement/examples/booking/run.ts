@@ -3,13 +3,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type {
-  InboundMessage,
-  OutboundSink,
-  OutboundTemplate,
-  PlatformClient,
-  SendResult,
-} from '@kuralle-agents/messaging';
 import { buildBookingRouter, buildHoldReminderText } from './bot.js';
 import { resolveLiveModel } from '../_shared/resolveLiveModel.js';
 
@@ -43,116 +36,6 @@ function loadEnv(): void {
   }
 }
 
-type RecordedSend = { kind: 'text' | 'template' | 'interactive'; detail: string };
-
-function createFakePlatform(
-  name: string,
-  transcript: RecordedSend[],
-): PlatformClient & OutboundSink & {
-  deliver: (message: InboundMessage) => Promise<void>;
-} {
-  const handlers: Array<(message: InboundMessage, raw: unknown) => Promise<void>> = [];
-  const makeResult = (threadId: string): SendResult => ({
-    messageId: `msg-${transcript.length}`,
-    threadId,
-    timestamp: new Date(),
-  });
-
-  return {
-    platform: name,
-    handleWebhook: async () => new Response('OK'),
-    onMessage: (handler) => {
-      handlers.push(handler);
-    },
-    onStatus: () => {},
-    onReaction: () => {},
-    sendText: async (to, text) => {
-      transcript.push({ kind: 'text', detail: text });
-      return makeResult(to);
-    },
-    sendTemplate: async (to: string, template: OutboundTemplate) => {
-      transcript.push({ kind: 'template', detail: template.name });
-      return makeResult(to);
-    },
-    sendInteractive: async (to, interactive) => {
-      const ids =
-        interactive.action.type === 'buttons'
-          ? interactive.action.buttons.map((b) => b.id).join(',')
-          : 'list';
-      transcript.push({ kind: 'interactive', detail: ids });
-      return makeResult(to);
-    },
-    sendMedia: async (to) => makeResult(to),
-    sendRaw: async (to) => makeResult(to),
-    markAsRead: async () => {},
-    sendTypingIndicator: async () => {},
-    uploadMedia: async () => ({ mediaId: 'mock' }),
-    downloadMedia: async () => ({ data: Buffer.from(''), mimeType: 'text/plain' }),
-    formatConverter: {
-      toPlainText: (t) => t,
-      toMarkdown: (t) => t,
-      toPlatformFormat: (t) => t,
-    },
-    webhookRouter: () => {
-      throw new Error('webhook not used in example run');
-    },
-    deliver: async (message) => {
-      for (const handler of handlers) {
-        await handler(message, message);
-      }
-    },
-  };
-}
-
-function inboundText(
-  platform: string,
-  threadId: string,
-  text: string,
-  id: string,
-): InboundMessage {
-  return {
-    id,
-    platform,
-    threadId,
-    customerId: 'guest-1',
-    from: { id: 'guest-1', name: 'Guest' },
-    timestamp: new Date(),
-    type: 'text',
-    text,
-  };
-}
-
-function inboundButton(
-  platform: string,
-  threadId: string,
-  slotId: string,
-  title: string,
-  id: string,
-): InboundMessage {
-  if (platform === 'whatsapp') {
-    return {
-      id,
-      platform,
-      threadId,
-      customerId: 'guest-1',
-      from: { id: 'guest-1' },
-      timestamp: new Date(),
-      type: 'interactive',
-      interactive: { type: 'button_reply', id: slotId, title },
-    };
-  }
-  return {
-    id,
-    platform,
-    threadId,
-    customerId: 'guest-1',
-    from: { id: 'guest-1' },
-    timestamp: new Date(),
-    type: 'text',
-    text: slotId,
-  };
-}
-
 async function main(): Promise<void> {
   loadEnv();
   const live = resolveLiveModel();
@@ -161,15 +44,14 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const waTranscript: RecordedSend[] = [];
-  const webTranscript: RecordedSend[] = [];
-  const whatsapp = createFakePlatform('whatsapp', waTranscript);
-  const web = createFakePlatform('web', webTranscript);
-
-  const { sendHoldReminder, windowStore } = buildBookingRouter({
+  const { sendHoldReminder, windowStore, simulator } = buildBookingRouter({
     model: live.model,
-    platforms: { whatsapp, web },
+    simulatorChannels: ['whatsapp', 'web'],
+    simulatorDefaultCustomerId: 'guest-1',
   });
+  if (!simulator) {
+    throw new Error('expected simulator from buildBookingRouter');
+  }
 
   const threadWa = 'demo-wa-thread';
   const threadWeb = 'demo-web-thread';
@@ -179,44 +61,47 @@ async function main(): Promise<void> {
   const steps: Array<{ label: string; run: () => Promise<void> }> = [
     {
       label: 'WA greet',
-      run: () =>
-        whatsapp.deliver(inboundText('whatsapp', threadWa, 'Hi, I need a table', 'wa-1')),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, { text: 'Hi, I need a table' });
+      },
     },
     {
       label: 'WA booking details',
-      run: () =>
-        whatsapp.deliver(
-          inboundText(
-            'whatsapp',
-            threadWa,
-            'Table for 4 on 2026-06-12 around 7pm, name Alex',
-            'wa-2',
-          ),
-        ),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, {
+          text: 'Table for 4 on 2026-06-12 around 7pm, name Alex',
+        });
+      },
     },
     {
       label: 'WA pick slot (id routes, not label)',
-      run: () =>
-        whatsapp.deliver(
-          inboundButton('whatsapp', threadWa, '19:00', 'Wrong label shown', 'wa-3'),
-        ),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, {
+          interactive: { id: '19:00', title: 'Wrong label shown' },
+        });
+      },
     },
     {
       label: 'WA confirm yes',
-      run: () =>
-        whatsapp.deliver(inboundButton('whatsapp', threadWa, 'yes', 'Yes please', 'wa-4')),
+      run: async () => {
+        await simulator.send('whatsapp', threadWa, {
+          interactive: { id: 'yes', title: 'Yes please' },
+        });
+      },
     },
     {
       label: 'Web greet',
-      run: () =>
-        web.deliver(inboundText('web', threadWeb, 'Book a table for 2', 'web-1')),
+      run: async () => {
+        await simulator.send('web', threadWeb, { text: 'Book a table for 2' });
+      },
     },
     {
       label: 'Web details',
-      run: () =>
-        web.deliver(
-          inboundText('web', threadWeb, '2026-06-20 at 18:30 for Sam', 'web-2'),
-        ),
+      run: async () => {
+        await simulator.send('web', threadWeb, {
+          text: '2026-06-20 at 18:30 for Sam',
+        });
+      },
     },
   ];
 
@@ -227,12 +112,12 @@ async function main(): Promise<void> {
   }
 
   console.log('\n--- WhatsApp transcript ---');
-  for (const line of waTranscript) {
+  for (const line of simulator.sends('whatsapp')) {
     console.log(`  [${line.kind}] ${line.detail}`);
   }
 
   console.log('\n--- Web transcript ---');
-  for (const line of webTranscript) {
+  for (const line of simulator.sends('web')) {
     console.log(`  [${line.kind}] ${line.detail}`);
   }
 
@@ -240,7 +125,10 @@ async function main(): Promise<void> {
   console.log('\n> Closed-window hold reminder (template conversion)');
   const holdOutcome = await sendHoldReminder(threadWa, 'whatsapp', holdState);
   console.log(`  outcome: ${holdOutcome.kind}`);
-  const closedTemplate = waTranscript.filter((t) => t.kind === 'template').pop();
+  const closedTemplate = simulator
+    .sends('whatsapp')
+    .filter((t) => t.kind === 'template')
+    .pop();
   console.log(`  reminder text: ${buildHoldReminderText(holdState)}`);
   console.log(`  sent template: ${closedTemplate?.detail ?? '(none)'}`);
 
@@ -248,7 +136,10 @@ async function main(): Promise<void> {
   console.log('\n> Open-window hold reminder (free-form)');
   const openOutcome = await sendHoldReminder(threadWa, 'whatsapp', holdState);
   console.log(`  outcome: ${openOutcome.kind}`);
-  const lastText = waTranscript.filter((t) => t.kind === 'text').pop();
+  const lastText = simulator
+    .sends('whatsapp')
+    .filter((t) => t.kind === 'text')
+    .pop();
   console.log(`  last text: ${lastText?.detail?.slice(0, 80) ?? '(none)'}`);
 }
 

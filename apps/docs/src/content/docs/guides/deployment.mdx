@@ -29,6 +29,18 @@ app.route('/', createKuralleChatRouter({ runtime, upgradeWebSocket }));
 export default app;
 ```
 
+## WhatsApp & messaging webhooks
+
+To deploy a bot on WhatsApp / Instagram (rather than the web chat endpoints), mount `createMessagingRouter` from `engagement()` instead — it exposes the Meta webhook at `/{platform}/webhook`. A self-hostable reference that boots on Bun or Node with a real WhatsApp Cloud API number (bring your own token, no Embedded Signup) and an optional Redis `WindowStore`:
+
+```bash
+# bring-your-own number/token — set WHATSAPP_* env, then:
+bun run packages/kuralle-messaging-meta/examples/whatsapp-server/server.ts
+# webhook: https://<host>/messaging/whatsapp/webhook
+```
+
+See `packages/kuralle-messaging-meta/examples/whatsapp-server/README.md` and the [Engagement guide](/guides/engagement/).
+
 ## Endpoints
 
 `createKuralleChatRouter` mounts these routes:
