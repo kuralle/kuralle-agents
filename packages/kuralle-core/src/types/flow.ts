@@ -45,7 +45,14 @@ export interface CollectNode {
   id: string;
   schema: StandardSchemaV1;
   required?: string[];
+  /** Extraction-only guidance for the (non-speaking) field extraction turn.
+   *  This text is NEVER shown to the user — see `ask` for user-facing copy. */
   instructions?: (missing: string[], state: FlowState) => Instructions;
+  /** Deterministic, framework-emitted question shown when fields are still
+   *  missing. Collect extraction never speaks model-authored text, so this is
+   *  the only user-facing copy a collect node produces. Must not claim any
+   *  downstream outcome (order placed, delivery scheduled, payment, website). */
+  ask?: (missing: string[], state: FlowState) => string;
   choices?: ChoiceOption[];
   maxTurns?: number;
   onComplete: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
