@@ -49,11 +49,18 @@ export function schemaSatisfied(node: CollectNode, state: FlowState): boolean {
 }
 
 export function projectCollectData(node: CollectNode, state: FlowState): unknown {
+  // Hand onComplete EVERY field the node collected (all schema keys present in
+  // the collected data) — not just the required subset. Projecting only the
+  // required fields silently dropped optional extracted values (e.g. a welcome
+  // node that also captures occasion/recipient), so onComplete could never read
+  // them. The schema is the contract for what a collect node yields.
   const data = getCollectData(state, node.id);
-  const required = node.required ?? inferRequiredFields(node.schema);
+  const fields = inferRequiredFields(node.schema);
   const projected: Record<string, unknown> = {};
-  for (const field of required) {
-    projected[field] = data[field];
+  for (const field of fields) {
+    if (field in data) {
+      projected[field] = data[field];
+    }
   }
   return projected;
 }

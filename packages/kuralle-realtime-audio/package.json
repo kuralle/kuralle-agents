@@ -6,8 +6,8 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-realtime-audio"
   },
-  "version": "0.3.3",
-  "description": "Realtime audio pipeline for Kuralle \u2014 multi-provider speech-to-speech and orchestration.",
+  "version": "0.3.4",
+  "description": "Realtime audio pipeline for Kuralle — multi-provider speech-to-speech and orchestration.",
   "keywords": [
     "realtime-audio",
     "openai",
