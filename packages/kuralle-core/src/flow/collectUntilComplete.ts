@@ -42,6 +42,22 @@ export async function collectUntilComplete(
       return normalizeTransition(await node.onComplete(data, run.state));
     }
 
+    // Acquire THIS turn's fresh input before extracting. If input is pending,
+    // consume it so extraction reads the user's actual reply. If nothing is
+    // pending AND the turn's input was already consumed by a prior node, pause:
+    // the prompt was presented on node-enter, so await the next turn rather than
+    // running extraction over stale history (which makes the model fabricate
+    // required fields). On the run's first input-node the turn's input is in
+    // `messages` with nothing pending and `turnInputConsumed` false, so we fall
+    // through and extract it.
+    if (hasPendingUserInput(ctx.session)) {
+      const signal = await driver.awaitUser(ctx);
+      appendUserMessage(run, signal.input);
+    } else if (ctx.turnInputConsumed) {
+      return { kind: 'stay' };
+    }
+    ctx.turnInputConsumed = true;
+
     const turns = incrementCollectTurns(run.state, node.id);
     const maxTurns = node.maxTurns ?? 10;
     if (turns > maxTurns) {
@@ -57,17 +73,6 @@ export async function collectUntilComplete(
     const turn = await driver.runAgentTurn(resolved, ctx);
     mergeExtractionFromTurn(node, run, turn);
     appendAssistantMessage(run, turn.text);
-
-    if (schemaSatisfied(node, run.state)) {
-      continue;
-    }
-
-    if (!hasPendingUserInput(ctx.session)) {
-      return { kind: 'stay' };
-    }
-
-    const signal = await driver.awaitUser(ctx);
-    appendUserMessage(run, signal.input);
   }
 }
 

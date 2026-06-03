@@ -92,13 +92,13 @@ async function dispatchNode(
     if (!driver.runStructured) {
       throw new Error('ChannelDriver.runStructured is required for decide nodes');
     }
-    // An interactive choice node (withChoices) reached without the user's reply
-    // this turn: its choices were already presented on node-enter, so wait for
-    // the user to actually pick rather than auto-deciding on stale conversation
-    // context. Returning `stay` lets the loop park as `awaitingUser` (it already
-    // persists state + ends the turn when no input is pending). (A plain decide
-    // with no choices is a pure branch and still runs.)
-    if (node.choices?.length && !hasPendingUserInput(ctx.session)) {
+    // An interactive choice node (withChoices) reached when the turn's input was
+    // already consumed by a prior node: its choices were presented on node-enter,
+    // so wait for the user to actually pick rather than auto-deciding on stale
+    // context. Returning `stay` lets the loop park as `awaitingUser`. (A plain
+    // decide with no choices is a pure branch and still runs; and an interactive
+    // decide that IS the turn's first input-node still decides on that input.)
+    if (node.choices?.length && !hasPendingUserInput(ctx.session) && ctx.turnInputConsumed) {
       return { kind: 'stay' };
     }
     // On resume, the new turn's input is buffered as pending and is not yet in
@@ -110,6 +110,8 @@ async function dispatchNode(
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
     }
+    // This decide consumes the turn's input for its decision.
+    ctx.turnInputConsumed = true;
     const structured = await driver.runStructured(node, ctx);
     return normalizeTransition(await node.decide(structured, run.state));
   }

@@ -54,6 +54,14 @@ export interface RunContext {
   bargeIn?: AbortSignal;
   abortSignal?: AbortSignal;
   telemetry?: TelemetrySettings;
+  /**
+   * Ephemeral, per-run-invocation flag: has the current turn's user input been
+   * consumed yet by an input-node (collect/decide)? Input-nodes extract/decide
+   * from the turn's fresh input; once it is consumed, later nodes in the same
+   * turn pause (present prompt, await next turn) instead of acting on stale
+   * context. Reset to false on every `createRunContext` (i.e. every turn).
+   */
+  turnInputConsumed?: boolean;
   tool(name: string, args: unknown, options?: { toolCallId?: string; def?: AnyTool; toolCtx?: ToolContext }): Promise<unknown>;
   approve(req: { title: string; description?: string }): Promise<{ approved: boolean; by?: string }>;
   signal(name: string, opts?: { deadline?: number; meta?: Record<string, unknown> }): Promise<unknown>;

@@ -182,6 +182,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     memoryService: deps.memoryService,
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
+    turnInputConsumed: false,
     tool: async (name, args, options) => {
       // needsApproval gate: a tool flagged `needsApproval` must be approved by a human
       // before it runs. Approval is a durable pause (the `__approval` signal); on resume
