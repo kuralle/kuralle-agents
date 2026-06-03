@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.1 — Multi-turn flow resume fix
+
+Patch across the package graph (`0.3.0 → 0.3.1`). Fixes a bug that stalled any
+multi-turn flow at the first interactive node when driven over a turn boundary
+(e.g. a bare `runtime.run` per HTTP request, as in a web chat route).
+
+### Fixed (`@kuralle-agents/core`)
+
+- **`decide` nodes now consume pending user input on resume.** `runFlow`'s decide
+  branch ran `driver.runStructured` over stale messages without consuming the
+  buffered pending input (which `collect` already does via `awaitUser`). On
+  resume the user's reply never reached `decide()`, so a paused `withChoices`
+  step (cart review, order confirm, product pick) could not advance — the turn
+  emitted only `done`. Decide resume now consumes pending input and appends it to
+  the message history before the decision.
+- **`TextDriver.runStructured` now honors `node.choices`.** It ignored the
+  offered choices, so an unconstrained string schema let the model answer with
+  free-form prose that `decide()` could not match. It now injects the valid
+  choice ids and instructs the model to return exactly one.
+
+Regression tests added at both seams (`test/core-flow/runFlow.test.ts`,
+`test/core-channel/textdriver.test.ts`). Whole graph republished together because
+internal deps pin exact versions at publish (`workspace:*` → exact), so a
+core-only bump would install a duplicate `core`.
+
 ## 2.0.0 — The Conversational Harness (core-v2)
 
 A from-first-principles rewrite of `@kuralle-agents/core`. **Breaking; no
