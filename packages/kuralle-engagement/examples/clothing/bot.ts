@@ -30,6 +30,8 @@ import {
   sessionConsentStore,
   createInMemoryBroadcastLedger,
   createBroadcasts,
+  createSimulator,
+  type Simulator,
   type TemplateCatalog,
   type TemplateSelector,
   type BroadcastApi,
@@ -413,6 +415,8 @@ export function buildClothingBot(model: LanguageModel) {
 export interface BuildClothingRouterOptions {
   model: LanguageModel;
   platforms?: Record<string, PlatformClient>;
+  simulatorChannels?: string[];
+  simulatorDefaultCustomerId?: string;
   windowStore?: InMemoryWindowStore;
   selector?: TemplateSelector;
   catalog?: TemplateCatalog;
@@ -426,6 +430,7 @@ export interface ClothingRouterBundle {
   runtime: ReturnType<typeof createRuntime>;
   eng: ReturnType<typeof engagement>;
   windowStore: InMemoryWindowStore;
+  simulator?: Simulator;
   consent: ConsentStore;
   broadcasts: BroadcastApi;
 }
@@ -446,8 +451,6 @@ export function buildClothingRouter(opts: BuildClothingRouterOptions): ClothingR
   const sessionStore = runtime.getSessionStore();
   const consent = sessionConsentStore(sessionStore, { defaultOptedIn: false });
   const ledger = createInMemoryBroadcastLedger();
-  const defaultPlatforms = opts.platforms ?? {};
-
   const eng = engagement({
     policies: [
       whatsappPolicy({
@@ -464,6 +467,30 @@ export function buildClothingRouter(opts: BuildClothingRouterOptions): ClothingR
     ledger,
   });
 
+  let simulator: Simulator | undefined;
+  let defaultPlatforms = opts.platforms ?? {};
+  let router: ReturnType<typeof createMessagingRouter>;
+
+  if (opts.simulatorChannels && opts.simulatorChannels.length > 0) {
+    simulator = createSimulator({
+      runtime,
+      bridge: eng.bridge,
+      channels: opts.simulatorChannels,
+      windowStore,
+      defaultCustomerId: opts.simulatorDefaultCustomerId
+        ? () => opts.simulatorDefaultCustomerId!
+        : undefined,
+    });
+    defaultPlatforms = simulator.platforms;
+    router = simulator.router;
+  } else {
+    router = createMessagingRouter({
+      runtime,
+      platforms: defaultPlatforms,
+      ...eng.bridge,
+    });
+  }
+
   const waPlatform = defaultPlatforms.whatsapp;
   const broadcasts = waPlatform
     ? createBroadcasts({
@@ -474,17 +501,12 @@ export function buildClothingRouter(opts: BuildClothingRouterOptions): ClothingR
       })
     : eng.broadcasts;
 
-  const router = createMessagingRouter({
-    runtime,
-    platforms: defaultPlatforms,
-    ...eng.bridge,
-  });
-
   return {
     router,
     runtime,
     eng,
     windowStore,
+    simulator,
     consent,
     broadcasts,
   };

@@ -43,6 +43,7 @@ export {
 } from './scheduler.js';
 export {
   createInMemoryBroadcastLedger,
+  createRedisBroadcastLedger,
   type BroadcastLedger,
 } from './broadcast-ledger.js';
 export {
@@ -57,3 +58,12 @@ export {
   type DripCampaignState,
   type DripApi,
 } from './drip.js';
+export {
+  createSimulator,
+  type SimChannel,
+  type SimSend,
+  type SimSendKind,
+  type SimInboundInput,
+  type Simulator,
+  type CreateSimulatorOptions,
+} from './simulator.js';
