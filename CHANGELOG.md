@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.5 — Non-speaking collect extraction (structural anti-narration backstop)
+
+Patch across the package graph (`0.3.4 → 0.3.5`).
+
+### Added / Fixed (`@kuralle-agents/core`)
+
+- **`collect` extraction no longer speaks.** A collect node used to run one agent
+  turn that both extracted fields AND emitted free-form prose; that prose drifted
+  into claims contradicting flow state ("order placed", "visit the website", "will
+  be delivered") and no prompt rule could deterministically stop it. Extraction is
+  now a non-speaking operation — the **invariant**: a collect turn may change
+  structured state but may NOT author user-facing text.
+  - New `ChannelDriver.runExtraction` + shared `runSilentExtraction` helper: runs
+    the submit tool to pull fields, emits no `text-delta`/`turn-end`, appends no
+    model prose. Implemented for **TextDriver and VoiceDriver** (voice extracts via
+    the text model, never speaking the realtime provider during collection).
+  - New `CollectNode.ask(missing, state)`: deterministic, framework-emitted
+    question for missing fields, with a safe default that never references a
+    downstream outcome. `instructions` is now extraction-only (never user-visible).
+- Proven model-independent via a malicious-mock model (always returns "I've
+  processed your order") whose text is never emitted/appended. Voice/text parity
+  (INV-3) preserved. core 381/381.
+
 ## 0.3.4 — Collect projects all collected fields to onComplete (no silent drop of optionals)
 
 Patch across the package graph (`0.3.3 → 0.3.4`).

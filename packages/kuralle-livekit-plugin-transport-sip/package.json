@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/livekit-plugin-transport-sip",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "SIP/RTP transport adapter for LiveKit Agents. Run voice agents over traditional telephony with G.711 codec support.",
   "type": "module",
   "main": "dist/index.js",
