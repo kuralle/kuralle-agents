@@ -19,6 +19,12 @@ export interface AgentConfig {
   model?: LanguageModel;
   tools?: ToolSet;
   effectTools?: Record<string, AnyTool>;
+  /** Safe, always-available tools made model-visible in EVERY speaking node turn
+   *  (the agent "base layer", ADR 0001) — e.g. a returns/FAQ knowledge-base
+   *  lookup the user might ask for mid-flow. This is an explicit allow-list:
+   *  NEVER put consequential/mutating tools here (they must stay flow-gated), and
+   *  they are not exposed during non-speaking collect extraction. */
+  globalTools?: Record<string, AnyTool>;
   flows?: Flow[];
   routes?: Route[];
   routing?: RoutingPolicy;

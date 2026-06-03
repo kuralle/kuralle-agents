@@ -8,6 +8,7 @@ import type { RefinementCapability } from '../capabilities/RefinementCapability.
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { Limits } from './guardrails.js';
 import type { AnyTool } from './effectTool.js';
+import type { Instructions } from './agentConfig.js';
 
 export interface EffectToolExecutor {
   execute(args: {
@@ -62,6 +63,12 @@ export interface RunContext {
    * context. Reset to false on every `createRunContext` (i.e. every turn).
    */
   turnInputConsumed?: boolean;
+  /** Agent base layer (ADR 0001), set when entering a flow. `baseInstructions`
+   *  is composed as a prefix into every node turn's system prompt (persona /
+   *  safety / grounding floor); `globalTools` are safe tools made model-visible
+   *  in every speaking turn. */
+  baseInstructions?: Instructions;
+  globalTools?: Record<string, AnyTool>;
   tool(name: string, args: unknown, options?: { toolCallId?: string; def?: AnyTool; toolCtx?: ToolContext }): Promise<unknown>;
   approve(req: { title: string; description?: string }): Promise<{ approved: boolean; by?: string }>;
   signal(name: string, opts?: { deadline?: number; meta?: Record<string, unknown> }): Promise<unknown>;
