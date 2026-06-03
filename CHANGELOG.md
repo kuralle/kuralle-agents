@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.6 — Agent base layer: base instructions + global tools in every node (ADR 0001)
+
+Patch across the package graph (`0.3.5 → 0.3.6`).
+
+### Added (`@kuralle-agents/core`)
+
+- **Agent base layer composed into every flow node.** Previously each node ran
+  with only its own `instructions`; the agent's global `instructions` reached just
+  the off-flow host reply, so there was no shared persona/safety/grounding floor.
+  Now the agent `instructions` are composed as a **prefix** into every node turn's
+  system prompt (`runAgentTurn`/`runStructured`/`runExtraction`); node instructions
+  layer on top. (ElevenLabs-style "base prompt regardless of active node".)
+- **`AgentConfig.globalTools`** — a designated, safe allow-list of tools made
+  model-visible in every **speaking** turn (e.g. a returns/FAQ KB lookup callable
+  mid-flow). Safety invariant: NOT all `effectTools` (mutating tools stay
+  flow-gated), and NOT exposed during non-speaking collect extraction.
+- Implemented for TextDriver and VoiceDriver. ADR `docs/adr/0001`. core 383/383.
+
+**Behavior change:** node prompts now also carry the agent persona/safety. Apps
+that relied on nodes NOT seeing `agent.instructions` should move that text out.
+
 ## 0.3.5 — Non-speaking collect extraction (structural anti-narration backstop)
 
 Patch across the package graph (`0.3.4 → 0.3.5`).
