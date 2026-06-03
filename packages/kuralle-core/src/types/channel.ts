@@ -14,6 +14,13 @@ export interface ChannelDriver {
   runAgentTurn(node: ResolvedNode, ctx: RunContext): Promise<TurnResult>;
   awaitUser(ctx: RunContext): Promise<UserSignal>;
   runStructured?(node: Extract<FlowNode, { kind: 'decide' }>, ctx: RunContext): Promise<unknown>;
+  /** Non-speaking field extraction for `collect` nodes: runs the submit tool to
+   *  pull structured fields but MUST NOT emit any user-facing text (no
+   *  text-delta, no spoken transcript). The returned `text` is ignored by the
+   *  flow engine. This is the structural backstop that stops a collect turn from
+   *  authoring narration that contradicts flow state. Drivers without it fall
+   *  back to runAgentTurn, whose text the engine then discards. */
+  runExtraction?(node: ResolvedNode, ctx: RunContext): Promise<TurnResult>;
 }
 
 export interface TurnResult {

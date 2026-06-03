@@ -151,10 +151,42 @@ async function runTextParity(flow: Flow) {
 }
 
 async function runVoiceParity(flow: Flow) {
+  // Collect extraction is now a non-speaking text-model turn on BOTH drivers, so
+  // the voice harness mocks streamText for the two extraction turns exactly like
+  // the text harness; the realtime client only serves the (speaking) reply turn.
+  let voiceStreamCall = 0;
   mock.module('ai', () => {
     const actual = require('ai');
     return {
       ...actual,
+      streamText: () => {
+        voiceStreamCall += 1;
+        if (voiceStreamCall === 1) {
+          return {
+            fullStream: (async function* () {
+              yield { type: 'text-delta', text: 'What is your name?' };
+            })(),
+            finishReason: Promise.resolve('stop'),
+            response: Promise.resolve({ messages: [] }),
+            toolCalls: Promise.resolve([]),
+          };
+        }
+        return {
+          fullStream: (async function* () {
+            yield {
+              type: 'tool-call',
+              toolCallId: 'tc-1',
+              toolName: 'submit_name_data',
+              input: { name: 'Jordan' },
+            };
+          })(),
+          finishReason: Promise.resolve('tool-calls'),
+          response: Promise.resolve({ messages: [] }),
+          toolCalls: Promise.resolve([
+            { toolCallId: 'tc-1', toolName: 'submit_name_data', input: { name: 'Jordan' } },
+          ]),
+        };
+      },
       generateObject: () => Promise.resolve({ object: { tier: 'premium' } }),
     };
   });

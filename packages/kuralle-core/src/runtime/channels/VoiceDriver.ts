@@ -3,6 +3,7 @@ import type { RunContext } from '../../types/run-context.js';
 import type { ChannelDriver } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
 import { generateObject } from 'ai';
+import { runSilentExtraction } from './extractionTurn.js';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions } from '../../flow/nodeBuilders.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
@@ -108,6 +109,15 @@ export class VoiceDriver implements ChannelDriver {
       abortSignal: ctx.abortSignal,
     });
     return object;
+  }
+
+  // Non-speaking collect extraction: uses the shared text-model extraction path
+  // rather than the realtime audio provider, so the agent never SPEAKS during
+  // field collection (which is where ungrounded narration leaked). Identical
+  // behavior to TextDriver — voice and text emit the same structural events; the
+  // user-facing question is the deterministic CollectNode.ask, synthesized after.
+  runExtraction(node: ResolvedNode, ctx: RunContext): Promise<TurnResult> {
+    return runSilentExtraction(node, ctx, ctx.model, resolveMaxSteps(ctx.limits, this.maxSteps));
   }
 
   async awaitUser(ctx: RunContext): Promise<UserSignal> {

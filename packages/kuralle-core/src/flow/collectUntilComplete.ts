@@ -54,6 +54,9 @@ export async function collectUntilComplete(
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
     } else if (ctx.turnInputConsumed) {
+      // No fresh input to extract this turn: ask (deterministically) for the
+      // fields still missing and wait. Never run extraction over stale context.
+      emitCollectAsk(node, run, ctx);
       return { kind: 'stay' };
     }
     ctx.turnInputConsumed = true;
@@ -70,10 +73,51 @@ export async function collectUntilComplete(
       userMessage: peekLatestUserMessage(run),
     });
     const resolved = resolveCollectExtractionNode(node, missing, run.state, submitTool);
-    const turn = await driver.runAgentTurn(resolved, ctx);
+    // Non-speaking extraction: the model's prose is DISCARDED (never emitted or
+    // appended), so a collect turn cannot author narration that contradicts flow
+    // state. Falls back to runAgentTurn for drivers without runExtraction; its
+    // text is likewise dropped here. The user-facing question is the deterministic
+    // `ask` emitted above — never model-authored.
+    const turn = await (driver.runExtraction
+      ? driver.runExtraction(resolved, ctx)
+      : driver.runAgentTurn(resolved, ctx));
     mergeExtractionFromTurn(node, run, turn);
-    appendAssistantMessage(run, turn.text);
   }
+}
+
+function humanizeField(field: string): string {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/** Deterministic, framework-authored question for the still-missing fields. Uses
+ *  the node's `ask` when provided, else a safe default that never references a
+ *  downstream outcome (order/delivery/payment/website). */
+function renderCollectAsk(node: CollectNode, missing: string[], state: RunState['state']): string {
+  if (node.ask) {
+    return node.ask(missing, state);
+  }
+  if (missing.length === 1) {
+    return `Could you share your ${humanizeField(missing[0]!)}?`;
+  }
+  if (missing.length > 1) {
+    return `Could you share: ${missing.map(humanizeField).join(', ')}?`;
+  }
+  return 'Could you tell me a little more?';
+}
+
+function emitCollectAsk(node: CollectNode, run: RunState, ctx: RunContext): void {
+  const missing = computeMissingFields(node, getCollectData(run.state, node.id));
+  const text = renderCollectAsk(node, missing, run.state);
+  if (!text.trim()) {
+    return;
+  }
+  ctx.emit({ type: 'text-delta', text });
+  ctx.emit({ type: 'turn-end' });
+  appendAssistantMessage(run, text);
 }
 
 function mergeExtractionFromTurn(node: CollectNode, run: RunState, turn: TurnResult): void {
