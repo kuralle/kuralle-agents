@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.7 — Fix: global tools must be executable
+
+`agent.globalTools` were made model-visible (0.3.6) but their executors were not
+registered in the tool executor, so a model call to a global tool failed. Now
+registered alongside `effectTools`; visibility remains gated (not exposed during
+non-speaking collect extraction). Regression test `test/core-agent/global-tools.test.ts`.
+
 ## 0.3.6 — Agent base layer: base instructions + global tools in every node (ADR 0001)
 
 Patch across the package graph (`0.3.5 → 0.3.6`).
