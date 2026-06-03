@@ -1,5 +1,5 @@
 import { describe, expect, it, mock, afterEach } from 'bun:test';
-import { reply } from '../../src/types/flow.js';
+import { decide, reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { defineTool, CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
@@ -183,5 +183,49 @@ describe('TextDriver unit', () => {
     expect(collected.some((p) => p.type === 'text-delta')).toBe(true);
     expect(typeof handle.toResponseStream).toBe('function');
     expect(typeof handle.cancel).toBe('function');
+  });
+
+  it('runStructured constrains the model to the node choices', async () => {
+    let capturedSystem = '';
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        generateObject: async ({ system }: { system: string }) => {
+          capturedSystem = system;
+          return { object: { choice: 'checkout' } };
+        },
+      };
+    });
+
+    const { session, runStore, runState } = await setupDurableHarness();
+    const ctx = await createRunContext({
+      session,
+      runState,
+      runStore,
+      steps: [],
+      toolExecutor: new CoreToolExecutor({ tools: {} }),
+      model: stubModel,
+      emit: () => {},
+    });
+
+    const node = decide({
+      id: 'cart',
+      instructions: 'Review the cart',
+      schema: z.object({ choice: z.string() }),
+      decide: () => 'stay',
+    });
+    node.choices = [
+      { id: 'checkout', label: 'Checkout' },
+      { id: 'more', label: 'Add another gift' },
+    ];
+
+    await new TextDriver().runStructured(node, ctx);
+
+    // Without the fix the system is just the node instructions and the model is
+    // free to answer with prose the decide() can't match. The fix injects the
+    // valid choice ids so the model returns exactly one.
+    expect(capturedSystem).toContain('checkout');
+    expect(capturedSystem).toContain('more');
   });
 });
