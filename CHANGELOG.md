@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.4 — Collect projects all collected fields to onComplete (no silent drop of optionals)
+
+Patch across the package graph (`0.3.3 → 0.3.4`).
+
+### Fixed (`@kuralle-agents/core`)
+
+- **`collect` now hands `onComplete` every field it collected, not just the
+  required subset.** `projectCollectData` previously projected only `node.required`,
+  so optional schema fields a node extracted (e.g. a `welcome` step that classifies
+  intent AND captures occasion/recipient/budget) were silently discarded before
+  `onComplete` ran — making any routing that read those optionals impossible. The
+  submit tool already accepts the full schema and the merge already stores all
+  populated values; only the projection was lossy. It now projects all schema keys
+  present in the collected data. Regression test in
+  `test/core-grounding/extraction.test.ts`; full core suite 379/379, engagement
+  107/107, hono-server 52/52.
+
 ## 0.3.3 — Collect grounding: one input per turn (no fabrication / no premature mutation)
 
 Patch across the package graph (`0.3.2 → 0.3.3`). Completes the turn-by-turn flow
