@@ -114,6 +114,10 @@ export class Runtime {
       const effectTools = {
         ...(this.config.tools ?? {}),
         ...(opened.agent.effectTools ?? {}),
+        // Global tools (ADR 0001) are model-visible in speaking turns via the
+        // drivers; register their executors here too so a model call can actually
+        // run them. Visibility stays gated (not exposed during collect extraction).
+        ...(opened.agent.globalTools ?? {}),
       };
 
       const toolExecutor = new CoreToolExecutor({
