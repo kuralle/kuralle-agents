@@ -4,7 +4,7 @@ import type { ChannelDriver } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
 import { streamText, generateObject, type JSONValue, type ModelMessage, type ToolSet } from 'ai';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
-import { buildNodePrompt, resolveInstructions } from '../../flow/nodeBuilders.js';
+import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import { buildToolSet } from '../../tools/effect/index.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
 import { classifyControl } from '../../flow/classifyControl.js';
@@ -46,10 +46,11 @@ export class TextDriver implements ChannelDriver {
     const gather = await runGatherPhase(ctx);
     const out: TurnResult = { text: '', toolResults: [] };
     const model = replyNode.model ?? ctx.model;
-    const baseSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+    const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+    const baseSystem = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
     const messages: ModelMessage[] = [...ctx.runState.messages];
-    const aiTools = this.resolveTools(node);
+    const aiTools = this.resolveTools(node, ctx.globalTools);
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);
     const toolCallsMade: ToolCallRecord[] = [];
     let draftText = '';
@@ -165,7 +166,11 @@ export class TextDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const base = resolveInstructions(node.instructions, ctx.runState.state);
+    const base = composeSystem(
+      ctx.baseInstructions,
+      resolveInstructions(node.instructions, ctx.runState.state),
+      ctx.runState.state,
+    );
     const schema = node.schema as z.ZodType;
     // When the node offers choices (e.g. via withChoices), constrain the model
     // to return exactly one option id. Otherwise an unconstrained string schema
@@ -191,8 +196,8 @@ export class TextDriver implements ChannelDriver {
     return { type: 'message', input };
   }
 
-  private resolveTools(resolved: ResolvedNode): ToolSet | undefined {
-    const merged: Record<string, AnyTool> = { ...this.toolDefs, ...(resolved.localTools ?? {}) };
+  private resolveTools(resolved: ResolvedNode, globalTools?: Record<string, AnyTool>): ToolSet | undefined {
+    const merged: Record<string, AnyTool> = { ...this.toolDefs, ...(globalTools ?? {}), ...(resolved.localTools ?? {}) };
     const aiTools: ToolSet = { ...resolved.tools };
     for (const [name, tool] of Object.entries(merged)) {
       if (tool && !aiTools[name]) {

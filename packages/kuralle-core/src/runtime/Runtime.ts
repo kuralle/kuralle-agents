@@ -156,6 +156,10 @@ export class Runtime {
           : undefined,
       });
 
+      // Agent base layer (ADR 0001): composed into every node turn by the drivers.
+      runCtx.baseInstructions = opened.agent.instructions;
+      runCtx.globalTools = opened.agent.globalTools;
+
       await this.hooks?.onStart?.(runCtx);
 
       const driver = opts.driver ?? new TextDriver();

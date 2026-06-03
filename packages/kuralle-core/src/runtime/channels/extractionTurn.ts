@@ -3,7 +3,7 @@ import type { ResolvedNode, TurnResult } from '../../types/channel.js';
 import type { RunContext } from '../../types/run-context.js';
 import type { ReplyNode } from '../../types/flow.js';
 import { buildToolSet } from '../../tools/effect/index.js';
-import { buildNodePrompt } from '../../flow/nodeBuilders.js';
+import { buildNodePrompt, composeSystem } from '../../flow/nodeBuilders.js';
 
 /**
  * Shared, NON-SPEAKING field extraction for `collect` nodes, used by every
@@ -22,7 +22,8 @@ export async function runSilentExtraction(
   maxSteps: number,
 ): Promise<TurnResult> {
   const replyNode = node.node as ReplyNode;
-  const system = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+  const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+  const system = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
   const messages: ModelMessage[] = [...ctx.runState.messages];
   const aiTools = resolveExtractionTools(node);
   const out: TurnResult = { text: '', toolResults: [] };

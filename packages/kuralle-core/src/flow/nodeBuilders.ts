@@ -23,6 +23,19 @@ export function buildNodePrompt(node: ReplyNode, state: FlowState): string {
   return resolveInstructions(node.instructions, state);
 }
 
+/** Compose the agent base layer (ADR 0001) into a node's system prompt: the
+ *  agent's base instructions (persona / safety / grounding) prefix the node's
+ *  own instructions. Node instructions layer ON TOP — they never replace the
+ *  base. Base resolves against the current state so dynamic base prompts work. */
+export function composeSystem(
+  base: Instructions | undefined,
+  nodeSystem: string,
+  state: FlowState,
+): string {
+  const baseText = base ? resolveInstructions(base, state) : '';
+  return [baseText, nodeSystem].filter((s) => s && s.trim()).join('\n\n');
+}
+
 function buildNodeTools(node: ReplyNode, state: FlowState): ToolSet {
   if (!node.tools) {
     return {};

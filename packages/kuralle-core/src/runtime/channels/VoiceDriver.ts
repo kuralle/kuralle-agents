@@ -5,7 +5,7 @@ import type { ToolCallRecord } from '../../types/session.js';
 import { generateObject } from 'ai';
 import { runSilentExtraction } from './extractionTurn.js';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
-import { buildNodePrompt, resolveInstructions } from '../../flow/nodeBuilders.js';
+import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
 import { classifyControl } from '../../flow/classifyControl.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
@@ -53,9 +53,10 @@ export class VoiceDriver implements ChannelDriver {
 
     const gather = await runGatherPhase(ctx);
     const out: TurnResult = { text: '', toolResults: [] };
-    const baseSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+    const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+    const baseSystem = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
-    const geminiTools = resolveVoiceGeminiTools(node, this.toolDefs);
+    const geminiTools = resolveVoiceGeminiTools(node, { ...this.toolDefs, ...(ctx.globalTools ?? {}) });
     const toolCallsMade: ToolCallRecord[] = [];
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);
     let draftText = '';
@@ -99,7 +100,11 @@ export class VoiceDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const system = resolveInstructions(node.instructions, ctx.runState.state);
+    const system = composeSystem(
+      ctx.baseInstructions,
+      resolveInstructions(node.instructions, ctx.runState.state),
+      ctx.runState.state,
+    );
     const schema = node.schema as z.ZodType;
     const { object } = await generateObject({
       model: ctx.model,
