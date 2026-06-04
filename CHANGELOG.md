@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.17 — H5: in-flow digression / answer-then-resume (default OFF)
+
+Patch across the graph (0.3.16 -> 0.3.17). Behind the same default-OFF flag as H1
+(`agent.experimental.outOfBandControl`). Today once a flow is active, host routing
+never re-runs and an off-script question at a `collect` node is discarded (field
+stays unfilled → re-ask). When ON: if a turn's input at a collect does NOT advance
+it, a digression step runs — (a) `selectHostTarget` (excluding the active flow) can
+route/handoff or **switch to another flow** with the current flow **parked** at its
+node (`__flowPark`; resumed when the switched flow ends), or (b) the off-script
+question is answered by one free-conversation turn and the collect re-asks (flow
+resumes next turn). On-topic input still collects; multi-intent split deferred.
+New `src/flow/collectDigression.ts`; `normalizeTransition` gains a `switchFlow`
+variant (type-only; produced only by digression). Flag OFF: collect loop
+byte-identical (parity test). core 478/478; W1/W9/H1/H4/confirm-gate/parking/
+turn-lock green.
+
 ## 0.3.16 — H4: constrained-enum decide + code-first routing
 
 Patch across the graph (0.3.15 -> 0.3.16). Generalizes W9's deterministic pattern

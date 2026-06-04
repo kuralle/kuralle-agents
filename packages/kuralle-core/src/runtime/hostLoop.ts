@@ -40,7 +40,7 @@ export async function hostLoop(options: HostLoopOptions): Promise<HostLoopResult
       if (!flow) {
         throw new Error(`Active flow "${run.activeFlow}" not found on agent "${agent.id}"`);
       }
-      return await runActiveFlow(flow, run, driver, ctx);
+      return await runActiveFlow(flow, run, driver, ctx, agent);
     }
 
     const alwaysRoute = agent.routing?.always === true;
@@ -53,7 +53,7 @@ export async function hostLoop(options: HostLoopOptions): Promise<HostLoopResult
       });
 
       if (selection.kind === 'enterFlow') {
-        return await runActiveFlow(selection.flow, run, driver, ctx);
+        return await runActiveFlow(selection.flow, run, driver, ctx, agent);
       }
 
       if (selection.kind === 'route') {
@@ -80,11 +80,12 @@ async function runActiveFlow(
   run: RunState,
   driver: ChannelDriver,
   ctx: RunContext,
+  agent: AgentConfig,
 ): Promise<HostLoopResult> {
   incrementTurnCount(run);
   assertWithinTurnLimit(run, ctx.limits);
 
-  const result = await runFlow(flow, run, driver, ctx);
+  const result = await runFlow(flow, run, driver, ctx, agent);
 
   if (result.kind === 'handoff') {
     return { kind: 'handoff', to: result.to, reason: result.reason };
