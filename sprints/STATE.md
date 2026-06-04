@@ -6,11 +6,11 @@
 
 ## Active sprint
 
-**Sprint number:** `2`
-**Sprint name:** Voice (native realtime)
+**Sprint number:** `3`
+**Sprint name:** Cascaded TTFT
 **Status:** `not-started`
-**Goal:** Route `VoiceDriver` through `speakGated` via a transcript-backed `TokenSource` so the native realtime assistant transcript streams incrementally, with the whole-answer gate running honestly post-hoc (REQ-9) and barge-in/truncate preserved.
-**WBS section:** [`sprints/WBS.md` § Sprint 2](./WBS.md)
+**Goal:** Make `KuralleRuntimeLLMStream.run` consume `text-delta.delta` and handle the lifecycle so the LiveKit cascaded path begins TTS before the runtime turn completes and `aria_runtime_ttft` drops to first-token latency.
+**WBS section:** [`sprints/WBS.md` § Sprint 3](./WBS.md)
 
 ## Build branch
 
@@ -20,23 +20,22 @@ Every sprint session — manager and IC — works **on this branch only**. Befor
 
 At session start: `git checkout plan/streaming-by-default` (or, for the very first Sprint 0 session, cut it: `git checkout main && git pull && git checkout -b plan/streaming-by-default`).
 
-## Load-bearing reading for sprint 2
+## Load-bearing reading for sprint 3
 
-The session running sprint 2 must read these in this order before delegating any story:
+The session running sprint 3 must read these in this order before delegating any story:
 
-1. `sprints/sprint-1/HANDOFF.md` — read-me-first; current state + Sprint-2 traps (esp. REQ-9).
-2. `sprints/WBS.md` § Sprint 2 — stories S2-01 (transcript `TokenSource`), S2-02 (honest post-hoc gate).
-3. `docs/rfc-streaming-by-default.md` — §2.4 (two voice substrates), §5.1 (VoiceDriver), §10 (security), REQ-8, **REQ-9 (native-realtime honesty — defining constraint)**.
-4. `packages/kuralle-core/src/runtime/channels/VoiceDriver.ts` — accumulate-then-emit block (now emitting the trio) to replace; preserve `heardCharCount`/`truncateAt`/barge-in.
-5. `packages/kuralle-core/src/runtime/channels/streaming/speakGated.ts` — the shared path; build a transcript-backed `TokenSource` over `onTranscript`.
-6. The `@kuralle-agents/realtime-audio` `RealtimeAudioClient` (`onTranscript`, `heardCharCount`, barge-in/`onInterrupted`) — the source of voice transcript events.
-7. **Before S2-01:** `/code-understand` the realtime client transcript/barge-in path; link `.understanding/<slug>.md` in the S2-01 brief.
+1. `sprints/sprint-2/HANDOFF.md` — read-me-first; current state + Sprint-3 traps (esp. the §11 TTFT abort).
+2. `sprints/WBS.md` § Sprint 3 — stories S3-01 (adapter lifecycle/TTFT), S3-02 (TTFT proof e2e).
+3. `docs/rfc-streaming-by-default.md` — §7 (cascaded blueprint), REQ-10, §1 success criterion #2, **§11 abort criteria**.
+4. `packages/kuralle-livekit-plugin/src/llm/KuralleRuntimeLLMAdapter.ts` — run loop (already `.delta` + `text-cancel` from S1-fix); `recordTtftOnce` must fire on the FIRST `text-delta`.
+5. `packages/kuralle-livekit-plugin-transport-ws/test/e2e/ws-cascaded-e2e.ts` — the e2e to extend (first-chunk-before-turn-end + before/after `aria_runtime_ttft`).
+6. **Before S3-01:** `/code-understand` the cascaded adapter + the `aria_runtime_ttft` metric path if unfamiliar; link the artifact in the brief.
 
-**Gate note:** `typecheck:all` is RED at baseline (4 frozen configs — see `sprint-0/PLAN.md §0` / WBS B-06). Use the frozen-baseline guard (`sprint-1/artifacts/guard-stream-s1-01.sh`) to assert "no NEW failures," not "exit 0." Grep migrations across `*.ts` AND `*.js`/`*.mjs`.
+**Gate note:** `typecheck:all` RED baseline (4 frozen configs — `sprint-0/PLAN.md §0` / B-06). Use the frozen-baseline guard (`sprint-1/artifacts/guard-stream-s1-01.sh`). Grep migrations across `*.ts`+`*.js`+`*.mjs`. **§11 ABORT:** if TTFT does not improve, STOP and surface it — do not work around.
 
 ## Last completed sprint
 
-`1` — Protocol flip + text path
+`2` — Voice (native realtime)
 
 ## Last completed at
 
@@ -48,7 +47,8 @@ The session running sprint 2 must read these in this order before delegating any
 |--------|--------|--------------|----------|
 | 0 | done | 2026-06-05 | [sprint-0/WARMDOWN.md](./sprint-0/WARMDOWN.md) |
 | 1 | done | 2026-06-05 | [sprint-1/WARMDOWN.md](./sprint-1/WARMDOWN.md) |
-| 2 | not-started | — | — |
+| 2 | done | 2026-06-05 | [sprint-2/WARMDOWN.md](./sprint-2/WARMDOWN.md) |
+| 3 | not-started | — | — |
 
 When a sprint completes, append a row here from `WARMDOWN.md`.
 
