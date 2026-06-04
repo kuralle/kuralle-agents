@@ -8,6 +8,8 @@ export interface ResolvedNode {
   prompt: string;
   tools: ToolSet;
   localTools?: Record<string, AnyTool>;
+  /** Free-conversation reply (host loop): keeps model control tools even when outOfBandControl is on. */
+  freeConversation?: boolean;
 }
 
 export interface ChannelDriver {

@@ -46,7 +46,11 @@ function buildNodeTools(node: ReplyNode, state: FlowState): ToolSet {
   return node.tools;
 }
 
-export function resolveReplyNode(node: ReplyNode, state: FlowState): ResolvedNode {
+export function resolveReplyNode(
+  node: ReplyNode,
+  state: FlowState,
+  options?: { freeConversation?: boolean },
+): ResolvedNode {
   const tools = buildNodeTools(node, state);
   return {
     node,
@@ -55,6 +59,7 @@ export function resolveReplyNode(node: ReplyNode, state: FlowState): ResolvedNod
     // Recover the raw executors from the node's `buildToolSet` tools so they run
     // in-flow (with run context) — without also needing `agent.effectTools`.
     localTools: rawToolsFromSet(tools),
+    ...(options?.freeConversation && { freeConversation: true }),
   };
 }
 

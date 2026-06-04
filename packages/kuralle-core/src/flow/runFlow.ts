@@ -16,6 +16,7 @@ import { normalizeTransition, resolveNodeRef } from './normalizeTransition.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
 import { reduceTransition } from './reduceTransition.js';
 import { resolveReplyNode } from './nodeBuilders.js';
+import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
 import { SuspendError } from '../runtime/durable/RunStore.js';
@@ -174,6 +175,26 @@ async function dispatchNode(
 
   if (isReplyNode(node)) {
     const turn = await driver.runAgentTurn(resolveReplyNode(node, run.state), ctx);
+
+    if (ctx.outOfBandControl) {
+      const decision = await evaluateReplyControl({
+        node,
+        turn,
+        state: run.state,
+        interrupted: !!turn.interrupted,
+      });
+      if (decision.kind === 'redispatch') {
+        const signal = await driver.awaitUser(ctx);
+        appendUserMessage(run, signal.input);
+        return dispatchNode(node, run, driver, ctx);
+      }
+      appendAssistantMessage(run, turn.text);
+      if (decision.kind === 'transition') {
+        return decision.transition;
+      }
+      return { kind: 'stay' };
+    }
+
     appendAssistantMessage(run, turn.text);
 
     if (turn.interrupted) {

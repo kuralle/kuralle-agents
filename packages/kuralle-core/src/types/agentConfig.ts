@@ -38,6 +38,10 @@ export interface AgentConfig {
   memory?: AgentMemory;
   guardrails?: Guardrails;
   limits?: Limits;
+  experimental?: {
+    /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1). Default OFF. */
+    outOfBandControl?: boolean;
+  };
 }
 
 export function defineAgent(config: AgentConfig): AgentConfig {

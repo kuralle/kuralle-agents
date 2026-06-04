@@ -40,6 +40,7 @@ export interface CtxDeps {
   hookRunner?: HookRunner;
   model: LanguageModel;
   controlModel?: LanguageModel;
+  outOfBandControl?: boolean;
   refinementPolicies?: RefinementCapability[];
   validationPolicies?: ValidationCapability[];
   inputProcessors?: InputProcessor[];
@@ -175,6 +176,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     hookRunner: deps.hookRunner ?? {},
     model: deps.model,
     controlModel: deps.controlModel ?? deps.model,
+    outOfBandControl: deps.outOfBandControl ?? false,
     refinementPolicies: deps.refinementPolicies ?? [],
     validationPolicies: deps.validationPolicies ?? [],
     inputProcessors: deps.inputProcessors ?? [],
