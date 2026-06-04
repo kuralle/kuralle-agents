@@ -54,3 +54,7 @@ dump.rdb
 # session/process docs — kept locally, not shipped public
 HANDOFF.md
 implementation-notes.md
+
+# OSS-program application drafts — private, never tracked
+OPENAI_CODEX_OSS_APPLICATION.md
+VERCEL_OSS_APPLICATION.md
