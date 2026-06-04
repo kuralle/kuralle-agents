@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.12 — H2: pinned temperature-0 control-model channel
+
+Patch across the graph (0.3.11 -> 0.3.12). First chunk of the core-primitive
+hardening plan (`docs/kuralle-hardening-plan.md`), the cheapest highest-leverage
+anti-flakiness lever. The control path (routing, `decide`/`runStructured`, collect
+extraction) ran on the same model that speaks to the user, at default sampling —
+so identical prompts produced different routes/branches/extractions across
+providers and runs (the gpt-4.1-mini-vs-gemini-3.1-flash-lite reliability gap).
+New optional `AgentConfig.controlModel` (resolved onto `RunContext.controlModel`,
+defaulting to the speaker model) pins every control-path LLM call to a single
+model at `temperature: 0`. The speaker path (`runAgentTurn`) is unchanged. Set
+`controlModel` to pin control to a reliable provider independent of the speaker.
+core 430/430, engagement 107/107, hono 52/52.
+
 ## 0.3.11 — Voice paused: text is the primary channel
 
 Patch across the graph (0.3.10 -> 0.3.11). Kuralle now hardens **text as the

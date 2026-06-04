@@ -17,6 +17,10 @@ export interface AgentConfig {
   description?: string;
   instructions?: Instructions;
   model?: LanguageModel;
+  /** Optional model for the control path (routing, decide, extraction), run at
+   *  temperature 0 for determinism. Defaults to `model` (the speaker) when unset.
+   *  Set this to pin control to a reliable provider independent of the speaker. */
+  controlModel?: LanguageModel;
   tools?: ToolSet;
   effectTools?: Record<string, AnyTool>;
   /** Safe, always-available tools made model-visible in EVERY speaking node turn

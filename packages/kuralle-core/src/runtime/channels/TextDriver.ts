@@ -147,8 +147,7 @@ export class TextDriver implements ChannelDriver {
   // voice are identical). The model's prose is discarded; the user-facing
   // question is emitted deterministically by the flow engine (CollectNode.ask).
   runExtraction(node: ResolvedNode, ctx: RunContext): Promise<TurnResult> {
-    const model = (node.node as ReplyNode).model ?? ctx.model;
-    return runSilentExtraction(node, ctx, model, resolveMaxSteps(ctx.limits, this.maxSteps));
+    return runSilentExtraction(node, ctx, ctx.controlModel, resolveMaxSteps(ctx.limits, this.maxSteps));
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
@@ -168,10 +167,11 @@ export class TextDriver implements ChannelDriver {
           .join(', ')}. Respond with only the chosen id, nothing else.`
       : base;
     const { object } = await generateObject({
-      model: ctx.model,
+      model: ctx.controlModel,
       schema,
       system,
       messages: ctx.runState.messages,
+      temperature: 0,
       abortSignal: ctx.abortSignal,
     });
     return object;

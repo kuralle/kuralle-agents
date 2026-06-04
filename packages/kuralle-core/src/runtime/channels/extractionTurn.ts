@@ -30,7 +30,14 @@ export async function runSilentExtraction(
   const out: TurnResult = { text: '', toolResults: [] };
 
   for (let step = 0; step < maxSteps; step += 1) {
-    const result = streamText({ model, system, messages, tools: aiTools, abortSignal: ctx.abortSignal });
+    const result = streamText({
+      model,
+      system,
+      messages,
+      tools: aiTools,
+      temperature: 0,
+      abortSignal: ctx.abortSignal,
+    });
 
     for await (const part of result.fullStream) {
       // Intentionally NOT handling 'text-delta' — extraction never speaks.

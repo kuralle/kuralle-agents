@@ -52,6 +52,8 @@ export interface RunContext {
   toolExecutor: EffectToolExecutor;
   hookRunner: HookRunner;
   model: LanguageModel;
+  /** Control-path model (routing, decide, extraction) at temperature 0. */
+  controlModel: LanguageModel;
   refinementPolicies: RefinementCapability[];
   validationPolicies: ValidationCapability[];
   inputProcessors: InputProcessor[];

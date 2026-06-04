@@ -57,6 +57,7 @@ export async function selectHostTarget(options: SelectHostOptions): Promise<Host
   const { object } = await generateObject({
     model,
     schema: selectionSchema,
+    temperature: 0,
     system:
       'You are an internal routing classifier. Choose exactly one action. ' +
       'Output schema fields only — never user-facing prose. ' +

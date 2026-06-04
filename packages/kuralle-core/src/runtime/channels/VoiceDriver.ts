@@ -115,10 +115,11 @@ export class VoiceDriver implements ChannelDriver {
           .join(', ')}. Respond with only the chosen id, nothing else.`
       : base;
     const { object } = await generateObject({
-      model: ctx.model,
+      model: ctx.controlModel,
       schema,
       system,
       messages: ctx.runState.messages,
+      temperature: 0,
       abortSignal: ctx.abortSignal,
     });
     return object;
@@ -130,7 +131,7 @@ export class VoiceDriver implements ChannelDriver {
   // behavior to TextDriver — voice and text emit the same structural events; the
   // user-facing question is the deterministic CollectNode.ask, synthesized after.
   runExtraction(node: ResolvedNode, ctx: RunContext): Promise<TurnResult> {
-    return runSilentExtraction(node, ctx, ctx.model, resolveMaxSteps(ctx.limits, this.maxSteps));
+    return runSilentExtraction(node, ctx, ctx.controlModel, resolveMaxSteps(ctx.limits, this.maxSteps));
   }
 
   async awaitUser(ctx: RunContext): Promise<UserSignal> {
