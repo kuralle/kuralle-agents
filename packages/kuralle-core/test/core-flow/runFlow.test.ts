@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { action, collect, decide, defineFlow, reply } from '../../src/types/flow.js';
-import { runFlow, FlowOscillationError } from '../../src/flow/runFlow.js';
+import { runFlow } from '../../src/flow/runFlow.js';
+import { SAFE_DEGRADED_MESSAGE } from '../../src/flow/degrade.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, reloadRunState } from '../core-durable/helpers.js';
@@ -81,7 +82,7 @@ describe('runFlow action exactly-once via effect log', () => {
 });
 
 describe('runFlow oscillation cap', () => {
-  it('blocks ping-pong transitions after maxOscillations', async () => {
+  it('degrades ping-pong transitions after maxOscillations without throwing', async () => {
     let nodeA!: ReturnType<typeof action>;
     let nodeB!: ReturnType<typeof action>;
     nodeB = action({ id: 'b', run: () => nodeA });
@@ -116,8 +117,12 @@ describe('runFlow oscillation cap', () => {
       emit: (part) => errors.push(part),
     });
 
-    await expect(runFlow(flow, runState, driver, ctx)).rejects.toBeInstanceOf(FlowOscillationError);
+    const result = await runFlow(flow, runState, driver, ctx);
+    expect(result).toEqual({ kind: 'ended', reason: 'error_degraded' });
     expect(errors.some((part) => part.type === 'error')).toBe(true);
+    expect(
+      errors.some((part) => part.type === 'text-delta' && (part as { text: string }).text === SAFE_DEGRADED_MESSAGE),
+    ).toBe(true);
   });
 });
 

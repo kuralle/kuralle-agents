@@ -17,7 +17,14 @@ import { reduceTransition } from './reduceTransition.js';
 import { resolveReplyNode } from './nodeBuilders.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
+import { SuspendError } from '../runtime/durable/RunStore.js';
+import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
+import {
+  appendSafeAssistantMessage,
+  degradeFlowError,
+  findEscalateNode,
+} from './degrade.js';
 
 export type FlowResult =
   | { kind: 'ended'; reason: string }
@@ -132,6 +139,12 @@ async function dispatchNode(
     if (turn.control?.type === 'end') {
       return { kind: 'end', reason: turn.control.reason };
     }
+    if (turn.control?.type === 'escalate') {
+      return { kind: 'escalate', reason: turn.control.reason };
+    }
+    if (turn.control?.type === 'recover') {
+      return { kind: 'end', reason: turn.control.reason ?? 'error_degraded' };
+    }
 
     if (node.next) {
       return normalizeTransition(await node.next(turn, run.state));
@@ -168,7 +181,17 @@ export async function runFlow(
   const maxOscillations = flow.maxOscillations ?? 2;
 
   for (;;) {
-    const transition = await dispatchNode(node, run, driver, ctx);
+    let transition: NormalizedTransition;
+    try {
+      transition = await dispatchNode(node, run, driver, ctx);
+    } catch (error) {
+      if (error instanceof SuspendError || error instanceof ToolApprovalDeniedError) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.emit({ type: 'error', error: message });
+      return degradeFlowError(flow, registry, run, driver, ctx, dispatchNode);
+    }
 
     if (transition.kind === 'end') {
       ctx.emit({ type: 'flow-end', flow: flow.name, reason: transition.reason });
@@ -219,7 +242,26 @@ export async function runFlow(
     const oscillation = bumpOscillation(edgeCounts, node.id, target.id);
     if (oscillation > maxOscillations) {
       ctx.emit({ type: 'error', error: `Flow oscillation blocked: ${node.id} -> ${target.id}` });
-      throw new FlowOscillationError(node.id, target.id);
+      const escalateNode = findEscalateNode(registry);
+      if (escalateNode) {
+        appendSafeAssistantMessage(run, ctx);
+        await reduceTransition({
+          fromNodeId: node.id,
+          toNode: escalateNode,
+          run,
+          flow,
+          model: ctx.model,
+          data: transition.data,
+          emit: ctx.emit,
+          abortSignal: ctx.abortSignal,
+        });
+        await ctx.runStore.putRunState(run);
+        node = escalateNode;
+        continue;
+      }
+      appendSafeAssistantMessage(run, ctx);
+      ctx.emit({ type: 'flow-end', flow: flow.name, reason: 'error_degraded' });
+      return { kind: 'ended', reason: 'error_degraded' };
     }
 
     await reduceTransition({

@@ -2,12 +2,12 @@ import type { TurnResult, UserSignal, ResolvedNode } from '../../types/channel.j
 import type { RunContext } from '../../types/run-context.js';
 import type { ChannelDriver } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
-import { streamText, generateObject, type JSONValue, type ModelMessage, type ToolSet } from 'ai';
+import { streamText, generateObject, type ModelMessage, type ToolSet } from 'ai';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import { buildToolSet } from '../../tools/effect/index.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
-import { classifyControl } from '../../flow/classifyControl.js';
+import { executeModelToolCall, toolResultMessage } from './executeModelTool.js';
 import { consumePendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
@@ -93,21 +93,11 @@ export class TextDriver implements ChannelDriver {
           toolCallId: call.toolCallId,
         });
 
-        const localTool = node.localTools?.[call.toolName];
-        const toolResult = await ctx.tool(call.toolName, call.input, {
-          toolCallId: call.toolCallId,
-          ...(localTool && {
-            def: localTool,
-            toolCtx: {
-              session: ctx.session,
-              runState: ctx.runState,
-              tool: ctx.tool.bind(ctx),
-              now: ctx.now.bind(ctx),
-              uuid: ctx.uuid.bind(ctx),
-              emit: ctx.emit.bind(ctx),
-            },
-          }),
-        });
+        const { result: toolResult, control, failed } = await executeModelToolCall(
+          ctx,
+          { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+          node.localTools,
+        );
         out.toolResults.push({
           name: call.toolName,
           args: call.input,
@@ -119,10 +109,10 @@ export class TextDriver implements ChannelDriver {
           toolName: call.toolName,
           args: call.input,
           result: toolResult,
-          success: true,
+          success: !failed,
           timestamp: Date.now(),
         });
-        out.control ??= classifyControl(toolResult);
+        out.control ??= control;
 
         ctx.emit({
           type: 'tool-result',
@@ -131,17 +121,12 @@ export class TextDriver implements ChannelDriver {
           toolCallId: call.toolCallId,
         });
 
-        messages.push({
-          role: 'tool',
-          content: [
-            {
-              type: 'tool-result',
-              toolCallId: call.toolCallId,
-              toolName: call.toolName,
-              output: { type: 'json', value: toolResult as JSONValue },
-            },
-          ],
-        });
+        messages.push(
+          toolResultMessage(
+            { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+            toolResult,
+          ),
+        );
       }
     }
 

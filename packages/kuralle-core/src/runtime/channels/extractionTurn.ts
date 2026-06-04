@@ -1,4 +1,5 @@
-import { streamText, type JSONValue, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
+import { streamText, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
+import { executeModelToolCall, toolResultMessage } from './executeModelTool.js';
 import type { ResolvedNode, TurnResult } from '../../types/channel.js';
 import type { RunContext } from '../../types/run-context.js';
 import type { ReplyNode } from '../../types/flow.js';
@@ -51,38 +52,23 @@ export async function runSilentExtraction(
 
     const toolCalls = await result.toolCalls;
     for (const call of toolCalls) {
-      const localTool = node.localTools?.[call.toolName];
-      const toolResult = await ctx.tool(call.toolName, call.input, {
-        toolCallId: call.toolCallId,
-        ...(localTool && {
-          def: localTool,
-          toolCtx: {
-            session: ctx.session,
-            runState: ctx.runState,
-            tool: ctx.tool.bind(ctx),
-            now: ctx.now.bind(ctx),
-            uuid: ctx.uuid.bind(ctx),
-            emit: ctx.emit.bind(ctx),
-          },
-        }),
-      });
+      const { result: toolResult } = await executeModelToolCall(
+        ctx,
+        { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+        node.localTools,
+      );
       out.toolResults.push({
         name: call.toolName,
         args: call.input,
         result: toolResult,
         toolCallId: call.toolCallId,
       });
-      messages.push({
-        role: 'tool',
-        content: [
-          {
-            type: 'tool-result',
-            toolCallId: call.toolCallId,
-            toolName: call.toolName,
-            output: { type: 'json', value: toolResult as JSONValue },
-          },
-        ],
-      });
+      messages.push(
+        toolResultMessage(
+          { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+          toolResult,
+        ),
+      );
     }
   }
 

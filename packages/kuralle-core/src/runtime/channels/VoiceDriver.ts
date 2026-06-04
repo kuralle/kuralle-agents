@@ -7,7 +7,7 @@ import { runSilentExtraction } from './extractionTurn.js';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
-import { classifyControl } from '../../flow/classifyControl.js';
+import { executeModelToolCall } from './executeModelTool.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
 import { appendGatherBlocks, runGatherPhase } from '../grounding/index.js';
@@ -182,42 +182,28 @@ export class VoiceDriver implements ChannelDriver {
 
       const onToolCall = (id: string, name: string, args: unknown): void => {
         void (async () => {
-          try {
-            ctx.emit({ type: 'tool-call', toolName: name, args, toolCallId: id });
+          ctx.emit({ type: 'tool-call', toolName: name, args, toolCallId: id });
 
-            const localTool = localTools?.[name];
-            const toolResult = await ctx.tool(name, args, {
-              toolCallId: id,
-              ...(localTool && {
-                def: localTool,
-                toolCtx: {
-                  session: ctx.session,
-                  runState: ctx.runState,
-                  tool: ctx.tool.bind(ctx),
-                  now: ctx.now.bind(ctx),
-                  uuid: ctx.uuid.bind(ctx),
-                  emit: ctx.emit.bind(ctx),
-                },
-              }),
-            });
+          const { result: toolResult, control, failed } = await executeModelToolCall(
+            ctx,
+            { toolName: name, input: args, toolCallId: id },
+            localTools,
+          );
 
-            out.toolResults.push({ name, args, result: toolResult, toolCallId: id });
-            toolCallsMade.push({
-              toolCallId: id,
-              toolName: name,
-              args,
-              result: toolResult,
-              success: true,
-              timestamp: Date.now(),
-            });
-            out.control ??= classifyControl(toolResult);
+          out.toolResults.push({ name, args, result: toolResult, toolCallId: id });
+          toolCallsMade.push({
+            toolCallId: id,
+            toolName: name,
+            args,
+            result: toolResult,
+            success: !failed,
+            timestamp: Date.now(),
+          });
+          out.control ??= control;
 
-            ctx.emit({ type: 'tool-result', toolName: name, result: toolResult, toolCallId: id });
+          ctx.emit({ type: 'tool-result', toolName: name, result: toolResult, toolCallId: id });
 
-            this.client.sendToolResponse([{ id, name, output: toolResult }]);
-          } catch (error) {
-            fail(error);
-          }
+          this.client.sendToolResponse([{ id, name, output: toolResult }]);
         })();
       };
 

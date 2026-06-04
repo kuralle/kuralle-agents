@@ -19,6 +19,8 @@ import { createRunContext } from './ctx.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
+import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
+import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 import type { selectHostTarget } from './select.js';
 import { openRun } from './openRun.js';
 import { closeRun } from './closeRun.js';
@@ -233,7 +235,20 @@ export class Runtime {
         }
       } catch (error) {
         await this.hooks?.onError?.(runCtx, error as Error);
-        throw error;
+        if (isDegradableRuntimeError(error)) {
+          const message = error instanceof Error ? error.message : String(error);
+          emit({ type: 'error', error: message });
+          emit({ type: 'text-delta', text: SAFE_DEGRADED_MESSAGE });
+          runCtx.runState.messages = [
+            ...runCtx.runState.messages,
+            { role: 'assistant', content: SAFE_DEGRADED_MESSAGE },
+          ];
+          await runCtx.runStore.putRunState(runCtx.runState);
+          terminalOutcome = 'unresolved';
+          loopResult = { kind: 'ended', reason: 'error_degraded' };
+        } else {
+          throw error;
+        }
       } finally {
         this.activeTurnAborts.delete(sessionId);
         await closeRun({
