@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.13 — H3: per-session turn lock + FIFO input inbox
+
+Patch across the graph (0.3.12 -> 0.3.13). Second hardening chunk
+(`docs/kuralle-hardening-plan.md`, Phase 0). Closes the overlapping-turn race:
+two concurrent `runtime.run()` on the SAME session (double-tap, retry-on-slow-
+stream, multi-tab, reconnect) used to interleave — both buffered into one
+overwritable input slot (last-writer-wins ate a message) and an empty consume
+threw. Now `Runtime.run` serializes turns per session via the (previously
+unwired) `SessionMutex` — the second turn's body, including its `openRun` buffer
+write, does not start until the first finishes; different sessions stay
+concurrent. The input buffer is an ordered FIFO (`setPendingUserInput` enqueues,
+`consumePendingUserInput` dequeues oldest and returns '' instead of throwing;
+legacy string slots coerce to a single-item queue). `turnInputConsumed` and all
+interactive-node parking are unchanged. core 438/438, engagement 107/107,
+hono 52/52; W1/W9/collect-parking suites green.
+
 ## 0.3.12 — H2: pinned temperature-0 control-model channel
 
 Patch across the graph (0.3.11 -> 0.3.12). First chunk of the core-primitive
