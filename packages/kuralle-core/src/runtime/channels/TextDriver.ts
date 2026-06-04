@@ -12,6 +12,8 @@ import { consumePendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
+import { speakGated, type TokenSource } from './streaming/speakGated.js';
+import { resolveStreamMode } from './streaming/mode.js';
 import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
 import { resolveStructuredDecide } from '../../flow/choiceMatch.js';
@@ -58,96 +60,108 @@ export class TextDriver implements ChannelDriver {
     const aiTools = this.resolveTools(node, ctx);
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);
     const toolCallsMade: ToolCallRecord[] = [];
-    let draftText = '';
+    const mode = resolveStreamMode(ctx, node);
+    const turnId = crypto.randomUUID();
 
-    for (let step = 0; step < maxSteps; step += 1) {
-      const result = streamText({
-        model,
-        system,
-        messages,
-        tools: aiTools,
-        abortSignal: ctx.abortSignal,
-      });
+    const source: TokenSource = {
+      async *[Symbol.asyncIterator]() {
+        for (let step = 0; step < maxSteps; step += 1) {
+          const result = streamText({
+            model,
+            system,
+            messages,
+            tools: aiTools,
+            abortSignal: ctx.abortSignal,
+          });
 
-      for await (const part of result.fullStream) {
-        if (part.type === 'text-delta') {
-          draftText += part.text;
+          for await (const part of result.fullStream) {
+            if (part.type === 'text-delta') {
+              yield { delta: part.text };
+            }
+            if (part.type === 'error') {
+              const err = (part as { error?: unknown }).error;
+              const message = err instanceof Error ? err.message : String(err);
+              ctx.emit({ type: 'error', error: message });
+              throw err instanceof Error ? err : new Error(message);
+            }
+          }
+
+          const finishReason = await result.finishReason;
+          const response = await result.response;
+          messages.push(...response.messages);
+
+          if (finishReason !== 'tool-calls') {
+            break;
+          }
+
+          const toolCalls = await result.toolCalls;
+          for (const call of toolCalls) {
+            ctx.emit({
+              type: 'tool-call',
+              toolName: call.toolName,
+              args: call.input,
+              toolCallId: call.toolCallId,
+            });
+
+            const { result: toolResult, control, failed } = await executeModelToolCall(
+              ctx,
+              { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+              node.localTools,
+            );
+            out.toolResults.push({
+              name: call.toolName,
+              args: call.input,
+              result: toolResult,
+              toolCallId: call.toolCallId,
+            });
+            toolCallsMade.push({
+              toolCallId: call.toolCallId,
+              toolName: call.toolName,
+              args: call.input,
+              result: toolResult,
+              success: !failed,
+              timestamp: Date.now(),
+            });
+            out.control ??= control;
+
+            ctx.emit({
+              type: 'tool-result',
+              toolName: call.toolName,
+              result: toolResult,
+              toolCallId: call.toolCallId,
+            });
+
+            messages.push(
+              toolResultMessage(
+                { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+                toolResult,
+              ),
+            );
+          }
         }
-        if (part.type === 'error') {
-          const err = (part as { error?: unknown }).error;
-          const message = err instanceof Error ? err.message : String(err);
-          ctx.emit({ type: 'error', error: message });
-          throw err instanceof Error ? err : new Error(message);
-        }
-      }
+      },
+    };
 
-      const finishReason = await result.finishReason;
-      const response = await result.response;
-      messages.push(...response.messages);
+    const spoken = await speakGated({
+      ctx,
+      mode,
+      turnId,
+      source,
+      runGate: async (text, _final) => {
+        const r = await applyPostTurnPolicies(ctx, text, toolCallsMade, gather.citations ?? []);
+        return {
+          blocked: !r.proceed,
+          text: r.proceed ? r.text : (r.blockedMessage ?? r.text),
+          reason: r.control?.reason,
+          control: r.control,
+          confidence: r.confidence,
+        };
+      },
+    });
 
-      if (finishReason !== 'tool-calls') {
-        break;
-      }
-
-      const toolCalls = await result.toolCalls;
-      for (const call of toolCalls) {
-        ctx.emit({
-          type: 'tool-call',
-          toolName: call.toolName,
-          args: call.input,
-          toolCallId: call.toolCallId,
-        });
-
-        const { result: toolResult, control, failed } = await executeModelToolCall(
-          ctx,
-          { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-          node.localTools,
-        );
-        out.toolResults.push({
-          name: call.toolName,
-          args: call.input,
-          result: toolResult,
-          toolCallId: call.toolCallId,
-        });
-        toolCallsMade.push({
-          toolCallId: call.toolCallId,
-          toolName: call.toolName,
-          args: call.input,
-          result: toolResult,
-          success: !failed,
-          timestamp: Date.now(),
-        });
-        out.control ??= control;
-
-        ctx.emit({
-          type: 'tool-result',
-          toolName: call.toolName,
-          result: toolResult,
-          toolCallId: call.toolCallId,
-        });
-
-        messages.push(
-          toolResultMessage(
-            { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-            toolResult,
-          ),
-        );
-      }
-    }
-
-    const postTurn = await applyPostTurnPolicies(ctx, draftText, toolCallsMade, gather.citations ?? []);
-    out.confidence = postTurn.confidence;
-    out.control = postTurn.control;
-
-    const emitText = postTurn.control ? (postTurn.blockedMessage ?? postTurn.text) : postTurn.text;
-    out.text = emitText;
-
-    if (emitText) {
-      const id = crypto.randomUUID();
-      ctx.emit({ type: 'text-start', id });
-      ctx.emit({ type: 'text-delta', id, delta: emitText });
-      ctx.emit({ type: 'text-end', id });
-    }
+    out.text = spoken.text;
+    out.control = spoken.control;
+    out.confidence = spoken.confidence;
 
     ctx.emit({ type: 'turn-end' });
     return out;

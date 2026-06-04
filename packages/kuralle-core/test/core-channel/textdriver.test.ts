@@ -10,7 +10,29 @@ import {
   stubModel,
 } from '../core-durable/helpers.js';
 import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { ValidationCapability } from '../../src/capabilities/ValidationCapability.js';
 import { z } from 'zod';
+
+const TEXT_LIFECYCLE = new Set(['text-start', 'text-delta', 'text-end', 'text-cancel']);
+
+function mockMultiChunkStream(chunks: string[]) {
+  mock.module('ai', () => {
+    const actual = require('ai');
+    return {
+      ...actual,
+      streamText: () => ({
+        fullStream: (async function* () {
+          for (const text of chunks) {
+            yield Object.assign({ type: 'text-delta' }, { text });
+          }
+        })(),
+        finishReason: Promise.resolve('stop'),
+        response: Promise.resolve({ messages: [] }),
+        toolCalls: Promise.resolve([]),
+      }),
+    };
+  });
+}
 
 afterEach(() => {
   mock.restore();
@@ -183,6 +205,144 @@ describe('TextDriver unit', () => {
     expect(collected.some((p) => p.type === 'text-delta')).toBe(true);
     expect(typeof handle.toResponseStream).toBe('function');
     expect(typeof handle.cancel).toBe('function');
+  });
+
+  describe('S1-03 speakGated streaming', () => {
+    it('REQ-1: ungated reply streams >1 text-delta with first before turn-end', async () => {
+      const chunks = ['Hello', ' world', '. How', ' are you?'];
+      mockMultiChunkStream(chunks);
+
+      const parts: HarnessStreamPart[] = [];
+      const { session, runStore, runState } = await setupDurableHarness();
+      const ctx = await createRunContext({
+        session,
+        runState,
+        runStore,
+        steps: [],
+        toolExecutor: new CoreToolExecutor({ tools: {} }),
+        model: stubModel,
+        emit: (p) => parts.push(p),
+      });
+
+      const node = reply({ id: 'stream', instructions: 'Say hello' });
+      const result = await new TextDriver().runAgentTurn(resolveReplyNode(node, {}), ctx);
+
+      expect(result.text).toBe(chunks.join(''));
+      const deltas = parts.filter((p) => p.type === 'text-delta');
+      expect(deltas.length).toBeGreaterThan(1);
+      const firstDeltaIdx = parts.findIndex((p) => p.type === 'text-delta');
+      const turnEndIdx = parts.findIndex((p) => p.type === 'turn-end');
+      expect(firstDeltaIdx).toBeGreaterThanOrEqual(0);
+      expect(turnEndIdx).toBeGreaterThan(firstDeltaIdx);
+      expect(parts.some((p) => p.type === 'text-start')).toBe(true);
+      expect(parts.some((p) => p.type === 'text-end')).toBe(true);
+    });
+
+    it('REQ-3: turn-mode node buffers to one lifecycle message', async () => {
+      const chunks = ['First ', 'second ', 'third'];
+      mockMultiChunkStream(chunks);
+
+      const turnPolicy: ValidationCapability = {
+        name: 'turn-buffer',
+        validate: async () => ({ decision: 'continue', confidence: 1 }),
+      };
+
+      const parts: HarnessStreamPart[] = [];
+      const { session, runStore, runState } = await setupDurableHarness();
+      const ctx = await createRunContext({
+        session,
+        runState,
+        runStore,
+        steps: [],
+        toolExecutor: new CoreToolExecutor({ tools: {} }),
+        model: stubModel,
+        validationPolicies: [turnPolicy],
+        emit: (p) => parts.push(p),
+      });
+
+      const node = reply({ id: 'grounded', instructions: 'Answer' });
+      const result = await new TextDriver().runAgentTurn(resolveReplyNode(node, {}), ctx);
+
+      expect(result.text).toBe(chunks.join(''));
+      expect(parts.filter((p) => p.type === 'text-delta')).toHaveLength(1);
+      expect(parts.filter((p) => p.type === 'text-start')).toHaveLength(1);
+      expect(parts.filter((p) => p.type === 'text-end')).toHaveLength(1);
+    });
+
+    it('REQ-3: turn-mode block never emits model partials', async () => {
+      const leaked = 'LEAKED-SECRET';
+      mockMultiChunkStream([leaked.slice(0, 6), leaked.slice(6)]);
+
+      const blockPolicy: ValidationCapability = {
+        name: 'block-all',
+        async validate() {
+          return {
+            decision: 'block',
+            confidence: 0,
+            rationale: 'blocked',
+            userFacingMessage: 'safe only',
+          };
+        },
+      };
+
+      const parts: HarnessStreamPart[] = [];
+      const { session, runStore, runState } = await setupDurableHarness();
+      const ctx = await createRunContext({
+        session,
+        runState,
+        runStore,
+        steps: [],
+        toolExecutor: new CoreToolExecutor({ tools: {} }),
+        model: stubModel,
+        validationPolicies: [blockPolicy],
+        emit: (p) => parts.push(p),
+      });
+
+      const node = reply({ id: 'blocked', instructions: 'Answer' });
+      const result = await new TextDriver().runAgentTurn(resolveReplyNode(node, {}), ctx);
+
+      expect(result.text).toBe('safe only');
+      const streamText = parts
+        .filter((p) => p.type === 'text-delta')
+        .map((p) => (p as { delta: string }).delta)
+        .join('');
+      expect(streamText).not.toContain('LEAKED');
+      expect(streamText).toBe('safe only');
+    });
+
+    it('REQ-12: runExtraction emits zero text lifecycle events', async () => {
+      mock.module('ai', () => {
+        const actual = require('ai');
+        return {
+          ...actual,
+          streamText: () => ({
+            fullStream: (async function* () {
+              yield Object.assign({ type: 'text-delta' }, { text: 'would speak' });
+            })(),
+            finishReason: Promise.resolve('stop'),
+            response: Promise.resolve({ messages: [] }),
+            toolCalls: Promise.resolve([]),
+          }),
+        };
+      });
+
+      const parts: HarnessStreamPart[] = [];
+      const { session, runStore, runState } = await setupDurableHarness();
+      const ctx = await createRunContext({
+        session,
+        runState,
+        runStore,
+        steps: [],
+        toolExecutor: new CoreToolExecutor({ tools: {} }),
+        model: stubModel,
+        emit: (p) => parts.push(p),
+      });
+
+      const node = reply({ id: 'extract', instructions: 'Extract only' });
+      await new TextDriver().runExtraction(resolveReplyNode(node, {}), ctx);
+
+      expect(parts.filter((p) => TEXT_LIFECYCLE.has(p.type))).toHaveLength(0);
+    });
   });
 
   it('runStructured uses a closed enum schema for choice-decides', async () => {
