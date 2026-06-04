@@ -267,7 +267,9 @@ export type { HarnessStreamPart } from './types/stream.js';
 export type { ChoiceOption, ResolvedSelection } from './types/selection.js';
 export type { RunState, StepRecord } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
-export type { ChannelDriver, TextDriver, VoiceDriver } from './runtime/channels/index.js';
+// Text is the primary channel. The realtime VoiceDriver is PAUSED and lives off
+// the headline API behind `@kuralle-agents/core/runtime` (see realtime-audio).
+export type { ChannelDriver, TextDriver } from './runtime/channels/index.js';
 export type { TurnResult } from './types/channel.js';
 export type { RunContext } from './types/run-context.js';
 export {

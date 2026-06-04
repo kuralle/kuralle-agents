@@ -1,5 +1,12 @@
 # @kuralle-agents/realtime-audio
 
+> **⏸️ Paused for now.** Kuralle is hardening **text as the primary primitive**.
+> The realtime model code here is kept intact, but the realtime `VoiceDriver` is
+> off the framework's headline API (it lives behind `@kuralle-agents/core/runtime`)
+> and is not part of the active stability program. For voice today, prefer
+> **cascaded voice over text** via [`@kuralle-agents/livekit-plugin`](https://www.npmjs.com/package/@kuralle-agents/livekit-plugin)
+> (STT → Kuralle text runtime → TTS). Provider-native speech-to-speech will resume later.
+
 Provider-native realtime audio for Kuralle — speech-to-speech voice agents powered by Gemini Live, OpenAI Realtime, or xAI Grok Realtime, with Kuralle keeping tool, flow, and handoff authority.
 
 ## Install

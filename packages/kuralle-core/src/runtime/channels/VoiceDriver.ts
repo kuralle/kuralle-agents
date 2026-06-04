@@ -101,12 +101,19 @@ export class VoiceDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const system = composeSystem(
+    const base = composeSystem(
       ctx.baseInstructions,
       resolveInstructions(node.instructions, ctx.runState.state),
       ctx.runState.state,
     );
     const schema = node.schema as z.ZodType;
+    // Parity with TextDriver: when the node offers choices, constrain the model
+    // to a single option id so an unconstrained string can't stall the decide.
+    const system = node.choices?.length
+      ? `${base}\n\nYou MUST pick exactly ONE option by its id. Valid ids: ${node.choices
+          .map((c) => c.id)
+          .join(', ')}. Respond with only the chosen id, nothing else.`
+      : base;
     const { object } = await generateObject({
       model: ctx.model,
       schema,

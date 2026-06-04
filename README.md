@@ -88,7 +88,9 @@ More examples: `packages/kuralle-core/examples/agents/` — form-filler, transfe
 
 ## Text and voice, one agent
 
-The same agent config runs over voice. `@kuralle-agents/realtime-audio` (`VoiceEngine`) drives provider-native realtime audio — Gemini, OpenAI, xAI — while Kuralle keeps tool, flow, and handoff authority. For cascaded voice (STT → Kuralle → TTS), `@kuralle-agents/livekit-plugin` bridges the runtime to a LiveKit voice pipeline with the same authority.
+The same agent config runs over voice via **cascaded voice (STT → Kuralle text runtime → TTS)**: `@kuralle-agents/livekit-plugin` bridges the runtime to a LiveKit voice pipeline with full tool/flow/handoff authority, on the text path.
+
+> **Provider-native realtime (speech-to-speech) is paused.** `@kuralle-agents/realtime-audio` (`VoiceEngine`, the realtime `VoiceDriver`) is kept intact but is off the headline API while we harden text as the primary primitive. Use cascaded voice for now; native realtime resumes later.
 
 ## Packages
 

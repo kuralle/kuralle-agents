@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.11 — Voice paused: text is the primary channel
+
+Patch across the graph (0.3.10 -> 0.3.11). Kuralle now hardens **text as the
+primary primitive**; provider-native realtime voice is **paused**. The realtime
+`VoiceDriver` is removed from the package's headline API (`@kuralle-agents/core`
+no longer exports it) — it remains intact behind the `@kuralle-agents/core/runtime`
+subpath for `@kuralle-agents/realtime-audio`, which is unchanged. No realtime model
+code was deleted. `@kuralle-agents/livekit-plugin` (cascaded STT → Kuralle text
+runtime → TTS) is unaffected — it runs on `runtime.run` (the default TextDriver),
+not the realtime VoiceDriver.
+
+Also fixed a VoiceDriver/TextDriver parity escape hatch: `VoiceDriver.runStructured`
+now applies the same single-choice-id constraint TextDriver already had, so a
+`decide` node behaves identically on both channels. READMEs note the pause + point
+to cascaded voice. core 422/422, engagement 107/107, hono 52/52.
+
 ## 0.3.10 — W3 per-node context scoping
 
 Patch across the graph (0.3.9 -> 0.3.10). Third chunk of the conversational-stability
