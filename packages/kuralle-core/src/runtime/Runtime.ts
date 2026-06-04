@@ -147,6 +147,7 @@ export class Runtime {
         steps,
         toolExecutor,
         model,
+        controlModel: opened.agent.controlModel ?? model,
         abortSignal: abortController.signal,
         emit,
         refinementPolicies: policies.refinementPolicies,

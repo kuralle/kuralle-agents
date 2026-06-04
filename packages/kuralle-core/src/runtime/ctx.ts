@@ -39,6 +39,7 @@ export interface CtxDeps {
   toolExecutor: EffectToolExecutor;
   hookRunner?: HookRunner;
   model: LanguageModel;
+  controlModel?: LanguageModel;
   refinementPolicies?: RefinementCapability[];
   validationPolicies?: ValidationCapability[];
   inputProcessors?: InputProcessor[];
@@ -173,6 +174,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     toolExecutor: deps.toolExecutor,
     hookRunner: deps.hookRunner ?? {},
     model: deps.model,
+    controlModel: deps.controlModel ?? deps.model,
     refinementPolicies: deps.refinementPolicies ?? [],
     validationPolicies: deps.validationPolicies ?? [],
     inputProcessors: deps.inputProcessors ?? [],

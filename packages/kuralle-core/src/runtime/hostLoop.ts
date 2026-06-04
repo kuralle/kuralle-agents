@@ -48,7 +48,7 @@ export async function hostLoop(options: HostLoopOptions): Promise<HostLoopResult
       const selection = await select({
         agent,
         run,
-        model: agent.routing?.model ?? agent.model ?? ctx.model,
+        model: agent.routing?.model ?? ctx.controlModel,
         alwaysRoute,
       });
 

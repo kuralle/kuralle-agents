@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-core"
   },
-  "version": "0.3.11",
+  "version": "0.3.12",
   "description": "A framework for structured conversational AI agents",
   "publishConfig": {
     "access": "public"
