@@ -6,11 +6,11 @@
 
 ## Active sprint
 
-**Sprint number:** `1`
-**Sprint name:** Protocol flip + text path
+**Sprint number:** `2`
+**Sprint name:** Voice (native realtime)
 **Status:** `not-started`
-**Goal:** Replace the single-shot `text-delta` with the `text-start`/`text-delta{id,delta}`/`text-end`/`text-cancel` lifecycle across both unions and route `TextDriver` through `speakGated`, so an ungated text reply emits more than one delta before turn-end while a grounded node still buffers — `typecheck:all` (no new failures) and `test` green at close.
-**WBS section:** [`sprints/WBS.md` § Sprint 1](./WBS.md)
+**Goal:** Route `VoiceDriver` through `speakGated` via a transcript-backed `TokenSource` so the native realtime assistant transcript streams incrementally, with the whole-answer gate running honestly post-hoc (REQ-9) and barge-in/truncate preserved.
+**WBS section:** [`sprints/WBS.md` § Sprint 2](./WBS.md)
 
 ## Build branch
 
@@ -20,24 +20,23 @@ Every sprint session — manager and IC — works **on this branch only**. Befor
 
 At session start: `git checkout plan/streaming-by-default` (or, for the very first Sprint 0 session, cut it: `git checkout main && git pull && git checkout -b plan/streaming-by-default`).
 
-## Load-bearing reading for sprint 1
+## Load-bearing reading for sprint 2
 
-The session running sprint 1 must read these in this order before delegating any story:
+The session running sprint 2 must read these in this order before delegating any story:
 
-1. `sprints/sprint-0/HANDOFF.md` — read-me-first; current state + Sprint-1 traps.
-2. `sprints/WBS.md` § Sprint 1 — stories S1-01/02/03.
-3. `docs/rfc-streaming-by-default.md` — §4.1–4.2 (lifecycle events, REQ-6/7), §4.5 (`speakGated`+`TokenSource`), §5.1 (TextDriver), §6 (pseudocode), §7 (blueprint), §11 (abort criteria).
-4. `packages/kuralle-core/src/types/stream.ts` + `types/voice.ts` — the two unions to flip (breaking).
-5. `packages/kuralle-core/src/runtime/channels/TextDriver.ts:58-147` — the accumulate-then-emit block to replace with `speakGated`.
-6. `packages/kuralle-core/src/runtime/policies/agentTurn.ts:236-272` — `applyPostTurnPolicies`, which becomes `speakGated`'s `runGate`.
-7. Sprint-0 primitives now available to wire: `runtime/channels/streaming/{mode.ts,SentenceAggregator.ts}`.
-8. **Before S1-01:** run `/code-understand` on the `HarnessStreamPart`/voice-union **consumers** (breaking-flip blast radius) and link `.understanding/<slug>.md` in the S1-01 brief.
+1. `sprints/sprint-1/HANDOFF.md` — read-me-first; current state + Sprint-2 traps (esp. REQ-9).
+2. `sprints/WBS.md` § Sprint 2 — stories S2-01 (transcript `TokenSource`), S2-02 (honest post-hoc gate).
+3. `docs/rfc-streaming-by-default.md` — §2.4 (two voice substrates), §5.1 (VoiceDriver), §10 (security), REQ-8, **REQ-9 (native-realtime honesty — defining constraint)**.
+4. `packages/kuralle-core/src/runtime/channels/VoiceDriver.ts` — accumulate-then-emit block (now emitting the trio) to replace; preserve `heardCharCount`/`truncateAt`/barge-in.
+5. `packages/kuralle-core/src/runtime/channels/streaming/speakGated.ts` — the shared path; build a transcript-backed `TokenSource` over `onTranscript`.
+6. The `@kuralle-agents/realtime-audio` `RealtimeAudioClient` (`onTranscript`, `heardCharCount`, barge-in/`onInterrupted`) — the source of voice transcript events.
+7. **Before S2-01:** `/code-understand` the realtime client transcript/barge-in path; link `.understanding/<slug>.md` in the S2-01 brief.
 
-**Gate note:** `typecheck:all` is RED at baseline (4 frozen configs — see `sprint-0/PLAN.md §0` / WBS B-06). Use the frozen-baseline guard pattern (`sprint-0/artifacts/guard-stream-s0-01.sh`) to assert "no NEW failures," not "exit 0."
+**Gate note:** `typecheck:all` is RED at baseline (4 frozen configs — see `sprint-0/PLAN.md §0` / WBS B-06). Use the frozen-baseline guard (`sprint-1/artifacts/guard-stream-s1-01.sh`) to assert "no NEW failures," not "exit 0." Grep migrations across `*.ts` AND `*.js`/`*.mjs`.
 
 ## Last completed sprint
 
-`0` — Primitives
+`1` — Protocol flip + text path
 
 ## Last completed at
 
@@ -48,13 +47,19 @@ The session running sprint 1 must read these in this order before delegating any
 | Sprint | Status | Completed at | Warmdown |
 |--------|--------|--------------|----------|
 | 0 | done | 2026-06-05 | [sprint-0/WARMDOWN.md](./sprint-0/WARMDOWN.md) |
-| 1 | not-started | — | — |
+| 1 | done | 2026-06-05 | [sprint-1/WARMDOWN.md](./sprint-1/WARMDOWN.md) |
+| 2 | not-started | — | — |
 
 When a sprint completes, append a row here from `WARMDOWN.md`.
 
 ## Backlog deltas this project life
 
 - **B-06** added (Sprint 0): fix pre-existing `typecheck:all` drift in test/example files (4 configs/14 errors); release blocker before Sprint 4's `0.4.0` gate. See WBS §4.
+- **B-07** added (Sprint 1): investigate whether `Hook.onStreamPart`/`AgentStreamPart` is a dead public surface (no live `ctx.emit` feeds it); remove if confirmed dead. Post-0.4.0. See WBS §4.
+
+## Open RFC amendments
+
+- Sprint 1: `docs/rfc-streaming-by-default.md` REQ-6 + new §4.2.1 — `AgentStreamPart` (`types/processors.ts`) added as the third in-scope union (O1). Landed in commit `c1c41fe`.
 
 ## Open RFC amendments
 
