@@ -178,7 +178,7 @@ export class SentenceAggregator {
     if (end > 0 && end === this.buffer.length) {
       this.needsLookahead = false;
       this.pendingPeriodConfirm = false;
-      const sentence = this.buffer.trimStart();
+      const sentence = this.buffer;
       this.buffer = '';
       return sentence.length > 0 ? sentence : null;
     }
@@ -188,7 +188,7 @@ export class SentenceAggregator {
   private emitFirstSentenceIfFound(): string | null {
     const end = matchEndOfSentence(this.buffer);
     if (end > 0) {
-      const sentence = this.buffer.slice(0, end).trimStart();
+      const sentence = this.buffer.slice(0, end);
       this.buffer = this.buffer.slice(end);
       return sentence.length > 0 ? sentence : null;
     }

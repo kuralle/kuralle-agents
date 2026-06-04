@@ -137,9 +137,10 @@ describe('speakGated modes', () => {
       deltas: ['Hi there. How are you?'],
       runGate: async (text) => ({ blocked: false, text }),
     });
-    expect(textDeltas(parts)).toEqual(['Hi there.', 'How are you?']);
+    expect(textDeltas(parts)).toEqual(['Hi there.', ' How are you?']);
     expect(lifecycleCounts(parts, 'turn-1')).toEqual({ starts: 1, ends: 1 });
-    expect(result.text).toBe('Hi there.How are you?');
+    expect(result.text).toBe('Hi there. How are you?');
+    expect(textDeltas(parts).join('')).toBe('Hi there. How are you?');
   });
 
   it('sentence BLOCKED: first sentence emitted; blocked sentence absent; cancel then fresh safe lifecycle', async () => {

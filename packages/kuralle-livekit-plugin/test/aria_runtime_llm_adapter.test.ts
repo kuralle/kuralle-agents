@@ -187,4 +187,28 @@ describe('KuralleRuntimeLLMAdapter session behavior', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.input).toBe('Greet the user in a helpful and friendly manner.');
   });
+
+  it('drops post-cancel deltas for the canceled turn id and forwards the safe lifecycle', async () => {
+    const runtime = mockRuntime(async function* () {
+      yield { type: 'text-start', id: 'turn-1' };
+      yield { type: 'text-delta', id: 'turn-1', delta: 'pre' };
+      yield { type: 'text-cancel', id: 'turn-1', reason: 'policy-block' };
+      yield { type: 'text-delta', id: 'turn-1', delta: 'leak' };
+      yield { type: 'text-start', id: 'safe-1' };
+      yield { type: 'text-delta', id: 'safe-1', delta: 'safe' };
+      yield { type: 'text-end', id: 'safe-1' };
+      yield { type: 'done', sessionId: 's' };
+    });
+
+    const adapter = new KuralleRuntimeLLMAdapter({ runtime });
+    const stream = adapter.chat({
+      chatCtx: {
+        items: [{ type: 'message', role: 'user', content: 'blocked' }],
+      } as never,
+    });
+
+    const text = await drainAssistantText(stream);
+    expect(text).toBe('presafe');
+    expect(text).not.toContain('leak');
+  });
 });

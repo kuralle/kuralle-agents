@@ -172,6 +172,7 @@ export class KuralleRuntimeLLMStream extends llm.LLMStream {
 
     let chunkIndex = 0;
     let runtimeTtftRecorded = false;
+    const canceledTurnIds = new Set<string>();
 
     const recordTtftOnce = () => {
       if (runtimeTtftRecorded || !metricsSink) return;
@@ -205,11 +206,20 @@ export class KuralleRuntimeLLMStream extends llm.LLMStream {
           throw new Error(part.error);
         }
 
-        if (part.type === 'text-start' || part.type === 'text-end' || part.type === 'text-cancel') {
+        if (part.type === 'text-cancel') {
+          canceledTurnIds.add(part.id);
+          continue;
+        }
+
+        if (part.type === 'text-start' || part.type === 'text-end') {
           continue;
         }
 
         if (part.type !== 'text-delta') {
+          continue;
+        }
+
+        if (canceledTurnIds.has(part.id)) {
           continue;
         }
 

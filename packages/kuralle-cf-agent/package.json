@@ -22,7 +22,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "bun test src/voice/__tests__",
+    "test": "bun test src/voice/__tests__ src/__tests__",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },

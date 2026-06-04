@@ -17,30 +17,31 @@ import { DEFAULT_STREAM_CONFIG } from './types.js';
  * CF's applyChunkToParts() then builds UIMessage parts from these chunks.
  * CF handles persistence, broadcasting, and resumability.
  */
+type SSETextState = {
+  open: boolean;
+  canceledIds: Set<string>;
+};
+
 export function createSSEResponse(
   stream: AsyncGenerator<HarnessStreamPart>,
   config: StreamAdapterConfig = DEFAULT_STREAM_CONFIG,
 ): Response {
   const encoder = new TextEncoder();
-  let textStarted = false;
+  const textState: SSETextState = { open: false, canceledIds: new Set() };
 
   const body = new ReadableStream({
     async start(controller) {
       try {
         for await (const part of stream) {
-          const lines = convertToSSELines(part, config, textStarted);
+          const lines = convertToSSELines(part, config, textState);
 
           for (const line of lines) {
-            // Track whether we've emitted text-start
-            if (line.includes('"text-start"')) textStarted = true;
-            if (line.includes('"text-end"')) textStarted = false;
-
             controller.enqueue(encoder.encode(line));
           }
         }
 
         // Ensure text is closed if still open
-        if (textStarted) {
+        if (textState.open) {
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: 'text-end' })}\n\n`),
           );
@@ -65,30 +66,49 @@ export function createSSEResponse(
  * Convert a single HarnessStreamPart to SSE data lines.
  * Returns 0+ formatted SSE lines ("data: {...}\n\n").
  */
-function convertToSSELines(
+export function convertToSSELines(
   part: HarnessStreamPart,
   config: StreamAdapterConfig,
-  textStarted: boolean,
+  textState: SSETextState,
 ): string[] {
   const lines: string[] = [];
   const sse = (obj: Record<string, unknown>) =>
     `data: ${JSON.stringify(obj)}\n\n`;
 
+  const closeTextSegment = () => {
+    if (!textState.open) return;
+    lines.push(sse({ type: 'text-end' }));
+    textState.open = false;
+  };
+
   switch (part.type) {
+    case 'text-start':
+      break;
+
+    case 'text-end':
+      closeTextSegment();
+      break;
+
+    case 'text-cancel': {
+      textState.canceledIds.add(part.id);
+      closeTextSegment();
+      break;
+    }
+
     case 'text-delta': {
-      // Emit text-start on first text chunk
-      if (!textStarted) {
+      if (textState.canceledIds.has(part.id)) {
+        break;
+      }
+      if (!textState.open) {
         lines.push(sse({ type: 'text-start' }));
+        textState.open = true;
       }
       lines.push(sse({ type: 'text-delta', delta: part.delta }));
       break;
     }
 
     case 'tool-call': {
-      // Close text before tool if open
-      if (textStarted) {
-        lines.push(sse({ type: 'text-end' }));
-      }
+      closeTextSegment();
       // CF expects tool-input-available with toolCallId, toolName, input
       lines.push(sse({
         type: 'tool-input-available',
