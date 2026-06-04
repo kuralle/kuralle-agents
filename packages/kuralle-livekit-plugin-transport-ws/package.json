@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/livekit-plugin-transport-ws",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "WebSocket transport adapter for LiveKit Agents. Run voice and text agents over plain WebSocket without a LiveKit server.",
   "type": "module",
   "main": "dist/index.js",

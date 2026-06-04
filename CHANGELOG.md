@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.8 — W1 runtime recovery boundary (errors degrade, never abort)
+
+Patch across the graph (0.3.7 -> 0.3.8). First chunk of the conversational-stability
+program (ADR 0002). A tool throw, a ToolValidationError (bad args), or a
+maxOscillations cap no longer aborts the session: errors degrade in-turn (safe
+message + non-fatal `error` event) and route to an `escalate` node or a graceful
+`error_degraded` end. New `executeModelToolCall` boundary (TextDriver+VoiceDriver),
+`degradeFlowError`, TurnControl escalate/recover. core 391/391.
+
+
 ## 0.3.7 — Fix: global tools must be executable
 
 `agent.globalTools` were made model-visible (0.3.6) but their executors were not
