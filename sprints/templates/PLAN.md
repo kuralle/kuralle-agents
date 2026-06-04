@@ -44,13 +44,8 @@ Copy this checklist into every story brief. The story is not closed until every 
 
 - [ ] CI green on Node 20, Node 22, Bun 1.1+; macOS + Ubuntu.
 - [ ] Behavioral coverage: every public surface tested with at least one happy-path and one failure-path test.
-- [ ] Sandwich review (r1) closed: all `blocker` and `major` items resolved.
-- [ ] Second-opinion review (r2) closed: all `blocker` and `major` items resolved.
-- [ ] Synthesis written and load-bearing items resolved.
-- [ ] Public TypeScript surfaces match RFC-002 §6 (or RFC amendment merged in same PR).
-- [ ] Telemetry events match `wiki/03_anatomy.md §9.1` (or wiki amendment merged in same PR).
-- [ ] Package README updated.
-- [ ] Demo artifact attached to PR.
+- [ ] Proof JSON written; manager proceed evidence = **PROCEED**
+- [ ] Demo artifact attached (per story or per sprint per PLAN §4)
 - [ ] No `--no-verify`, no `@ts-ignore`, no `try/except: pass`.
 - [ ] PR description includes story id + DoD checklist + demo link.
 

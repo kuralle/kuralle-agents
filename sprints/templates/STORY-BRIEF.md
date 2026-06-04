@@ -2,7 +2,9 @@
 
 > **You are the IC engineer (`cursor` worker, default for this project — fresh process for this story; clean context window) with no prior context.** This brief is self-contained. Read it end-to-end before writing any code. If anything in this brief is ambiguous or contradicts what you find on disk, **stop and ask** rather than guess.
 >
-> **Atomic-commit policy:** when you finish, stage every file you create / modify and commit atomically with `[S{N}-{nn}] {short title}` on **`plan/whatsapp-engagement`** (see `sprints/STATE.md` § Build branch). Do NOT push. Do NOT checkout `main`. Do NOT make multiple commits per story. Manager handles proceed evidence, fix-pass, and closeout commits later.
+> **Atomic-commit policy:** when you finish, stage every file you create / modify and commit atomically with `[S{N}-{nn}] {short title}` on the **active build branch** (`sprints/STATE.md` § Build branch). Do NOT push. Do NOT checkout `main`/`master`. Do NOT make multiple commits per story. Manager handles proceed evidence, fix-pass, and closeout commits later.
+>
+> **Proof policy:** before exiting, write `.handoff/proof-{slug}.json` per `delegate-proof-schema.md` (slug = `s{N}-{nn}`). Manager verifies with `verify-handoff-proof.sh` — proceed evidence only between stories; sprint review in Phase B.
 
 ---
 
@@ -31,7 +33,7 @@ You may also skim the source repos under `research/{agents-js,cloudflare-agents,
 
 ## 3. Files you will create or modify
 
-Be explicit. The reviewer will check that you didn't touch anything else.
+Be explicit. Manager proceed evidence will check that you didn't touch anything else.
 
 **Create:**
 - `packages/.../src/...`
@@ -50,7 +52,7 @@ Be explicit. The reviewer will check that you didn't touch anything else.
 
 ## 4. Acceptance criteria (numbered, in priority order)
 
-These are the gates the reviewer will check. Pass all of them.
+These are the acceptance criteria. Pass all of them before committing.
 
 1. ...
 2. ...
@@ -75,7 +77,7 @@ Every box must be ticked before you report back:
 
 ## 6. What NOT to do
 
-This is anti-scope. The reviewer will reject the diff if you do any of these:
+This is anti-scope. Manager proceed evidence will reject the diff if you do any of these:
 
 - Do not refactor adjacent code that this story does not require.
 - Do not "improve" comments, formatting, or naming outside the changed lines.
@@ -100,25 +102,40 @@ Place it under `sprints/sprint-{N}/artifacts/{story}.{ext}` and reference it in 
 
 ---
 
-## 8. How to report back
+## 8. Proof commands + validation contract
 
-When you finish:
+**Slug:** `s{N}-{nn}` (e.g. `s0-01`) → `.handoff/proof-s{N}-{nn}.json`
 
-1. Open a PR titled `[S{N}-{nn}] {short title}`.
-2. PR description must include:
-   - This story brief link.
-   - The DoD checklist with every box ticked.
-   - The demo artifact link.
-   - The list of files changed.
-   - The list of tests added (file:line).
-   - One paragraph of "what I considered but didn't do, and why" — the trade-offs you accepted.
-3. Tag the PR with `sprint-{N}` and `awaiting-r1-review`.
+**Assertions required** (from RFC §9.0 — manager fills in per story):
 
-The reviewer (main session) will then run the sandwich review.
+| ID | Description |
+|----|-------------|
+| `REQ-N` / `test:*` / `cmd:*` / `A-UI-*` | {list from RFC §9.0 for this story} |
+
+**Commands to run** (every command must appear in `commands_run[]` with exit code 0):
+
+```bash
+# Example — replace with story-specific commands
+cd {{monorepo}} && npm test -- path/to/test.ts
+cd {{monorepo}} && npm run build
+```
+
+Each claim in proof JSON must cite `satisfies_assertions[]` and attach stdout sidecars where schema requires SHA-256.
 
 ---
 
-## 9. If you get stuck
+## 9. How to report back
+
+When you finish (before exiting):
+
+1. Commit atomically: `[S{N}-{nn}] {short title}`.
+2. Write `.handoff/proof-s{N}-{nn}.json` + sidecars.
+3. Ensure demo artifact exists at `sprints/sprint-{N}/artifacts/{story}.{ext}` if required.
+4. Exit. **Do not** open a PR — manager collects proceed evidence; sprint manager review runs in Phase B.
+
+---
+
+## 10. If you get stuck
 
 - If a file path or symbol referenced in this brief does not exist on disk: stop. Report back with what you found and what you expected.
 - If the acceptance criteria are mutually contradictory or contradict the RFCs: stop. Report back.

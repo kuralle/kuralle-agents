@@ -1,6 +1,6 @@
 # Proceed Evidence — `S{N}-{nn}` {title}
 
-> **Manager artifact — Phase A only.** Confirms this story may proceed to the next story. **Not a gate worker review.** Full pi / r1 / r2 gates run only in **Phase B** after every story in the sprint is committed.
+> **Manager artifact — Phase A only.** Confirms this story may proceed to the next. **Not a review worker.** Manager sprint review runs in Phase B after every story has **PROCEED**.
 
 ---
 
@@ -23,7 +23,7 @@
 
 **Verdict:** `PROCEED` | `HOLD` (do not start next story until fixed)
 
-**If HOLD:** re-delegate IC with fix brief — do **not** invoke pi gate or codex r2 mid-sprint.
+**If HOLD:** re-delegate IC with fix brief — manager sprint review runs in Phase B, not between stories.
 
 ---
 
