@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/voice-protocol",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "Canonical client-server wire protocol for Kuralle voice transports. Pure TypeScript types + optional Zod schemas, zero runtime.",
   "keywords": [
     "voice",

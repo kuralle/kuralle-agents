@@ -47,16 +47,16 @@ export function buildAutoRetrieveProvider(
   }
 
   const overrides = agent.knowledge as AgentKnowledgeOverrides;
-  const maxOutputTokens = provider.resolveConfig(overrides).maxOutputTokens;
 
   return {
-    retrieve: async (ctx) => {
-      const query = latestUserMessage(ctx);
+    retrieve: async (ctx, scope) => {
+      const query = scope?.query ?? latestUserMessage(ctx);
+      const merged = scope?.knowledge ? { ...overrides, ...scope.knowledge } : overrides;
       const cache = undefined;
       const { results, events } = await provider.retrieve(
         query || ' ',
         cache,
-        overrides,
+        merged,
         false,
       );
 
@@ -64,14 +64,15 @@ export function buildAutoRetrieveProvider(
         ctx.emit(event);
       }
 
-      const compiled = provider.getCompiledKnowledge(overrides);
+      const compiled = provider.getCompiledKnowledge(merged);
       const retrievalResults = results.length > 0 ? results : [];
       const combined = [
         ...(compiled ? [{ text: compiled }] : []),
         ...retrievalResults.map((result) => ({ text: result.text })),
       ];
 
-      return formatRetrievalBlock(combined, maxOutputTokens * 4);
+      const maxChars = provider.resolveConfig(merged).maxOutputTokens * 4;
+      return formatRetrievalBlock(combined, maxChars);
     },
   };
 }

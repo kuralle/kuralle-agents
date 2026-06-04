@@ -1,5 +1,6 @@
-import type { LanguageModel, ToolSet } from 'ai';
+import type { LanguageModel, ModelMessage, ToolSet } from 'ai';
 import type { Instructions } from './agentConfig.js';
+import type { AgentKnowledgeOverrides } from './voice.js';
 import type { StandardSchemaV1 } from './standard-schema.js';
 import type { ContextStrategy } from './context.js';
 import type { TurnResult } from './channel.js';
@@ -21,6 +22,21 @@ export interface Flow {
 
 export type FlowNode = ReplyNode | CollectNode | ActionNode | DecideNode;
 
+/** Per-node retrieval/memory scoping (W3). All optional; omitting `grounding`
+ *  entirely leaves the node grounded exactly as the agent-wide default. */
+export interface NodeGrounding {
+  /** Retrieval/memory query for this node. A fixed topic string, or a function
+   *  over current flow state + message history. Defaults to the last user message. */
+  query?: string | ((state: FlowState, history: ModelMessage[]) => string);
+  /** Node-scoped knowledge overrides, merged OVER the agent's (node wins). Most
+   *  useful: `filter` (restrict to a node-specific doc subset) and `autoRetrieve:false`
+   *  to skip retrieval for this node. `topK`/`maxOutputTokens` also honored. */
+  knowledge?: AgentKnowledgeOverrides & { autoRetrieve?: boolean };
+  /** Node-scoped memory: `preload:false` skips memory preload for this node;
+   *  `tokenBudget` overrides the agent default for this node only. */
+  memory?: { preload?: boolean; tokenBudget?: number };
+}
+
 export type Transition =
   | FlowNode
   | (() => FlowNode)
@@ -37,6 +53,7 @@ export interface ReplyNode {
   tools?: ToolSet | ((state: FlowState) => ToolSet);
   model?: LanguageModel;
   context?: ContextStrategy;
+  grounding?: NodeGrounding;
   next?: (turn: TurnResult, state: FlowState) => Transition | Promise<Transition>;
 }
 

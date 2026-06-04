@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.10 — W3 per-node context scoping
+
+Patch across the graph (0.3.9 -> 0.3.10). Third chunk of the conversational-stability
+program (ADR 0002). Grounding was assembled once per turn, agent-wide, for reply
+nodes only — every node retrieved with the same KB scope and the same query
+(`latestUserMessage`), even when the node's job had nothing to do with the user's
+last words. W3 makes grounding node-scoped on reply nodes (the ElevenLabs per-node
+context-assembly model; `decide` stays a KB-free out-of-band evaluator, `collect`
+extraction stays silent). New optional `ReplyNode.grounding` (`NodeGrounding`): a
+node-specific `query` (string or `(state, history) => string`), a node `knowledge`
+subset merged over the agent's (`filter`/`topK`/`maxOutputTokens`/`autoRetrieve:false`),
+and node `memory` (`preload:false`/`tokenBudget`). `runGatherPhase(ctx, scope?)` is
+now node-aware; `AutoRetrieveProvider.retrieve`/`MemoryService.preload` take an
+optional `GatherScope`. No provider changes — the per-call query+overrides path
+already existed. Additive: no `grounding` ⇒ byte-identical to today (locked by a
+baseline-equality test). core 422/422.
+
 ## 0.3.9 — W9 deterministic mutation/confirm gate
 
 Patch across the graph (0.3.8 -> 0.3.9). Second chunk of the conversational-stability

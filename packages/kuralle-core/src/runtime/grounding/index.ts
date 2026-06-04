@@ -9,7 +9,8 @@ export {
   runMemoryIngest,
   warnMissingUserId,
 } from './memory.js';
-export { runGatherPhase, type GatherResult } from './gather.js';
+export { runGatherPhase, type GatherResult, type GatherScope } from './gather.js';
+export { resolveNodeGatherScope } from './nodeScope.js';
 export {
   createInMemoryKnowledgeConfig,
   createInMemoryKnowledgeRetriever,

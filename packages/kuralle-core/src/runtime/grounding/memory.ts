@@ -46,16 +46,16 @@ export function buildMemoryService(
 
   return {
     preload: preloadEnabled
-      ? async (ctx) => {
+      ? async (ctx, scope) => {
           if (!ctx.session.userId) {
             warnMissingUserId(ctx.session.id);
             return undefined;
           }
-          const userInput = latestUserMessage(ctx);
+          const userInput = scope?.query ?? latestUserMessage(ctx);
           if (!userInput.trim()) {
             return undefined;
           }
-          const budget = agent.memory?.preload?.tokenBudget ?? 500;
+          const budget = scope?.memory?.tokenBudget ?? agent.memory?.preload?.tokenBudget ?? 500;
           const block = await preloadMemoryContext(service, ctx.session, userInput, budget);
           return block ? `\n\n${block}` : undefined;
         }

@@ -10,7 +10,7 @@ import type { Tool, AnyTool } from '../../types/effectTool.js';
 import { executeModelToolCall } from './executeModelTool.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
-import { appendGatherBlocks, runGatherPhase } from '../grounding/index.js';
+import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import type { RealtimeSessionConfig, RealtimeToolResponse } from '../../realtime/RealtimeAudioClient.js';
 import type { RealtimeAudioClient } from '../../realtime/RealtimeAudioClient.js';
 import { resolveVoiceGeminiTools } from './voiceTools.js';
@@ -51,7 +51,8 @@ export class VoiceDriver implements ChannelDriver {
       return { text: blocked, toolResults: [] };
     }
 
-    const gather = await runGatherPhase(ctx);
+    const scope = resolveNodeGatherScope(replyNode, ctx.runState.state, ctx.runState.messages);
+    const gather = await runGatherPhase(ctx, scope);
     const out: TurnResult = { text: '', toolResults: [] };
     const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
     const baseSystem = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);

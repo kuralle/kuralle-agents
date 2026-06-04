@@ -9,6 +9,13 @@ import type { ValidationCapability } from '../capabilities/ValidationCapability.
 import type { Limits } from './guardrails.js';
 import type { AnyTool } from './effectTool.js';
 import type { Instructions } from './agentConfig.js';
+import type { AgentKnowledgeOverrides } from './voice.js';
+
+export interface GatherScope {
+  query?: string;
+  knowledge?: AgentKnowledgeOverrides & { autoRetrieve?: boolean };
+  memory?: { preload?: boolean; tokenBudget?: number };
+}
 
 export interface EffectToolExecutor {
   execute(args: {
@@ -25,11 +32,11 @@ export interface EffectToolExecutor {
 }
 
 export interface AutoRetrieveProvider {
-  retrieve(ctx: RunContext): Promise<string | undefined>;
+  retrieve(ctx: RunContext, scope?: GatherScope): Promise<string | undefined>;
 }
 
 export interface MemoryService {
-  preload?(ctx: RunContext): Promise<string | undefined>;
+  preload?(ctx: RunContext, scope?: GatherScope): Promise<string | undefined>;
   ingest?(ctx: RunContext): Promise<void>;
 }
 

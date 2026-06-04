@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/http-client",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "Generic HTTP client with exponential-backoff retry, token-bucket rate limiting, and pluggable error classification. Extracted from @kuralle-agents/messaging-meta/graph-api for reuse across Meta, Telegram, Twilio, Stripe and similar REST integrations.",
   "type": "module",
   "main": "dist/index.js",

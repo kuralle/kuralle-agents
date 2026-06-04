@@ -250,7 +250,15 @@ export { buildToolSet, toolToAiSdk, ToolApprovalDeniedError } from './tools/effe
 export type { Tool as EffectTool } from './types/effectTool.js';
 export type { AgentRoute } from './types/processors.js';
 export type { AgentConfig, Instructions } from './types/agentConfig.js';
-export type { Flow, FlowNode, Transition, CollectNode, DecideNode, ConfirmGate } from './types/flow.js';
+export type {
+  Flow,
+  FlowNode,
+  Transition,
+  CollectNode,
+  DecideNode,
+  ConfirmGate,
+  NodeGrounding,
+} from './types/flow.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
 export type { Route } from './types/route.js';
