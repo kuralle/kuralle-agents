@@ -9,7 +9,7 @@ import type { ValidationCapability } from '../capabilities/ValidationCapability.
 import type { Limits } from './guardrails.js';
 import type { AnyTool } from './effectTool.js';
 import type { Instructions } from './agentConfig.js';
-import type { AgentKnowledgeOverrides } from './voice.js';
+import type { AgentKnowledgeOverrides, SourceRef } from './voice.js';
 
 export interface GatherScope {
   query?: string;
@@ -31,8 +31,13 @@ export interface EffectToolExecutor {
   getTool?(name: string): AnyTool | undefined;
 }
 
+export interface AutoRetrieveResult {
+  block?: string;
+  citations?: SourceRef[];
+}
+
 export interface AutoRetrieveProvider {
-  retrieve(ctx: RunContext, scope?: GatherScope): Promise<string | undefined>;
+  retrieve(ctx: RunContext, scope?: GatherScope): Promise<AutoRetrieveResult | string | undefined>;
 }
 
 export interface MemoryService {
@@ -74,6 +79,8 @@ export interface RunContext {
    * context. Reset to false on every `createRunContext` (i.e. every turn).
    */
   turnInputConsumed?: boolean;
+  /** Citations from the latest gather-phase retrieval on this turn. */
+  lastRetrievalCitations?: SourceRef[];
   /** Agent base layer (ADR 0001), set when entering a flow. `baseInstructions`
    *  is composed as a prefix into every node turn's system prompt (persona /
    *  safety / grounding floor); `globalTools` are safe tools made model-visible

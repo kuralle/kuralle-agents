@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-messaging-meta"
   },
-  "version": "0.3.17",
+  "version": "0.3.18",
   "description": "Meta platform clients (WhatsApp, Messenger, Instagram) for Kuralle messaging",
   "type": "module",
   "main": "dist/index.js",

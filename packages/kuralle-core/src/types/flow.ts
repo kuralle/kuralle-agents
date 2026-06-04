@@ -54,6 +54,8 @@ export interface ReplyNode {
   model?: LanguageModel;
   context?: ContextStrategy;
   grounding?: NodeGrounding;
+  /** When set, routes to `onLow` when post-turn validation confidence is below `min`. */
+  confidenceGate?: { min: number; onLow: Transition };
   next?: (turn: TurnResult, state: FlowState) => Transition | Promise<Transition>;
 }
 

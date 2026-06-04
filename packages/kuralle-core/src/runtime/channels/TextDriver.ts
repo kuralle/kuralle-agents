@@ -132,12 +132,15 @@ export class TextDriver implements ChannelDriver {
       }
     }
 
-    const postTurn = await applyPostTurnPolicies(ctx, draftText, toolCallsMade);
-    const finalText = postTurn.text;
-    out.text = finalText;
+    const postTurn = await applyPostTurnPolicies(ctx, draftText, toolCallsMade, gather.citations ?? []);
+    out.confidence = postTurn.confidence;
+    out.control = postTurn.control;
 
-    if (finalText) {
-      ctx.emit({ type: 'text-delta', text: finalText });
+    const emitText = postTurn.control ? (postTurn.blockedMessage ?? postTurn.text) : postTurn.text;
+    out.text = emitText;
+
+    if (emitText) {
+      ctx.emit({ type: 'text-delta', text: emitText });
     }
 
     ctx.emit({ type: 'turn-end' });

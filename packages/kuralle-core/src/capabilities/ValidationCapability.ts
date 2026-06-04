@@ -1,3 +1,4 @@
+import type { EscalationReason } from '../escalation/types.js';
 import type { Session, SourceRef, ToolCallRecord } from '../types/index.js';
 
 export interface ValidationCapability {
@@ -18,5 +19,13 @@ export interface ValidateInput {
 export type ValidateDecision =
   | { decision: 'continue'; confidence: number; rationale?: string }
   | { decision: 'rewrite'; confidence: number; rewrittenOutput: string; rationale: string }
+  | {
+      decision: 'escalate';
+      confidence: number;
+      rationale: string;
+      escalateTo?: string;
+      escalationReason?: EscalationReason;
+      userFacingMessage?: string;
+    }
   | { decision: 'block'; confidence: number; rationale: string; userFacingMessage?: string };
 

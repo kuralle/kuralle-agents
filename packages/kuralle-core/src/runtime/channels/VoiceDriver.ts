@@ -91,11 +91,15 @@ export class VoiceDriver implements ChannelDriver {
       }
     }
 
-    const postTurn = await applyPostTurnPolicies(ctx, draftText, toolCallsMade);
-    out.text = postTurn.text;
+    const postTurn = await applyPostTurnPolicies(ctx, draftText, toolCallsMade, gather.citations ?? []);
+    out.confidence = postTurn.confidence;
+    out.control = postTurn.control;
 
-    if (out.text) {
-      ctx.emit({ type: 'text-delta', text: out.text });
+    const emitText = postTurn.control ? (postTurn.blockedMessage ?? postTurn.text) : postTurn.text;
+    out.text = emitText;
+
+    if (emitText) {
+      ctx.emit({ type: 'text-delta', text: emitText });
     }
 
     ctx.emit({ type: 'turn-end' });

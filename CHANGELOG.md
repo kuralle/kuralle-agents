@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.18 — H6: author-reachable confidence/grounding gate
+
+Patch across the graph (0.3.17 -> 0.3.18). Completes the text-hardening backlog.
+The `ValidationCapability` machinery existed but was unreachable (`resolvePolicies`
+hardcoded `validationPolicies:[]`, `agentTurn` hardcoded `knowledgeCitations:[]`),
+and a `block` decision emitted a fallback then continued as if the turn happened —
+no engine backstop against a hallucination. H6 (additive-by-config, NO flag):
+- `AgentConfig.validate` / `refine` are wired through `resolveAgentPolicies`.
+- Retrieved `SourceRef[]` citations from gather are threaded into `ValidateInput`
+  (the missing half of W3 grounding) + a `knowledge-citation` audit entry.
+- A `block` / `escalate` validation decision now emits a SAFE message (never the
+  un-validated model draft) and reroutes via the existing W1 recover/escalate
+  control path — instead of streaming the reply and continuing.
+- New `ReplyNode.confidenceGate { min, onLow }`: a low-confidence turn routes to
+  `onLow` + a low-confidence escalation audit entry. `TurnResult.confidence`
+  populated from the validation decision.
+Additive: an agent with no `validate`/`refine`/`confidenceGate` is byte-identical
+to 0.3.17 (parity test — empty policy list short-circuits to the model text).
+core 485/485; W1/W9/H1/H4/H5/confirm-gate/parking/turn-lock green.
+
 ## 0.3.17 — H5: in-flow digression / answer-then-resume (default OFF)
 
 Patch across the graph (0.3.16 -> 0.3.17). Behind the same default-OFF flag as H1
