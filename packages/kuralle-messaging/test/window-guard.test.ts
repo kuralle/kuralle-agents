@@ -127,7 +127,7 @@ function createMockPlatform(options?: {
 }
 
 async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, text };
+  yield { type: 'text-delta' as const, id: 't', delta: text };
 }
 
 describe('windowGuard', () => {

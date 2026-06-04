@@ -10,7 +10,10 @@ function createFakeRuntime() {
   const makeHandle = ({ input, sessionId, userId }) => {
     calls.push({ input, sessionId, userId });
     const events = (async function* () {
-      yield { type: 'text-delta', text: 'Model welcome' };
+      const id = 'welcome-id';
+      yield { type: 'text-start', id };
+      yield { type: 'text-delta', id, delta: 'Model welcome' };
+      yield { type: 'text-end', id };
       yield { type: 'done', sessionId: sessionId ?? 'generated-session', timestamp: new Date().toISOString() };
     })();
     const handle = Promise.resolve({ text: 'Model welcome', toolResults: [] });
@@ -122,10 +125,10 @@ test('widgetWelcomeMode=static sends deterministic welcome and optional chips', 
     const events = await connectAndCollect(server.port);
     assert.deepEqual(
       events.map((event) => event.type),
-      ['connected', 'text-delta', 'suggested-questions', 'done'],
+      ['connected', 'text-start', 'text-delta', 'text-end', 'suggested-questions', 'done'],
     );
-    assert.equal(events[1].text, "I'm the Ninewells Hospital virtual assistant. How can I assist you today?");
-    assert.deepEqual(events[2].suggestions, ['Check Availability', 'Book an Appointment', 'Inquiries']);
+    assert.equal(events[2].delta, "I'm the Ninewells Hospital virtual assistant. How can I assist you today?");
+    assert.deepEqual(events[4].suggestions, ['Check Availability', 'Book an Appointment', 'Inquiries']);
     assert.equal(server.calls.length, 0, 'static mode should not invoke runtime.stream for welcome');
   } finally {
     await server.close();
@@ -139,8 +142,14 @@ test('widgetWelcomeMode=model uses runtime streaming for welcome', async () => {
 
   try {
     const events = await connectAndCollect(server.port);
-    assert.deepEqual(events.map((event) => event.type), ['connected', 'text-delta', 'done']);
-    assert.equal(events[1].text, 'Model welcome');
+    assert.deepEqual(events.map((event) => event.type), [
+      'connected',
+      'text-start',
+      'text-delta',
+      'text-end',
+      'done',
+    ]);
+    assert.equal(events[2].delta, 'Model welcome');
     assert.equal(server.calls.length, 1);
     assert.match(server.calls[0].input, /new user has connected/i);
   } finally {

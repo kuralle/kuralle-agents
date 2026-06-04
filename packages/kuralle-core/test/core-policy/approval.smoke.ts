@@ -134,7 +134,7 @@ describeLive(`core-v2 durable approval smoke (${lm?.label ?? 'no live key'})`, (
 
     const transcript = [...parts1, ...parts2]
       .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
-      .map((part) => part.text)
+      .map((part) => part.delta)
       .join('');
     expect(transcript.length).toBeGreaterThan(0);
   });

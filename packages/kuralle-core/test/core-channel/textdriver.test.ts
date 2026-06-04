@@ -24,8 +24,8 @@ describe('TextDriver unit', () => {
         ...actual,
         streamText: () => ({
           fullStream: (async function* () {
-            yield { type: 'text-delta', text: 'Hello' };
-            yield { type: 'text-delta', text: ' world' };
+            yield Object.assign({ type: 'text-delta' }, { text: 'Hello' });
+            yield Object.assign({ type: 'text-delta' }, { text: ' world' });
           })(),
           finishReason: Promise.resolve('stop'),
           response: Promise.resolve({ messages: [] }),
@@ -53,7 +53,7 @@ describe('TextDriver unit', () => {
     const result = await driver.runAgentTurn(resolveReplyNode(node, {}), ctx);
 
     expect(result.text).toBe('Hello world');
-    expect(parts.filter((p) => p.type === 'text-delta').map((p) => (p as { text: string }).text).join('')).toBe('Hello world');
+    expect(parts.filter((p) => p.type === 'text-delta').map((p) => p.delta).join('')).toBe('Hello world');
     expect(parts.some((p) => p.type === 'turn-end')).toBe(true);
   });
 
@@ -79,7 +79,7 @@ describe('TextDriver unit', () => {
           if (streamCall === 1) {
             return {
               fullStream: (async function* () {
-                yield { type: 'text-delta', text: 'Calling tool' };
+                yield Object.assign({ type: 'text-delta' }, { text: 'Calling tool' });
               })(),
               finishReason: Promise.resolve('tool-calls'),
               response: Promise.resolve({
@@ -97,7 +97,7 @@ describe('TextDriver unit', () => {
           }
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: ' Done' };
+              yield Object.assign({ type: 'text-delta' }, { text: ' Done' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),
@@ -140,7 +140,7 @@ describe('TextDriver unit', () => {
         ...actual,
         streamText: () => ({
           fullStream: (async function* () {
-            yield { type: 'text-delta', text: 'Hi' };
+            yield Object.assign({ type: 'text-delta' }, { text: 'Hi' });
           })(),
           finishReason: Promise.resolve('stop'),
           response: Promise.resolve({ messages: [] }),

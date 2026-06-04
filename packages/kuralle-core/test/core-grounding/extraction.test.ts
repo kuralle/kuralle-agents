@@ -143,7 +143,7 @@ describe('collect extraction is non-speaking (structural backstop)', () => {
     await runFlow(flow, runState, maliciousDriver, ctx);
 
     // The malicious extraction prose is never emitted as text...
-    expect(parts.some((p) => p.type === 'text-delta' && FORBIDDEN.test(String((p as { text?: string }).text)))).toBe(false);
+    expect(parts.some((p) => p.type === 'text-delta' && FORBIDDEN.test(String((p as { delta?: string }).delta)))).toBe(false);
     // ...and never appended to conversation history.
     expect(runState.messages.some((m) => m.role === 'assistant' && FORBIDDEN.test(String(m.content)))).toBe(false);
     // Extraction itself still worked (the field was captured).
@@ -192,7 +192,7 @@ describe('collect extraction is non-speaking (structural backstop)', () => {
 
     const result = await runFlow(flow, runState, partialDriver, ctx);
 
-    const texts = parts.filter((p) => p.type === 'text-delta').map((p) => String((p as { text?: string }).text));
+    const texts = parts.filter((p) => p.type === 'text-delta').map((p) => String((p as { delta?: string }).delta));
     expect(result).toEqual({ kind: 'awaitingUser' });
     expect(texts.some((t) => FORBIDDEN.test(t))).toBe(false); // no model lie
     expect(texts.some((t) => /email/i.test(t))).toBe(true); // deterministic ask for the missing field

@@ -49,7 +49,7 @@ describeLive(`core-v2 knowledge live smoke (${lm?.label ?? 'no live key'})`, () 
     let answer = '';
     for await (const part of handle.events) {
       if (part.type === 'text-delta') {
-        answer += part.text;
+        answer += part.delta;
       }
     }
     await handle;

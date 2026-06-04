@@ -74,9 +74,9 @@ describeLive(`core-v2 flow live smoke (${lm?.label ?? 'no live key'})`, () => {
         if (part.type === 'text-delta') {
           const last = transcript[transcript.length - 1];
           if (last?.startsWith('assistant: ')) {
-            transcript[transcript.length - 1] = `assistant: ${last.slice('assistant: '.length)}${part.text}`;
+            transcript[transcript.length - 1] = `assistant: ${last.slice('assistant: '.length)}${part.delta}`;
           } else {
-            transcript.push(`assistant: ${part.text}`);
+            transcript.push(`assistant: ${part.delta}`);
           }
         }
       },
@@ -93,7 +93,7 @@ describeLive(`core-v2 flow live smoke (${lm?.label ?? 'no live key'})`, () => {
 
     const assistantText = parts
       .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
-      .map((part) => part.text)
+      .map((part) => part.delta)
       .join('');
 
     expect(assistantText.length).toBeGreaterThan(0);

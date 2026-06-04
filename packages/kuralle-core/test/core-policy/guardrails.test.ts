@@ -24,7 +24,7 @@ describe('guardrails', () => {
         ...actual,
         streamText: () => ({
           fullStream: (async function* () {
-            yield { type: 'text-delta', text: 'Email me at user@example.com please.' };
+            yield Object.assign({ type: 'text-delta' }, { text: 'Email me at user@example.com please.' });
           })(),
           finishReason: Promise.resolve('stop'),
           response: Promise.resolve({ messages: [] }),
@@ -51,7 +51,7 @@ describe('guardrails', () => {
       }],
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push(part.text);
+          emitted.push(part.delta);
         }
       },
     });
@@ -72,7 +72,7 @@ describe('guardrails', () => {
         ...actual,
         streamText: () => ({
           fullStream: (async function* () {
-            yield { type: 'text-delta', text: 'secret-token-12345' };
+            yield Object.assign({ type: 'text-delta' }, { text: 'secret-token-12345' });
           })(),
           finishReason: Promise.resolve('stop'),
           response: Promise.resolve({ messages: [] }),
@@ -101,7 +101,7 @@ describe('guardrails', () => {
       outputProcessors: [scrubber],
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push(part.text);
+          emitted.push(part.delta);
         }
       },
     });

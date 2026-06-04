@@ -213,7 +213,7 @@ function createFlowRouterManager(rt: Runtime) {
           hasEnded = true;
         }
         if (part.type === 'text-delta') {
-          yield { type: part.type, text: part.text };
+          yield { type: part.type, id: part.id, delta: part.delta };
         }
         if (part.type === 'error') {
           yield { type: part.type, error: part.error };

@@ -50,7 +50,7 @@ describeLive(`TextDriver live smoke (${lm?.label ?? 'no live key'})`, () => {
 
     const streamedText = parts
       .filter((p): p is Extract<HarnessStreamPart, { type: 'text-delta' }> => p.type === 'text-delta')
-      .map((p) => p.text)
+      .map((p) => p.delta)
       .join('');
 
     expect(streamedText.length).toBeGreaterThan(0);

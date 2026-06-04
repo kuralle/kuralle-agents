@@ -252,7 +252,7 @@ describe('LLM-brain conformance gates G1–G6', () => {
           if (streamCall === 1) {
             return {
               fullStream: (async function* () {
-                yield { type: 'text-delta', text: 'Picking' };
+                yield Object.assign({ type: 'text-delta' }, { text: 'Picking' });
               })(),
               finishReason: Promise.resolve('tool-calls'),
               response: Promise.resolve({ messages: [] }),
@@ -267,7 +267,7 @@ describe('LLM-brain conformance gates G1–G6', () => {
           }
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: ' Done' };
+              yield Object.assign({ type: 'text-delta' }, { text: ' Done' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),

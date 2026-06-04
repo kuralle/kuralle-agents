@@ -68,7 +68,7 @@ async function collectStreamTimed(
   const doneEvent = events.find((e) => e.type === 'done');
   const fullText = events
     .filter((e): e is TimedEvent & { part: Extract<HarnessStreamPart, { type: 'text-delta' }> } => e.type === 'text-delta')
-    .map((e) => e.part.text)
+    .map((e) => e.part.delta)
     .join('');
 
   return {

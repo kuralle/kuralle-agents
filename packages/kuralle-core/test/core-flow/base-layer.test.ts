@@ -19,7 +19,7 @@ function captureStream(captured: Record<string, unknown>[]) {
         captured.push(args);
         return {
           fullStream: (async function* () {
-            yield { type: 'text-delta', text: 'ok' };
+            yield Object.assign({ type: 'text-delta' }, { text: 'ok' });
           })(),
           finishReason: Promise.resolve('stop'),
           response: Promise.resolve({ messages: [] }),

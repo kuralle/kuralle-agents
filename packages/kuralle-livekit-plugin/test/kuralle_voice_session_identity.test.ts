@@ -12,7 +12,7 @@ describe('KuralleVoiceSession runtime identity binding', () => {
     const runtime: KuralleRuntimeLike = {
       run() {
         return mockTurnHandle((async function* () {
-          yield { type: 'text-delta', text: 'ok' };
+          yield { type: 'text-delta', id: 't', delta: 'ok' };
           yield { type: 'done', sessionId: 's' };
         })());
       },

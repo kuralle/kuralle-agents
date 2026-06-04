@@ -6,8 +6,8 @@ describe('OpenAI compat SSE shape', () => {
   it('keeps chatcmpl id and created (seconds) stable; role only in first delta', async () => {
     const app = createOpenAICompatRouter({
       runtime: mockRuntime([
-        { type: 'text-delta', text: 'Hello' },
-        { type: 'text-delta', text: ' world' },
+        { type: 'text-delta', id: 't0', delta: 'Hello' },
+        { type: 'text-delta', id: 't0', delta: ' world' },
         { type: 'done', sessionId: 's1' },
       ]),
     });
@@ -105,7 +105,7 @@ describe('OpenAI compat SSE shape', () => {
 
   it('emits usage chunk only when stream_options.include_usage is true', async () => {
     const runtime = mockRuntime([
-      { type: 'text-delta', text: 'ok' },
+      { type: 'text-delta', id: 't0', delta: 'ok' },
       { type: 'done', sessionId: 's1' },
     ]);
 

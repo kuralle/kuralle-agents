@@ -67,8 +67,8 @@ function chatCtx(input: string) {
 describe('KuralleRuntimeLLMAdapter terminus contract (GH #29 regression guard)', () => {
   test('closes cleanly when Runtime stream ends with text-delta only', async () => {
     const runtime = mockRuntime(async function* () {
-      yield { type: 'text-delta', text: 'hello' };
-      yield { type: 'text-delta', text: ' world' };
+      yield { type: 'text-delta', id: 't', delta: 'hello' };
+      yield { type: 'text-delta', id: 't', delta: ' world' };
     });
     const adapter = new KuralleRuntimeLLMAdapter({ runtime });
     const stream = adapter.chat({ chatCtx: chatCtx('greet') });
@@ -80,7 +80,7 @@ describe('KuralleRuntimeLLMAdapter terminus contract (GH #29 regression guard)',
   test('closes cleanly when Runtime stream ends on a handoff event (no trailing text)', async () => {
     const handoffEvents: Array<{ targetAgent: string; reason: string }> = [];
     const runtime = mockRuntime(async function* () {
-      yield { type: 'text-delta', text: 'transferring' };
+      yield { type: 'text-delta', id: 't', delta: 'transferring' };
       yield {
         type: 'handoff',
         targetAgent: 'tracking',
@@ -105,7 +105,7 @@ describe('KuralleRuntimeLLMAdapter terminus contract (GH #29 regression guard)',
 
   test('closes cleanly when Runtime stream ends on a flow-transition event (no trailing text)', async () => {
     const runtime = mockRuntime(async function* () {
-      yield { type: 'text-delta', text: 'switching nodes' };
+      yield { type: 'text-delta', id: 't', delta: 'switching nodes' };
       yield {
         type: 'flow-transition',
         from: 'hub',
@@ -151,13 +151,13 @@ describe('KuralleRuntimeLLMAdapter terminus contract (GH #29 regression guard)',
   test('forwarding still emits text-delta to LiveKit queue when interleaved with handoff', async () => {
     const handoffEvents: Array<{ targetAgent: string; reason: string }> = [];
     const runtime = mockRuntime(async function* () {
-      yield { type: 'text-delta', text: 'pre' };
+      yield { type: 'text-delta', id: 't', delta: 'pre' };
       yield {
         type: 'handoff',
         targetAgent: 'b',
         reason: 'r',
       };
-      yield { type: 'text-delta', text: ' post' };
+      yield { type: 'text-delta', id: 't', delta: ' post' };
     });
     const adapter = new KuralleRuntimeLLMAdapter({
       runtime,
@@ -177,7 +177,7 @@ describe('KuralleRuntimeLLMAdapter terminus contract (GH #29 regression guard)',
   test('rapid stream completion (sub-microsecond) still terminates within deadline', async () => {
     const runtime = mockRuntime(async function* () {
       for (let i = 0; i < 50; i++) {
-        yield { type: 'text-delta', text: `${i} ` };
+        yield { type: 'text-delta', id: 't', delta: `${i} ` };
       }
       yield {
         type: 'handoff',

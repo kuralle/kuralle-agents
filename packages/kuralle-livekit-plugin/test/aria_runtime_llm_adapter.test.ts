@@ -38,7 +38,7 @@ describe('KuralleRuntimeLLMAdapter session behavior', () => {
 
     const runtime = mockRuntime(async function* (options) {
       calls.push(options);
-      yield { type: 'text-delta', text: 'hello' };
+      yield { type: 'text-delta', id: 't', delta: 'hello' };
       yield { type: 'done', sessionId: options.sessionId ?? 'generated' };
     });
 
@@ -64,7 +64,7 @@ describe('KuralleRuntimeLLMAdapter session behavior', () => {
 
     const runtime = mockRuntime(async function* (options) {
       calls.push(options);
-      yield { type: 'text-delta', text: 'ok' };
+      yield { type: 'text-delta', id: 't', delta: 'ok' };
       yield { type: 'done', sessionId: options.sessionId ?? 'generated' };
     });
 
@@ -87,7 +87,7 @@ describe('KuralleRuntimeLLMAdapter session behavior', () => {
 
     const runtime = mockRuntime(async function* (options) {
       calls.push(options);
-      yield { type: 'text-delta', text: `reply:${options.input}` };
+      yield { type: 'text-delta', id: 't', delta: `reply:${options.input}` };
       yield { type: 'done', sessionId: options.sessionId ?? 'generated' };
     });
 
@@ -164,7 +164,7 @@ describe('KuralleRuntimeLLMAdapter session behavior', () => {
 
     const runtime = mockRuntime(async function* (options) {
       calls.push(options);
-      yield { type: 'text-delta', text: 'hello from instructions' };
+      yield { type: 'text-delta', id: 't', delta: 'hello from instructions' };
       yield { type: 'done', sessionId: options.sessionId ?? 'generated' };
     });
 

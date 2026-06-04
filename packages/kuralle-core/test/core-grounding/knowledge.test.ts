@@ -29,7 +29,7 @@ describe('knowledge gather', () => {
           capturedSystem = opts.system ?? '';
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: 'Answer' };
+              yield Object.assign({ type: 'text-delta' }, { text: 'Answer' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),

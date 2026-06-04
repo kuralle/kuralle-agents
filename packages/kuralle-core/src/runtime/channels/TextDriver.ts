@@ -39,7 +39,10 @@ export class TextDriver implements ChannelDriver {
     const preTurn = await applyPreTurnPolicies(ctx);
     if (!preTurn.proceed) {
       const blocked = preTurn.blockedMessage ?? 'Input blocked by guardrails';
-      ctx.emit({ type: 'text-delta', text: blocked });
+      const id = crypto.randomUUID();
+      ctx.emit({ type: 'text-start', id });
+      ctx.emit({ type: 'text-delta', id, delta: blocked });
+      ctx.emit({ type: 'text-end', id });
       ctx.emit({ type: 'turn-end' });
       return { text: blocked, toolResults: [] };
     }
@@ -140,7 +143,10 @@ export class TextDriver implements ChannelDriver {
     out.text = emitText;
 
     if (emitText) {
-      ctx.emit({ type: 'text-delta', text: emitText });
+      const id = crypto.randomUUID();
+      ctx.emit({ type: 'text-start', id });
+      ctx.emit({ type: 'text-delta', id, delta: emitText });
+      ctx.emit({ type: 'text-end', id });
     }
 
     ctx.emit({ type: 'turn-end' });

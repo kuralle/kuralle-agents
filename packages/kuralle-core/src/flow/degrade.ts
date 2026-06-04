@@ -19,7 +19,10 @@ export function findEscalateNode(registry: Map<string, FlowNode>): FlowNode | un
 export function appendSafeAssistantMessage(run: RunState, ctx: RunContext, text = SAFE_DEGRADED_MESSAGE): void {
   const message: ModelMessage = { role: 'assistant', content: text };
   run.messages = [...run.messages, message];
-  ctx.emit({ type: 'text-delta', text });
+  const id = crypto.randomUUID();
+  ctx.emit({ type: 'text-start', id });
+  ctx.emit({ type: 'text-delta', id, delta: text });
+  ctx.emit({ type: 'text-end', id });
 }
 
 export async function degradeFlowError(

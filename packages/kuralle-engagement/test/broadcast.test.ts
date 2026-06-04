@@ -185,7 +185,7 @@ function createMockPlatform(): MockPlatform {
 }
 
 async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', text };
+  yield { type: 'text-delta', id: 't', delta: text };
 }
 
 describe('broadcast reply routing', () => {

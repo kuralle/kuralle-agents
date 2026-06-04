@@ -198,32 +198,54 @@ export class WidgetClient {
 
       if (data.type === "connected") {
         this.notifyConnectionChange(true);
+      } else if (data.type === "text-start") {
+        if (this.isAgentProcessing) {
+          this.notifyProcessingChange(false);
+        }
+        this.setMessages((prev) => [
+          ...prev,
+          {
+            id: nanoid(),
+            role: "assistant",
+            content: "",
+            timestamp: Date.now(),
+            isStreaming: true,
+          },
+        ]);
       } else if (data.type === "text-delta") {
-        // Stop processing indicator when text starts streaming
         if (this.isAgentProcessing) {
           this.notifyProcessingChange(false);
         }
 
-        // Streaming response - append to last assistant message
         this.setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last && last.role === "assistant" && last.isStreaming) {
             return [
               ...prev.slice(0, -1),
-              { ...last, content: last.content + data.text },
+              { ...last, content: last.content + data.delta },
             ];
           }
-          // Start new streaming message
           return [
             ...prev,
             {
               id: nanoid(),
               role: "assistant",
-              content: data.text,
+              content: data.delta,
               timestamp: Date.now(),
-              isStreaming: true
+              isStreaming: true,
             },
           ];
+        });
+      } else if (data.type === "text-end" || data.type === "text-cancel") {
+        this.setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && last.isStreaming) {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, isStreaming: false },
+            ];
+          }
+          return prev;
         });
       } else if (data.type === "done") {
         this.notifyProcessingChange(false);

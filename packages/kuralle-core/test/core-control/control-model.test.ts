@@ -291,7 +291,7 @@ describe('control model channel (H2)', () => {
           captured = opts;
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: 'Hi' };
+              yield Object.assign({ type: 'text-delta' }, { text: 'Hi' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),

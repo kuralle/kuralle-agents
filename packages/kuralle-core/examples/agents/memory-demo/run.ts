@@ -68,7 +68,7 @@ async function runSession(sessionNum: number) {
     process.stdout.write('Agent: ');
     const handle = runtime.run({ sessionId, input, userId: USER_ID });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') process.stdout.write(part.text);
+      if (part.type === 'text-delta') process.stdout.write(part.delta);
     }
     await handle;
     console.log();

@@ -128,7 +128,12 @@ export class Runtime {
         tools: effectTools,
         enforcer: policies.enforcer,
         agentId: opened.agent.id,
-        onInterim: (message) => emit({ type: 'text-delta', text: message }),
+        onInterim: (message) => {
+          const id = crypto.randomUUID();
+          emit({ type: 'text-start', id });
+          emit({ type: 'text-delta', id, delta: message });
+          emit({ type: 'text-end', id });
+        },
       });
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =
@@ -243,7 +248,10 @@ export class Runtime {
         if (isDegradableRuntimeError(error)) {
           const message = error instanceof Error ? error.message : String(error);
           emit({ type: 'error', error: message });
-          emit({ type: 'text-delta', text: SAFE_DEGRADED_MESSAGE });
+          const degradedId = crypto.randomUUID();
+          emit({ type: 'text-start', id: degradedId });
+          emit({ type: 'text-delta', id: degradedId, delta: SAFE_DEGRADED_MESSAGE });
+          emit({ type: 'text-end', id: degradedId });
           runCtx.runState.messages = [
             ...runCtx.runState.messages,
             { role: 'assistant', content: SAFE_DEGRADED_MESSAGE },

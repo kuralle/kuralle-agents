@@ -121,7 +121,7 @@ describe('runFlow oscillation cap', () => {
     expect(result).toEqual({ kind: 'ended', reason: 'error_degraded' });
     expect(errors.some((part) => part.type === 'error')).toBe(true);
     expect(
-      errors.some((part) => part.type === 'text-delta' && (part as { text: string }).text === SAFE_DEGRADED_MESSAGE),
+      errors.some((part) => part.type === 'text-delta' && part.delta === SAFE_DEGRADED_MESSAGE),
     ).toBe(true);
   });
 });

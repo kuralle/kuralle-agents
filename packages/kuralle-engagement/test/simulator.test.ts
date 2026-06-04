@@ -81,7 +81,7 @@ function buildSimulator(
 describe('simulator_drives_multi_turn', () => {
   it('returns rendered sends per turn and accumulates history', async () => {
     const parts: HarnessStreamPart[] = [
-      { type: 'text-delta', text: 'Hello there' },
+      { type: 'text-delta', id: 't0', delta: 'Hello there' },
       { type: 'done', sessionId: 'thread-1' },
     ];
     const { sim } = buildSimulator(parts);
@@ -153,7 +153,7 @@ describe('simulator_renders_per_channel', () => {
 describe('simulator_reports_window_state', () => {
   it('reports an open window after an inbound turn on a windowed channel', async () => {
     const { sim } = buildSimulator(
-      [{ type: 'text-delta', text: 'ok' }, { type: 'done', sessionId: 't-win' }],
+      [{ type: 'text-delta', id: 't0', delta: 'ok' }, { type: 'done', sessionId: 't-win' }],
       ['whatsapp'],
     );
 

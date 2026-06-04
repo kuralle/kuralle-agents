@@ -77,10 +77,10 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     expect(result).toEqual({ kind: 'awaitingUser' });
     expect(answerTurns).toBe(0);
-    expect(parts.some((p) => p.type === 'text-delta' && /hours|open 9-5/i.test(String((p as { text?: string }).text)))).toBe(
+    expect(parts.some((p) => p.type === 'text-delta' && /hours|open 9-5/i.test(String((p as { delta?: string }).delta)))).toBe(
       false,
     );
-    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(String((p as { text?: string }).text)))).toBe(true);
+    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(String((p as { delta?: string }).delta)))).toBe(true);
     expect(runState.activeNode).toBe(ask.id);
   });
 
@@ -213,10 +213,10 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     expect(result).toEqual({ kind: 'awaitingUser' });
     expect(answerTurns).toBe(1);
-    expect(parts.some((p) => p.type === 'text-delta' && /9am|5pm/i.test(String((p as { text?: string }).text)))).toBe(
+    expect(parts.some((p) => p.type === 'text-delta' && /9am|5pm/i.test(String((p as { delta?: string }).delta)))).toBe(
       true,
     );
-    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(String((p as { text?: string }).text)))).toBe(true);
+    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(String((p as { delta?: string }).delta)))).toBe(true);
     expect(runState.activeNode).toBe(ask.id);
 
     setPendingUserInput(session, 'My name is Riley');

@@ -176,7 +176,7 @@ for (const input of prompts) {
   let response = '';
   const handle = runtime.run({ sessionId, input });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') response += part.text;
+    if (part.type === 'text-delta') response += part.delta;
   }
   await handle;
   console.log('Assistant: ' + response.trim());

@@ -46,7 +46,7 @@ export class StreamMapper {
       for await (const part of stream) {
         parts.push(part);
         if (part.type === 'text-delta') {
-          textBuffer += part.text;
+          textBuffer += part.delta;
         }
       }
 

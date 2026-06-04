@@ -172,7 +172,7 @@ describeLive('live VoiceDriver + Gemini realtime smoke', () => {
 
     const assistantText = parts
       .filter((p): p is Extract<HarnessStreamPart, { type: 'text-delta' }> => p.type === 'text-delta')
-      .map((p) => p.text)
+      .map((p) => p.delta)
       .join('');
 
     console.log('[smoke:realtime] assistant:', assistantText.slice(0, 300));

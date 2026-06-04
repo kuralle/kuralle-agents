@@ -11,7 +11,7 @@ describe('POST /api/chat/resume', () => {
         captured = opts;
         return createMockTurnHandle(
           (async function* () {
-            yield { type: 'text-delta', text: 'resumed' } as never;
+            yield { type: 'text-delta', id: 't', delta: 'resumed' };
             yield { type: 'done', sessionId: opts.sessionId } as never;
           })(),
         );

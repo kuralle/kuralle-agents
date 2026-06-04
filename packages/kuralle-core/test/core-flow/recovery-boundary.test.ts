@@ -55,7 +55,7 @@ describe('W1 recovery boundary', () => {
 
     expect(result).toEqual({ kind: 'ended', reason: 'error_degraded' });
     expect(parts.some((p) => p.type === 'error')).toBe(true);
-    expect(parts.some((p) => p.type === 'text-delta' && (p as { text: string }).text === SAFE_DEGRADED_MESSAGE)).toBe(
+    expect(parts.some((p) => p.type === 'text-delta' && p.delta === SAFE_DEGRADED_MESSAGE)).toBe(
       true,
     );
   });
@@ -123,7 +123,7 @@ describe('W1 recovery boundary', () => {
           if (streamCall === 1) {
             return {
               fullStream: (async function* () {
-                yield { type: 'text-delta', text: 'Looking up' };
+                yield Object.assign({ type: 'text-delta' }, { text: 'Looking up' });
               })(),
               finishReason: Promise.resolve('tool-calls'),
               response: Promise.resolve({ messages: [] }),
@@ -134,7 +134,7 @@ describe('W1 recovery boundary', () => {
           }
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: ' Sorry about that.' };
+              yield Object.assign({ type: 'text-delta' }, { text: ' Sorry about that.' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),

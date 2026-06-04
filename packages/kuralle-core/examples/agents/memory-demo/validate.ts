@@ -72,7 +72,7 @@ async function chat(
   const handle = runtime.run({ sessionId, input, userId });
   for await (const part of handle.events) {
     events.push(part.type);
-    if (part.type === 'text-delta') response += part.text;
+    if (part.type === 'text-delta') response += part.delta;
     if (part.type === 'error') console.error('  [ERROR event]', part.error);
   }
   await handle;
