@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/transport-base",
-  "version": "0.3.19",
+  "version": "0.3.20",
   "description": "Shared primitives for Kuralle voice transport adapters (TransportAdapterBase, CallbackTextOutput, ResamplingAudioInput/Output, G.711 codec, contract test harness).",
   "type": "module",
   "main": "dist/index.js",

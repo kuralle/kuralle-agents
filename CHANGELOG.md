@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.20 — ValidateInput.state (grounding validators can see flow state)
+
+Patch across the graph (0.3.19 -> 0.3.20). `ValidateInput` now carries `state` (the
+flow `runState.state`), passed by `applyPostTurnPolicies`. A grounding `ValidationCapability`
+can now ground a claim against evidence an ACTION node wrote (e.g. `state.orderRef`
+after a create-order tool) — which `toolCallsMade` (this turn`s model tool calls
+only) does NOT capture. Without this, a validator that grounds order/delivery
+claims on `toolCallsMade` false-positives on the reply turn that follows an action
+node (the tool ran in the prior node). Additive: existing validators ignore the
+new field. core 485/485.
+
 ## 0.3.19 — Export pending-input buffer helpers (custom ChannelDriver support)
 
 Patch across the graph (0.3.18 -> 0.3.19). `setPendingUserInput`/`consumePendingUserInput`/`peekPendingUserInput`/`hasPendingUserInput` are now exported from `@kuralle-agents/core/runtime`. A custom `ChannelDriver` (or a test fake) needs `consumePendingUserInput` to implement `awaitUser` the same FIFO-aware way the built-in drivers do — since 0.3.13 (H3) the buffer is an ordered queue, so hand-reading the workingMemory key as a string silently breaks. No behavior change; export-only.
