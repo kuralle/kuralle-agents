@@ -55,17 +55,20 @@ So the genuine parity bar is set by **ElevenAgents + Vapi/Retell/LiveKit/TEN/Pip
 - **W7** (confidence gate) — **merged into H6** (shares the unreachable ValidationCapability plumbing).
 - **W8** (tool modes) — **= H7**, downgraded to P2 (dead-air is latency not a crash) EXCEPT the per-tool **timeout** split out as a NEW correctness sub-item.
 
-## Status (2026-06-04)
+## Status (2026-06-04) — TEXT-HARDENING BACKLOG COMPLETE
 
-Core-hardening **text phase complete**, all published to npm:
+All published to npm:
 - **H2** (pinned temp-0 control model) — 0.3.12
 - **H3** (per-session turn lock + FIFO inbox) — 0.3.13
 - **H1** (out-of-band control evaluator, flow nodes, default-OFF flag) — 0.3.14
 - **H7a** (interim filler + per-tool `timeoutMs`→W1 + extraction telemetry + Tool.ts convergence) — 0.3.15
+- **H4** (constrained-enum decide + code-first routing) — 0.3.16
+- **H5** (in-flow digression / answer-then-resume, default-OFF) — 0.3.17
+- **H6** (author-reachable confidence/grounding gate, additive-by-config) — 0.3.18
 
-ADR 0003 (kimi-reviewed) covers H1. Latency verified neutral across H2/H3/H1.
-**Deferred to the voice-unpause phase:** H7b (execution modes — voice-latency substrate; the text-relevant `timeoutMs` already shipped in H7a) + W7 (endpointing).
-**Future text items, not yet scheduled** (all hang off the H1 evaluator): H4 (constrained-enum decide + code-first routing — generalizes W9), H5/W4 (in-flow digression), H6 (confidence/grounding gate — merges W3+W7). H1's flag stays default-OFF until broader lab validation flips it.
+ADR 0003 (kimi-reviewed) covers H1. Latency verified neutral across H2/H3/H1. core suite 485.
+**Flag posture:** H1/H5/H6-evaluator stack is behind `agent.experimental.outOfBandControl` (default OFF); H4 + H6-validation-by-config + H7a-timeout are live by default. Flip the `outOfBandControl` default after broader lab validation of the full evaluator stack on 4 use-cases × 2 providers.
+**Remaining — voice-phase only (deferred):** H7b (execution modes immediate/post_speech/async + async-via-effect-log; voice-latency substrate, the text-relevant `timeoutMs` already shipped in H7a) + W7 (endpointing).
 
 ## North star
 
