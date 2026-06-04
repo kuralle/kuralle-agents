@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/livekit-plugin-transport-http",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "HTTP/SSE transport adapter for LiveKit Agents. Run text chatbots and voice agents over standard HTTP with Server-Sent Events.",
   "type": "module",
   "main": "dist/index.js",

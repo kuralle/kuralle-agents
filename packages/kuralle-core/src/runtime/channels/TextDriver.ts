@@ -2,7 +2,7 @@ import type { TurnResult, UserSignal, ResolvedNode } from '../../types/channel.j
 import type { RunContext } from '../../types/run-context.js';
 import type { ChannelDriver } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
-import { streamText, generateObject, type ModelMessage, type ToolSet } from 'ai';
+import { streamText, type ModelMessage, type ToolSet } from 'ai';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import { buildToolSet } from '../../tools/effect/index.js';
@@ -13,8 +13,8 @@ import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
 import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
-import { z } from 'zod';
 import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
+import { resolveStructuredDecide } from '../../flow/choiceMatch.js';
 
 export interface TextDriverConfig {
   toolDefs?: Record<string, AnyTool>;
@@ -152,30 +152,12 @@ export class TextDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const base = composeSystem(
+    const system = composeSystem(
       ctx.baseInstructions,
       resolveInstructions(node.instructions, ctx.runState.state),
       ctx.runState.state,
     );
-    const schema = node.schema as z.ZodType;
-    // When the node offers choices (e.g. via withChoices), constrain the model
-    // to return exactly one option id. Otherwise an unconstrained string schema
-    // lets the model reply with free-form prose that `decide()` can't match,
-    // stalling the flow at every interactive node.
-    const system = node.choices?.length
-      ? `${base}\n\nYou MUST pick exactly ONE option by its id. Valid ids: ${node.choices
-          .map((c) => c.id)
-          .join(', ')}. Respond with only the chosen id, nothing else.`
-      : base;
-    const { object } = await generateObject({
-      model: ctx.controlModel,
-      schema,
-      system,
-      messages: ctx.runState.messages,
-      temperature: 0,
-      abortSignal: ctx.abortSignal,
-    });
-    return object;
+    return resolveStructuredDecide(node, ctx, system);
   }
 
   async awaitUser(ctx: RunContext): Promise<UserSignal> {

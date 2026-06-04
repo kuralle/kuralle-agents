@@ -2,8 +2,8 @@ import type { TurnResult, UserSignal, ResolvedNode } from '../../types/channel.j
 import type { RunContext } from '../../types/run-context.js';
 import type { ChannelDriver } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
-import { generateObject } from 'ai';
 import { runSilentExtraction } from './extractionTurn.js';
+import { resolveStructuredDecide } from '../../flow/choiceMatch.js';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
@@ -14,8 +14,6 @@ import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../g
 import type { RealtimeSessionConfig, RealtimeToolResponse } from '../../realtime/RealtimeAudioClient.js';
 import type { RealtimeAudioClient } from '../../realtime/RealtimeAudioClient.js';
 import { resolveVoiceGeminiTools } from './voiceTools.js';
-import { z } from 'zod';
-
 export interface VoiceDriverConfig {
   client: RealtimeAudioClient;
   toolDefs?: Record<string, AnyTool>;
@@ -105,28 +103,12 @@ export class VoiceDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const base = composeSystem(
+    const system = composeSystem(
       ctx.baseInstructions,
       resolveInstructions(node.instructions, ctx.runState.state),
       ctx.runState.state,
     );
-    const schema = node.schema as z.ZodType;
-    // Parity with TextDriver: when the node offers choices, constrain the model
-    // to a single option id so an unconstrained string can't stall the decide.
-    const system = node.choices?.length
-      ? `${base}\n\nYou MUST pick exactly ONE option by its id. Valid ids: ${node.choices
-          .map((c) => c.id)
-          .join(', ')}. Respond with only the chosen id, nothing else.`
-      : base;
-    const { object } = await generateObject({
-      model: ctx.controlModel,
-      schema,
-      system,
-      messages: ctx.runState.messages,
-      temperature: 0,
-      abortSignal: ctx.abortSignal,
-    });
-    return object;
+    return resolveStructuredDecide(node, ctx, system);
   }
 
   // Non-speaking collect extraction: uses the shared text-model extraction path

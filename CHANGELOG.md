@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.16 — H4: constrained-enum decide + code-first routing
+
+Patch across the graph (0.3.15 -> 0.3.16). Generalizes W9's deterministic pattern
+to all `withChoices` `decide` nodes. (1) Choice-decides now build the
+`generateObject` schema from the node's actual choice ids as a closed `z.enum`
+(+ a reserved `__none` member so the model can decline rather than be forced into
+a wrong branch) — an invalid branch is structurally impossible, replacing the old
+soft prompt-instruction. (2) `matchChoiceFromInput` resolves a clear input (exact
+id/label or unambiguous keyword) in code and SKIPS the LLM entirely; the pinned
+temp-0 control model (H2) only arbitrates genuine ambiguity. (3) `select.ts` host
+routing tries a deterministic route/keyword match BEFORE `generateObject` (was
+LLM-first with a post-hoc fallback). Conservative guard: the enum + code-first
+apply only when the node has `choices` and the schema is exactly
+`z.object({ choice: z.string() })`; other shapes keep legacy behavior. confirmGate
+and choice-less decides untouched. New `src/flow/choiceMatch.ts`. core 471/471;
+W1/W9/H1/confirm-gate/parking/turn-lock green.
+
 ## 0.3.15 — H7a: interim filler + per-tool timeout + extraction telemetry
 
 Patch across the graph (0.3.14 -> 0.3.15). First half of H7 (tool execution

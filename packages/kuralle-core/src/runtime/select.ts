@@ -47,6 +47,11 @@ export async function selectHostTarget(options: SelectHostOptions): Promise<Host
     return { kind: 'enterFlow', flow: availableFlows[0]! };
   }
 
+  const deterministic = deterministicRouteMatch(latestUser, routes, availableFlows);
+  if (deterministic) {
+    return deterministic;
+  }
+
   const flowLines = availableFlows
     .map((flow) => `- flow "${flow.name}": ${flow.description}`)
     .join('\n');
@@ -104,6 +109,38 @@ export async function selectHostTarget(options: SelectHostOptions): Promise<Host
   }
 
   return keywordRouteFallback(latestUser, routes, availableFlows);
+}
+
+function deterministicRouteMatch(
+  message: string,
+  routes: Route[],
+  availableFlows: Flow[],
+): HostSelection | undefined {
+  const lower = message.toLowerCase();
+  const hits: HostSelection[] = [];
+
+  for (const route of routes) {
+    const terms = route.when
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((term) => term.length > 3);
+    if (!terms.some((term) => lower.includes(term))) {
+      continue;
+    }
+    if (route.flow) {
+      const flow = availableFlows.find((candidate) => candidate.name === route.flow);
+      if (flow) {
+        hits.push({ kind: 'enterFlow', flow });
+      }
+    } else if (route.agent) {
+      hits.push({ kind: 'route', agentId: route.agent });
+    }
+  }
+
+  if (hits.length === 1) {
+    return hits[0];
+  }
+  return undefined;
 }
 
 function keywordRouteFallback(
