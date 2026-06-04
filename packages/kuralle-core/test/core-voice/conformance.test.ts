@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { VoiceDriver } from '../../src/runtime/channels/VoiceDriver.js';
-import { buildToolSet, defineTool, CoreToolExecutor, ToolValidationError } from '../../src/tools/effect/index.js';
+import { buildToolSet, defineTool, CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { resolveVoiceGeminiTools } from '../../src/runtime/channels/voiceTools.js';
@@ -213,7 +213,9 @@ describe('LLM-brain conformance gates G1–G6', () => {
     await waitForDriverReady();
     fakeClient.emitToolCallTurn('create_ticket', { title: '', priority: 'invalid' });
 
-    await expect(turnPromise).rejects.toBeInstanceOf(ToolValidationError);
+    const turn = await turnPromise;
+    expect(turn.toolResults).toHaveLength(1);
+    expect(turn.toolResults[0]?.result).toMatchObject({ error: true });
     expect(backendHit).toBe(false);
   });
 

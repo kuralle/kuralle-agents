@@ -140,6 +140,15 @@ async function runFreeConversation(
     return { kind: 'ended', reason: turn.control.reason };
   }
 
+  if (turn.control?.type === 'escalate') {
+    ctx.emit({ type: 'handoff', targetAgent: 'human', reason: turn.control.reason });
+    return { kind: 'handoff', to: 'human', reason: turn.control.reason };
+  }
+
+  if (turn.control?.type === 'recover') {
+    return { kind: 'ended', reason: turn.control.reason ?? 'error_degraded' };
+  }
+
   return { kind: 'turnComplete' };
 }
 
