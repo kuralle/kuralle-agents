@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.15 — H7a: interim filler + per-tool timeout + extraction telemetry
+
+Patch across the graph (0.3.14 -> 0.3.15). First half of H7 (tool execution
+hardening). (1) The previously-dead `onInterim` callback is wired in `Runtime` to
+emit a `text-delta` filler, so a slow tool with `interim`/`interimAfterMs` speaks
+instead of going silent. (2) New per-tool `Tool.timeoutMs`: `CoreToolExecutor`
+races execution against a `ToolTimeoutError`, which flows through
+`executeModelToolCall` → `toolErrorResult` → the W1 recovery boundary — closing
+the "hung tool throws nothing, so W1 never fires" hole (every peer agent engine
+has a timeout/duration guard). Timer is cleared on abort/success/error and
+`unref`'d; unset `timeoutMs` = no change. (3) The modeled-but-never-emitted
+extraction telemetry (`flow.extraction.submission` with fieldsAccepted/Rejected,
+`flow.extraction.update`) is now emitted from the collect path and fed to the
+observability hook. (4) Legacy `tools/Tool.ts` `filler`/`estimatedDurationMs`
+converge onto the canonical `interim`/`interimAfterMs` (deprecated aliases kept).
+Execution modes (immediate/post_speech/async) are H7b. core 458/458;
+W1/W9/H1/parking/turn-lock green.
+
 ## 0.3.14 — H1: out-of-band control evaluator for flow reply nodes (default OFF)
 
 Patch across the graph (0.3.13 -> 0.3.14). The W2 keystone, scoped to flow reply

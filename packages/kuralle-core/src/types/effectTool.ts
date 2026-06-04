@@ -10,6 +10,7 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   interruptible?: boolean;
   interim?: string;
   interimAfterMs?: number;
+  timeoutMs?: number;
   execute: (
     args: TInput,
     ctx?: ToolContext,

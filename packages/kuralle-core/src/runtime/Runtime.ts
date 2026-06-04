@@ -128,6 +128,7 @@ export class Runtime {
         tools: effectTools,
         enforcer: policies.enforcer,
         agentId: opened.agent.id,
+        onInterim: (message) => emit({ type: 'text-delta', text: message }),
       });
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =

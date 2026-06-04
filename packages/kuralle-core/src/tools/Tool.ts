@@ -37,10 +37,12 @@ export interface ToolDefinition<TInput = unknown, TResult = unknown> {
 }
 
 export interface ToolWithFiller<TInput = unknown, TResult = unknown> extends ToolDefinition<TInput, TResult> {
-  /** Optional filler message to display while tool is executing */
+  /** @deprecated Use `interim` on effect tools (`defineTool`). */
   filler?: string;
-  /** Optional estimated duration in ms for showing filler */
+  /** @deprecated Use `interimAfterMs` on effect tools (`defineTool`). */
   estimatedDurationMs?: number;
+  interim?: string;
+  interimAfterMs?: number;
 }
 
 type SchemaToolDefinition<TSchema extends ZodTypeAny, TResult = unknown> = {
@@ -53,8 +55,12 @@ type SchemaToolDefinition<TSchema extends ZodTypeAny, TResult = unknown> = {
 
 type SchemaToolWithFiller<TSchema extends ZodTypeAny, TResult = unknown> =
   SchemaToolDefinition<TSchema, TResult> & {
+    /** @deprecated Use `interim`. */
     filler?: string;
+    /** @deprecated Use `interimAfterMs`. */
     estimatedDurationMs?: number;
+    interim?: string;
+    interimAfterMs?: number;
   };
 
 export function createTool<TSchema extends ZodTypeAny, TResult = unknown>(
@@ -73,8 +79,19 @@ export function createToolWithFiller<TSchema extends ZodTypeAny, TResult = unkno
   const { description, inputSchema, execute } = definition;
   // @ts-expect-error — same deferred-generic limitation as createTool (see above).
   const t = aiTool({ description, inputSchema: zodSchema(inputSchema), execute });
-  const extended = Object.assign(t, definition);
-  if (definition.filler) extended.filler = definition.filler;
-  if (definition.estimatedDurationMs) extended.estimatedDurationMs = definition.estimatedDurationMs;
+  const extended = Object.assign(t, definition) as Tool<z.infer<TSchema>, TResult> &
+    ToolWithFiller<z.infer<TSchema>, TResult>;
+  const interim = definition.interim ?? definition.filler;
+  const interimAfterMs = definition.interimAfterMs ?? definition.estimatedDurationMs;
+  if (interim) {
+    extended.interim = interim;
+    if (definition.filler) extended.filler = definition.filler;
+  }
+  if (interimAfterMs != null) {
+    extended.interimAfterMs = interimAfterMs;
+    if (definition.estimatedDurationMs != null) {
+      extended.estimatedDurationMs = definition.estimatedDurationMs;
+    }
+  }
   return extended;
 }

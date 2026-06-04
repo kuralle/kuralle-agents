@@ -22,6 +22,11 @@ export function defineTool<
   interruptible?: boolean;
   interim?: string;
   interimAfterMs?: number;
+  /** @deprecated Use `interim`. */
+  filler?: string;
+  /** @deprecated Use `interimAfterMs`. */
+  estimatedDurationMs?: number;
+  timeoutMs?: number;
   execute: (
     args: InferToolInput<S>,
     ctx?: ToolContext,
@@ -34,8 +39,9 @@ export function defineTool<
     output: config.output,
     needsApproval: config.needsApproval,
     interruptible: config.interruptible,
-    interim: config.interim,
-    interimAfterMs: config.interimAfterMs,
+    interim: config.interim ?? config.filler,
+    interimAfterMs: config.interimAfterMs ?? config.estimatedDurationMs,
+    timeoutMs: config.timeoutMs,
     execute: config.execute,
   } as Tool<InferToolInput<S>, R>;
 }

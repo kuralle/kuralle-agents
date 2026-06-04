@@ -246,7 +246,12 @@ export {
   confirmGate,
 } from './authoring/index.js';
 export { defineTool } from './types/effectTool.js';
-export { buildToolSet, toolToAiSdk, ToolApprovalDeniedError } from './tools/effect/index.js';
+export {
+  buildToolSet,
+  toolToAiSdk,
+  ToolApprovalDeniedError,
+  ToolTimeoutError,
+} from './tools/effect/index.js';
 export type { Tool as EffectTool } from './types/effectTool.js';
 export type { AgentRoute } from './types/processors.js';
 export type { AgentConfig, Instructions } from './types/agentConfig.js';

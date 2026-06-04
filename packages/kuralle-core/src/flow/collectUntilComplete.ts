@@ -10,6 +10,7 @@ import {
   createExtractionSubmitTool,
   getCollectData,
   incrementCollectTurns,
+  emitExtractionTelemetry,
   mergeTurnExtraction,
   projectCollectData,
   schemaSatisfied,
@@ -81,7 +82,7 @@ export async function collectUntilComplete(
     const turn = await (driver.runExtraction
       ? driver.runExtraction(resolved, ctx)
       : driver.runAgentTurn(resolved, ctx));
-    mergeExtractionFromTurn(node, run, turn);
+    mergeExtractionFromTurn(node, run, turn, ctx);
   }
 }
 
@@ -120,12 +121,20 @@ function emitCollectAsk(node: CollectNode, run: RunState, ctx: RunContext): void
   appendAssistantMessage(run, text);
 }
 
-function mergeExtractionFromTurn(node: CollectNode, run: RunState, turn: TurnResult): void {
-  mergeTurnExtraction(
+function mergeExtractionFromTurn(
+  node: CollectNode,
+  run: RunState,
+  turn: TurnResult,
+  ctx: RunContext,
+): void {
+  const { merged, incoming } = mergeTurnExtraction(
     node,
     run.state,
     turn.toolResults.map((record) => ({ name: record.name, result: record.result })),
   );
+  if (merged && incoming) {
+    emitExtractionTelemetry(node, run.state, incoming, ctx.emit);
+  }
 }
 
 function peekLatestUserMessage(run: RunState): string | undefined {

@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/cf-agent",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "Kuralle agent integration for Cloudflare Workers with AIChatAgent",
   "type": "module",
   "main": "./dist/index.js",
