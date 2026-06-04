@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-lancedb-store"
   },
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "LanceDB-backed VectorStore for Kuralle (Node/Bun only, not for edge runtimes)",
   "type": "module",
   "main": "dist/index.js",

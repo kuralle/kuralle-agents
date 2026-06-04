@@ -243,13 +243,16 @@ export {
   collect,
   action,
   decide,
+  confirmGate,
 } from './authoring/index.js';
 export { defineTool } from './types/effectTool.js';
 export { buildToolSet, toolToAiSdk, ToolApprovalDeniedError } from './tools/effect/index.js';
 export type { Tool as EffectTool } from './types/effectTool.js';
 export type { AgentRoute } from './types/processors.js';
 export type { AgentConfig, Instructions } from './types/agentConfig.js';
-export type { Flow, FlowNode, Transition, CollectNode, DecideNode } from './types/flow.js';
+export type { Flow, FlowNode, Transition, CollectNode, DecideNode, ConfirmGate } from './types/flow.js';
+export { parseConfirmation } from './flow/confirmParse.js';
+export type { ConfirmVerdict } from './flow/confirmParse.js';
 export type { Route } from './types/route.js';
 export type { TurnHandle } from './types/stream.js';
 export type { HarnessStreamPart } from './types/stream.js';

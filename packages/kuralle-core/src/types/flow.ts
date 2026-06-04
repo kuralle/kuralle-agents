@@ -66,13 +66,20 @@ export interface ActionNode {
   run: (state: FlowState, ctx: ActionContext) => Transition | Promise<Transition>;
 }
 
+export interface ConfirmGate {
+  onConfirm: Transition;
+  onDecline: Transition;
+  onAmbiguous?: Transition;
+}
+
 export interface DecideNode {
   kind: 'decide';
   id: string;
   instructions: Instructions;
-  schema: StandardSchemaV1;
+  schema?: StandardSchemaV1;
   choices?: ChoiceOption[];
-  decide: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
+  confirmGate?: ConfirmGate;
+  decide?: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
 }
 
 export function reply(node: Omit<ReplyNode, 'kind'>): ReplyNode {
@@ -87,8 +94,31 @@ export function action(node: Omit<ActionNode, 'kind'>): ActionNode {
   return { kind: 'action', ...node };
 }
 
-export function decide(node: Omit<DecideNode, 'kind'>): DecideNode {
+export function decide(
+  node: Omit<DecideNode, 'kind' | 'confirmGate'> & Required<Pick<DecideNode, 'schema' | 'decide'>>,
+): DecideNode {
   return { kind: 'decide', ...node };
+}
+
+export function confirmGate(node: {
+  id: string;
+  instructions: Instructions;
+  onConfirm: Transition;
+  onDecline: Transition;
+  onAmbiguous?: Transition;
+  choices?: ChoiceOption[];
+}): DecideNode {
+  return {
+    kind: 'decide',
+    id: node.id,
+    instructions: node.instructions,
+    choices: node.choices,
+    confirmGate: {
+      onConfirm: node.onConfirm,
+      onDecline: node.onDecline,
+      onAmbiguous: node.onAmbiguous,
+    },
+  };
 }
 
 export function defineFlow(flow: Flow): Flow {

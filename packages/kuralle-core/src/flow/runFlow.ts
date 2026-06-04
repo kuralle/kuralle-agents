@@ -1,6 +1,7 @@
 import type { ModelMessage } from 'ai';
 import type { ChannelDriver } from '../types/channel.js';
-import type { Flow, FlowNode } from '../types/flow.js';
+import type { DecideNode, Flow, FlowNode } from '../types/flow.js';
+import { parseConfirmation } from './confirmParse.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
 import { hasPendingUserInput } from '../runtime/channels/inputBuffer.js';
@@ -73,6 +74,48 @@ function appendUserMessage(run: RunState, input: string): void {
   run.messages = [...run.messages, message];
 }
 
+function latestUserText(run: RunState): string {
+  for (let i = run.messages.length - 1; i >= 0; i -= 1) {
+    const message = run.messages[i];
+    if (message?.role === 'user' && typeof message.content === 'string') {
+      return message.content;
+    }
+  }
+  return '';
+}
+
+async function dispatchConfirmGate(
+  node: DecideNode,
+  run: RunState,
+  driver: ChannelDriver,
+  ctx: RunContext,
+): Promise<NormalizedTransition> {
+  const gate = node.confirmGate!;
+  if (!hasPendingUserInput(ctx.session) && ctx.turnInputConsumed) {
+    return { kind: 'stay' };
+  }
+
+  let input = '';
+  if (hasPendingUserInput(ctx.session)) {
+    const signal = await driver.awaitUser(ctx);
+    input = signal.input;
+    appendUserMessage(run, signal.input);
+  } else {
+    input = latestUserText(run);
+  }
+  ctx.turnInputConsumed = true;
+
+  const verdict = parseConfirmation(input);
+  const branch =
+    verdict === 'affirm'
+      ? gate.onConfirm
+      : verdict === 'decline'
+        ? gate.onDecline
+        : (gate.onAmbiguous ?? 'stay');
+
+  return normalizeTransition(branch);
+}
+
 function appendAssistantMessage(run: RunState, text: string): void {
   if (!text.trim()) {
     return;
@@ -96,8 +139,14 @@ async function dispatchNode(
   }
 
   if (isDecideNode(node)) {
+    if (node.confirmGate) {
+      return dispatchConfirmGate(node, run, driver, ctx);
+    }
     if (!driver.runStructured) {
       throw new Error('ChannelDriver.runStructured is required for decide nodes');
+    }
+    if (!node.schema || !node.decide) {
+      throw new Error(`decide node "${node.id}" requires schema and decide`);
     }
     // An interactive choice node (withChoices) reached when the turn's input was
     // already consumed by a prior node: its choices were presented on node-enter,

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.9 — W9 deterministic mutation/confirm gate
+
+Patch across the graph (0.3.8 -> 0.3.9). Second chunk of the conversational-stability
+program (ADR 0002). A confirm-before-mutate step was a `decide` node whose choice
+was classified by the LLM — an off-script reply or a bare value could be
+mis-classified as "confirm" and fire the mutation without an explicit human yes.
+New `confirmGate()` node builder (a `DecideNode` with a `confirmGate` config — no
+new node kind) whose advance decision is parsed **in code** by `parseConfirmation`,
+never the model. Conservative precedence: **decline wins → interrogative/off-script
+is ambiguous → affirm only when affirm-dominant**; multilingual (English + Sinhala +
+Tamil, script and romanized). The runtime branches the decide dispatch on
+`confirmGate` and never calls `runStructured`. Off-script/ambiguous re-asks (stay);
+explicit negative routes to `onDecline`; post-END never re-fires a completed
+mutation (locked by test via `hostLoop` reset + `__completedFlows`). core 415/415.
+
 ## 0.3.8 — W1 runtime recovery boundary (errors degrade, never abort)
 
 Patch across the graph (0.3.7 -> 0.3.8). First chunk of the conversational-stability

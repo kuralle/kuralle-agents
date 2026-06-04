@@ -1,1 +1,1 @@
-export { reply, collect, action, decide, defineFlow } from '../types/flow.js';
+export { reply, collect, action, decide, confirmGate, defineFlow } from '../types/flow.js';
