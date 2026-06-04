@@ -1,7 +1,8 @@
 # ADR 0003 — Out-of-band control evaluator (H1 / W2 keystone)
 
-**Status:** Proposed (design doc — implementation gated on review)
+**Status:** Proposed — **Revision 1** (post external review, kimi-k2.6). Implementation gated on final sign-off.
 **Context:** `docs/kuralle-hardening-plan.md` (H1, the keystone), ADR 0002, `docs/kuralle-stability-rootcause.md`. Builds on shipped H2 (`ctx.controlModel`, 0.3.12) and H3 (turn lock, 0.3.13).
+**Review:** `.handoff/result-h1-adr-review.txt` (kimi-k2.6) — verdict "not ready" on the v0 design; the revision below resolves its four blockers. **See "Revision 1" at the bottom — it supersedes parts of the original draft above it.**
 
 ## Context — control is fused into generation
 
@@ -90,3 +91,41 @@ Speculative generation; in-flow digression *rerouting* (H5/W4 — H1 only provid
 1. Flag location/name: `agent.experimental.outOfBandControl` (per-agent) vs `HarnessConfig.experimental` (per-runtime)? Per-agent is finer; per-runtime is simpler to flip. **Proposed: per-agent.**
 2. `node.next`-as-predicate: keep the current `(turn, state) => Transition` signature (the evaluator passes a synthesized `turn` with the draft) to avoid an authoring breaking change? **Proposed: yes — no author-facing API change.**
 3. Is H1a worth shipping alone, or fold both into one flag-gated release? **Proposed: ship H1a then H1b (two releases) per the chosen split.**
+
+---
+
+# Revision 1 — incorporating the kimi-k2.6 review (supersedes the conflicting parts above)
+
+The v0 draft above had a correct *intent* (take control off the free-form generation path) but a wrong *mechanism* (blanket-silo control tools) and a wrong *premise* (that text streams incrementally). The review found four blockers; this revision resolves them.
+
+## Correction 1 — text is ALREADY fully buffered (latency premise was wrong)
+`TextDriver.runAgentTurn` accumulates `draftText += part.text` and emits **one** `text-delta` with the final text (`TextDriver.ts:69-70, 139`); VoiceDriver likewise. There is **no incremental streaming today**. Therefore:
+- **H1 adds NO time-to-first-token regression** — there is no per-chunk stream to delay. The "buffer-before-emit" worry is moot.
+- The real cost is **total-turn latency on the semantic path only**: one extra temp-0 `generateObject` (~150–400ms on gpt-4.1-mini / gemini-flash-lite, extrapolated from `selectHostTarget`). The code-decided path is microseconds.
+- **Latency answer (final):** H2 = neutral-to-faster (no extra calls). H3 = <1ms on the normal path (serialization only for genuinely-overlapping same-session requests — the fix, not a regression). H1 = zero added latency when control is code/structured-decided; **+1 temp-0 call only when a decision is genuinely semantic** — and the design below ensures that is NOT every free-conversation turn.
+
+## Correction 2 — separate the control CHANNEL, don't delete the control SIGNAL (resolves A-02, A-03)
+The flaw: `classifyControl` reads the *result shape* of a control tool the model called; siloing those tools out makes it dead, and free conversation (no `node.next`) loses its only control signal. Resolution — distinguish the two control sources:
+- **Flow nodes:** transitions are the FLOW's job, not the model's. The evaluator derives them from `node.next` / `decide` / tool-result shape / W1 recover-escalate — **deterministically**. A flow reply node's speaking dict carries only its data tools; it does **not** need model-initiated flow-transition control tools. `classifyControl` still runs **on the data-tool results' shape** (a data tool may return a `__handoff`/`__escalate` shape, e.g. W1), so it is NOT dead — it becomes one input to the evaluator.
+- **Free conversation (no flow):** the model legitimately IS the only one who can decide handoff/end. Keep a **dedicated, explicit control channel** here (the existing handoff/final tools, or a constrained `__control` output) — NOT mixed into a large data-tool dict, but NOT removed. `classifyControl` interprets its result deterministically. Free-conv falls to the temp-0 classifier ONLY when the model emits ambiguous prose with no control affordance used — not every turn.
+
+Net: "per-node tool siloing" (Decision 3 above) is **narrowed** to "flow reply nodes don't expose model-initiated *flow-transition* control; routing is the evaluator's job." Free conversation keeps its model control channel. The temp-0 classifier is the *last* resort, not the default.
+
+## Correction 3 — `ControlSignal` must carry `interrupted` (resolves A-04)
+Add `interrupted: boolean` (and `truncateAt?`) to `ControlSignal`. The evaluator **bypasses** any transition/handoff/end decision on an interrupted/partial draft (mirrors `runFlow.ts:130-134`) — it must not decide control from half a turn.
+
+## Correction 4 — one flag-gated release, not H1a-then-H1b (resolves A-06)
+H1a alone (siloing without the evaluator) is a broken half-state — control becomes structurally unreachable. **Merge: H1 ships as a single default-OFF flag-gated release** (siloing + evaluator + pre-emission resolution together). Released as 0.3.14.
+
+## Resolved open questions
+1. **Flag:** per-agent `agent.experimental.outOfBandControl` (per-runtime would force all-or-nothing). ✓
+2. **`node.next` signature:** keep it (no author break) — BUT document that under flag-ON, model-initiated `turn.control` inside a **flow** node no longer fires (flow routing is the evaluator's); authors relying on a model handoff mid-flow migrate to a `decide`/`escalate` edge. Free-conv `turn.control` is unchanged.
+3. **Split:** folded into one release (Correction 4).
+
+## Flag-OFF parity (resolves A-08)
+Default-OFF branches in exactly three places — `resolveTools` (tool dict), `runFlow.dispatchNode` (evaluator vs today's `node.next`/`turn.control`), `composeSystem` (control-hint concatenation). A dedicated **parity test** asserts flag-OFF produces an identical tool set, identical emit sequence, and identical transitions to 0.3.13 on a representative flow — "suite green" is necessary, not sufficient.
+
+## Revised acceptance
+- Flag OFF: parity test (tool set + emit sequence + transitions identical to 0.3.13) + full suite + lab byte-identical.
+- Flag ON: (a) flow reply node's speaking tool set excludes flow-transition control tools; (b) free-conversation handoff/end still works via the dedicated control channel WITHOUT a temp-0 call; (c) transition resolved before `appendAssistantMessage`/emit; (d) interrupted turn bypasses the evaluator; (e) lab 4×2 crashed:false, parity-or-better, reduced decide/routing variance. Single release 0.3.14.
+- Add evaluator-latency masking to H7 scope (interim filler also covers a pending semantic control call).
