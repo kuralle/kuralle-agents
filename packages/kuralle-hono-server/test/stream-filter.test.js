@@ -5,7 +5,7 @@ import { shouldEmit, sanitizeForClient } from '../dist/index.js';
 /** @type {import('@kuralle-agents/core').HarnessStreamPart[]} */
 const allHarnessPartSamples = [
   { type: 'input', text: 'hi' },
-  { type: 'text-delta', text: 'x' },
+  { type: 'text-delta', id: 't', delta: 'x' },
   { type: 'text-clear', agentId: 'ag' },
   {
     type: 'tripwire',
@@ -93,7 +93,7 @@ test('safe-filter-blocks-result-evicted', () => {
 });
 
 test('safe-filter-allows-text-delta', () => {
-  assert.equal(shouldEmit({ type: 'text-delta', text: 'hi' }, 'safe'), true);
+  assert.equal(shouldEmit({ type: 'text-delta', id: 't', delta: 'hi' }, 'safe'), true);
 });
 
 test('safe-filter-allows-done', () => {
@@ -127,7 +127,7 @@ test('all-filter-allows-everything', () => {
 test('custom-filter-function', () => {
   const filter = (part) =>
     part.type === 'text-delta' || part.type === 'tool-call';
-  assert.equal(shouldEmit({ type: 'text-delta', text: 'a' }, filter), true);
+  assert.equal(shouldEmit({ type: 'text-delta', id: 't', delta: 'a' }, filter), true);
   assert.equal(
     shouldEmit(
       { type: 'tool-call', toolCallId: '1', toolName: 't', args: {} },
@@ -158,7 +158,7 @@ test('sanitize-error-strips-details', () => {
 });
 
 test('sanitize-error-preserves-non-error', () => {
-  const part = { type: 'text-delta', text: 'hi' };
+  const part = { type: 'text-delta', id: 't', delta: 'hi' };
   const out = sanitizeForClient(part);
   assert.deepEqual(out, part);
 });

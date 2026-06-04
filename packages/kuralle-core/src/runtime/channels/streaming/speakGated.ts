@@ -94,7 +94,7 @@ export async function speakGated(args: {
     sentence: string,
     final: boolean,
   ): Promise<{ text: string; control?: TurnControl; confidence?: number } | null> => {
-    const decision = await runGate(sentence, final);
+    const decision = await runGate(sentence.trim(), final);
     if (decision.blocked) {
       return emitBlockedSafeMessage(ctx, turnId, started, decision);
     }

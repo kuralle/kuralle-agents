@@ -37,13 +37,13 @@ describe('SentenceAggregator boundaries', () => {
     {
       name: 'two sentences fed whole',
       tokens: ['Hi there. How are you?'],
-      expected: ['Hi there.', 'How are you?'],
+      expected: ['Hi there.', ' How are you?'],
       flush: null,
     },
     {
       name: 'two sentences fed fragmented',
       tokens: ['Hi th', 'ere. How', ' are you?'],
-      expected: ['Hi there.', 'How are you?'],
+      expected: ['Hi there.', ' How are you?'],
       flush: null,
     },
     {
@@ -75,10 +75,13 @@ describe('SentenceAggregator boundaries', () => {
   for (const row of cases) {
     test(row.name, () => {
       const agg = new SentenceAggregator();
+      const original = row.tokens.join('');
       const sentences = pushAll(agg, row.tokens);
       expect(sentences).toEqual(row.expected);
       expect(sentences.every((s) => s.length > 0)).toBe(true);
-      expect(agg.flush()).toBe(row.flush ?? null);
+      const tail = agg.flush();
+      expect(tail).toBe(row.flush ?? null);
+      expect(sentences.join('') + (tail ?? '')).toBe(original);
     });
   }
 
@@ -99,6 +102,6 @@ describe('SentenceAggregator boundaries', () => {
     expect(agg.push('Hi ')).toEqual([]);
     expect(agg.push('there.')).toEqual([]);
     expect(agg.push(' How')).toEqual(['Hi there.']);
-    expect(agg.push(' are you?')).toEqual(['How are you?']);
+    expect(agg.push(' are you?')).toEqual([' How are you?']);
   });
 });

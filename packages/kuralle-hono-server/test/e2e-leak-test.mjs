@@ -93,7 +93,7 @@ for (const err of errors1) {
 
 // Check text content was received
 const textParts = events1.filter(e => e.type === 'text-delta');
-const fullText = textParts.map(e => e.text).join('');
+const fullText = textParts.map(e => e.delta).join('');
 console.log(`  Agent response: "${fullText.slice(0, 80)}${fullText.length > 80 ? '...' : ''}"`);
 
 if (textParts.length === 0) {

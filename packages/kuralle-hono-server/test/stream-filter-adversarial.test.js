@@ -101,7 +101,7 @@ test('sanitize: stack trace stripped', () => {
 });
 
 test('sanitize: text-delta passes through unchanged', () => {
-  const part = { type: 'text-delta', text: 'Hello, how can I help?' };
+  const part = { type: 'text-delta', id: 't', delta: 'Hello, how can I help?' };
   const safe = sanitizeForClient(part);
   assert.deepEqual(safe, part, 'non-error events should pass through unchanged');
 });
@@ -117,7 +117,7 @@ test('sanitize: done event passes through unchanged', () => {
 test('custom filter: allow only text-delta and flow-transition (for a flow visualization UI)', () => {
   const custom = (part) => part.type === 'text-delta' || part.type === 'flow-transition';
 
-  assert.equal(shouldEmit({ type: 'text-delta', text: 'hi' }, custom), true);
+  assert.equal(shouldEmit({ type: 'text-delta', id: 't', delta: 'hi' }, custom), true);
   assert.equal(shouldEmit({ type: 'flow-transition', from: 'a', to: 'b' }, custom), true);
   assert.equal(shouldEmit({ type: 'tool-call', toolCallId: 'x', toolName: 'y', args: {} }, custom), false);
   assert.equal(shouldEmit({ type: 'done', sessionId: 'x' }, custom), false);
@@ -127,7 +127,7 @@ test('custom filter: throwing function blocks the event (fail-closed)', () => {
   const broken = () => { throw new Error('filter crashed'); };
   // shouldEmit should handle this gracefully — if it throws, event should be blocked (fail-closed)
   try {
-    const result = shouldEmit({ type: 'text-delta', text: 'hi' }, broken);
+    const result = shouldEmit({ type: 'text-delta', id: 't', delta: 'hi' }, broken);
     // If it doesn't throw, it should return false (fail-closed)
     assert.equal(result, false, 'broken filter should fail closed');
   } catch {
