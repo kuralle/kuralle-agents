@@ -12,11 +12,11 @@ Derived from `docs/kuralle-stability-rootcause.md` (multi-source root-cause work
 | W4 | P1 | #6 digression / multi-intent | In-flow re-routing primitive: let routing re-run inside an active flow; multi-intent parse at the input boundary; stop discarding off-script prose silently. | Real customers digress; needed for support/sales agents. | todo |
 | W5 | P1 | #8 repair / correction | Surface collected field values to the extractor; tag new-vs-correction; emit a confirmation on change. | Corrections are table-stakes for collect-heavy flows. | todo |
 | W6 | P1 | #5 memory (cross-session/user) | First-class per-user memory + resumption checkpoint (activeFlow/node/pending); optional scheduler/trigger for unattended runs. | "Welcome back" + durable carts; text-relevant. | todo |
-| W7 | P2 (defer) | #3 turn-taking/endpointing | Turn-end predictor + local VAD fallback. | **Voice-only** — deferred per text-first decision. | deferred |
-| W8 | P2 (defer) | #4 latency masking | Tool execution modes (immediate+filler/post-speech/async) + speculative generation. | Mostly voice-perceived; revisit if text latency hurts. | deferred |
+| W8 | **P1** | #4 latency masking | Tool execution modes (immediate+filler / post-speech / async) + speculative-generation hook. | **In scope:** this is the layer cascaded voice-over-text rides on (async/post-speech tool dispatch + filler), and it masks model latency in text too. | todo |
+| W7 | P2 (defer) | #3 turn-taking/endpointing | Turn-end predictor + local VAD fallback. | **Voice-only** (provider-native realtime owns this) — deferred per text-first decision. | deferred |
 
 ## Already shipped this session (related)
 - 0.3.5 silent collect extraction (anti-narration) · 0.3.6/0.3.7 agent base layer + global tools · 0.3.1–0.3.4 one-input-per-turn / collect grounding. These are the *virtue* side of the synchronous design (deterministic, no fabricated fields) — W1–W6 add the resilience side without throwing that away.
 
 ## Sequencing
-W1 (ships now, standalone) → W3 + W5 (additive, low-risk, parallel) → W2 (keystone, larger; enables W4) → W4 → W6. W7/W8 deferred.
+W1 (ships now, standalone) → W3 + W5 (additive, low-risk, parallel) → W2 (keystone, larger; enables W4) → W4 → W6 → W8 (tool-modes + speculative gen; the substrate cascaded voice rides on). W7 deferred (voice-native).
