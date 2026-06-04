@@ -55,6 +55,18 @@ So the genuine parity bar is set by **ElevenAgents + Vapi/Retell/LiveKit/TEN/Pip
 - **W7** (confidence gate) — **merged into H6** (shares the unreachable ValidationCapability plumbing).
 - **W8** (tool modes) — **= H7**, downgraded to P2 (dead-air is latency not a crash) EXCEPT the per-tool **timeout** split out as a NEW correctness sub-item.
 
+## Status (2026-06-04)
+
+Core-hardening **text phase complete**, all published to npm:
+- **H2** (pinned temp-0 control model) — 0.3.12
+- **H3** (per-session turn lock + FIFO inbox) — 0.3.13
+- **H1** (out-of-band control evaluator, flow nodes, default-OFF flag) — 0.3.14
+- **H7a** (interim filler + per-tool `timeoutMs`→W1 + extraction telemetry + Tool.ts convergence) — 0.3.15
+
+ADR 0003 (kimi-reviewed) covers H1. Latency verified neutral across H2/H3/H1.
+**Deferred to the voice-unpause phase:** H7b (execution modes — voice-latency substrate; the text-relevant `timeoutMs` already shipped in H7a) + W7 (endpointing).
+**Future text items, not yet scheduled** (all hang off the H1 evaluator): H4 (constrained-enum decide + code-first routing — generalizes W9), H5/W4 (in-flow digression), H6 (confidence/grounding gate — merges W3+W7). H1's flag stays default-OFF until broader lab validation flips it.
+
 ## North star
 
 **Determinism in the control path + provider-independence.** The single cheapest lever is **H2** (pin a temperature-0 control model distinct from the speaker) — it directly attacks the gpt-4.1-mini-vs-gemini-3.1-flash-lite reliability gap with an S-effort change and de-risks every other control change. Ship it first.
