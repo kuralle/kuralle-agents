@@ -36,6 +36,7 @@ import {
   buildMemoryService,
   runMemoryIngest,
 } from './grounding/index.js';
+import { SessionMutex } from './SessionMutex.js';
 
 export interface HarnessConfig {
   agents: AgentConfig[];
@@ -73,6 +74,7 @@ export class Runtime {
   private readonly terminalHandoffTargets: Set<string>;
   private readonly hooks?: Hooks;
   private readonly activeTurnAborts = new Map<string, AbortController>();
+  private readonly sessionMutex = new SessionMutex();
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
@@ -272,10 +274,19 @@ export class Runtime {
       return { text: collectAssistantText(runCtx.runState.messages), toolResults: [] };
     };
 
+    const gated = async (): Promise<TurnResult> => {
+      const release = await this.sessionMutex.acquire(sessionId);
+      try {
+        return await execute();
+      } finally {
+        release();
+      }
+    };
+
     return createTurnHandle({
       bus,
       abortController,
-      run: execute,
+      run: gated,
     });
   }
 

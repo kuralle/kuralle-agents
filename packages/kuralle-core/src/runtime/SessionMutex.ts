@@ -51,8 +51,7 @@ export class SessionMutex {
     // sees this promise in the chain
     this.locks.set(sessionId, newTail);
 
-    // Wait for the previous lock holder to release
-    await currentTail;
+    await currentTail.catch(() => {});
 
     return releaseFn;
   }
