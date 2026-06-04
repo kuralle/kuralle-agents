@@ -44,6 +44,8 @@ export interface OutputProcessor {
   id: string;
   name?: string;
   description?: string;
+  /** Absent ⇒ `turn` (buffered, safe). Streaming is an explicit opt-in by the gate author. */
+  streamGranularity?: 'sentence' | 'turn';
   process: (args: {
     text: string;
     messages: ModelMessage[];

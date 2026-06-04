@@ -4,6 +4,8 @@ import type { Session, SourceRef, ToolCallRecord } from '../types/index.js';
 export interface ValidationCapability {
   readonly name: string;
   readonly order?: 'parallel' | 'serial';
+  /** Absent ⇒ `turn` (buffered, safe). Streaming is an explicit opt-in by the gate author. */
+  readonly streamGranularity?: 'sentence' | 'turn';
   validate(input: ValidateInput): Promise<ValidateDecision>;
 }
 
