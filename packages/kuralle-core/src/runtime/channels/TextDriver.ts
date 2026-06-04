@@ -12,7 +12,7 @@ import { consumePendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
-import { appendGatherBlocks, runGatherPhase } from '../grounding/index.js';
+import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import { z } from 'zod';
 
 export interface TextDriverConfig {
@@ -43,7 +43,8 @@ export class TextDriver implements ChannelDriver {
       return { text: blocked, toolResults: [] };
     }
 
-    const gather = await runGatherPhase(ctx);
+    const scope = resolveNodeGatherScope(replyNode, ctx.runState.state, ctx.runState.messages);
+    const gather = await runGatherPhase(ctx, scope);
     const out: TurnResult = { text: '', toolResults: [] };
     const model = replyNode.model ?? ctx.model;
     const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);

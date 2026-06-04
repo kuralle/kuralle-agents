@@ -8,8 +8,8 @@ Delegate-ready, sequenced. One chunk = one `@kuralle-agents/core` patch (version
 |---|-----|-------|---------|--------|
 | W1 | P0 | Runtime recovery boundary (errors degrade, never abort) | — | **done (0.3.8, live-verified)** |
 | W9 | P0 | Deterministic mutation/confirm gate | — | **done (0.3.9, live-verified both providers)** |
-| W3 | P1 | Per-node context scoping (KB/memory/query) | — | **in progress** |
-| W5 | P1 | Observable repair/correction in collect | — | queued |
+| W3 | P1 | Per-node context scoping (KB/memory/query) | — | **done (0.3.10, additive — reply-node grounding)** |
+| W5 | P1 | Observable repair/correction in collect | — | **in progress** |
 | W2 | P1 | Split orchestration from generation (keystone) | — | queued |
 | W4 | P1 | In-flow digression / multi-intent routing | W2 | queued |
 | W8 | P1 | Tool execution modes (immediate+interim / post_speech / async) | — (W8b speculative needs W2) | queued |

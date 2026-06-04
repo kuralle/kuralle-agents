@@ -1,12 +1,20 @@
-import type { RunContext } from '../../types/run-context.js';
+import type { GatherScope, RunContext } from '../../types/run-context.js';
+
+export type { GatherScope } from '../../types/run-context.js';
 
 export interface GatherResult {
   retrievalBlock?: string;
   memoryBlock?: string;
 }
 
-export async function runGatherPhase(ctx: RunContext): Promise<GatherResult> {
-  const retrievalBlock = ctx.autoRetrieve ? await ctx.autoRetrieve.retrieve(ctx) : undefined;
-  const memoryBlock = ctx.memoryService?.preload ? await ctx.memoryService.preload(ctx) : undefined;
+export async function runGatherPhase(ctx: RunContext, scope?: GatherScope): Promise<GatherResult> {
+  const retrievalBlock =
+    ctx.autoRetrieve && scope?.knowledge?.autoRetrieve !== false
+      ? await ctx.autoRetrieve.retrieve(ctx, scope)
+      : undefined;
+  const memoryBlock =
+    ctx.memoryService?.preload && scope?.memory?.preload !== false
+      ? await ctx.memoryService.preload(ctx, scope)
+      : undefined;
   return { retrievalBlock, memoryBlock };
 }
