@@ -10,6 +10,7 @@ import {
   PairingTracker,
   type ToolCallPair,
 } from './pairing.js';
+import { ToolTimeoutError } from './errors.js';
 import { ToolValidationError, validateAndSanitize, validateOutput } from './schema.js';
 
 export interface CoreToolExecutorConfig {
@@ -132,10 +133,12 @@ export class CoreToolExecutor implements EffectToolExecutor {
     }
 
     let interimTimer: ReturnType<typeof setTimeout> | undefined;
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
     let interimSent = false;
 
     const onAbort = (): void => {
       if (interimTimer) clearTimeout(interimTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
     };
     abortSignal?.addEventListener('abort', onAbort, { once: true });
 
@@ -183,11 +186,27 @@ export class CoreToolExecutor implements EffectToolExecutor {
             })
           : null;
 
-      const rawResult = abortPromise
-        ? await Promise.race([executePromise, abortPromise])
-        : await executePromise;
+      const timeoutMs = def.timeoutMs;
+      const timeoutPromise =
+        timeoutMs != null && timeoutMs > 0
+          ? new Promise<never>((_, reject) => {
+              timeoutTimer = setTimeout(() => {
+                reject(new ToolTimeoutError(name, timeoutMs));
+              }, timeoutMs);
+              if (typeof timeoutTimer === 'object' && 'unref' in timeoutTimer) {
+                (timeoutTimer as NodeJS.Timeout).unref();
+              }
+            })
+          : null;
+
+      const racers: Promise<unknown>[] = [executePromise];
+      if (abortPromise) racers.push(abortPromise);
+      if (timeoutPromise) racers.push(timeoutPromise);
+      const rawResult =
+        racers.length > 1 ? await Promise.race(racers) : await executePromise;
 
       if (interimTimer) clearTimeout(interimTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
 
       const validated = await validateOutput(def.output, rawResult, name);
       callRecord.result = validated;
@@ -203,6 +222,7 @@ export class CoreToolExecutor implements EffectToolExecutor {
       return validated;
     } catch (error) {
       if (interimTimer) clearTimeout(interimTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
 
       if (error instanceof DOMException && error.name === 'AbortError') {
         const placeholder = cancelledPlaceholder(requestId, name);

@@ -1,6 +1,7 @@
 import type { StandardSchemaV1 } from '../types/standard-schema.js';
 import type { CollectNode, FlowState } from '../types/flow.js';
 import type { Tool } from '../types/effectTool.js';
+import type { HarnessStreamPart } from '../types/stream.js';
 import { defineTool } from '../tools/effect/defineTool.js';
 import { z } from 'zod';
 
@@ -122,13 +123,19 @@ function submitToolName(nodeId: string): string {
   return `submit_${slugify(nodeId)}_data`;
 }
 
+export interface MergeTurnExtractionResult {
+  merged: boolean;
+  incoming?: Record<string, unknown>;
+}
+
 export function mergeTurnExtraction(
   node: CollectNode,
   state: FlowState,
   toolResults: Array<{ name: string; result: unknown }>,
-): boolean {
+): MergeTurnExtractionResult {
   const submitName = submitToolName(node.id);
   let merged = false;
+  let lastIncoming: Record<string, unknown> | undefined;
   const current = getCollectData(state, node.id);
 
   for (const record of toolResults) {
@@ -143,9 +150,39 @@ export function mergeTurnExtraction(
     setCollectData(state, node.id, next);
     Object.assign(current, next);
     merged = true;
+    lastIncoming = incoming;
   }
 
-  return merged;
+  return merged ? { merged: true, incoming: lastIncoming } : { merged: false };
+}
+
+export function emitExtractionTelemetry(
+  node: CollectNode,
+  state: FlowState,
+  incoming: Record<string, unknown>,
+  emit: (part: HarnessStreamPart) => void,
+): void {
+  const fieldsAccepted: string[] = [];
+  const fieldsRejected: string[] = [];
+  for (const [key, value] of Object.entries(incoming)) {
+    if (fieldPopulated(value)) {
+      fieldsAccepted.push(key);
+    } else {
+      fieldsRejected.push(key);
+    }
+  }
+  emit({
+    type: 'custom',
+    name: 'flow.extraction.submission',
+    data: { node: node.id, fieldsAccepted, fieldsRejected },
+  });
+  const collected = getCollectData(state, node.id);
+  const missing = computeMissingFields(node, collected);
+  emit({
+    type: 'custom',
+    name: 'flow.extraction.update',
+    data: { nodeId: node.id, collected, missing },
+  });
 }
 
 function fieldPopulated(value: unknown): boolean {

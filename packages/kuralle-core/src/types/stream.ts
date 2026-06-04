@@ -22,6 +22,7 @@ export type HarnessStreamPart =
   | { type: 'interactive'; nodeId: string; options: ChoiceOption[]; prompt: string }
   | { type: 'turn-end' }
   | { type: 'error'; error: string }
+  | { type: 'custom'; name: string; data: unknown }
   | { type: 'done'; sessionId: string };
 
 export interface TurnHandle extends Promise<import('./channel.js').TurnResult> {
