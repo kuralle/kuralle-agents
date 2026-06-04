@@ -57,8 +57,8 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'text-delta', text: 'hello ' });
-    log.record(ctx, { type: 'text-delta', text: 'world' });
+    log.record(ctx, { type: 'text-delta', id: 't1', delta: 'hello ' });
+    log.record(ctx, { type: 'text-delta', id: 't1', delta: 'world' });
 
     assert.equal(session.workingMemory['__ariaAssistantText'], 'hello world');
     // No event log entry yet (text-delta is accumulated)
@@ -70,7 +70,7 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'text-delta', text: 'hello world' });
+    log.record(ctx, { type: 'text-delta', id: 't1', delta: 'hello world' });
     log.record(ctx, { type: 'turn-end' });
 
     const events = session.workingMemory['runtimeEventLog'];
@@ -155,7 +155,7 @@ describe('DefaultConversationEventLog', () => {
 
   it('shouldCheckpoint returns false for text-delta', () => {
     const log = createLog();
-    assert.equal(log.shouldCheckpoint({ type: 'text-delta', text: 'hi' }), false);
+    assert.equal(log.shouldCheckpoint({ type: 'text-delta', id: 't', delta: 'hi' }), false);
   });
 
   it('cleanup removes assistant text key', () => {

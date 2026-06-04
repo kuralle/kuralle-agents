@@ -12,7 +12,10 @@ import type { HarnessStreamPart } from '../../src/types/stream.js';
 
 function classifyStreamPart(part: HarnessStreamPart): 'text' | 'flow' | 'other' {
   switch (part.type) {
+    case 'text-start':
     case 'text-delta':
+    case 'text-end':
+    case 'text-cancel':
       return 'text';
     case 'flow-enter':
     case 'node-enter':
@@ -40,7 +43,7 @@ const driverWithStructured: ChannelDriver = {
 describe('interactive stream part', () => {
   it('interactive_part_is_additive', () => {
     const existing: HarnessStreamPart[] = [
-      { type: 'text-delta', text: 'hi' },
+      { type: 'text-delta', id: 't0', delta: 'hi' },
       { type: 'node-enter', nodeName: 'n' },
       { type: 'done', sessionId: 's' },
     ];

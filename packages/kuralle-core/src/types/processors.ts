@@ -90,7 +90,10 @@ export interface AgentCapabilityDescriptor {
 }
 
 export type AgentStreamPart =
-  | { type: 'text-delta'; text: string }
+  | { type: 'text-start'; id: string }
+  | { type: 'text-delta'; id: string; delta: string }
+  | { type: 'text-end'; id: string }
+  | { type: 'text-cancel'; id: string; reason: string }
   | { type: 'tool-call'; toolName: string; args: unknown; toolCallId?: string }
   | { type: 'tool-result'; toolName: string; result: unknown; toolCallId?: string }
   | { type: 'tool-error'; toolName: string; error: string; toolCallId?: string }

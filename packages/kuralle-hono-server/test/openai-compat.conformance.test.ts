@@ -8,7 +8,7 @@ describe('OpenAI compat platform body conformance', () => {
     const app = createOpenAICompatRouter({
       runtime: mockRuntime(
         [
-          { type: 'text-delta', text: 'Hello from Vapi path.' },
+          { type: 'text-delta', id: 't0', delta: 'Hello from Vapi path.' },
           { type: 'done', sessionId: 'vapi-call-99' },
         ],
         { onRun: (call) => runs.push(call) },
@@ -50,7 +50,7 @@ describe('OpenAI compat platform body conformance', () => {
     const runs: RecordedRun[] = [];
     const app = createOpenAICompatRouter({
       runtime: mockRuntime(
-        [{ type: 'text-delta', text: 'Hi ElevenLabs.' }, { type: 'done', sessionId: 'el-conv-42' }],
+        [{ type: 'text-delta', id: 't0', delta: 'Hi ElevenLabs.' }, { type: 'done', sessionId: 'el-conv-42' }],
         { onRun: (call) => runs.push(call) },
       ),
     });

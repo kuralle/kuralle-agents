@@ -4,7 +4,7 @@ import { mockRuntime } from './openai-compat.helpers.ts';
 
 describe('OpenAI compat auth', () => {
   const runtime = mockRuntime([
-    { type: 'text-delta', text: 'ok' },
+    { type: 'text-delta', id: 't0', delta: 'ok' },
     { type: 'done', sessionId: 's1' },
   ]);
 

@@ -97,16 +97,16 @@ async function* emptyStream(): AsyncGenerator<HarnessStreamPart> {
 }
 
 async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, text };
+  yield { type: 'text-delta' as const, id: 't', delta: text };
 }
 
 async function* errorStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, text: 'partial...' };
+  yield { type: 'text-delta' as const, id: 't', delta: 'partial...' };
   throw new Error('stream crashed');
 }
 
 async function* emptyTextStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, text: '' };
+  yield { type: 'text-delta' as const, id: 't', delta: '' };
   yield { type: 'done' as const, sessionId: 'sess1' };
 }
 
@@ -434,7 +434,7 @@ describe('StreamMapper — unhappy paths', () => {
     // Use a very short typing interval to verify it fires
     async function* slowStream(): AsyncGenerator<HarnessStreamPart> {
       await new Promise((r) => setTimeout(r, 100));
-      yield { type: 'text-delta' as const, text: 'hello' };
+      yield { type: 'text-delta' as const, id: 't', delta: 'hello' };
     }
 
     await mapper.mapStream(slowStream(), platform, 'thread-1', {

@@ -117,7 +117,7 @@ async function turn(label: string, sessionId: string, input: string): Promise<vo
 
   let assistantText = '';
   for (const p of parts) {
-    if (p.type === 'text-delta') assistantText += p.text;
+    if (p.type === 'text-delta') assistantText += p.delta;
     if (p.type === 'tool-call') {
       console.log(`  → tool-call: ${p.toolName} args=${JSON.stringify(p.args)}`);
     }

@@ -7,7 +7,10 @@ import type { ChoiceOption } from './selection.js';
  * does not include `{ type: 'interactive' }`.
  */
 export type HarnessStreamPart =
-  | { type: 'text-delta'; text: string }
+  | { type: 'text-start'; id: string }
+  | { type: 'text-delta'; id: string; delta: string }
+  | { type: 'text-end'; id: string }
+  | { type: 'text-cancel'; id: string; reason: string }
   | { type: 'tool-call'; toolName: string; args: unknown; toolCallId?: string }
   | { type: 'tool-result'; toolName: string; result: unknown; toolCallId?: string }
   | { type: 'flow-enter'; flow: string }

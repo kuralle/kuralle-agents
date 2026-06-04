@@ -36,7 +36,8 @@ import { debug } from './debug.js';
 
 type FlowStreamPart = {
   type: string;
-  text?: string;
+  id?: string;
+  delta?: string;
   error?: string;
 };
 
@@ -229,7 +230,7 @@ const collectResponse = async (
 
   for await (const part of iterateRuntimeParts(runtime, { input: message, sessionId, userId })) {
     if (part.type === 'text-delta') {
-      response += part.text;
+      response += part.delta;
     }
 
     if (part.type === 'error') {
@@ -393,7 +394,7 @@ export const createKuralleChatRouter = ({
             userId: body.userId as string | undefined,
           })) {
             if (part.type === 'text-delta') {
-              controller.enqueue(encoder.encode(part.text));
+              controller.enqueue(encoder.encode(part.delta));
             }
           }
         } catch (error) {
@@ -644,10 +645,14 @@ export const createKuralleChatRouter = ({
           if (effectiveWelcomeMode !== 'off') {
             const staticWelcome = widgetWelcomeMessage?.trim();
             if (effectiveWelcomeMode === 'static') {
+              const welcomeId = crypto.randomUUID();
+              ws.send(JSON.stringify({ type: 'text-start', id: welcomeId }));
               ws.send(JSON.stringify({
                 type: 'text-delta',
-                text: staticWelcome || 'Hello! How can I help you today?',
+                id: welcomeId,
+                delta: staticWelcome || 'Hello! How can I help you today?',
               }));
+              ws.send(JSON.stringify({ type: 'text-end', id: welcomeId }));
 
               const suggestions = (widgetWelcomeSuggestions ?? [])
                 .filter((item): item is string => typeof item === 'string')
@@ -683,10 +688,14 @@ export const createKuralleChatRouter = ({
               } catch (error) {
                 console.error(`[Kuralle] Failed to send greeting for session ${sessionId}:`, error);
                 // Send a simple greeting if streaming fails
+                const fallbackId = crypto.randomUUID();
+                ws.send(JSON.stringify({ type: 'text-start', id: fallbackId }));
                 ws.send(JSON.stringify({
                   type: 'text-delta',
-                  text: 'Hello! How can I help you today?',
+                  id: fallbackId,
+                  delta: 'Hello! How can I help you today?',
                 }));
+                ws.send(JSON.stringify({ type: 'text-end', id: fallbackId }));
                 ws.send(JSON.stringify({
                   type: 'done',
                   sessionId,
@@ -826,7 +835,7 @@ const collectFlowResponse = async (
 
   for await (const part of flowManager.process(message)) {
     if (part.type === 'text-delta') {
-      response += part.text;
+      response += part.delta;
     }
 
     if (part.type === 'error') {
@@ -909,7 +918,7 @@ export const createKuralleRouter = ({
         try {
           for await (const part of flowManager.process(input)) {
             if (part.type === 'text-delta') {
-              controller.enqueue(encoder.encode(part.text));
+              controller.enqueue(encoder.encode(part.delta));
             }
           }
         } catch (error) {

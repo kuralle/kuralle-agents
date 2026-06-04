@@ -77,7 +77,7 @@ async function runTextParity(flow: Flow) {
         if (textStreamCall === 1) {
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: 'What is your name?' };
+              yield Object.assign({ type: 'text-delta' }, { text: 'What is your name?' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),
@@ -103,7 +103,7 @@ async function runTextParity(flow: Flow) {
         }
         return {
           fullStream: (async function* () {
-            yield { type: 'text-delta', text: 'Premium confirmed.' };
+            yield Object.assign({ type: 'text-delta' }, { text: 'Premium confirmed.' });
           })(),
           finishReason: Promise.resolve('stop'),
           response: Promise.resolve({ messages: [] }),
@@ -164,7 +164,7 @@ async function runVoiceParity(flow: Flow) {
         if (voiceStreamCall === 1) {
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: 'What is your name?' };
+              yield Object.assign({ type: 'text-delta' }, { text: 'What is your name?' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),

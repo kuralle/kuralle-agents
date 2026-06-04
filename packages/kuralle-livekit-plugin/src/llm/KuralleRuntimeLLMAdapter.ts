@@ -205,6 +205,10 @@ export class KuralleRuntimeLLMStream extends llm.LLMStream {
           throw new Error(part.error);
         }
 
+        if (part.type === 'text-start' || part.type === 'text-end' || part.type === 'text-cancel') {
+          continue;
+        }
+
         if (part.type !== 'text-delta') {
           continue;
         }
@@ -214,7 +218,7 @@ export class KuralleRuntimeLLMStream extends llm.LLMStream {
           id: `kuralle-${chunkIndex++}`,
           delta: {
             role: 'assistant',
-            content: part.text,
+            content: part.delta,
           },
         });
       }

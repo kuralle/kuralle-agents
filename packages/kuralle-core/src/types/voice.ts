@@ -263,7 +263,10 @@ export interface StreamCallbackConfig {
 
 export type HarnessStreamPart =
   | { type: 'input'; text: string; userId?: string }
-  | { type: 'text-delta'; text: string }
+  | { type: 'text-start'; id: string }
+  | { type: 'text-delta'; id: string; delta: string }
+  | { type: 'text-end'; id: string }
+  | { type: 'text-cancel'; id: string; reason: string }
   | { type: 'channel-switched'; from: ChannelId; to: ChannelId; conversationId: string }
   | {
       type: 'channel-policy-applied';

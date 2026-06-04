@@ -81,9 +81,9 @@ describeLive(`core-v2 agent live smoke (${lm?.label ?? 'no live key'})`, () => {
         if (part.type === 'text-delta') {
           const line = transcript[transcript.length - 1];
           if (line?.startsWith('assistant: ')) {
-            transcript[transcript.length - 1] = `${line}${part.text}`;
+            transcript[transcript.length - 1] = `${line}${part.delta}`;
           } else {
-            transcript.push(`assistant: ${part.text}`);
+            transcript.push(`assistant: ${part.delta}`);
           }
         }
       }

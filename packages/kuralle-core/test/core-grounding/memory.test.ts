@@ -31,7 +31,7 @@ describe('memory preload and ingest', () => {
           capturedSystem = opts.system ?? '';
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: 'Got it.' };
+              yield Object.assign({ type: 'text-delta' }, { text: 'Got it.' });
             })(),
             finishReason: Promise.resolve('stop'),
             response: Promise.resolve({ messages: [] }),

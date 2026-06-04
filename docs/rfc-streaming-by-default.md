@@ -74,7 +74,7 @@ Three boundaries, auto-selected per node by the coarsest attached gate: **token*
 - **REQ-3:** A reply node with a gate whose declared granularity is `turn` (the H6 grounding/confidence gate) MUST buffer the full turn, run the gate once on the complete text, then emit — preserving today's behavior, but only on such nodes.
 - **REQ-4:** The effective mode for a node is the **coarsest** granularity among all attached gates: `turn` if any gate is `turn`; else `sentence` if any gate is `sentence`; else `token`. Mode selection is pure and unit-testable.
 - **REQ-5:** Gate authors declare granularity via a `streamGranularity: 'sentence' | 'turn'` field on the policy/processor interface. **A gate that does not declare one defaults to `turn`** (conservative — unknown gates buffer). Streaming is an explicit opt-in by the gate author.
-- **REQ-6 (event protocol, breaking):** The single-shot `{ type: 'text-delta'; text: string }` is **removed**. The new assistant-text lifecycle is `text-start{id}` / `text-delta{id, delta}` / `text-end{id}` / `text-cancel{id, reason}`, applied to **both** `HarnessStreamPart` (`types/stream.ts`) and the voice union (`types/voice.ts`). No alias, no dual-emit, no compatibility shim.
+- **REQ-6 (event protocol, breaking):** The single-shot `{ type: 'text-delta'; text: string }` is **removed**. The new assistant-text lifecycle is `text-start{id}` / `text-delta{id, delta}` / `text-end{id}` / `text-cancel{id, reason}`, applied to **all three** in-scope unions: `HarnessStreamPart` (`types/stream.ts`), the voice union (`types/voice.ts`), and `AgentStreamPart` (`types/processors.ts`). No alias, no dual-emit, no compatibility shim.
 - **REQ-7:** One speaking turn emits exactly one `text-start`/`text-end` pair; all deltas for that turn carry the same `id`. A turn blocked **before** any delta emits a fresh `text-start`/`text-delta`/`text-end` carrying only the safe message (no `text-cancel`). A turn blocked **after** partial emit (sentence mode) emits `text-cancel{id}` followed by a fresh lifecycle for the safe message.
 - **REQ-8:** Text and native-voice speaking turns MUST share a single emission-and-gating implementation fed by a `TokenSource` abstraction. The two drivers differ only in how they produce tokens (model stream vs. provider transcript), not in how they gate or emit.
 - **REQ-9 (native realtime honesty):** On the native realtime path a `turn`-granularity gate runs **post-hoc**: it emits the relevant `safety-*`/`pipeline-validation-*` events and, on block, triggers the provider interrupt + correction utterance, but it MUST NOT claim to have prevented emission. Documentation MUST state that whole-answer content gates are advisory on native realtime audio and that input-side gating + tool authority are the reliable controls there.
@@ -101,6 +101,12 @@ Three boundaries, auto-selected per node by the coarsest attached gate: **token*
 
 - **Location:** `packages/kuralle-core/src/types/voice.ts:266`
 - **Change:** replace `{ type: 'text-delta'; text: string }` with the same four-variant lifecycle. The existing `pipeline-validation-*` / `safety-*` events (`voice.ts:285-303`) are unchanged and now interleave with sentence-level deltas.
+
+### 4.2.1 `AgentStreamPart` — same lifecycle (hook callback contract)
+
+- **Location:** `packages/kuralle-core/src/types/processors.ts` (`AgentStreamPart`)
+- **Change:** same four-variant lifecycle as §4.1–4.2.
+- **Rationale:** `AgentStreamPart` (`types/processors.ts`) — the `Hook.onStreamPart` callback contract — carries the same `text-delta` member and is flipped to the same lifecycle in the same change (REQ-11: no dual-shape). (Amended during S1-01; the original RFC named only `stream.ts`/`voice.ts`.)
 
 ### 4.3 `StreamMode` + `resolveStreamMode`
 

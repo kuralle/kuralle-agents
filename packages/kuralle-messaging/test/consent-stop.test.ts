@@ -56,7 +56,7 @@ function createMockPlatform(): MockPlatform {
 }
 
 async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', text };
+  yield { type: 'text-delta', id: 't', delta: text };
 }
 
 function trackingConsent(): ConsentStore & { optedOut: string[]; runOptOut: boolean } {

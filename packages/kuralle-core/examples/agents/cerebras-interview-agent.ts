@@ -140,7 +140,7 @@ async function main() {
     let response = '';
     const handle = runtime.run({ sessionId, input });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') response += part.text;
+      if (part.type === 'text-delta') response += part.delta;
       if (part.type === 'tool-call') console.log(`[Tool call] ${part.toolName}`);
       if (part.type === 'tool-result') {
         console.log(`[Tool result] ${part.toolName} => ${JSON.stringify(part.result)}`);

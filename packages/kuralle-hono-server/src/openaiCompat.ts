@@ -278,7 +278,7 @@ async function collectTurn(
   for await (const part of handle.events) {
     if (stopEarly) continue;
     if (part.type === 'text-delta') {
-      text += part.text;
+      text += part.delta;
     } else if (part.type === 'tool-call') {
       if (!clientTools.has(part.toolName)) continue;
       const argsStr = typeof part.args === 'string' ? part.args : JSON.stringify(part.args ?? {});
@@ -409,9 +409,9 @@ async function handleChatCompletions(
       for await (const part of handle.events) {
         if (stopEarly) continue;
         if (part.type === 'text-delta') {
-          if (!part.text) continue;
-          completionText += part.text;
-          await writeChunk({ content: part.text });
+          if (!part.delta) continue;
+          completionText += part.delta;
+          await writeChunk({ content: part.delta });
         } else if (part.type === 'tool-call') {
           if (!clientToolSet.has(part.toolName)) continue;
           const argsStr = typeof part.args === 'string' ? part.args : JSON.stringify(part.args ?? {});

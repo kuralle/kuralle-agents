@@ -1,7 +1,10 @@
 export type StreamEventFilter = 'safe' | 'all' | ((part: { type: string }) => boolean);
 
 const SAFE_EVENT_TYPES = new Set<string>([
+  'text-start',
   'text-delta',
+  'text-end',
+  'text-cancel',
   'text-clear',
   'done',
   'error',

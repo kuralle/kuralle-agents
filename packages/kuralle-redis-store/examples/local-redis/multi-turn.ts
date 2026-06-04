@@ -136,7 +136,7 @@ const run = async () => {
     const handle = runtime.run({ input: message, sessionId });
     for await (const part of handle.events) {
       if (part.type === 'text-delta') {
-        response += part.text;
+        response += part.delta;
       }
 
       if (part.type === 'handoff') {

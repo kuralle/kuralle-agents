@@ -60,7 +60,7 @@ describeLive(`v2 hono SSE live smoke (${lm?.label ?? 'no live key'})`, () => {
     const done = firstParts.find((p) => p.type === 'done') as { sessionId?: string } | undefined;
 
     expect(deltas.length).toBeGreaterThan(0);
-    expect((deltas[0] as { text?: string }).text?.length).toBeGreaterThan(0);
+    expect((deltas[0] as { delta?: string }).delta?.length).toBeGreaterThan(0);
     expect(done?.sessionId).toBeTruthy();
 
     const sessionId = done!.sessionId as string;

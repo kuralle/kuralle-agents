@@ -87,7 +87,7 @@ async function runStream(
   for await (const part of handle.events) {
     if (part.type === 'text-delta') {
       if (!ttft) ttft = Math.round(performance.now() - start);
-      text += part.text;
+      text += part.delta;
     } else if (part.type === 'tool-result') {
       tools.push(part.toolName);
     } else if (part.type === 'handoff') {

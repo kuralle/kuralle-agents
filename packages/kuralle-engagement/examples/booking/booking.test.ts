@@ -276,7 +276,7 @@ describe('booking_example', () => {
           if (streamCall === 1) {
             return {
               fullStream: (async function* () {
-                yield { type: 'text-delta', text: 'Welcome!' };
+                yield Object.assign({ type: 'text-delta' }, { text: 'Welcome!' });
               })(),
               finishReason: Promise.resolve('stop'),
               response: Promise.resolve({ messages: [] }),
@@ -285,7 +285,7 @@ describe('booking_example', () => {
           }
           return {
             fullStream: (async function* () {
-              yield { type: 'text-delta', text: 'Got it.' };
+              yield Object.assign({ type: 'text-delta' }, { text: 'Got it.' });
             })(),
             finishReason: Promise.resolve('tool-calls'),
             response: Promise.resolve({

@@ -135,7 +135,7 @@ export async function runV2Conversation(opts: {
 
     for await (const part of handle.events) {
       opts.onPart?.(part);
-      if (part.type === 'text-delta') response += part.text;
+      if (part.type === 'text-delta') response += part.delta;
       if (part.type === 'node-enter') console.log(`[Node] ${part.nodeName}`);
       if (part.type === 'flow-transition') console.log(`[Transition] ${part.from} -> ${part.to}`);
       if (part.type === 'flow-enter') console.log(`[Flow] ${part.flow}`);

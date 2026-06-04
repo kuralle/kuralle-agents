@@ -45,7 +45,7 @@ export class DefaultConversationEventLog implements ConversationEventLog {
     if (part.type === 'text-delta') {
       const prevRaw = context.session.workingMemory[ASSISTANT_TEXT_KEY];
       const prev = typeof prevRaw === 'string' ? prevRaw : '';
-      context.session.workingMemory[ASSISTANT_TEXT_KEY] = prev + part.text;
+      context.session.workingMemory[ASSISTANT_TEXT_KEY] = prev + part.delta;
       return;
     }
 

@@ -3,16 +3,16 @@ import type { HarnessStreamPart } from '@kuralle-agents/core';
 import { filterStreamParts } from '../src/stream-filter.js';
 
 const parts: HarnessStreamPart[] = [
-  { type: 'text-delta', text: 'hello ' },
+  { type: 'text-delta', id: 't0', delta: 'hello ' },
   { type: 'tool-call', toolCallId: 't1', toolName: 'search', args: { q: 'x' } },
-  { type: 'text-delta', text: 'world' },
+  { type: 'text-delta', id: 't0', delta: 'world' },
   { type: 'handoff', targetAgent: 'a2', reason: 'transfer' },
   { type: 'done', sessionId: 'session-1' },
 ];
 
 describe('filterStreamParts', () => {
   it('narrows text-delta parts and preserves the text property', () => {
-    const texts = parts.filter(filterStreamParts.textDelta).map((p) => p.text);
+    const texts = parts.filter(filterStreamParts.textDelta).map((p) => p.delta);
     expect(texts).toEqual(['hello ', 'world']);
   });
 

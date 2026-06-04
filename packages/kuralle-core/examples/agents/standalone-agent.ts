@@ -30,7 +30,7 @@ async function example1() {
   const handle = runtime.run({ sessionId: newSessionId(), input: 'Write a poem about TypeScript.' });
   let text = '';
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') text += part.text;
+    if (part.type === 'text-delta') text += part.delta;
   }
   await handle;
   console.log('Poem:\n\n' + text);
@@ -56,7 +56,7 @@ async function example2() {
     input: 'Tell me a story about a robot who learned to cook.',
   });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') process.stdout.write(part.text);
+    if (part.type === 'text-delta') process.stdout.write(part.delta);
   }
   await handle;
   console.log('\n');
@@ -93,7 +93,7 @@ async function example3() {
   console.log('Question: What is 47 * 83 + 156?\n');
   const handle = runtime.run({ sessionId: newSessionId(), input: 'What is 47 * 83 + 156?' });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta' && part.text) process.stdout.write(part.text);
+    if (part.type === 'text-delta' && part.delta) process.stdout.write(part.delta);
     if (part.type === 'tool-call') console.log(`\n  [Tool call: ${part.toolName}(${JSON.stringify(part.args)})]`);
     if (part.type === 'tool-result') console.log(`  [Tool result: ${JSON.stringify(part.result)}]\n`);
   }
@@ -151,7 +151,7 @@ async function example4() {
     input: 'Who discovered penicillin and how does it work?',
   });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta' && part.text) process.stdout.write(part.text);
+    if (part.type === 'text-delta' && part.delta) process.stdout.write(part.delta);
     if (part.type === 'tool-call') console.log(`\n  [Consulting ${part.toolName}...]`);
     if (part.type === 'tool-result') {
       const result = part.result as { agentId: string; response: string };
@@ -200,7 +200,7 @@ async function example5() {
     console.log(`User: ${input}\n`);
     const handle = runtime.run({ sessionId, input });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') process.stdout.write(part.text);
+      if (part.type === 'text-delta') process.stdout.write(part.delta);
     }
     await handle;
     console.log('\n');

@@ -31,7 +31,7 @@ export class EvalRunner {
       const handle = runtime.run({ input: turn.input, sessionId });
       for await (const part of handle.events) {
         if (part.type === 'text-delta') {
-          response += part.text;
+          response += part.delta;
         }
         if (part.type === 'tool-call') {
           toolsCalled.push(part.toolName);

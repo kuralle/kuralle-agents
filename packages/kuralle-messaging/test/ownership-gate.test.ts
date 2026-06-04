@@ -69,7 +69,7 @@ function mutableOwnership(initial: 'bot' | 'human' = 'bot'): OwnershipStore {
 }
 
 async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', text };
+  yield { type: 'text-delta', id: 't', delta: text };
 }
 
 async function* humanHandoffStream(): AsyncGenerator<HarnessStreamPart> {

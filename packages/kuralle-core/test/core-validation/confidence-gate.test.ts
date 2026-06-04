@@ -32,7 +32,7 @@ function mockStreamText(text: string) {
       ...actual,
       streamText: () => ({
         fullStream: (async function* () {
-          yield { type: 'text-delta', text };
+          yield Object.assign({ type: 'text-delta' }, { text });
         })(),
         finishReason: Promise.resolve('stop'),
         response: Promise.resolve({ messages: [] }),
@@ -123,7 +123,7 @@ describe('H6 confidence/grounding gate', () => {
       validationPolicies: [policy],
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push((part as { text: string }).text);
+          emitted.push((part as { delta: string }).delta);
         }
       },
     });
@@ -305,7 +305,7 @@ describe('H6 confidence/grounding gate', () => {
       model: stubModel,
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push((part as { text: string }).text);
+          emitted.push((part as { delta: string }).delta);
         }
       },
     });

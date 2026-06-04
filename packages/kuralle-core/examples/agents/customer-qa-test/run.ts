@@ -105,7 +105,7 @@ async function runQATest(): Promise<void> {
     let supportResponse = '';
     const handle = runtime.run({ sessionId, input: scenario.input });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') supportResponse += part.text;
+      if (part.type === 'text-delta') supportResponse += part.delta;
     }
     await handle;
     console.log(`Support: ${supportResponse.slice(0, 200)}${supportResponse.length > 200 ? '...' : ''}`);

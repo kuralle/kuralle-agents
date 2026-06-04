@@ -29,14 +29,14 @@ describe('tool interim filler', () => {
     });
     const executor = new CoreToolExecutor({
       tools: { lookup: slow },
-      onInterim: (message) => parts.push({ type: 'text-delta', text: message }),
+      onInterim: (message) => { const id = crypto.randomUUID(); parts.push({ type: 'text-start', id }); parts.push({ type: 'text-delta', id, delta: message }); parts.push({ type: 'text-end', id }); },
     });
     const session = createMockSession({ id: 's1' });
 
     const result = await executor.execute({ name: 'lookup', args: {}, session });
     expect(result).toEqual({ found: true });
-    expect(parts.some((p) => p.type === 'text-delta' && p.text === 'one sec…')).toBe(true);
-    const fillerIdx = parts.findIndex((p) => p.type === 'text-delta' && p.text === 'one sec…');
+    expect(parts.some((p) => p.type === 'text-delta' && p.delta === 'one sec…')).toBe(true);
+    const fillerIdx = parts.findIndex((p) => p.type === 'text-delta' && p.delta === 'one sec…');
     expect(fillerIdx).toBeGreaterThanOrEqual(0);
   });
 
@@ -49,7 +49,7 @@ describe('tool interim filler', () => {
     });
     const executor = new CoreToolExecutor({
       tools: { ping: fast },
-      onInterim: (message) => parts.push({ type: 'text-delta', text: message }),
+      onInterim: (message) => { const id = crypto.randomUUID(); parts.push({ type: 'text-start', id }); parts.push({ type: 'text-delta', id, delta: message }); parts.push({ type: 'text-end', id }); },
     });
     const session = createMockSession({ id: 's1' });
 

@@ -80,7 +80,7 @@ function convertToSSELines(
       if (!textStarted) {
         lines.push(sse({ type: 'text-start' }));
       }
-      lines.push(sse({ type: 'text-delta', delta: part.text }));
+      lines.push(sse({ type: 'text-delta', delta: part.delta }));
       break;
     }
 
