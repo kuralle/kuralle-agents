@@ -185,20 +185,21 @@ describe('TextDriver unit', () => {
     expect(typeof handle.cancel).toBe('function');
   });
 
-  it('runStructured constrains the model to the node choices', async () => {
-    let capturedSystem = '';
+  it('runStructured uses a closed enum schema for choice-decides', async () => {
+    let capturedSchema: unknown;
     mock.module('ai', () => {
       const actual = require('ai');
       return {
         ...actual,
-        generateObject: async ({ system }: { system: string }) => {
-          capturedSystem = system;
+        generateObject: async ({ schema }: { schema: unknown }) => {
+          capturedSchema = schema;
           return { object: { choice: 'checkout' } };
         },
       };
     });
 
     const { session, runStore, runState } = await setupDurableHarness();
+    runState.messages = [{ role: 'user', content: 'something unrelated entirely' }];
     const ctx = await createRunContext({
       session,
       runState,
@@ -222,10 +223,11 @@ describe('TextDriver unit', () => {
 
     await new TextDriver().runStructured(node, ctx);
 
-    // Without the fix the system is just the node instructions and the model is
-    // free to answer with prose the decide() can't match. The fix injects the
-    // valid choice ids so the model returns exactly one.
-    expect(capturedSystem).toContain('checkout');
-    expect(capturedSystem).toContain('more');
+    const { isConstrainedChoiceEnumSchema } = await import('../../src/flow/choiceMatch.js');
+    expect(isConstrainedChoiceEnumSchema(capturedSchema)).toBe(true);
+    const parsed = (capturedSchema as import('zod').ZodObject<{ choice: import('zod').ZodEnum<[string, ...string[]]> }>).safeParse({
+      choice: 'bogus',
+    });
+    expect(parsed.success).toBe(false);
   });
 });
