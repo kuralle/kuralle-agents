@@ -13,6 +13,11 @@ export interface ValidateInput {
   readonly assistantOutput: string;
   readonly toolCallsMade: ToolCallRecord[];
   readonly knowledgeCitations: SourceRef[];
+  /** Current flow state (`runState.state`). Lets a grounding validator ground a
+   *  claim against evidence an ACTION node wrote (e.g. `state.orderRef` after a
+   *  create-order tool), which `toolCallsMade` (this turn's model tool calls only)
+   *  does not capture. `{}` when the turn ran outside a flow. */
+  readonly state: Readonly<Record<string, unknown>>;
   readonly abortSignal?: AbortSignal;
 }
 

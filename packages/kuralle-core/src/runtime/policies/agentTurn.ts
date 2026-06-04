@@ -162,6 +162,7 @@ async function runValidationPolicies(
       assistantOutput: current,
       toolCallsMade,
       knowledgeCitations,
+      state: ctx.runState.state,
       abortSignal: ctx.abortSignal,
     });
 
