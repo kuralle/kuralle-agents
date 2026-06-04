@@ -123,7 +123,10 @@ async function runFreeConversation(
   assertWithinTurnLimit(run, ctx.limits);
 
   const replyNode = buildAgentReplyNode(agent);
-  const turn = await driver.runAgentTurn(resolveReplyNode(replyNode, run.state), ctx);
+  const turn = await driver.runAgentTurn(
+    resolveReplyNode(replyNode, run.state, { freeConversation: true }),
+    ctx,
+  );
 
   if (turn.text.trim()) {
     const message: ModelMessage = { role: 'assistant', content: turn.text };

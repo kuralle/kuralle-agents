@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.14 — H1: out-of-band control evaluator for flow reply nodes (default OFF)
+
+Patch across the graph (0.3.13 -> 0.3.14). The W2 keystone, scoped to flow reply
+nodes (ADR 0003 Revision 1, kimi-k2.6-reviewed). Behind a default-OFF flag
+`agent.experimental.outOfBandControl`. When ON: a flow reply node's model-visible
+tool dict EXCLUDES flow-transition control tools (handoff/transfer_to_agent/final/
+escalate/recover — still registered in the executor, just not offered to the
+speaker), and a deterministic `evaluateReplyControl` decides the transition from
+structured signals — `interrupted` → redispatch, a data-tool/W1 control-result
+shape → transition, else `node.next` → transition. So flow routing is decided by
+the flow, not by the model picking a control tool mid-generation. NO new LLM calls
+(purely deterministic). Free conversation (`hostLoop.runFreeConversation`, marked
+`ResolvedNode.freeConversation`) is untouched — it keeps its model control channel.
+Flag OFF reproduces 0.3.13 byte-for-byte (the original dispatch branch is preserved
+verbatim; parity test). Pre-emission reask + the semantic classifier are deferred
+to H6. core 449/449; W1/W9/parking/turn-lock green.
+
 ## 0.3.13 — H3: per-session turn lock + FIFO input inbox
 
 Patch across the graph (0.3.12 -> 0.3.13). Second hardening chunk

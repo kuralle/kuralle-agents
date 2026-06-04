@@ -54,6 +54,8 @@ export interface RunContext {
   model: LanguageModel;
   /** Control-path model (routing, decide, extraction) at temperature 0. */
   controlModel: LanguageModel;
+  /** When true, flow reply nodes use the out-of-band control evaluator (ADR 0003 H1). */
+  outOfBandControl: boolean;
   refinementPolicies: RefinementCapability[];
   validationPolicies: ValidationCapability[];
   inputProcessors: InputProcessor[];

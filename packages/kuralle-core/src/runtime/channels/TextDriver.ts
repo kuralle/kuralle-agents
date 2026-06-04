@@ -14,6 +14,7 @@ import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTu
 import { resolveMaxSteps } from '../policies/limits.js';
 import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import { z } from 'zod';
+import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
 
 export interface TextDriverConfig {
   toolDefs?: Record<string, AnyTool>;
@@ -51,7 +52,7 @@ export class TextDriver implements ChannelDriver {
     const baseSystem = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
     const messages: ModelMessage[] = [...ctx.runState.messages];
-    const aiTools = this.resolveTools(node, ctx.globalTools);
+    const aiTools = this.resolveTools(node, ctx);
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);
     const toolCallsMade: ToolCallRecord[] = [];
     let draftText = '';
@@ -182,20 +183,43 @@ export class TextDriver implements ChannelDriver {
     return { type: 'message', input };
   }
 
-  private resolveTools(resolved: ResolvedNode, globalTools?: Record<string, AnyTool>): ToolSet | undefined {
-    const merged: Record<string, AnyTool> = { ...this.toolDefs, ...(globalTools ?? {}), ...(resolved.localTools ?? {}) };
+  private resolveTools(resolved: ResolvedNode, ctx: RunContext): ToolSet | undefined {
+    const siloFlowControl = ctx.outOfBandControl && !resolved.freeConversation;
+    const merged: Record<string, AnyTool> = {
+      ...this.toolDefs,
+      ...(ctx.globalTools ?? {}),
+      ...(resolved.localTools ?? {}),
+    };
     const aiTools: ToolSet = { ...resolved.tools };
     for (const [name, tool] of Object.entries(merged)) {
+      if (siloFlowControl && isFlowTransitionControlTool(name)) {
+        continue;
+      }
       if (tool && !aiTools[name]) {
         const built = buildToolSet({ [name]: tool });
         Object.assign(aiTools, built);
+      }
+    }
+    if (siloFlowControl) {
+      for (const name of Object.keys(aiTools)) {
+        if (isFlowTransitionControlTool(name)) {
+          delete aiTools[name];
+        }
       }
     }
     if (Object.keys(aiTools).length === 0 && Object.keys(merged).length === 0) {
       return undefined;
     }
     if (Object.keys(aiTools).length === 0) {
-      return buildToolSet(merged);
+      const filteredMerged = siloFlowControl
+        ? Object.fromEntries(
+            Object.entries(merged).filter(([name]) => !isFlowTransitionControlTool(name)),
+          )
+        : merged;
+      if (Object.keys(filteredMerged).length === 0) {
+        return undefined;
+      }
+      return buildToolSet(filteredMerged);
     }
     return aiTools;
   }

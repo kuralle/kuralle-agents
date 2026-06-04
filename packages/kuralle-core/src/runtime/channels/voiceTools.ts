@@ -7,6 +7,7 @@ import type { ToolDeclaration } from '../../capabilities/index.js';
 import type { ResolvedNode } from '../../types/channel.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
 import { buildToolSet } from '../../tools/effect/defineTool.js';
+import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
 
 function toolToDeclaration(name: string, tool: Tool): ToolDeclaration {
   return {
@@ -25,12 +26,24 @@ export function v2ToolsToGemini(tools: Record<string, AnyTool>): GeminiFunctionD
 export function resolveVoiceGeminiTools(
   resolved: ResolvedNode,
   toolDefs: Record<string, AnyTool>,
+  options?: { siloFlowControl?: boolean },
 ): GeminiFunctionDeclaration[] {
+  const siloFlowControl = options?.siloFlowControl === true;
   const merged: Record<string, AnyTool> = { ...toolDefs, ...(resolved.localTools ?? {}) };
   const fromNode = toolSetToEffectTools(resolved.tools);
   for (const [name, tool] of Object.entries(fromNode)) {
+    if (siloFlowControl && isFlowTransitionControlTool(name)) {
+      continue;
+    }
     if (!merged[name]) {
       merged[name] = tool;
+    }
+  }
+  if (siloFlowControl) {
+    for (const name of Object.keys(merged)) {
+      if (isFlowTransitionControlTool(name)) {
+        delete merged[name];
+      }
     }
   }
   return v2ToolsToGemini(merged);

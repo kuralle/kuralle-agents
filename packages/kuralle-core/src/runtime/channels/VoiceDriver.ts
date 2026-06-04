@@ -57,7 +57,11 @@ export class VoiceDriver implements ChannelDriver {
     const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
     const baseSystem = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
-    const geminiTools = resolveVoiceGeminiTools(node, { ...this.toolDefs, ...(ctx.globalTools ?? {}) });
+    const geminiTools = resolveVoiceGeminiTools(
+      node,
+      { ...this.toolDefs, ...(ctx.globalTools ?? {}) },
+      { siloFlowControl: ctx.outOfBandControl && !node.freeConversation },
+    );
     const toolCallsMade: ToolCallRecord[] = [];
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);
     let draftText = '';

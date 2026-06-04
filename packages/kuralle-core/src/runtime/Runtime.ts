@@ -168,6 +168,7 @@ export class Runtime {
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = opened.agent.globalTools;
+      runCtx.outOfBandControl = opened.agent.experimental?.outOfBandControl ?? false;
 
       await this.hooks?.onStart?.(runCtx);
 
