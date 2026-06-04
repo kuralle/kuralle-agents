@@ -25,6 +25,8 @@ npm install @kuralle-agents/core ai zod
 
 Unlike the cascaded path in `@kuralle-agents/livekit-plugin` (STT → LLM → TTS), provider-native realtime sends raw audio directly to the model and receives audio back in a single connection — lower latency, no transcript round-trip.
 
+Whole-answer content gates are **advisory** on native realtime audio. The provider speaks audio as it generates it, before any Kuralle gate runs, so a blocking gate cannot un-speak audio already played — it emits a `safety-*` event and speaks a correction utterance (post-hoc). The reliable controls on native realtime are **input-side gating** (pre-turn policies) and **tool authority** (tools return data, not conversational text). On the **cascaded** substrate, by contrast, Kuralle controls the emission boundary and the gate is preventive.
+
 - **`VoiceEngine`** — call acceptor. Accepts incoming audio connections and creates per-call `VoiceCallSession` workers that bridge a transport to the chosen provider.
 - **`VoiceCallSession`** / **`RealtimeCallWorker`** — per-call lifecycle: connects to the provider, routes tool calls through Kuralle runtime, manages session state.
 - **`GeminiLiveSession`** — thin wrapper around `@google/genai` `live.connect()`; manages the WebSocket to Gemini, PCM audio encoding, tool dispatch, and session resumption.

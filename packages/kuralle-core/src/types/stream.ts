@@ -24,6 +24,14 @@ export type HarnessStreamPart =
   | { type: 'conversation-outcome'; outcome: ConversationOutcome }
   | { type: 'interactive'; nodeId: string; options: ChoiceOption[]; prompt: string }
   | { type: 'turn-end' }
+  | { type: 'pipeline-validation-block'; rationale: string; userFacingMessage?: string }
+  | {
+      type: 'safety-blocked';
+      moderator: string;
+      rationale: string;
+      userFacingMessage: string;
+      handlerOutcome?: 'queued' | 'connected' | 'failed';
+    }
   | { type: 'error'; error: string }
   | { type: 'custom'; name: string; data: unknown }
   | { type: 'done'; sessionId: string };
