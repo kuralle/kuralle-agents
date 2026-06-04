@@ -1,11 +1,13 @@
-import type { FlowNode, Transition } from '../types/flow.js';
+import type { Flow, FlowNode, Transition } from '../types/flow.js';
+import type { FlowPark } from './collectDigression.js';
 
 export type NormalizedTransition =
   | { kind: 'goto'; node: FlowNode; data?: Record<string, unknown> }
   | { kind: 'handoff'; to: string; reason?: string }
   | { kind: 'escalate'; reason: string }
   | { kind: 'end'; reason: string }
-  | { kind: 'stay' };
+  | { kind: 'stay' }
+  | { kind: 'switchFlow'; flow: Flow; park: FlowPark };
 
 const NODE_KINDS = new Set(['reply', 'collect', 'action', 'decide']);
 

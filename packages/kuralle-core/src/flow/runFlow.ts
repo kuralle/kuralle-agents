@@ -1,6 +1,8 @@
 import type { ModelMessage } from 'ai';
+import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
 import type { DecideNode, Flow, FlowNode } from '../types/flow.js';
+import { getFlowPark } from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
@@ -130,13 +132,18 @@ async function dispatchNode(
   run: RunState,
   driver: ChannelDriver,
   ctx: RunContext,
+  agent: AgentConfig | undefined,
+  flow: Flow,
 ): Promise<NormalizedTransition> {
   if (isActionNode(node)) {
     return normalizeTransition(await node.run(run.state, toActionContext(ctx)));
   }
 
   if (isCollectNode(node)) {
-    return collectUntilComplete(node, run, driver, ctx);
+    return collectUntilComplete(node, run, driver, ctx, {
+      agent,
+      activeFlowName: flow.name,
+    });
   }
 
   if (isDecideNode(node)) {
@@ -186,7 +193,7 @@ async function dispatchNode(
       if (decision.kind === 'redispatch') {
         const signal = await driver.awaitUser(ctx);
         appendUserMessage(run, signal.input);
-        return dispatchNode(node, run, driver, ctx);
+        return dispatchNode(node, run, driver, ctx, agent, flow);
       }
       appendAssistantMessage(run, turn.text);
       if (decision.kind === 'transition') {
@@ -200,7 +207,7 @@ async function dispatchNode(
     if (turn.interrupted) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
-      return dispatchNode(node, run, driver, ctx);
+      return dispatchNode(node, run, driver, ctx, agent, flow);
     }
 
     if (turn.control?.type === 'handoff') {
@@ -230,6 +237,7 @@ export async function runFlow(
   run: RunState,
   driver: ChannelDriver,
   ctx: RunContext,
+  agent?: AgentConfig,
 ): Promise<FlowResult> {
   const registry = buildNodeRegistry(flow);
   const startNode = resolveStartNode(flow);
@@ -253,17 +261,38 @@ export async function runFlow(
   for (;;) {
     let transition: NormalizedTransition;
     try {
-      transition = await dispatchNode(node, run, driver, ctx);
+      transition = await dispatchNode(node, run, driver, ctx, agent, flow);
     } catch (error) {
       if (error instanceof SuspendError || error instanceof ToolApprovalDeniedError) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
       ctx.emit({ type: 'error', error: message });
-      return degradeFlowError(flow, registry, run, driver, ctx, dispatchNode);
+      return degradeFlowError(flow, registry, run, driver, ctx, (n, r, d, c) =>
+        dispatchNode(n, r, d, c, agent, flow),
+      );
+    }
+
+    if (transition.kind === 'switchFlow') {
+      run.activeFlow = transition.flow.name;
+      run.activeNode = undefined;
+      await ctx.runStore.putRunState(run);
+      return runFlow(transition.flow, run, driver, ctx, agent);
     }
 
     if (transition.kind === 'end') {
+      const park = getFlowPark(run.state);
+      if (park && agent) {
+        delete run.state.__flowPark;
+        const parkedFlow = agent.flows?.find((candidate) => candidate.name === park.flow);
+        if (parkedFlow) {
+          run.activeFlow = park.flow;
+          run.activeNode = park.node;
+          await ctx.runStore.putRunState(run);
+          ctx.emit({ type: 'flow-end', flow: flow.name, reason: transition.reason });
+          return runFlow(parkedFlow, run, driver, ctx, agent);
+        }
+      }
       ctx.emit({ type: 'flow-end', flow: flow.name, reason: transition.reason });
       return { kind: 'ended', reason: transition.reason };
     }

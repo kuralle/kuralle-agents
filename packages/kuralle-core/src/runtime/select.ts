@@ -23,6 +23,8 @@ export interface SelectHostOptions {
   run: RunState;
   model: LanguageModel;
   alwaysRoute?: boolean;
+  /** Flow names to exclude from enterFlow (e.g. the active flow during in-flow digression). */
+  excludeFlowNames?: string[];
 }
 
 export async function selectHostTarget(options: SelectHostOptions): Promise<HostSelection> {
@@ -41,8 +43,14 @@ export async function selectHostTarget(options: SelectHostOptions): Promise<Host
 
   const completed = run.state.__completedFlows;
   const completedFlows = Array.isArray(completed) ? (completed as string[]) : [];
-  const availableFlows = flows.filter((flow) => !completedFlows.includes(flow.name));
+  const excluded = new Set(options.excludeFlowNames ?? []);
+  const availableFlows = flows.filter(
+    (flow) => !completedFlows.includes(flow.name) && !excluded.has(flow.name),
+  );
   const agentRoutes = routes.filter((route) => route.agent);
+  if (availableFlows.length === 0 && agentRoutes.length === 0) {
+    return { kind: 'keep' };
+  }
   if (availableFlows.length === 1 && agentRoutes.length === 0) {
     return { kind: 'enterFlow', flow: availableFlows[0]! };
   }

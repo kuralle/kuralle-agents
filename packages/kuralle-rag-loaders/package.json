@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-rag-loaders"
   },
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "Document loaders for Kuralle RAG pipelines (INGESTION-TIME ONLY — never import at runtime)",
   "type": "module",
   "main": "dist/index.js",

@@ -1,8 +1,10 @@
 import type { ModelMessage } from 'ai';
+import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver, TurnResult } from '../types/channel.js';
 import type { CollectNode } from '../types/flow.js';
 import type { RunContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
+import { runCollectDigression } from './collectDigression.js';
 import { hasPendingUserInput } from '../runtime/channels/inputBuffer.js';
 import { resolveCollectExtractionNode } from './nodeBuilders.js';
 import {
@@ -36,6 +38,7 @@ export async function collectUntilComplete(
   run: RunState,
   driver: ChannelDriver,
   ctx: RunContext,
+  options?: { agent?: AgentConfig; activeFlowName?: string },
 ): Promise<NormalizedTransition> {
   for (;;) {
     if (schemaSatisfied(node, run.state)) {
@@ -69,11 +72,11 @@ export async function collectUntilComplete(
       return normalizeTransition(await node.onComplete(data, run.state));
     }
 
-    const missing = computeMissingFields(node, getCollectData(run.state, node.id));
-    const submitTool = createExtractionSubmitTool(node, missing, {
+    const missingBefore = computeMissingFields(node, getCollectData(run.state, node.id));
+    const submitTool = createExtractionSubmitTool(node, missingBefore, {
       userMessage: peekLatestUserMessage(run),
     });
-    const resolved = resolveCollectExtractionNode(node, missing, run.state, submitTool);
+    const resolved = resolveCollectExtractionNode(node, missingBefore, run.state, submitTool);
     // Non-speaking extraction: the model's prose is DISCARDED (never emitted or
     // appended), so a collect turn cannot author narration that contradicts flow
     // state. Falls back to runAgentTurn for drivers without runExtraction; its
@@ -83,6 +86,33 @@ export async function collectUntilComplete(
       ? driver.runExtraction(resolved, ctx)
       : driver.runAgentTurn(resolved, ctx));
     mergeExtractionFromTurn(node, run, turn, ctx);
+
+    const missingAfter = computeMissingFields(node, getCollectData(run.state, node.id));
+    const advanced =
+      missingAfter.length < missingBefore.length || schemaSatisfied(node, run.state);
+
+    if (
+      !advanced &&
+      ctx.outOfBandControl &&
+      options?.agent &&
+      options.activeFlowName
+    ) {
+      const digression = await runCollectDigression({
+        agent: options.agent,
+        node,
+        activeFlowName: options.activeFlowName,
+        run,
+        driver,
+        ctx,
+      });
+      if (digression.kind === 'transition') {
+        return digression.transition;
+      }
+      if (digression.kind === 'answeredThenResume') {
+        emitCollectAsk(node, run, ctx);
+        return { kind: 'stay' };
+      }
+    }
   }
 }
 
@@ -110,7 +140,7 @@ function renderCollectAsk(node: CollectNode, missing: string[], state: RunState[
   return 'Could you tell me a little more?';
 }
 
-function emitCollectAsk(node: CollectNode, run: RunState, ctx: RunContext): void {
+export function emitCollectAsk(node: CollectNode, run: RunState, ctx: RunContext): void {
   const missing = computeMissingFields(node, getCollectData(run.state, node.id));
   const text = renderCollectAsk(node, missing, run.state);
   if (!text.trim()) {
