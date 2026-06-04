@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.19 — Export pending-input buffer helpers (custom ChannelDriver support)
+
+Patch across the graph (0.3.18 -> 0.3.19). `setPendingUserInput`/`consumePendingUserInput`/`peekPendingUserInput`/`hasPendingUserInput` are now exported from `@kuralle-agents/core/runtime`. A custom `ChannelDriver` (or a test fake) needs `consumePendingUserInput` to implement `awaitUser` the same FIFO-aware way the built-in drivers do — since 0.3.13 (H3) the buffer is an ordered queue, so hand-reading the workingMemory key as a string silently breaks. No behavior change; export-only.
+
 ## 0.3.18 — H6: author-reachable confidence/grounding gate
 
 Patch across the graph (0.3.17 -> 0.3.18). Completes the text-hardening backlog.
