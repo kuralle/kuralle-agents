@@ -1,0 +1,18 @@
+=== bun test mode.test.ts ===
+bun test v1.3.9 (cf6cdbbb)
+
+ 10 pass
+ 0 fail
+ 10 expect() calls
+Ran 10 tests across 1 file. [222.00ms]
+
+=== guard-stream-s0-03.sh ===
+=== typecheck:all FAIL configs this run ===
+packages/kuralle-core/test/tsconfig.json
+packages/kuralle-engagement/examples/booking/tsconfig.json
+packages/kuralle-engagement/examples/clothing/tsconfig.json
+packages/kuralle-engagement/examples/pharmacy/tsconfig.json
+=== NEW failures beyond baseline (must be empty) ===
+
+=== kuralle-core/test error count: 5 (baseline 5, must be <= 5) ===
+GUARD OK: no new typecheck:all failures
