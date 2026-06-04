@@ -209,6 +209,7 @@ The format below repeats per sprint. Stories use the id pattern `S{N}-{nn}` (e.g
 | B-04 | Aggressive default (`sentence`) for undeclared gate granularity, if field adoption shows `turn` is too conservative in practice. | as-needed | §12 Q2 |
 | B-05 | Downstream Studio `SSEChatTransport` migration to the new lifecycle (separate repo; REQ-6 enables it). | downstream | §1, §4.1 |
 | B-07 | Investigate whether `Hook.onStreamPart`/`AgentStreamPart` is a dead public surface (no live `ctx.emit` feeds it); remove if confirmed dead. Source: S1-01 / `.understanding/text-delta-consumers.md` O1. | post-0.4.0 | S1-01 |
+| B-08 | Live-Gemini validation: does `serverContent.outputTranscription.text` overlap `modelTurn.parts[].text` in `outputAudioTranscription` mode? If so, the voice transcript `TokenSource` would emit duplicate/overlapping deltas — add dedup. Current accumulation semantics preserved as baseline. Source: S2-01 / `.understanding/voicedriver-streaming.md` O1. | when live-Gemini access | S2-01 |
 | B-06 | **Fix pre-existing `typecheck:all` drift in test/example files** (discovered at S0-00 baseline, red on `main` @ `925c7bb`): `kuralle-core/test` (5 — `Transition` `"a"` literal + dual-`RunContext` import), `kuralle-engagement/examples/{booking,clothing,pharmacy}` (4/3/2 — TS2722 possibly-undefined). Unrelated to streaming; the "tests/examples never typechecked" CI hole. **Release blocker:** must be green before Sprint 4's `0.4.0` gate is truly clean. | before Sprint 4 release | §9.3 / S0-00 |
 
 ---
