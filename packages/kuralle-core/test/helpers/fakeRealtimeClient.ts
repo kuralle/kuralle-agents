@@ -51,6 +51,7 @@ export class FakeRealtimeAudioClient implements RealtimeAudioClient {
   }
   private requestResponseCount = 0;
 
+  readonly correctionRequests: string[] = [];
   readonly receivedToolResponses: RealtimeToolResponse[] = [];
   readonly configHistory: Array<Partial<RealtimeSessionConfig>> = [];
 
@@ -115,7 +116,11 @@ export class FakeRealtimeAudioClient implements RealtimeAudioClient {
     this.configHistory.push(config);
   }
 
-  requestResponse(_instruction?: string): void {
+  requestResponse(instruction?: string): void {
+    if (instruction !== undefined && instruction.length > 0) {
+      this.correctionRequests.push(instruction);
+      return;
+    }
     this.requestResponseCount += 1;
     if (this.stallResponse) {
       return;

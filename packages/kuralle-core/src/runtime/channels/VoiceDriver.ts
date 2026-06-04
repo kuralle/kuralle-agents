@@ -20,6 +20,42 @@ import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../g
 import type { RealtimeSessionConfig, RealtimeToolResponse } from '../../realtime/RealtimeAudioClient.js';
 import type { RealtimeAudioClient } from '../../realtime/RealtimeAudioClient.js';
 import { resolveVoiceGeminiTools } from './voiceTools.js';
+
+interface NativeRealtimePostHocGate {
+  safeText: string;
+  rationale: string;
+  moderator: string;
+  escalated: boolean;
+}
+
+function emitNativeRealtimePostHocGate(
+  ctx: RunContext,
+  client: RealtimeAudioClient,
+  gate: NativeRealtimePostHocGate,
+): void {
+  if (gate.escalated) {
+    ctx.emit({
+      type: 'safety-blocked',
+      moderator: gate.moderator,
+      rationale: gate.rationale,
+      userFacingMessage: gate.safeText,
+    });
+  } else {
+    ctx.emit({
+      type: 'pipeline-validation-block',
+      rationale: gate.rationale,
+      userFacingMessage: gate.safeText,
+    });
+    ctx.emit({
+      type: 'safety-blocked',
+      moderator: gate.moderator,
+      rationale: gate.rationale,
+      userFacingMessage: gate.safeText,
+    });
+  }
+
+  client.requestResponse?.(gate.safeText);
+}
 export interface VoiceDriverConfig {
   client: RealtimeAudioClient;
   toolDefs?: Record<string, AnyTool>;
@@ -76,6 +112,7 @@ export class VoiceDriver implements ChannelDriver {
     const transcript = createDeferredTokenSource();
     let draftText = '';
     this.heardCharCount = 0;
+    let postHocGate: NativeRealtimePostHocGate | null = null;
 
     const speakPromise = speakGated({
       ctx,
@@ -84,6 +121,15 @@ export class VoiceDriver implements ChannelDriver {
       source: transcript.source,
       runGate: async (text, _final) => {
         const r = await applyPostTurnPolicies(ctx, text, toolCallsMade, gather.citations ?? []);
+        if (!r.proceed) {
+          const safeText = r.blockedMessage ?? r.text;
+          postHocGate = {
+            safeText,
+            rationale: r.control?.reason ?? 'blocked',
+            moderator: 'post-turn-gate',
+            escalated: r.control?.type === 'escalate',
+          };
+        }
         return {
           blocked: !r.proceed,
           text: r.proceed ? r.text : (r.blockedMessage ?? r.text),
@@ -135,6 +181,12 @@ export class VoiceDriver implements ChannelDriver {
     out.text = spoken.text;
     out.control = spoken.control;
     out.confidence = spoken.confidence;
+
+    if (postHocGate) {
+      // Advisory post-hoc gate: provider audio may already have played; correction does not un-speak it.
+      emitNativeRealtimePostHocGate(ctx, this.client, postHocGate);
+      out.gateScope = 'advisory';
+    }
 
     ctx.emit({ type: 'turn-end' });
     return out;

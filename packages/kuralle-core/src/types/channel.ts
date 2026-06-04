@@ -32,6 +32,8 @@ export interface TurnResult {
   interrupted?: boolean;
   truncateAt?: number;
   confidence?: number;
+  /** Native realtime post-hoc gate: provider audio already played; gate is advisory only. */
+  gateScope?: 'advisory';
 }
 
 export type UserSignal = { type: 'message'; input: string };
