@@ -159,6 +159,25 @@ export class FakeRealtimeAudioClient implements RealtimeAudioClient {
     });
   }
 
+  /** Emit multiple assistant transcript chunks then turn-complete (stallResponse must be true). */
+  emitAssistantChunks(chunks: string[]): void {
+    this.schedule(() => {
+      for (const chunk of chunks) {
+        if (chunk.length > 0) {
+          this.emit('transcript', chunk, 'assistant');
+        }
+      }
+      this.emit('turn-complete');
+    });
+  }
+
+  /** End a stalled turn with no assistant transcript (stallResponse must be true). */
+  emitTurnCompleteOnly(): void {
+    this.schedule(() => {
+      this.emit('turn-complete');
+    });
+  }
+
   private emitAssistantResponse(response: CannedResponse): void {
     if (response.toolCalls?.length) {
       this.pendingAfterTools = response;

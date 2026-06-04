@@ -10,6 +10,12 @@ import type { Tool, AnyTool } from '../../types/effectTool.js';
 import { executeModelToolCall } from './executeModelTool.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
+import { speakGated } from './streaming/speakGated.js';
+import { resolveStreamMode } from './streaming/mode.js';
+import {
+  createDeferredTokenSource,
+  type DeferredTokenSource,
+} from './streaming/deferredTokenSource.js';
 import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import type { RealtimeSessionConfig, RealtimeToolResponse } from '../../realtime/RealtimeAudioClient.js';
 import type { RealtimeAudioClient } from '../../realtime/RealtimeAudioClient.js';
@@ -65,8 +71,28 @@ export class VoiceDriver implements ChannelDriver {
     );
     const toolCallsMade: ToolCallRecord[] = [];
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);
+    const mode = resolveStreamMode(ctx, node);
+    const turnId = crypto.randomUUID();
+    const transcript = createDeferredTokenSource();
     let draftText = '';
     this.heardCharCount = 0;
+
+    const speakPromise = speakGated({
+      ctx,
+      mode,
+      turnId,
+      source: transcript.source,
+      runGate: async (text, _final) => {
+        const r = await applyPostTurnPolicies(ctx, text, toolCallsMade, gather.citations ?? []);
+        return {
+          blocked: !r.proceed,
+          text: r.proceed ? r.text : (r.blockedMessage ?? r.text),
+          reason: r.control?.reason,
+          control: r.control,
+          confidence: r.confidence,
+        };
+      },
+    });
 
     await this.reconfigure({ systemInstruction: system, tools: geminiTools });
 
@@ -77,10 +103,17 @@ export class VoiceDriver implements ChannelDriver {
         step === 0,
         toolCallsMade,
         node.localTools,
+        transcript,
       );
       draftText += assistantText;
 
       if (outcome === 'interrupted') {
+        transcript.close('interrupted');
+        try {
+          await speakPromise;
+        } catch {
+          /* speakGated cancels in-flight stream on interrupt */
+        }
         out.interrupted = true;
         out.truncateAt = this.heardCharCount;
         out.text = truncateToHeard(draftText, this.heardCharCount);
@@ -97,19 +130,11 @@ export class VoiceDriver implements ChannelDriver {
       }
     }
 
-    const postTurn = await applyPostTurnPolicies(ctx, draftText, toolCallsMade, gather.citations ?? []);
-    out.confidence = postTurn.confidence;
-    out.control = postTurn.control;
-
-    const emitText = postTurn.control ? (postTurn.blockedMessage ?? postTurn.text) : postTurn.text;
-    out.text = emitText;
-
-    if (emitText) {
-      const id = crypto.randomUUID();
-      ctx.emit({ type: 'text-start', id });
-      ctx.emit({ type: 'text-delta', id, delta: emitText });
-      ctx.emit({ type: 'text-end', id });
-    }
+    transcript.close('complete');
+    const spoken = await speakPromise;
+    out.text = spoken.text;
+    out.control = spoken.control;
+    out.confidence = spoken.confidence;
 
     ctx.emit({ type: 'turn-end' });
     return out;
@@ -157,7 +182,8 @@ export class VoiceDriver implements ChannelDriver {
     out: TurnResult,
     triggerResponse: boolean,
     toolCallsMade: ToolCallRecord[],
-    localTools?: Record<string, AnyTool>,
+    localTools: Record<string, AnyTool> | undefined,
+    transcript: DeferredTokenSource,
   ): Promise<{ outcome: CollectOutcome; assistantText: string }> {
     return new Promise((resolve, reject) => {
       let assistantText = '';
@@ -175,6 +201,7 @@ export class VoiceDriver implements ChannelDriver {
         if (settled) return;
         settled = true;
         cleanup();
+        transcript.close('error');
         reject(error);
       };
 
@@ -182,6 +209,7 @@ export class VoiceDriver implements ChannelDriver {
         if (role === 'assistant') {
           assistantText += text;
           this.heardCharCount += text.length;
+          transcript.push(text);
         }
         if (role === 'user' && sawInterrupt) {
           this.pendingBargeInInput = text;
