@@ -2,6 +2,7 @@ import type { AgentConfig } from '../../types/agentConfig.js';
 import type { AutoRetrieveProvider, RunContext } from '../../types/run-context.js';
 import type { HarnessStreamPart } from '../../types/stream.js';
 import type { AgentKnowledgeOverrides, KnowledgeProviderConfig } from '../../types/voice.js';
+import { normalizeCitations } from '../citations/index.js';
 import { KnowledgeProvider } from '../KnowledgeProvider.js';
 
 function latestUserMessage(ctx: RunContext): string {
@@ -72,7 +73,12 @@ export function buildAutoRetrieveProvider(
       ];
 
       const maxChars = provider.resolveConfig(merged).maxOutputTokens * 4;
-      return formatRetrievalBlock(combined, maxChars);
+      const block = formatRetrievalBlock(combined, maxChars);
+      const citations = normalizeCitations(retrievalResults);
+      if (!block && citations.length === 0) {
+        return undefined;
+      }
+      return { block, citations: citations.length > 0 ? citations : undefined };
     },
   };
 }

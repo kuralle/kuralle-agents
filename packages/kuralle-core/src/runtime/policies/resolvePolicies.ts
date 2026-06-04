@@ -21,8 +21,8 @@ export function resolveAgentPolicies(agent: AgentConfig): ResolvedAgentPolicies 
   return {
     inputProcessors: guardrails?.input ?? [],
     outputProcessors: guardrails?.output ?? [],
-    refinementPolicies: [],
-    validationPolicies: [],
+    refinementPolicies: agent.refine ?? [],
+    validationPolicies: agent.validate ?? [],
     limits: agent.limits,
     enforcer: enforcementRules.length > 0 ? createToolEnforcer(enforcementRules) : undefined,
   };

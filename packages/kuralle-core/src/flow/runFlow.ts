@@ -24,6 +24,7 @@ import { loadRecordedSteps } from '../runtime/durable/replay.js';
 import { SuspendError } from '../runtime/durable/RunStore.js';
 import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
+import { appendConversationAudit } from '../audit/record.js';
 import {
   appendSafeAssistantMessage,
   degradeFlowError,
@@ -221,6 +222,28 @@ async function dispatchNode(
     }
     if (turn.control?.type === 'recover') {
       return { kind: 'end', reason: turn.control.reason ?? 'error_degraded' };
+    }
+
+    if (
+      node.confidenceGate &&
+      turn.confidence != null &&
+      turn.confidence < node.confidenceGate.min
+    ) {
+      appendConversationAudit(
+        ctx.session,
+        {
+          sessionId: ctx.session.id,
+          conversationId: ctx.session.conversationId,
+          userId: ctx.session.userId,
+          agentId: ctx.runState.activeAgentId,
+        },
+        {
+          type: 'escalation',
+          reason: 'low-confidence',
+          confidence: turn.confidence,
+        },
+      );
+      return normalizeTransition(node.confidenceGate.onLow);
     }
 
     if (node.next) {

@@ -4,6 +4,8 @@ import type { Flow } from './flow.js';
 import type { Route, RoutingPolicy } from './route.js';
 import type { Guardrails, Limits } from './guardrails.js';
 import type { AgentKnowledge, AgentMemory } from './grounding.js';
+import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
+import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { Tool, AnyTool } from './effectTool.js';
 
 export type Instructions =
@@ -38,6 +40,10 @@ export interface AgentConfig {
   memory?: AgentMemory;
   guardrails?: Guardrails;
   limits?: Limits;
+  /** Post-turn validation policies (grounding/confidence gate). Default: none. */
+  validate?: ValidationCapability[];
+  /** Pre-turn refinement policies. Default: none. */
+  refine?: RefinementCapability[];
   experimental?: {
     /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1). Default OFF. */
     outOfBandControl?: boolean;
