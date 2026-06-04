@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/livekit-plugin",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Kuralle plugin for LiveKit Agents — runtime adapter, transport foundation, Gemini STT/TTS",
   "type": "module",
   "main": "dist/index.js",
