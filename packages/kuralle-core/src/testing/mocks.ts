@@ -1,3 +1,5 @@
+import { createUIMessageStreamResponse } from 'ai';
+import { harnessToUIMessageStream } from '../ai-sdk/uiMessageStream.js';
 import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
 import type { TurnResult } from '../types/channel.js';
 import type { Session } from '../types/session.js';
@@ -24,6 +26,11 @@ export function createMockTurnHandle(
   return Object.assign(Promise.resolve(settled), {
     events,
     toResponseStream: () => new ReadableStream(),
+    toUIMessageStreamResponse(opts?: { sessionId?: string }): Response {
+      return createUIMessageStreamResponse({
+        stream: harnessToUIMessageStream(events, opts),
+      });
+    },
     cancel: () => {},
   }) as TurnHandle;
 }
