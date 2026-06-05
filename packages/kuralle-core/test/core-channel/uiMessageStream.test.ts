@@ -208,6 +208,31 @@ describe('harnessToUIMessageStream', () => {
     expect(chunksOfType(chunks, 'done')).toHaveLength(0);
   });
 
+  it('emits sessionId as UIMessage message metadata when opts.sessionId is provided', async () => {
+    const stream = harnessToUIMessageStream(
+      partsSource([
+        { type: 'text-start', id: 't1' },
+        { type: 'text-delta', id: 't1', delta: 'Hi' },
+        { type: 'text-end', id: 't1' },
+        { type: 'done', sessionId: 'sess-from-done' },
+      ]),
+      { sessionId: 'sess-meta' },
+    );
+
+    const chunks = await collectChunks(stream as ReadableStream<StreamChunk>);
+    const startChunk = chunks.find((chunk) => chunk.type === 'start');
+    const finishChunk = chunks.find((chunk) => chunk.type === 'finish');
+
+    expect(startChunk).toMatchObject({
+      type: 'start',
+      messageMetadata: { sessionId: 'sess-meta' },
+    });
+    expect(finishChunk).toMatchObject({
+      type: 'finish',
+      messageMetadata: { sessionId: 'sess-meta' },
+    });
+  });
+
   it('surfaces harness error parts as UI message error chunks', async () => {
     const stream = harnessToUIMessageStream(
       partsSource([
@@ -247,5 +272,7 @@ describe('harnessToUIMessageStream', () => {
     expect(text).toContain('"type":"text-start"');
     expect(text).toContain('"type":"text-delta"');
     expect(text).toContain('"delta":"Hi"');
+    expect(text).toContain('"messageMetadata"');
+    expect(text).toContain('"sessionId":"sess-2"');
   });
 });
