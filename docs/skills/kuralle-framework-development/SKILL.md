@@ -12,7 +12,7 @@ This skill is for internal developers extending the Kuralle framework. Keep chan
 - **Stability first**: Breaking changes require version bumps across all packages
 - **Types lead**: Update types before implementation
 - **Examples prove behavior**: Every feature needs a working example
-- **Streaming semantics are sacred**: Never change `text-delta`, `tool-call`, `done` events
+- **Streaming semantics are sacred**: Never change the assistant-text lifecycle (`text-start` / `text-delta{id,delta}` / `text-end` / `text-cancel`), `tool-call`, `done` events without a major version
 - **One agent model**: No new agent type discriminators — extend `AgentConfig` fields and derivation in `deriveAgent.ts`
 - **Test before committing**: Run existing examples to verify nothing breaks
 
@@ -182,7 +182,7 @@ npx tsx examples/agents/form-filler.ts
 
 Never change event structure without a major version:
 
-- `text-delta`, `tool-call`, `tool-result`, `tool-error`
+- `text-start`, `text-delta{id,delta}`, `text-end`, `text-cancel`, `tool-call`, `tool-result`, `tool-error`
 - `node-enter`, `node-exit`, `flow-transition`, `flow-end`
 - `handoff`, `paused`, `done`, `error`, `interrupted`
 

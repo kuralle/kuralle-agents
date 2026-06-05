@@ -25,7 +25,7 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
 
 const handle = runtime.run({ input: 'Echo "hello world"' });
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.text);
+  if (part.type === 'text-delta') process.stdout.write(part.delta);
   if (part.type === 'done') console.log('\nDone.');
 }
 await handle;

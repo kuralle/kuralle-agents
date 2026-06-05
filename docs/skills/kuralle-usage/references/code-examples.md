@@ -44,7 +44,7 @@ const runtime = new Runtime({
 // 3. Stream response
 let sessionId: string | undefined;
 for await (const part of runtime.stream({ input: 'Hello!', sessionId })) {
-  if (part.type === 'text-delta') process.stdout.write(part.text);
+  if (part.type === 'text-delta') process.stdout.write(part.delta);
   if (part.type === 'done') sessionId = part.sessionId;
 }
 ```

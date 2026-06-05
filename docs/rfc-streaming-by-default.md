@@ -95,7 +95,7 @@ Three boundaries, auto-selected per node by the coarsest attached gate: **token*
   | { type: 'text-cancel'; id: string; reason: string }
   ```
 - **Behavior:** `id` is the per-turn assistant message id (`crypto.randomUUID()` at turn start). Mirrors AI SDK v6 `UIMessageChunk` so any v6 consumer maps 1:1.
-- **Error cases:** consumers that pattern-matched `part.text` no longer typecheck — intentional; they are updated in this change (in-repo) or by downstream consumers (breaking-release note).
+- **Error cases:** consumers that pattern-matched the removed `.text` field on `text-delta` no longer typecheck — intentional; they are updated in this change (in-repo) or by downstream consumers (breaking-release note).
 
 ### 4.2 Voice union — same lifecycle
 

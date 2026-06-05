@@ -56,7 +56,7 @@ for await (const part of handle.events()) {
     console.log(`[BLOCKED] ${part.reason} — message sent: "${part.message}"`);
   }
   if (part.type === 'text-delta') {
-    process.stdout.write(part.text);
+    process.stdout.write(part.delta);
   }
 }
 ```
