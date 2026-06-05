@@ -1,6 +1,8 @@
+import { createUIMessageStreamResponse } from 'ai';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { Context, Handler } from 'hono';
+import { harnessToUIMessageStream } from '@kuralle-agents/core';
 import type {
   ConversationOutcome,
   CsatRecord,
@@ -171,6 +173,8 @@ const parseJsonBody = async <T>(c: Context): Promise<T | null> => {
     return null;
   }
 };
+
+const wantsRawStreamFormat = (c: Context): boolean => c.req.query('format') === 'raw';
 
 const extractInputFromBody = (body: Record<string, unknown>): { input: string; sessionId?: string } => {
   if (typeof body.message === 'string') {
@@ -413,32 +417,48 @@ export const createKuralleChatRouter = ({
   });
 
   app.post('/api/chat/sse', async (c) => {
-    const body = await parseJsonBody<ChatRequest>(c);
-    if (!body || !body.message) {
+    const body = await parseJsonBody<Record<string, unknown>>(c);
+    if (!body) {
+      return c.json({ error: 'invalid body' }, 400);
+    }
+
+    const { input, sessionId: bodySessionId } = extractInputFromBody(body);
+    if (!input) {
       return c.json({ error: 'message required' }, 400);
     }
 
-    return streamSSE(c, async (stream) => {
-      try {
-        for await (const part of iterateRuntimeParts(runtime, {
-          input: body.message,
-          sessionId: body.sessionId,
-          userId: body.userId,
-        })) {
-          await sendSSEPart(stream, part, streamFilter);
+    const sessionId =
+      bodySessionId ??
+      (typeof body.sessionId === 'string' ? body.sessionId : undefined) ??
+      crypto.randomUUID();
+    const userId = typeof body.userId === 'string' ? body.userId : undefined;
+
+    if (wantsRawStreamFormat(c)) {
+      return streamSSE(c, async (stream) => {
+        try {
+          for await (const part of iterateRuntimeParts(runtime, {
+            input,
+            sessionId,
+            userId,
+          })) {
+            await sendSSEPart(stream, part, streamFilter);
+          }
+        } catch (error) {
+          console.error('[Kuralle] SSE stream error:', error);
+          const message =
+            streamFilter === 'all'
+              ? (error as Error).message
+              : 'An error occurred. Please try again.';
+          await stream.writeSSE({
+            event: 'error',
+            data: JSON.stringify({ error: message }),
+          });
         }
-      } catch (error) {
-        console.error('[Kuralle] SSE stream error:', error);
-        const message =
-          streamFilter === 'all'
-            ? (error as Error).message
-            : 'An error occurred. Please try again.';
-        await stream.writeSSE({
-          event: 'error',
-          data: JSON.stringify({ error: message }),
-        });
-      }
-    });
+      });
+    }
+
+    const handle = runtime.run({ input, sessionId, userId });
+    return handle.toUIMessageStreamResponse({ sessionId });
   });
 
   app.post('/api/chat/resume', async (c) => {
@@ -937,22 +957,66 @@ export const createKuralleRouter = ({
   });
 
   app.post('/api/flow/sse', async (c) => {
-    const body = await parseJsonBody<FlowRequest>(c);
-    if (!body || !body.message) {
+    const body = await parseJsonBody<Record<string, unknown>>(c);
+    if (!body) {
+      return c.json({ error: 'invalid body' }, 400);
+    }
+
+    const { input, sessionId: bodySessionId } = extractInputFromBody(body);
+    if (!input) {
       return c.json({ error: 'message required' }, 400);
     }
 
-    return streamSSE(c, async (stream) => {
-      try {
-        for await (const part of flowManager.process(body.message)) {
-          await sendFlowSSEPart(stream, part);
+    if (wantsRawStreamFormat(c)) {
+      return streamSSE(c, async (stream) => {
+        try {
+          for await (const part of flowManager.process(input)) {
+            await sendFlowSSEPart(stream, part);
+          }
+        } catch (error) {
+          await stream.writeSSE({
+            event: 'error',
+            data: JSON.stringify({ error: (error as Error).message }),
+          });
         }
-      } catch (error) {
-        await stream.writeSSE({
-          event: 'error',
-          data: JSON.stringify({ error: (error as Error).message }),
-        });
+      });
+    }
+
+    async function* flowHarnessParts(): AsyncGenerator<HarnessStreamPart> {
+      for await (const part of flowManager.process(input)) {
+        if (
+          part.type === 'text-start' ||
+          part.type === 'text-delta' ||
+          part.type === 'text-end' ||
+          part.type === 'text-cancel' ||
+          part.type === 'tool-call' ||
+          part.type === 'tool-result' ||
+          part.type === 'node-enter' ||
+          part.type === 'node-exit' ||
+          part.type === 'flow-enter' ||
+          part.type === 'flow-transition' ||
+          part.type === 'flow-end' ||
+          part.type === 'handoff' ||
+          part.type === 'interactive' ||
+          part.type === 'safety-blocked' ||
+          part.type === 'pipeline-validation-block' ||
+          part.type === 'conversation-outcome' ||
+          part.type === 'interrupted' ||
+          part.type === 'paused' ||
+          part.type === 'custom' ||
+          part.type === 'error' ||
+          part.type === 'done' ||
+          part.type === 'turn-end'
+        ) {
+          yield part as HarnessStreamPart;
+        }
       }
+    }
+
+    return createUIMessageStreamResponse({
+      stream: harnessToUIMessageStream(flowHarnessParts(), {
+        sessionId: bodySessionId ?? sessionId,
+      }),
     });
   });
 
