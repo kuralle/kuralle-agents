@@ -31,7 +31,7 @@ ws.on('message', (data: Buffer) => {
       break;
 
     case 'text-delta':
-      process.stdout.write(part.text);
+      process.stdout.write(part.delta);
       break;
 
     case 'tool-call':
