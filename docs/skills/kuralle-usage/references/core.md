@@ -33,7 +33,7 @@ const runtime = createRuntime({
 ```ts
 const handle = runtime.run({ input: 'Hi', sessionId });
 for await (const part of handle.events()) {
-  if (part.type === 'text-delta') process.stdout.write(part.text);
+  if (part.type === 'text-delta') process.stdout.write(part.delta);
 }
 const result = await handle;
 ```

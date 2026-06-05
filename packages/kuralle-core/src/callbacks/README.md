@@ -138,7 +138,7 @@ const runtime = new Runtime({
 
 All `HarnessStreamPart` types are available for filtering:
 
-- `text-delta` - Text tokens as they stream
+- `text-start` / `text-delta` / `text-end` / `text-cancel` - Assistant text lifecycle (`text-delta` carries `id` + `delta`)
 - `tool-call` - Tool invocation starts
 - `tool-result` - Tool returns data
 - `tool-error` - Tool fails
@@ -163,7 +163,8 @@ Each callback sends a JSON payload:
   "timestamp": "2026-02-01T16:40:36.950Z",
   "part": {
     "type": "text-delta",
-    "text": "Hello"
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "delta": "Hello"
   },
   "fullText": "Hello! I'm here to help."
 }

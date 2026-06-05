@@ -75,7 +75,8 @@ for await (const part of handle.events()) {
 
 ```ts
 for await (const part of handle.events()) {
-  console.log(`[${part.type}]`, part.toolName || part.text?.substring(0, 50));
+  const preview = part.type === 'text-delta' ? part.delta.slice(0, 50) : undefined;
+  console.log(`[${part.type}]`, part.toolName || preview);
 }
 ```
 

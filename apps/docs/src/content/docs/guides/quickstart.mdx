@@ -60,7 +60,7 @@ import firstAgentExample from '../../../examples/quickstart/first-agent.ts?raw';
 
    const handle = runtime.run({ input: 'Use echo to say "hello"' });
    for await (const part of handle.events) {
-     if (part.type === 'text-delta') process.stdout.write(part.text);
+     if (part.type === 'text-delta') process.stdout.write(part.delta);
      if (part.type === 'done') console.log('\nSession:', part.sessionId);
    }
    await handle;
@@ -90,7 +90,10 @@ The `handle.events` async iterable emits `HarnessStreamPart` events. The most co
 
 | Event type | When | Key fields |
 |---|---|---|
-| `text-delta` | Each text chunk from the model | `part.text: string` |
+| `text-start` | Assistant message begins | `part.id: string` |
+| `text-delta` | Each text chunk from the model | `part.id: string`, `part.delta: string` |
+| `text-end` | Assistant message complete | `part.id: string` |
+| `text-cancel` | Partial message retracted (gate block) | `part.id: string`, `part.reason: string` |
 | `tool-call` | Before a tool executes | `part.toolName`, `part.args` |
 | `tool-result` | After a tool executes | `part.toolName`, `part.result` |
 | `done` | Turn complete | `part.sessionId` |
@@ -105,7 +108,7 @@ let sessionId: string | undefined;
 async function chat(input: string) {
   const handle = runtime.run({ input, sessionId });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') process.stdout.write(part.text);
+    if (part.type === 'text-delta') process.stdout.write(part.delta);
     if (part.type === 'done') sessionId = part.sessionId;
   }
   await handle;
