@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-postgres-store"
   },
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "PostgreSQL-backed SessionStore for Kuralle",
   "type": "module",
   "main": "dist/index.js",
