@@ -19,7 +19,7 @@
  *   - STT: LiveKit inference.STT (Deepgram Nova-3 via LiveKit Cloud)
  *   - TTS: LiveKit inference.TTS (Cartesia Sonic-3 via LiveKit Cloud)
  *   - Requires LIVEKIT_URL + LIVEKIT_API_KEY (LiveKit Cloud inference gateway)
- *   - Also requires OPENAI_API_KEY for the hospital agent LLM backend
+ *   - Also requires OPENAI_API_KEY for the assistant agent LLM backend
  *   - Skips if required keys are missing
  *
  * Run:
@@ -43,6 +43,7 @@ import {
   assertSessionStarted,
   assertAgentTextReceived,
   assertBinaryAudioReceived,
+  assertFirstAudioBeforeRuntimeEnd,
 } from './harness/assertions.js';
 
 // ─── Env ────────────────────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ if (!hasLiveKit) {
 }
 
 if (!hasOpenAI) {
-  console.log('SKIP: Set OPENAI_API_KEY to run cascaded e2e (hospital agent LLM backend)');
+  console.log('SKIP: Set OPENAI_API_KEY to run cascaded e2e (assistant agent LLM backend)');
   process.exit(0);
 }
 
@@ -105,24 +106,22 @@ async function main() {
   console.log('  Stack: KuralleVoiceSession via WebSocketAgentServer');
   console.log('═══════════════════════════════════════════════════════════\n');
 
-  // 1. Create the hospital runtime
+  // 1. Create the assistant runtime (ungated token/sentence replies — REQ-10 proof target)
   console.log('Phase 1: Runtime Construction');
 
-  // Dynamically import the hospital runtime from the starter
-  // (avoids hard dependency on starter package structure)
-  let createHospitalRuntime: () => unknown;
+  let createBotRuntime: () => unknown;
   try {
     const mod = await import(
-      join(rootDir, 'apps/playground/livekit-starters/livekit-agent-starter/src/aria-agent/runtime.ts')
+      join(rootDir, 'apps/playground/livekit-starters/livekit-agent-starter/src/runtime.ts')
     );
-    createHospitalRuntime = mod.createHospitalRuntime;
+    createBotRuntime = mod.createBotRuntime;
   } catch (err) {
-    console.log(`  Cannot import hospital runtime: ${err instanceof Error ? err.message : String(err)}`);
-    console.log('  SKIP: Hospital runtime not available');
+    console.log(`  Cannot import assistant runtime: ${err instanceof Error ? err.message : String(err)}`);
+    console.log('  SKIP: Assistant runtime not available');
     process.exit(0);
   }
 
-  const runtime = createHospitalRuntime();
+  const runtime = createBotRuntime();
   const vad = await silero.VAD.load();
   console.log('  Runtime and VAD loaded\n');
 
@@ -134,6 +133,8 @@ async function main() {
     audioFixtures.push(pcm);
   }
   console.log(`  ${audioFixtures.length} fixtures ready\n`);
+
+  const trace = new TraceCollector();
 
   // 3. Start WS server
   console.log('Phase 3: WS Server (Cascaded Mode)');
@@ -158,6 +159,9 @@ async function main() {
         minInterruptionWords: 2,
       },
       greeting: 'Hello. I can help with appointments and hospital information. How can I help today?',
+      onMetrics: (metric) => {
+        trace.recordRuntimeMetric(metric.type, metric.data as Record<string, unknown>);
+      },
     } as ConstructorParameters<typeof KuralleVoiceSession>[0]);
 
     const session = await server.startSession(transport, voiceSession);
@@ -175,7 +179,6 @@ async function main() {
 
   // 4. Test: Greeting
   console.log('Phase 4: Scenario — Greeting');
-  const trace = new TraceCollector();
   const client = new WsTestClient({
     url: `ws://127.0.0.1:${PORT}`,
     trace,
@@ -205,7 +208,19 @@ async function main() {
 
   const textTurnMsgs = trace.getMessages('agent_text');
   const textTurnAudio = trace.binaryChunks.length;
-  console.log(`  After text turn: ${textTurnMsgs.length} total text msgs, ${textTurnAudio} total audio chunks\n`);
+  const textTurnTtft = trace.runtimeMetrics.filter((m) => m.type === 'aria_runtime_ttft');
+  const textTurnEnd = trace.runtimeMetrics.filter((m) => m.type === 'aria_runtime_end');
+  const textTurnLatency = trace.turnLatencies.find((t) => t.label === 'text_turn');
+  console.log(`  After text turn: ${textTurnMsgs.length} total text msgs, ${textTurnAudio} total audio chunks`);
+  if (textTurnLatency?.firstAudioAt) {
+    const runtimeEnd = textTurnEnd.find((m) => m.timestamp >= textTurnLatency.startedAt);
+    console.log(
+      `  TTFT timeline: first audio at +${textTurnLatency.timeToFirstAudioMs ?? '?'}ms, ` +
+        `aria_runtime_ttft=${textTurnTtft.at(-1)?.data.ttftMs ?? 'n/a'}ms, ` +
+        `aria_runtime_end at +${runtimeEnd ? runtimeEnd.timestamp - textTurnLatency.startedAt : '?'}ms`,
+    );
+  }
+  console.log();
 
   // 6. Test: Audio Turn
   console.log('Phase 6: Scenario — Audio Turn');
@@ -278,13 +293,16 @@ async function main() {
     {
       name: 'Post-text-turn response received',
       check: () => {
-        // After the greeting, there should be additional agent_text messages
         const texts = trace.getMessages('agent_text');
         return {
           pass: texts.length > 1,
           detail: `${texts.length} total agent_text messages`,
         };
       },
+    },
+    {
+      name: 'Ungated text turn: first TTS audio before runtime turn-end (REQ-10)',
+      check: () => assertFirstAudioBeforeRuntimeEnd(trace, 'text_turn'),
     },
     {
       name: 'Server survived client disconnect',

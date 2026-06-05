@@ -78,6 +78,50 @@ export function assertBinaryAudioReceived(trace: TraceCollector): { pass: boolea
   };
 }
 
+export function assertFirstAudioBeforeRuntimeEnd(
+  trace: TraceCollector,
+  turnLabel: string,
+): { pass: boolean; detail: string; ttftMs: number | null } {
+  const turn = trace.turnLatencies.find((t) => t.label === turnLabel);
+  if (!turn) {
+    return { pass: false, detail: `Turn "${turnLabel}" not found`, ttftMs: null };
+  }
+
+  const runtimeEnd = trace.runtimeMetrics.find(
+    (m) => m.type === 'aria_runtime_end' && m.timestamp >= turn.startedAt,
+  );
+  if (!runtimeEnd) {
+    return {
+      pass: false,
+      detail: `No aria_runtime_end after turn "${turnLabel}" started`,
+      ttftMs: null,
+    };
+  }
+
+  const ttft = trace.runtimeMetrics.find(
+    (m) => m.type === 'aria_runtime_ttft' && m.timestamp >= turn.startedAt,
+  );
+  const ttftMs = typeof ttft?.data.ttftMs === 'number' ? ttft.data.ttftMs : null;
+
+  if (turn.firstAudioAt === null) {
+    return {
+      pass: false,
+      detail: `No TTS audio chunk during turn "${turnLabel}"`,
+      ttftMs,
+    };
+  }
+
+  const audioBeforeEnd = turn.firstAudioAt < runtimeEnd.timestamp;
+  const audioLeadMs = runtimeEnd.timestamp - turn.firstAudioAt;
+  return {
+    pass: audioBeforeEnd,
+    detail: audioBeforeEnd
+      ? `first audio ${audioLeadMs}ms before aria_runtime_end; aria_runtime_ttft=${ttftMs ?? 'n/a'}ms`
+      : `first audio at ${turn.firstAudioAt} not before aria_runtime_end at ${runtimeEnd.timestamp}; aria_runtime_ttft=${ttftMs ?? 'n/a'}ms`,
+    ttftMs,
+  };
+}
+
 export function assertNoUnexpectedClose(trace: TraceCollector): { pass: boolean; detail: string } {
   const closeEntries = trace.entries.filter((e) => e.type === 'ws:close');
   if (closeEntries.length === 0) return { pass: true, detail: 'No WS close events' };
