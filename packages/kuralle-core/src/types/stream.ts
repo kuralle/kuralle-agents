@@ -39,5 +39,6 @@ export type HarnessStreamPart =
 export interface TurnHandle extends Promise<import('./channel.js').TurnResult> {
   readonly events: AsyncIterable<HarnessStreamPart>;
   toResponseStream(format?: 'sse' | 'ndjson'): ReadableStream;
+  toUIMessageStreamResponse(opts?: { sessionId?: string }): Response;
   cancel(reason?: string): void;
 }

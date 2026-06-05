@@ -1,3 +1,5 @@
+import { createUIMessageStreamResponse } from 'ai';
+import { harnessToUIMessageStream } from '../ai-sdk/uiMessageStream.js';
 import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
 
 export interface EventBus {
@@ -68,6 +70,11 @@ export function createTurnHandle(options: TurnHandleOptions): TurnHandle {
     events: bus.events(),
     toResponseStream(format: 'sse' | 'ndjson' = 'sse'): ReadableStream {
       return createResponseStream(bus.events(), format);
+    },
+    toUIMessageStreamResponse(opts?: { sessionId?: string }): Response {
+      return createUIMessageStreamResponse({
+        stream: harnessToUIMessageStream(bus.events(), opts),
+      });
     },
     cancel(reason?: string): void {
       abortController.abort(reason);

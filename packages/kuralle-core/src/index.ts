@@ -269,6 +269,12 @@ export type { ConfirmVerdict } from './flow/confirmParse.js';
 export type { Route } from './types/route.js';
 export type { TurnHandle } from './types/stream.js';
 export type { HarnessStreamPart } from './types/stream.js';
+export { harnessToUIMessageStream } from './ai-sdk/uiMessageStream.js';
+export type {
+  KuralleMetadata,
+  KuralleDataParts,
+  KuralleUIMessage,
+} from './ai-sdk/uiMessageStream.js';
 export type { ChoiceOption, ResolvedSelection } from './types/selection.js';
 export type { RunState, StepRecord } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
