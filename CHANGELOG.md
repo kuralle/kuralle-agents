@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1 — Streaming follow-up fixes (patch)
+
+Patch across the graph (0.4.0 -> 0.4.1). Backward-compatible fixes to the 0.4.0 streaming release; no API changes.
+
+- **Fix (behavioral):** off-script answers in the collect **digression** path were emitted **twice** — `runFlow`'s `collectDigression` re-emitted the assistant-text lifecycle on top of the one `ChannelDriver.runAgentTurn` already produces. The driver is now the single owner of the assistant-text lifecycle; the digression path only appends the answer to history. (Regression test added asserting a single answer emit + single re-ask.)
+- **Docs (shipped):** the published `@kuralle-agents/core` `guides/` (GETTING_STARTED / TOOLS / FLOWS / AGENTS) still showed `part.text` in streaming snippets — migrated to `part.delta` for the 0.4.0 lifecycle. Added `scripts/check-no-stale-text-delta.sh` to fail CI on stale `text-delta.text` reads/constructors in publishable files.
+- **Internal:** cleared pre-existing `typecheck:all` drift in test/example tsconfigs and the playground (`'a'`→`Transition`, optional-`decide` narrowing, dual hook-vs-wire `RunContext` in a test, `part.text`→`part.delta` in playground CLIs); the full `typecheck:all` gate (incl. playground + lint) is green again. No shipped-API change.
+
 ## 0.4.0 — Streaming-by-default (BREAKING: assistant-text event lifecycle)
 
 Unified minor bump across the graph (0.3.20 -> 0.4.0). **Breaking event-protocol change — no compatibility shim.**
