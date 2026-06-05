@@ -6,6 +6,7 @@ import {
   type KuralleRuntimeLike,
   type KuralleRuntimeRunOptions,
 } from '../src/llm/KuralleRuntimeLLMAdapter.js';
+import type { VoiceMetric, VoiceMetricsSink } from '../src/metrics/types.js';
 import { mockTurnHandle } from './mock_turn_handle.js';
 
 initializeLogger({ pretty: false, level: 'warn' });
@@ -30,6 +31,20 @@ async function drainAssistantText(stream: AsyncIterable<{ delta?: { content?: st
     text += chunk?.delta?.content ?? '';
   }
   return text;
+}
+
+function chatCtx(input: string) {
+  return {
+    items: [{ type: 'message', role: 'user', content: input }],
+  } as never;
+}
+
+function collectMetrics(): { sink: VoiceMetricsSink; metrics: VoiceMetric[] } {
+  const metrics: VoiceMetric[] = [];
+  return {
+    metrics,
+    sink: (metric) => metrics.push(metric),
+  };
 }
 
 describe('KuralleRuntimeLLMAdapter session behavior', () => {
@@ -210,5 +225,83 @@ describe('KuralleRuntimeLLMAdapter session behavior', () => {
     const text = await drainAssistantText(stream);
     expect(text).toBe('presafe');
     expect(text).not.toContain('leak');
+  });
+});
+
+describe('KuralleRuntimeLLMAdapter TTFT (REQ-10 / §11 gate)', () => {
+  it('records aria_runtime_ttft at the first text-delta, before later deltas and turn-end', async () => {
+    let resolveTtftGate!: () => void;
+    const ttftGate = new Promise<void>((resolve) => {
+      resolveTtftGate = resolve;
+    });
+    let ttftRecordedBeforeSecondDelta = false;
+
+    const { metrics, sink } = collectMetrics();
+    const onMetrics: VoiceMetricsSink = (metric) => {
+      sink(metric);
+      if (metric.type === 'aria_runtime_ttft') {
+        resolveTtftGate();
+      }
+    };
+
+    const runtime = mockRuntime(async function* () {
+      yield { type: 'text-start', id: 'turn-1' };
+      yield { type: 'text-delta', id: 'turn-1', delta: 'one' };
+      await ttftGate;
+      ttftRecordedBeforeSecondDelta = true;
+      yield { type: 'text-delta', id: 'turn-1', delta: 'two' };
+      yield { type: 'text-delta', id: 'turn-1', delta: 'three' };
+      yield { type: 'text-end', id: 'turn-1' };
+      yield { type: 'done', sessionId: 's' };
+    });
+
+    const adapter = new KuralleRuntimeLLMAdapter({ runtime, onMetrics });
+    const stream = adapter.chat({ chatCtx: chatCtx('stream') });
+
+    const text = await drainAssistantText(stream);
+    expect(text).toBe('onetwothree');
+    expect(ttftRecordedBeforeSecondDelta).toBe(true);
+
+    const ttftMetrics = metrics.filter((m) => m.type === 'aria_runtime_ttft');
+    const endMetrics = metrics.filter((m) => m.type === 'aria_runtime_end');
+    expect(ttftMetrics).toHaveLength(1);
+    expect(endMetrics).toHaveLength(1);
+
+    const ttftIndex = metrics.findIndex((m) => m.type === 'aria_runtime_ttft');
+    const endIndex = metrics.findIndex((m) => m.type === 'aria_runtime_end');
+    expect(ttftIndex).toBeGreaterThanOrEqual(0);
+    expect(endIndex).toBeGreaterThan(ttftIndex);
+
+    const ttftMs = ttftMetrics[0]!.data.ttftMs;
+    expect(typeof ttftMs).toBe('number');
+    expect(ttftMs).toBeGreaterThanOrEqual(0);
+    expect(ttftMs).toBeLessThanOrEqual(endMetrics[0]!.data.durationMs as number);
+  });
+
+  it('records TTFT at a single trailing text-delta without waiting for done', async () => {
+    const { metrics, sink } = collectMetrics();
+
+    const runtime = mockRuntime(async function* () {
+      yield { type: 'text-start', id: 'turn-1' };
+      yield { type: 'text-end', id: 'turn-1' };
+      yield { type: 'text-delta', id: 'turn-1', delta: 'buffered' };
+      yield { type: 'done', sessionId: 's' };
+    });
+
+    const adapter = new KuralleRuntimeLLMAdapter({ runtime, onMetrics: sink });
+    const stream = adapter.chat({ chatCtx: chatCtx('buffered') });
+
+    const text = await drainAssistantText(stream);
+    expect(text).toBe('buffered');
+
+    const ttftMetrics = metrics.filter((m) => m.type === 'aria_runtime_ttft');
+    const endMetrics = metrics.filter((m) => m.type === 'aria_runtime_end');
+    expect(ttftMetrics).toHaveLength(1);
+    expect(endMetrics).toHaveLength(1);
+
+    const ttftIndex = metrics.findIndex((m) => m.type === 'aria_runtime_ttft');
+    const endIndex = metrics.findIndex((m) => m.type === 'aria_runtime_end');
+    expect(ttftIndex).toBeLessThan(endIndex);
+    expect(ttftMetrics[0]!.data.ttftMs).toBeGreaterThanOrEqual(0);
   });
 });
