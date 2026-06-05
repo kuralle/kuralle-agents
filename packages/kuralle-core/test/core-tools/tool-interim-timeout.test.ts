@@ -261,15 +261,26 @@ describe('extraction telemetry', () => {
       model: {} as import('ai').LanguageModel,
       emit: () => {},
     });
-    await hooks.onStart?.(ctx);
-    await hooks.onStreamPart?.(ctx, {
+    const hookCtx: import('../../src/types/session.js').RunContext = {
+      session,
+      agentId: runState.activeAgentId ?? 'test-agent',
+      stepCount: 0,
+      totalTokens: 0,
+      handoffStack: [],
+      startTime: Date.now(),
+      consecutiveErrors: 0,
+      toolCallHistory: [],
+    };
+    await hooks.onStart?.(hookCtx);
+    await hooks.onStreamPart?.(hookCtx, {
       type: 'custom',
       name: 'flow.extraction.submission',
       data: { node: 'contact', fieldsAccepted: ['name'], fieldsRejected: ['notes'] },
     });
     await hooks.onSessionEnd?.(session, { success: true });
 
-    expect(exported?.extractionSubmissions).toEqual([
+    expect(exported).not.toBeNull();
+    expect(exported!.extractionSubmissions).toEqual([
       {
         node: 'contact',
         fieldsAccepted: ['name'],

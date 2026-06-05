@@ -88,7 +88,7 @@ describe('control model channel (H2)', () => {
       id: 'pick',
       instructions: 'Choose',
       schema: z.object({ choice: z.string() }),
-      decide: () => 'a',
+      decide: () => 'stay',
     });
 
     await new TextDriver().runStructured(node, ctx);
@@ -128,7 +128,7 @@ describe('control model channel (H2)', () => {
       id: 'pick',
       instructions: 'Choose',
       schema: z.object({ choice: z.string() }),
-      decide: () => 'a',
+      decide: () => 'stay',
     });
 
     const client = {

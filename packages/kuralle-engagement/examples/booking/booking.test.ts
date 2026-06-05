@@ -180,7 +180,7 @@ describe('booking_example', () => {
     };
 
     const transition = await Promise.resolve(
-      pickSlot.decide({ choice: '19:00' }, state),
+      pickSlot.decide?.({ choice: '19:00' }, state),
     );
     const target =
       typeof transition === 'object' && transition !== null && 'id' in transition
@@ -249,12 +249,12 @@ describe('booking_example', () => {
       availableSlots: ['18:30', '19:00', '20:15'],
     };
 
-    expect(pickSlot.decide({ choice: 'not-a-slot' }, state)).toBe('stay');
-    expect(confirm.decide({ choice: '19:00' }, { ...state, confirmedTime: '19:00' })).toBe(
+    expect(pickSlot.decide?.({ choice: 'not-a-slot' }, state)).toBe('stay');
+    expect(confirm.decide?.({ choice: '19:00' }, { ...state, confirmedTime: '19:00' })).toBe(
       'stay',
     );
     const changeTransition = await Promise.resolve(
-      confirm.decide({ choice: 'no' }, { ...state, confirmedTime: '19:00' }),
+      confirm.decide?.({ choice: 'no' }, { ...state, confirmedTime: '19:00' }),
     );
     expect(changeTransition).toBe(collectDetails);
 
