@@ -23,11 +23,18 @@ export interface TurnLatency {
   totalTurnMs: number | null;
 }
 
+export interface RuntimeMetricEvent {
+  type: string;
+  timestamp: number;
+  data: Record<string, unknown>;
+}
+
 export class TraceCollector {
   entries: TraceEntry[] = [];
   jsonMessages: Array<{ type: string; data: Record<string, unknown>; timestamp: number }> = [];
   binaryChunks: Array<{ size: number; timestamp: number }> = [];
   turnLatencies: TurnLatency[] = [];
+  runtimeMetrics: RuntimeMetricEvent[] = [];
 
   private _currentTurn: TurnLatency | null = null;
 
@@ -46,6 +53,12 @@ export class TraceCollector {
       this._currentTurn.timeToFirstTextMs =
         this._currentTurn.firstTextAt - this._currentTurn.startedAt;
     }
+  }
+
+  recordRuntimeMetric(type: string, data: Record<string, unknown> = {}): void {
+    const timestamp = Date.now();
+    this.runtimeMetrics.push({ type, timestamp, data });
+    this.record(`metric:${type}`, data);
   }
 
   recordBinaryChunk(size: number): void {
