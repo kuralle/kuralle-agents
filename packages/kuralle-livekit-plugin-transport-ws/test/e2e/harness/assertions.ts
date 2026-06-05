@@ -87,21 +87,38 @@ export function assertFirstAudioBeforeRuntimeEnd(
     return { pass: false, detail: `Turn "${turnLabel}" not found`, ttftMs: null };
   }
 
+  const turnIndex = trace.turnLatencies.findIndex((t) => t.label === turnLabel);
+  const nextTurn = trace.turnLatencies[turnIndex + 1];
+
   const runtimeEnd = trace.runtimeMetrics.find(
-    (m) => m.type === 'aria_runtime_end' && m.timestamp >= turn.startedAt,
+    (m) =>
+      m.type === 'aria_runtime_end' &&
+      m.timestamp >= turn.startedAt &&
+      (nextTurn === undefined || m.timestamp < nextTurn.startedAt),
   );
   if (!runtimeEnd) {
     return {
       pass: false,
-      detail: `No aria_runtime_end after turn "${turnLabel}" started`,
+      detail: `No aria_runtime_end for turn "${turnLabel}" window`,
       ttftMs: null,
     };
   }
 
   const ttft = trace.runtimeMetrics.find(
-    (m) => m.type === 'aria_runtime_ttft' && m.timestamp >= turn.startedAt,
+    (m) =>
+      m.type === 'aria_runtime_ttft' &&
+      m.timestamp >= turn.startedAt &&
+      m.timestamp < runtimeEnd.timestamp,
   );
-  const ttftMs = typeof ttft?.data.ttftMs === 'number' ? ttft.data.ttftMs : null;
+  if (!ttft) {
+    return {
+      pass: false,
+      detail: `No aria_runtime_ttft for turn "${turnLabel}" before aria_runtime_end`,
+      ttftMs: null,
+    };
+  }
+
+  const ttftMs = typeof ttft.data.ttftMs === 'number' ? ttft.data.ttftMs : null;
 
   if (turn.firstAudioAt === null) {
     return {
@@ -111,13 +128,34 @@ export function assertFirstAudioBeforeRuntimeEnd(
     };
   }
 
-  const audioBeforeEnd = turn.firstAudioAt < runtimeEnd.timestamp;
+  if (turn.firstAudioAt < turn.startedAt) {
+    return {
+      pass: false,
+      detail: `First audio at ${turn.firstAudioAt} is before turn "${turnLabel}" started at ${turn.startedAt}`,
+      ttftMs,
+    };
+  }
+
+  if (turn.firstAudioAt >= runtimeEnd.timestamp) {
+    return {
+      pass: false,
+      detail: `First audio at ${turn.firstAudioAt} not before aria_runtime_end at ${runtimeEnd.timestamp}`,
+      ttftMs,
+    };
+  }
+
+  if (ttft.timestamp > turn.firstAudioAt) {
+    return {
+      pass: false,
+      detail: `aria_runtime_ttft at ${ttft.timestamp} is after first audio at ${turn.firstAudioAt}`,
+      ttftMs,
+    };
+  }
+
   const audioLeadMs = runtimeEnd.timestamp - turn.firstAudioAt;
   return {
-    pass: audioBeforeEnd,
-    detail: audioBeforeEnd
-      ? `first audio ${audioLeadMs}ms before aria_runtime_end; aria_runtime_ttft=${ttftMs ?? 'n/a'}ms`
-      : `first audio at ${turn.firstAudioAt} not before aria_runtime_end at ${runtimeEnd.timestamp}; aria_runtime_ttft=${ttftMs ?? 'n/a'}ms`,
+    pass: true,
+    detail: `ttft→audio→end ordering ok; first audio ${audioLeadMs}ms before aria_runtime_end; aria_runtime_ttft=${ttftMs ?? 'n/a'}ms`,
     ttftMs,
   };
 }
