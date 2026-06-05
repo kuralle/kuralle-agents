@@ -6,11 +6,11 @@
 
 ## Active sprint
 
-**Sprint number:** `4`
-**Sprint name:** Polish + 0.4.0 (final — REAL publish authorized)
-**Status:** `not-started`
-**Goal:** Land the live streaming smoke example, the docs + ADR-0004 amendments (native-realtime caveat), and the unified `0.4.0` version bump, then publish for real (`pnpm publish -r`) to npm. **User directive (this session): real incremental 0.4.0 minor publish — overrides the kickoff's dry-run ceiling.**
-**WBS section:** [`sprints/WBS.md` § Sprint 4](./WBS.md)
+**Sprint number:** `—` (PROGRAM COMPLETE)
+**Sprint name:** —
+**Status:** `complete` — Sprints 0–4 all closed. **0.4.0 LIVE on npm** (28 packages), tag `v0.4.0` (`b6c4f25`).
+**Remaining human step:** merge `plan/streaming-by-default` → `main` (PR or fast-forward) so main reflects the released 0.4.0. Optional: clear B-06 (4 pre-existing test/example typecheck configs) before the next release.
+**WBS section:** [`sprints/WBS.md`](./WBS.md) — all sprints done.
 
 ## Build branch
 
@@ -50,7 +50,7 @@ The session running sprint 4 (final + REAL publish) must read these in this orde
 | 1 | done | 2026-06-05 | [sprint-1/WARMDOWN.md](./sprint-1/WARMDOWN.md) |
 | 2 | done | 2026-06-05 | [sprint-2/WARMDOWN.md](./sprint-2/WARMDOWN.md) |
 | 3 | done | 2026-06-05 | [sprint-3/WARMDOWN.md](./sprint-3/WARMDOWN.md) |
-| 4 | not-started | — | — |
+| 4 | done | 2026-06-05 | [sprint-4/WARMDOWN.md](./sprint-4/WARMDOWN.md) — **0.4.0 PUBLISHED** |
 
 When a sprint completes, append a row here from `WARMDOWN.md`.
 
