@@ -36,7 +36,7 @@ for await (const line of console) {
   if (!sessionId) sessionId = crypto.randomUUID();
   const handle = runtime.run({ input: line, sessionId });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') process.stdout.write(part.text);
+    if (part.type === 'text-delta') process.stdout.write(part.delta);
     if (part.type === 'tool-call') {
       console.log(`\n  [CAG search] query="${(part.args as { query?: string })?.query}"`);
     }

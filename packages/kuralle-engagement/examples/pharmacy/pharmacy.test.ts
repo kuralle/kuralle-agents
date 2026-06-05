@@ -265,7 +265,7 @@ describe('pharmacy_example', () => {
     const state: Record<string, unknown> = { rxId: '', patientId: 'p1' };
 
     const transition = await Promise.resolve(
-      chooseRx.decide({ choice: 'rx-lis' }, state),
+      chooseRx.decide?.({ choice: 'rx-lis' }, state),
     );
     const target =
       typeof transition === 'object' && transition !== null && 'id' in transition
@@ -309,7 +309,7 @@ describe('pharmacy_example', () => {
     const state: Record<string, unknown> = {};
 
     const transition = await Promise.resolve(
-      fulfilment.decide({ choice: 'delivery' }, state),
+      fulfilment.decide?.({ choice: 'delivery' }, state),
     );
     const target =
       typeof transition === 'object' && transition !== null && 'id' in transition

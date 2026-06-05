@@ -44,7 +44,7 @@ function prompt() {
       const handle = runtime.run({ sessionId, input: input.trim() });
       let nextSessionId = sessionId;
       for await (const event of handle.events) {
-        if (event.type === 'text-delta') process.stdout.write(event.text);
+        if (event.type === 'text-delta') process.stdout.write(event.delta);
         if (event.type === 'handoff') console.log(`\n  → Routed to ${event.targetAgent}`);
         if (event.type === 'done') nextSessionId = event.sessionId;
       }

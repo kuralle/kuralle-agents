@@ -40,7 +40,7 @@ async function main() {
   if (!sessionId) sessionId = crypto.randomUUID();
     const handle = runtime.run({ input: line, sessionId });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') process.stdout.write(part.text);
+      if (part.type === 'text-delta') process.stdout.write(part.delta);
       if (part.type === 'tool-call') {
         const args = part.args as { query?: string; filter?: unknown };
         console.log(`\n  [search] query="${args?.query}" filter=${JSON.stringify(args?.filter ?? null)}`);

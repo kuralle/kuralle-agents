@@ -43,7 +43,7 @@ export async function runPlaygroundConversation(opts: {
 
 		for await (const part of handle.events) {
 			logPart(part);
-			if (part.type === 'text-delta') response += part.text;
+			if (part.type === 'text-delta') response += part.delta;
 		}
 
 		await handle;

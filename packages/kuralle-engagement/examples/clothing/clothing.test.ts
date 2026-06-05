@@ -188,14 +188,14 @@ describe('clothing_example', () => {
     const { pickProduct, pickSize, pickColor } = buildClothingBot(stubModel);
     const state: Record<string, unknown> = {};
 
-    await Promise.resolve(pickProduct.decide({ choice: 'hoodie' }, state));
+    await Promise.resolve(pickProduct.decide?.({ choice: 'hoodie' }, state));
     expect(state.productId).toBe('hoodie');
     expect(state.productName).toBe('Zip Hoodie');
 
-    await Promise.resolve(pickSize.decide({ choice: 'm' }, state));
+    await Promise.resolve(pickSize.decide?.({ choice: 'm' }, state));
     expect(state.size).toBe('m');
 
-    const transition = await Promise.resolve(pickColor.decide({ choice: 'navy' }, state));
+    const transition = await Promise.resolve(pickColor.decide?.({ choice: 'navy' }, state));
     expect(state.color).toBe('navy');
     expect(transition).toBeDefined();
 
