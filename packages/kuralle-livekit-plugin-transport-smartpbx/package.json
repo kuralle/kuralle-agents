@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/livekit-plugin-transport-smartpbx",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "SmartPBX transport adapter for Kuralle voice agents.",
   "type": "module",
   "main": "dist/index.js",
