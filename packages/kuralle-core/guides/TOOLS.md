@@ -85,7 +85,7 @@ const handle = runtime.run({
   sessionId: 'demo',
 });
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.text);
+  if (part.type === 'text-delta') process.stdout.write(part.delta);
 }
 await handle;
 ```

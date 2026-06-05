@@ -122,11 +122,6 @@ export async function runCollectDigression(
   );
 
   if (turn.text.trim()) {
-    const id = crypto.randomUUID();
-    ctx.emit({ type: 'text-start', id });
-    ctx.emit({ type: 'text-delta', id, delta: turn.text });
-    ctx.emit({ type: 'text-end', id });
-    ctx.emit({ type: 'turn-end' });
     appendAssistantMessage(run, turn.text);
   }
 

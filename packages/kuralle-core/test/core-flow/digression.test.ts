@@ -42,6 +42,17 @@ function noAdvanceDriver() {
   };
 }
 
+function emitAnswerLifecycle(
+  ctx: import('../../src/types/run-context.js').RunContext,
+  text: string,
+): void {
+  const id = crypto.randomUUID();
+  ctx.emit({ type: 'text-start', id });
+  ctx.emit({ type: 'text-delta', id, delta: text });
+  ctx.emit({ type: 'text-end', id });
+  ctx.emit({ type: 'turn-end' });
+}
+
 describe('H5 in-flow digression (outOfBandControl)', () => {
   it('flag-OFF: off-script at collect re-asks without answer turn or route', async () => {
     const { ask, flow } = makeCollectFlow();
@@ -176,10 +187,15 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const driver = {
       ...noAdvanceDriver(),
-      async runAgentTurn(resolved: { freeConversation?: boolean }) {
+      async runAgentTurn(
+        resolved: { freeConversation?: boolean },
+        ctx: import('../../src/types/run-context.js').RunContext,
+      ) {
         if (resolved.freeConversation) {
           answerTurns += 1;
-          return { text: 'We are open 9am to 5pm weekdays.', toolResults: [] };
+          const text = 'We are open 9am to 5pm weekdays.';
+          emitAnswerLifecycle(ctx, text);
+          return { text, toolResults: [] };
         }
         return { text: '', toolResults: [] };
       },
@@ -305,6 +321,81 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
     expect(result.kind).toBe('ended');
     expect(answerTurns).toBe(0);
     expect(getCollectData(runState.state, ask.id).name).toBe('Riley');
+  });
+
+  it('flag-ON digression: runAgentTurn owns answer lifecycle — no double emit', async () => {
+    const { ask, flow } = makeCollectFlow();
+    const parts: HarnessStreamPart[] = [];
+    let answerTurns = 0;
+
+    const driver = {
+      ...noAdvanceDriver(),
+      async runAgentTurn(
+        resolved: { freeConversation?: boolean },
+        ctx: import('../../src/types/run-context.js').RunContext,
+      ) {
+        if (resolved.freeConversation) {
+          answerTurns += 1;
+          const text = 'We are open 9am to 5pm weekdays.';
+          emitAnswerLifecycle(ctx, text);
+          return { text, toolResults: [] };
+        }
+        return { text: '', toolResults: [] };
+      },
+    };
+
+    const agent = defineAgent({
+      id: 'support',
+      model: {} as import('ai').LanguageModel,
+      flows: [flow],
+      experimental: { outOfBandControl: true },
+    });
+
+    const { session, runStore, runState } = await setupDurableHarness('h5-single-emit', 'h5-single-emit-run');
+    runState.messages = [{ role: 'user', content: 'What are your hours?' }];
+    runState.activeFlow = flow.name;
+    runState.activeNode = ask.id;
+    setPendingUserInput(session, 'What are your hours?');
+
+    const ctx = await createRunContext({
+      session,
+      runState,
+      runStore,
+      steps: [],
+      toolExecutor: { execute: async () => ({}) },
+      model: {} as import('ai').LanguageModel,
+      emit: (p) => parts.push(p),
+      outOfBandControl: true,
+    });
+
+    const result = await runFlow(flow, runState, driver, ctx, agent);
+
+    expect(result).toEqual({ kind: 'awaitingUser' });
+    expect(answerTurns).toBe(1);
+
+    const digressionDeltas = parts.filter(
+      (p) => p.type === 'text-delta' && /9am|5pm/i.test(String((p as { delta?: string }).delta)),
+    );
+    const digressionStarts = parts.filter(
+      (p) =>
+        p.type === 'text-start' &&
+        digressionDeltas.some((d) => (d as { id?: string }).id === (p as { id?: string }).id),
+    );
+    const digressionEnds = parts.filter(
+      (p) =>
+        p.type === 'text-end' &&
+        digressionDeltas.some((d) => (d as { id?: string }).id === (p as { id?: string }).id),
+    );
+
+    expect(digressionDeltas).toHaveLength(1);
+    expect(digressionStarts).toHaveLength(1);
+    expect(digressionEnds).toHaveLength(1);
+
+    const reAskDeltas = parts.filter(
+      (p) => p.type === 'text-delta' && /name/i.test(String((p as { delta?: string }).delta)),
+    );
+    expect(reAskDeltas).toHaveLength(1);
+    expect(runState.activeNode).toBe(ask.id);
   });
 
   it('flag-ON no loop: at most one free-conversation answer per digression turn', async () => {

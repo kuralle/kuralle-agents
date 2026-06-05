@@ -60,7 +60,7 @@ const agent = defineAgent({
 const runtime = createRuntime({ agents: [agent], defaultAgentId: 'booking' });
 const handle = runtime.run({ input: 'Hi', sessionId: 'demo' });
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.text);
+  if (part.type === 'text-delta') process.stdout.write(part.delta);
 }
 await handle;
 ```
