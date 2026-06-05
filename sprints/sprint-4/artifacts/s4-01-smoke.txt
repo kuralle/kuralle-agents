@@ -1,0 +1,8 @@
+{"type":"text-start","id":"3c588087-2924-4d8f-9229-26b4b9a0bf13"}
+{"type":"text-delta","id":"3c588087-2924-4d8f-9229-26b4b9a0bf13","delta":"Hello"}
+{"type":"text-delta","id":"3c588087-2924-4d8f-9229-26b4b9a0bf13","delta":" there."}
+{"type":"text-delta","id":"3c588087-2924-4d8f-9229-26b4b9a0bf13","delta":" How"}
+{"type":"text-delta","id":"3c588087-2924-4d8f-9229-26b4b9a0bf13","delta":" can I help?"}
+{"type":"text-end","id":"3c588087-2924-4d8f-9229-26b4b9a0bf13"}
+{"type":"turn-end"}
+{"type":"done","sessionId":"e3f55e82-3f81-43a9-9937-1b388f72d20e"}
