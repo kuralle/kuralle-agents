@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.0 — Streaming-by-default (BREAKING: assistant-text event lifecycle)
+
+Unified minor bump across the graph (0.3.20 -> 0.4.0). **Breaking event-protocol change — no compatibility shim.**
+
+**Breaking:** the single-shot `{ type: 'text-delta'; text: string }` is **removed** and replaced with a four-variant assistant-text lifecycle on `HarnessStreamPart` (`types/stream.ts`), the voice union (`types/voice.ts`), and `AgentStreamPart` (`types/processors.ts`):
+
+```
+| { type: 'text-start'; id: string }
+| { type: 'text-delta'; id: string; delta: string }   // was { text: string }
+| { type: 'text-end'; id: string }
+| { type: 'text-cancel'; id: string; reason: string }
+```
+
+**Consumer migration:** read `part.delta` (not `part.text`); handle (or ignore) `text-start`/`text-end`/`text-cancel`. Mirrors AI SDK v6 `UIMessageChunk`.
+
+**What's new:**
+- **Streaming-by-default.** Replies stream incrementally up to the smallest guardrail boundary each attached gate permits — `token` (no gate), `sentence` (per-utterance gate), `turn` (whole-answer grounding gate). An ungated reply now emits multiple `text-delta`s with the first before turn-end (was: one buffered delta at turn-end).
+- **Shared `speakGated` emission path** for text + native-realtime voice; `SentenceAggregator` + `resolveStreamMode` + a `streamGranularity?: 'sentence'|'turn'` field on output processors / validation policies (default `turn`, safe).
+- **Cascaded LiveKit TTFT** drops to first-token latency (`aria_runtime_ttft` fires on the first delta).
+- **Native realtime gate is advisory (REQ-9):** the provider speaks audio before any gate runs, so a whole-answer gate on native realtime emits a `safety-*` event + correction post-hoc but cannot un-speak audio. Preventive only on text/cascaded. See ADR 0004.
+
+See `docs/adr/0004-streaming-by-default.md` and `docs/rfc-streaming-by-default.md`. Downstream consumers (e.g. external Studio `SSEChatTransport`) migrate `part.text` -> `part.delta`.
+
+> Known (non-shipping): `bun run typecheck:all` reports pre-existing drift in 4 test/example tsconfigs (unrelated to streaming; not in published tarballs, which build from `src`). Tracked as a follow-up; the published packages build clean.
+
 ## 0.3.20 — ValidateInput.state (grounding validators can see flow state)
 
 Patch across the graph (0.3.19 -> 0.3.20). `ValidateInput` now carries `state` (the
