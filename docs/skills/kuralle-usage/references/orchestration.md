@@ -12,7 +12,7 @@ hostLoop → route → runFlow → free converse → handoff loop
 closeRun → persist RunState, memory ingest, emit done
 ```
 
-`runtime.run()` returns a **`TurnHandle`**: await for `TurnResult`, iterate `events()`, or pipe `toResponseStream()`.
+`runtime.run()` returns a **`TurnHandle`**: await for `TurnResult`, iterate `.events`, pipe `toUIMessageStreamResponse()` for web (`useChat`, no bridge), or `toResponseStream('sse')` for raw `HarnessStreamPart` JSON-SSE.
 
 ## hostLoop composition
 

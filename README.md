@@ -16,7 +16,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 - **Flows** — node graphs (`reply`, `collect`, `action`, `decide`) where each node returns its next transition. Your SOP becomes a typed state machine you didn't have to hand-write.
 - **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
 - **Routing / Handoffs** — structured routing (`routes`) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
-- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, or pipe to HTTP with `handle.toResponseStream('sse')`.
+- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `HarnessStreamPart` JSON-SSE.
 
 ## Why Kuralle
 

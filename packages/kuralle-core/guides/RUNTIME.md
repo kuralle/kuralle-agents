@@ -11,7 +11,24 @@
 
 ## Stream Events
 
-`runtime.run()` returns a `TurnHandle` with an `.events` async iterable of `HarnessStreamPart` items. Typical UI usage only renders `text-delta`.
+`runtime.run()` returns a `TurnHandle` with an `.events` async iterable of `HarnessStreamPart` items.
+
+### Web UI (AI SDK native, 0.5.0+)
+
+For React/web consumers, return a native `UIMessageStream` — `useChat` works with no bridge:
+
+```ts
+const handle = runtime.run({ input, sessionId });
+return handle.toUIMessageStreamResponse({ sessionId });
+```
+
+Kuralle orchestration events map to typed `data-kuralle-*` parts (see `docs/adr/0005-ai-sdk-native-uimessage-default.md`). Import `KuralleUIMessage` for compile-time-safe `message.parts`.
+
+With `@kuralle-agents/hono-server`, `POST /api/chat/sse` defaults to this native wire. Append `?format=raw` for legacy `HarnessStreamPart` JSON-SSE.
+
+### Direct `HarnessStreamPart` consumption
+
+For CLI scripts, cascaded voice, messaging, or custom transports, iterate `handle.events` directly. Typical usage renders `text-delta` chunks via `part.delta`.
 
 Common types:
 - `text-delta`
