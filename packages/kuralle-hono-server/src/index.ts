@@ -185,9 +185,16 @@ const extractInputFromBody = (body: Record<string, unknown>): { input: string; s
     const messages = body.messages as Array<{ parts?: Array<{ type: string; text?: string }> }>;
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.parts && Array.isArray(lastMessage.parts)) {
-      const textPart = lastMessage.parts.find((p) => p.type === 'text');
-      const input = textPart?.text || '';
-      const sessionId = typeof body.id === 'string' ? body.id : undefined;
+      const input = lastMessage.parts
+        .filter((p) => p.type === 'text')
+        .map((p) => p.text ?? '')
+        .join('');
+      const sessionId =
+        typeof body.sessionId === 'string'
+          ? body.sessionId
+          : typeof body.id === 'string'
+            ? body.id
+            : undefined;
       return { input, sessionId };
     }
   }

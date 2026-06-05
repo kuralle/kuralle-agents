@@ -176,12 +176,32 @@ function writeHarnessPart(
 
 export function harnessToUIMessageStream(
   source: AsyncIterable<HarnessStreamPart>,
-  _opts?: { sessionId?: string },
+  opts?: { sessionId?: string },
 ): ReadableStream {
   return createUIMessageStream<KuralleUIMessage>({
     execute: async ({ writer }) => {
+      let doneSessionId = opts?.sessionId;
+
+      if (doneSessionId) {
+        writer.write({
+          type: 'start',
+          messageMetadata: { sessionId: doneSessionId },
+        });
+      }
+
       for await (const part of source) {
-        writeHarnessPart(part, writer);
+        if (part.type === 'done' && part.sessionId) {
+          doneSessionId = doneSessionId ?? part.sessionId;
+        } else {
+          writeHarnessPart(part, writer);
+        }
+      }
+
+      if (doneSessionId) {
+        writer.write({
+          type: 'finish',
+          messageMetadata: { sessionId: doneSessionId },
+        });
       }
     },
   });

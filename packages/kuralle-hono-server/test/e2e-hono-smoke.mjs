@@ -78,7 +78,7 @@ async function sendSSE(message, sessionId) {
     ? JSON.stringify({ message, sessionId })
     : JSON.stringify({ message });
 
-  const res = await fetch('http://127.0.0.1:' + PORT + '/api/chat/sse', {
+  const res = await fetch('http://127.0.0.1:' + PORT + '/api/chat/sse?format=raw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,

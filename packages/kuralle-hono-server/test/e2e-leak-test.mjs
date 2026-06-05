@@ -10,7 +10,7 @@ async function captureSSEEvents(message) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
 
-  const res = await fetch(`${SERVER}/api/chat/sse`, {
+  const res = await fetch(`${SERVER}/api/chat/sse?format=raw`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),

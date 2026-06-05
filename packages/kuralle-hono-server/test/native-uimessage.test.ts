@@ -33,6 +33,22 @@ async function parseRawHarnessSse(body: string): Promise<StreamChunk[]> {
   return parts;
 }
 
+function sessionIdFromUiStream(chunks: StreamChunk[]): string | undefined {
+  for (const chunk of chunks) {
+    if (
+      chunk.type === 'start' ||
+      chunk.type === 'finish' ||
+      chunk.type === 'message-metadata'
+    ) {
+      const metadata = chunk.messageMetadata as { sessionId?: string } | undefined;
+      if (metadata?.sessionId) {
+        return metadata.sessionId;
+      }
+    }
+  }
+  return undefined;
+}
+
 describe('native UIMessageStream default', () => {
   it('POST /api/chat/sse returns native text-* chunks for useChat-shaped body', async () => {
     const runtime = createMockRuntime([
@@ -60,6 +76,66 @@ describe('native UIMessageStream default', () => {
     expect(chunks.some((c) => c.type === 'text-delta' && c.delta === 'Hello')).toBe(true);
     expect(chunks.some((c) => c.type === 'text-end')).toBe(true);
     expect(chunks.some((c) => c.type === 'data-kuralle-node')).toBe(true);
+  });
+
+  it('concatenates all text parts from the last user message for runtime.run input', async () => {
+    let capturedInput: string | undefined;
+    const runtime = createMockRuntime(
+      [
+        { type: 'text-start', id: 't1' },
+        { type: 'text-delta', id: 't1', delta: 'ok' },
+        { type: 'text-end', id: 't1' },
+        { type: 'done', sessionId: 'sess-inbound' },
+      ],
+      {
+        onRun: (call) => {
+          capturedInput = call.input;
+        },
+      },
+    );
+
+    const app = createKuralleChatRouter({ runtime, streamFilter: 'all' });
+    const res = await app.request('/api/chat/sse', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'user',
+            parts: [
+              { type: 'text', text: 'first ' },
+              { type: 'text', text: 'second' },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(capturedInput).toBe('first second');
+  });
+
+  it('native default exposes server sessionId in message metadata for useChat clients', async () => {
+    const runtime = createMockRuntime([
+      { type: 'text-start', id: 't1' },
+      { type: 'text-delta', id: 't1', delta: 'Hello' },
+      { type: 'text-end', id: 't1' },
+      { type: 'done', sessionId: 'sess-ui' },
+    ]);
+
+    const app = createKuralleChatRouter({ runtime, streamFilter: 'all' });
+    const res = await app.request('/api/chat/sse', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'sess-ui',
+        messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const chunks = await parseUiMessageSse(await res.text());
+    expect(sessionIdFromUiStream(chunks)).toBe('sess-ui');
   });
 
   it('POST /api/chat/sse?format=raw returns legacy HarnessStreamPart JSON-SSE', async () => {
