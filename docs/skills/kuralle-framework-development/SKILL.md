@@ -241,7 +241,7 @@ All packages version together via changesets (`pnpm changeset` → `pnpm release
 ### Add an HTTP adapter
 
 1. Mirror `packages/kuralle-hono-server` routes
-2. Wire `runtime.run()` → `TurnHandle.toResponseStream()`
+2. Wire `runtime.run()` → `TurnHandle.toUIMessageStreamResponse()` (web default) or `toResponseStream('sse')` for raw JSON-SSE
 3. Example server
 
 ## Debugging

@@ -130,9 +130,18 @@ const runtime = createRuntime({
 });
 ```
 
-## HTTP streaming
+## HTTP streaming (web)
 
-`TurnHandle` exposes `handle.toResponseStream('sse')` for HTTP transports — or use `@kuralle-agents/hono-server` for a ready-made Hono router.
+For React/web consumers, return a native AI SDK `UIMessageStream` — `useChat` works with no bridge:
+
+```ts
+const handle = runtime.run({ input: 'Hello', sessionId: 'demo' });
+return handle.toUIMessageStreamResponse({ sessionId: 'demo' });
+```
+
+Kuralle orchestration events (flow telemetry, safety blocks, interactive choices) arrive as typed `data-kuralle-*` parts. Import `KuralleUIMessage` and `KuralleDataParts` for compile-time-safe `message.parts` and `useChat({ onData })` handlers.
+
+For non-UI consumers (curl, custom transports), use `handle.toResponseStream('sse')` to emit raw `HarnessStreamPart` JSON-SSE. Or use `@kuralle-agents/hono-server` — `POST /api/chat/sse` defaults to native `UIMessageStream`; append `?format=raw` for the legacy wire.
 
 ## Related
 

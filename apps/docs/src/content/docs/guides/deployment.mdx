@@ -48,7 +48,7 @@ See `packages/kuralle-messaging-meta/examples/whatsapp-server/README.md` and the
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/chat` | Single-turn JSON response |
-| `POST` | `/api/chat/sse` | SSE streaming response |
+| `POST` | `/api/chat/sse` | AI SDK `UIMessageStream` (default, `useChat`-compatible). `?format=raw` for legacy `HarnessStreamPart` JSON-SSE |
 | `POST` | `/api/chat/stream` | Chunked text stream |
 | `GET` | `/agents/chat/:sessionId` | WebSocket widget endpoint |
 | `GET` | `/ws/:sessionId` | WebSocket turn endpoint |
@@ -109,19 +109,52 @@ Flows, tools, and structured routing all work identically on Cloudflare — the 
 
 ## HTTP streaming
 
-Use `handle.toResponseStream('sse')` to pipe a `TurnHandle` directly to an HTTP response without `createKuralleChatRouter`:
+### Web (`useChat`, default)
+
+`POST /api/chat/sse` returns a native AI SDK `UIMessageStream`. A React client uses `useChat` with no bridge:
+
+```tsx
+import { useChat } from '@ai-sdk/react';
+import type { KuralleUIMessage } from '@kuralle-agents/core';
+
+const { messages } = useChat<KuralleUIMessage>({ api: '/api/chat/sse' });
+```
+
+Kuralle flow/safety/interactive events arrive as `data-kuralle-*` parts — read persistent parts from `message.parts`, transient telemetry from `useChat({ onData })`. See ADR 0005 for the full mapping table.
+
+### Raw JSON-SSE (`?format=raw`)
+
+Non-UI consumers that parsed `HarnessStreamPart` JSON from 0.4.x append `?format=raw`:
+
+```bash
+curl -N -X POST 'http://localhost:3000/api/chat/sse?format=raw' \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"hello"}'
+```
+
+Or use `createKuralleSseChatRouter` for a router that always emits raw JSON-SSE.
+
+### Direct `TurnHandle` piping
+
+Without `createKuralleChatRouter`, return a native stream for web clients:
 
 ```typescript
 app.post('/chat', async (c) => {
   const { input, sessionId } = await c.req.json();
   const handle = runtime.run({ input, sessionId });
-  return new Response(handle.toResponseStream('sse'), {
-    headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
-  });
+  return handle.toUIMessageStreamResponse({ sessionId });
 });
 ```
 
-`createKuralleChatRouter` uses this internally and also wires sessions, WebSocket, and the full endpoint set.
+For raw `HarnessStreamPart` JSON-SSE (voice adapters, curl, custom transports):
+
+```typescript
+return new Response(handle.toResponseStream('sse'), {
+  headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+});
+```
+
+`createKuralleChatRouter` wires the native default on `/api/chat/sse` and also mounts sessions, WebSocket, and the full endpoint set.
 
 <Aside type="note">
   For production, pair the Hono server or CF agent with a durable `SessionStore`. See [Sessions & State](/guides/sessions).

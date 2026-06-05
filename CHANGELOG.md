@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 — AI-SDK-native by default (BREAKING: web stream output)
+
+Unified minor bump across the graph (0.4.1 → 0.5.0). **Breaking wire-format change for web consumers of `POST /api/chat/sse`** — no compatibility shim on the default path.
+
+**Breaking:** the default web/HTTP streaming response is now an AI SDK `UIMessageStream` (`useChat` works with **no bridge**). Raw `HarnessStreamPart` JSON-SSE moved to opt-in: append `?format=raw` to `/api/chat/sse` (and `/api/flow/sse`). `createKuralleSseChatRouter` remains the explicit raw-SSE-only router.
+
+**Consumer migration:**
+- **Web/React:** delete any hand-rolled `HarnessStreamPart` → `UIMessageChunk` bridge; point `useChat` at `POST /api/chat/sse` (default). Read Kuralle orchestration events from `message.parts` (persistent `data-kuralle-*`) or `useChat({ onData })` (transient telemetry).
+- **Raw JSON-SSE consumers** (curl, Studio, custom transports): append `?format=raw` to preserve the 0.4.x wire.
+
+**What's new:**
+- **`harnessToUIMessageStream()`** — pure adapter from `HarnessStreamPart` to AI SDK `UIMessageStream`; native text/tool parts + typed `data-kuralle-*` for Kuralle orchestration residue.
+- **`TurnHandle.toUIMessageStreamResponse()`** — convenience returning `createUIMessageStreamResponse`.
+- **`KuralleUIMessage` / `KuralleDataParts`** — typed `UIMessage` for compile-time-safe `message.parts` and `onData`.
+- **`createKuralleChatRouter`** — `POST /api/chat/sse` defaults to native `UIMessageStream`; accepts `useChat`-shaped `{ messages: UIMessage[] }` inbound.
+
+**Unchanged:** `HarnessStreamPart`, `toResponseStream('sse'|'ndjson')`, cascaded voice, messaging, WebSocket widget (still `HarnessStreamPart` JSON).
+
+See `docs/adr/0005-ai-sdk-native-uimessage-default.md` and `docs/rfc-ai-sdk-native-uimessage-stream.md`.
+
 ## 0.4.1 — Streaming follow-up fixes (patch)
 
 Patch across the graph (0.4.0 -> 0.4.1). Backward-compatible fixes to the 0.4.0 streaming release; no API changes.
