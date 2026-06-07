@@ -81,8 +81,7 @@ async function example3() {
     name: 'Math Tutor',
     model,
     instructions: 'Math tutor. Use calculator for problems. Show your work.',
-    tools: buildToolSet({ calculator }),
-    effectTools: { calculator },
+    tools: { calculator },
   });
   const runtime = createRuntime({
     agents: [mathTutor],
@@ -136,8 +135,7 @@ async function example4() {
     model,
     instructions:
       'Research assistant. Use consult_historian for history, consult_scientist for science. Combine answers clearly.',
-    tools: buildToolSet(tools),
-    effectTools: tools,
+    tools: tools,
   });
   const runtime = createRuntime({
     agents: [lead],
@@ -184,8 +182,7 @@ async function example5() {
     instructions:
       'Bilingual assistant. When asked to translate, use the translate tool and present original + translation.',
     model,
-    tools: buildToolSet({ translate }),
-    effectTools: { translate },
+    tools: { translate },
   });
 
   const runtime = createRuntime({

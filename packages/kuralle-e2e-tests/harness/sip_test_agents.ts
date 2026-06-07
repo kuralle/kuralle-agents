@@ -9,6 +9,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { AgentConfig } from '@kuralle-agents/core/types';
+import { wrapAiSdkTool } from '@kuralle-agents/core';
 import type { CannedResponse } from './fake_realtime_client.js';
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
@@ -60,9 +61,9 @@ When the user asks about weather, use the check_weather tool.
 If the user wants to speak to a human, use transferToHuman.
 Keep responses concise — this is a phone call.`,
   tools: {
-    check_weather: checkWeather,
-    lookupOrder,
-    transferToHuman,
+    check_weather: wrapAiSdkTool('check_weather', checkWeather),
+    lookupOrder: wrapAiSdkTool('lookupOrder', lookupOrder),
+    transferToHuman: wrapAiSdkTool('transferToHuman', transferToHuman),
   },
 };
 

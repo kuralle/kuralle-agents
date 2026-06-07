@@ -18,6 +18,7 @@ import { createFlowTransition, defineFlow, defineAgent, reply } from "@kuralle-a
 import { routeAgentRequest } from "agents";
 import { tool } from "ai";
 import { z } from "zod";
+import { wrapAiSdkTool } from "@kuralle-agents/core";
 
 export interface Env {
   GEMINI_API_KEY: string;

@@ -18,7 +18,7 @@
 
 import { WebSocketAgentServer } from '@kuralle-agents/livekit-plugin-transport-ws';
 import { KuralleVoiceSession } from '@kuralle-agents/livekit-plugin';
-import { Runtime } from '@kuralle-agents/core';
+import { Runtime, wrapAiSdkTool } from '@kuralle-agents/core';
 import { openai } from '@ai-sdk/openai';
 import { GeminiLiveSTT, GeminiLiveTTS } from '@kuralle-agents/livekit-plugin/gemini';
 import { initializeLogger, voice } from '@livekit/agents';
@@ -29,6 +29,15 @@ const PORT = 8080;
 initializeLogger({ pretty: true });
 
 const MENU = 'Pizza: $10, Salad: $5, Ice Cream: $3, Coffee: $2';
+
+const durableTool = <T extends z.ZodTypeAny>(
+  name: string,
+  spec: {
+    description: string;
+    inputSchema: T;
+    execute: (args: z.infer<T>) => Promise<string> | string;
+  },
+) => wrapAiSdkTool(name, tool(spec as unknown as Parameters<typeof tool>[0]));
 
 // --- Kuralle Runtime with restaurant agents ---
 const runtime = new Runtime({
@@ -47,14 +56,14 @@ Your jobs are to:
 Always be polite and helpful. If the customer asks about something outside
 your scope, let them know what you can help with.`,
       tools: {
-        updateName: tool({
+        updateName: durableTool('updateName', {
           description: 'Save the customer name. Confirm spelling first.',
           inputSchema: z.object({
             name: z.string().describe('The customer name'),
           }),
           execute: async ({ name }) => `Customer name saved: ${name}`,
         }),
-        updatePhone: tool({
+        updatePhone: durableTool('updatePhone', {
           description: 'Save the customer phone number. Confirm the number first.',
           inputSchema: z.object({
             phone: z.string().describe('The customer phone number'),
@@ -78,28 +87,28 @@ Your jobs are to:
 
 Be thorough but efficient. Always confirm details before saving.`,
       tools: {
-        updateName: tool({
+        updateName: durableTool('updateName', {
           description: 'Save the customer name. Confirm spelling first.',
           inputSchema: z.object({
             name: z.string().describe('The customer name'),
           }),
           execute: async ({ name }) => `Customer name saved: ${name}`,
         }),
-        updatePhone: tool({
+        updatePhone: durableTool('updatePhone', {
           description: 'Save the customer phone number. Confirm the number first.',
           inputSchema: z.object({
             phone: z.string().describe('The customer phone number'),
           }),
           execute: async ({ phone }) => `Phone number saved: ${phone}`,
         }),
-        updateReservationTime: tool({
+        updateReservationTime: durableTool('updateReservationTime', {
           description: 'Set the reservation time. Confirm with the customer first.',
           inputSchema: z.object({
             time: z.string().describe('The reservation date and time'),
           }),
           execute: async ({ time }) => `Reservation time set to: ${time}`,
         }),
-        confirmReservation: tool({
+        confirmReservation: durableTool('confirmReservation', {
           description: 'Confirm and finalize the reservation.',
           inputSchema: z.object({}),
           execute: async () => 'Reservation confirmed! Thank the customer and hand off to greeter.',
@@ -121,7 +130,7 @@ Your jobs are to:
 
 Be friendly and suggest items if the customer seems undecided.`,
       tools: {
-        updateOrder: tool({
+        updateOrder: durableTool('updateOrder', {
           description: 'Save or update the takeaway order.',
           inputSchema: z.object({
             items: z.array(z.string()).describe('The items in the order'),
@@ -146,28 +155,28 @@ Your jobs are to:
 Collect card details step by step: number, expiry, then CVV.
 Always confirm before saving.`,
       tools: {
-        updateName: tool({
+        updateName: durableTool('updateName', {
           description: 'Save the customer name. Confirm spelling first.',
           inputSchema: z.object({
             name: z.string().describe('The customer name'),
           }),
           execute: async ({ name }) => `Customer name saved: ${name}`,
         }),
-        updatePhone: tool({
+        updatePhone: durableTool('updatePhone', {
           description: 'Save the customer phone number.',
           inputSchema: z.object({
             phone: z.string().describe('The customer phone number'),
           }),
           execute: async ({ phone }) => `Phone number saved: ${phone}`,
         }),
-        confirmExpense: tool({
+        confirmExpense: durableTool('confirmExpense', {
           description: 'Confirm the total expense with the customer.',
           inputSchema: z.object({
             expense: z.number().describe('The total expense in dollars'),
           }),
           execute: async ({ expense }) => `Expense confirmed: $${expense}`,
         }),
-        updateCreditCard: tool({
+        updateCreditCard: durableTool('updateCreditCard', {
           description: 'Save the credit card details. Confirm each field first.',
           inputSchema: z.object({
             number: z.string().describe('The credit card number'),
@@ -179,7 +188,7 @@ Always confirm before saving.`,
             return `Credit card saved: ${masked}`;
           },
         }),
-        confirmCheckout: tool({
+        confirmCheckout: durableTool('confirmCheckout', {
           description: 'Finalize the checkout and process payment.',
           inputSchema: z.object({}),
           execute: async () => 'Payment processed successfully! Thank the customer.',

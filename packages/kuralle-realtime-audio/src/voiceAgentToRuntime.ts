@@ -1,7 +1,17 @@
 import type { LanguageModel } from 'ai';
-import { defineAgent } from '@kuralle-agents/core';
+import { defineAgent, wrapAiSdkTool, type EffectTool } from '@kuralle-agents/core';
 import type { AgentConfig } from '@kuralle-agents/core';
+import type { ToolSet } from '@kuralle-agents/core/types';
 import type { VoiceAgentConfig } from './types.js';
+
+function voiceToolsToAgentTools(tools?: ToolSet): Record<string, EffectTool> | undefined {
+  if (!tools) return undefined;
+  const out: Record<string, EffectTool> = {};
+  for (const [name, aiTool] of Object.entries(tools)) {
+    out[name] = wrapAiSdkTool(name, aiTool);
+  }
+  return out;
+}
 
 function resolveVoiceInstructions(agent: VoiceAgentConfig): string | undefined {
   const extended = agent as VoiceAgentConfig & { instructions?: string };
@@ -23,7 +33,7 @@ export function voiceAgentToRuntimeAgent(
       description: agent.description,
       instructions,
       model,
-      tools: agent.tools,
+      tools: voiceToolsToAgentTools(agent.tools),
       flows: [agent.flow],
     });
   }
@@ -33,6 +43,6 @@ export function voiceAgentToRuntimeAgent(
     description: agent.description,
     instructions,
     model,
-    tools: agent.tools,
+    tools: voiceToolsToAgentTools(agent.tools),
   });
 }

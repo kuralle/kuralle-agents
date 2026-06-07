@@ -45,7 +45,7 @@ export const shippingAgent = defineAgent({
   id: 'shipping',
   instructions: 'You book shipments for customers.',
   model: openai('gpt-4o-mini'),
-  effectTools: { bookShipment },
+  tools: { bookShipment },
   flows: [
     defineFlow({
       name: 'ship',

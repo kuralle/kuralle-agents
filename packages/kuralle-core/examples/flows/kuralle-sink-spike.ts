@@ -131,7 +131,7 @@ const agent = defineAgent({
   instructions:
     "You are a booking agent. Use very simple language. Avoid emojis. Don't repeat yourself.",
   model,
-  effectTools: {
+  tools: {
     lookup_customer: defineTool({
       name: 'lookup_customer',
       description: 'Looks up an existing customer by name.',

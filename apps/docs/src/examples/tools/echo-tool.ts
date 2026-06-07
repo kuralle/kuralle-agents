@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai';
 import { z } from 'zod';
-import { defineAgent, defineTool, createRuntime, buildToolSet } from '@kuralle-agents/core';
+import { defineAgent, defineTool, createRuntime } from '@kuralle-agents/core';
 
 // Define a tool with a Zod input schema and an async execute function
 const echo = defineTool({
@@ -10,15 +10,12 @@ const echo = defineTool({
   execute: async ({ text }) => ({ echoed: text }),
 });
 
-// Wire it to an agent:
-//   tools: buildToolSet({ echo })  — makes it model-visible
-//   effectTools: { echo }          — wires the durable executor
+// Wire durable tools on the agent; flow nodes use buildToolSet for model-visible schema.
 const agent = defineAgent({
   id: 'support',
   instructions: 'Use the echo tool when asked.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ echo }),
-  effectTools: { echo },
+  tools: { echo },
 });
 
 const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });

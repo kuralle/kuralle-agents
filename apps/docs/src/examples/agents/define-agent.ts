@@ -21,8 +21,7 @@ const toolAgent = defineAgent({
   id: 'catalog',
   instructions: 'Answer product questions using the lookup tool.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ lookup }),   // model-visible
-  effectTools: { lookup },           // durable executor — logged and replay-safe
+  tools: { lookup },
 });
 
 // Flow agent: behavior driven by the flow graph, not the instructions alone

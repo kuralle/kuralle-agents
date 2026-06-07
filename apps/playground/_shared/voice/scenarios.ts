@@ -81,7 +81,7 @@ export function buildEcommerceAgents(model: LanguageModel): AgentConfig[] {
     nodes: [hub, tracking],
   });
 
-  const effectTools = {
+  const tools = {
     lookup_order: lookupOrder,
     route_to_tracking: routeToTracking,
     back_to_hub: backToHub,
@@ -98,7 +98,7 @@ export function buildEcommerceAgents(model: LanguageModel): AgentConfig[] {
       ].join('\n'),
       model,
       flows: [flow],
-      effectTools,
+      tools,
     }),
   ];
 }
@@ -140,7 +140,6 @@ export function buildSingleAgent(model: LanguageModel): AgentConfig[] {
       ].join('\n'),
       model,
       tools: wired.tools,
-      effectTools: wired.effectTools,
     }),
   ];
 }
@@ -175,7 +174,6 @@ export function createSupportRuntime(
       instructions,
       model,
       tools: wired.tools,
-      effectTools: wired.effectTools,
     }),
   ];
   return createRuntime({
@@ -183,6 +181,6 @@ export function createSupportRuntime(
     defaultAgentId: 'support',
     defaultModel: model,
     voiceMode: true,
-    tools: wired.effectTools,
+    tools: wired.tools,
   });
 }

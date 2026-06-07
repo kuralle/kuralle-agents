@@ -59,7 +59,7 @@ export const refundAgent = defineAgent({
   id: 'refunds',
   instructions: 'You process customer refund requests.',
   model: openai('gpt-4o-mini'),
-  effectTools: { processRefund },
+  tools: { processRefund },
   flows: [
     defineFlow({
       name: 'refund',

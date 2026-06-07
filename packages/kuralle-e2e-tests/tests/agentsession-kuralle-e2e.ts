@@ -22,7 +22,7 @@ import { initializeLogger, inference, voice } from '@livekit/agents';
 import { google } from '@ai-sdk/google';
 import { tool } from 'ai';
 import { z } from 'zod';
-import { Runtime, createFlowTransition, defineAgent, defineFlow, reply } from '@kuralle-agents/core';
+import { Runtime, createFlowTransition, defineAgent, defineFlow, reply, wrapAiSdkTool } from '@kuralle-agents/core';
 import { KuralleRuntimeLLMAdapter } from '@kuralle-agents/livekit-plugin';
 import { WebSocketTransportAdapter } from '@kuralle-agents/livekit-plugin-transport-ws';
 
@@ -267,26 +267,32 @@ function singleAgentScenario() {
         'Use get_time when asked about the time.',
       ].join('\n'),
       tools: {
-        check_weather: tool({
-          description: 'Check the current weather for a city',
-          inputSchema: z.object({ city: z.string() }),
-          execute: async ({ city }) => {
-            console.log(`  [tool] check_weather("${city}")`);
-            return { city, temperature: 22, unit: 'celsius', condition: 'partly cloudy' };
-          },
-        }),
-        get_time: tool({
-          description: 'Get the current time in a timezone',
-          inputSchema: z.object({ timezone: z.string() }),
-          execute: async ({ timezone }) => {
-            console.log(`  [tool] get_time("${timezone}")`);
-            try {
-              return { timezone, time: new Date().toLocaleTimeString('en-US', { timeZone: timezone }) };
-            } catch {
-              return { timezone, time: new Date().toLocaleTimeString('en-US') };
-            }
-          },
-        }),
+        check_weather: wrapAiSdkTool(
+          'check_weather',
+          tool({
+            description: 'Check the current weather for a city',
+            inputSchema: z.object({ city: z.string() }),
+            execute: async ({ city }) => {
+              console.log(`  [tool] check_weather("${city}")`);
+              return { city, temperature: 22, unit: 'celsius', condition: 'partly cloudy' };
+            },
+          }),
+        ),
+        get_time: wrapAiSdkTool(
+          'get_time',
+          tool({
+            description: 'Get the current time in a timezone',
+            inputSchema: z.object({ timezone: z.string() }),
+            execute: async ({ timezone }) => {
+              console.log(`  [tool] get_time("${timezone}")`);
+              try {
+                return { timezone, time: new Date().toLocaleTimeString('en-US', { timeZone: timezone }) };
+              } catch {
+                return { timezone, time: new Date().toLocaleTimeString('en-US') };
+              }
+            },
+          }),
+        ),
       },
     })],
     defaultAgentId: 'assistant',
@@ -398,14 +404,17 @@ function triageAgentScenario() {
       'Ask for the order number, then use lookup_order.',
     ].join('\n'),
     tools: {
-      lookup_order: tool({
-        description: 'Look up order status by order number',
-        inputSchema: z.object({ orderNumber: z.string() }),
-        execute: async ({ orderNumber }) => {
-          console.log(`  [tool] lookup_order("${orderNumber}")`);
-          return { orderNumber, status: 'shipped', carrier: 'FedEx', eta: 'Tomorrow by 5pm' };
-        },
-      }),
+      lookup_order: wrapAiSdkTool(
+        'lookup_order',
+        tool({
+          description: 'Look up order status by order number',
+          inputSchema: z.object({ orderNumber: z.string() }),
+          execute: async ({ orderNumber }) => {
+            console.log(`  [tool] lookup_order("${orderNumber}")`);
+            return { orderNumber, status: 'shipped', carrier: 'FedEx', eta: 'Tomorrow by 5pm' };
+          },
+        }),
+      ),
     },
   });
 
@@ -418,14 +427,17 @@ function triageAgentScenario() {
       'Use check_balance to look up account balance.',
     ].join('\n'),
     tools: {
-      check_balance: tool({
-        description: 'Check account balance',
-        inputSchema: z.object({ accountId: z.string() }),
-        execute: async ({ accountId }) => {
-          console.log(`  [tool] check_balance("${accountId}")`);
-          return { accountId, balance: '$142.50', dueDate: '2026-05-01' };
-        },
-      }),
+      check_balance: wrapAiSdkTool(
+        'check_balance',
+        tool({
+          description: 'Check account balance',
+          inputSchema: z.object({ accountId: z.string() }),
+          execute: async ({ accountId }) => {
+            console.log(`  [tool] check_balance("${accountId}")`);
+            return { accountId, balance: '$142.50', dueDate: '2026-05-01' };
+          },
+        }),
+      ),
     },
   });
 

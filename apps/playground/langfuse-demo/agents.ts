@@ -91,7 +91,6 @@ export function buildAgents(model: LanguageModel): AgentConfig[] {
     instructions:
       'Customer support specialist. Help with orders, shipping, and returns. Explain tool use briefly.',
     tools: supportTools.tools,
-    effectTools: supportTools.effectTools,
     knowledge: {},
   });
 
@@ -102,7 +101,6 @@ export function buildAgents(model: LanguageModel): AgentConfig[] {
     instructions:
       'Billing specialist. Help with invoices, payments, pricing, and discounts.',
     tools: billingTools.tools,
-    effectTools: billingTools.effectTools,
     knowledge: {},
   });
 

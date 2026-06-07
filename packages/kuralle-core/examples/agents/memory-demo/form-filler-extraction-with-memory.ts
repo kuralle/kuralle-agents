@@ -123,7 +123,7 @@ const agent = defineAgent({
     preload: { enabled: true, tokenBudget: 2000 },
     ingest: { enabled: true },
   },
-  effectTools: { submit_form: submitForm, end_call: endCall },
+  tools: { submit_form: submitForm, end_call: endCall },
   flows: [
     defineFlow({
       name: 'appointment',

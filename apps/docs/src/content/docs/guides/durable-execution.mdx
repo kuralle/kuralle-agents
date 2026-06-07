@@ -14,7 +14,7 @@ This is the same model used by durable workflow engines like Temporal and DBOS. 
 - **Durable pause/resume** — a run can suspend for human approval (or any external signal) and resume later, even in a different process, without losing its place.
 
 <Aside type="note">
-  You get this for free. Any tool wired through `effectTools` is logged and replayed; any `ctx.approve()` / `ctx.signal()` call suspends durably. The rules below matter only when you write `action` node logic.
+  You get this for free. Any tool wired through `tools` is logged and replayed; any `ctx.approve()` / `ctx.signal()` call suspends durably. The rules below matter only when you write `action` node logic.
 </Aside>
 
 ## The effect log
@@ -97,6 +97,6 @@ The `action` node collects an amount, pauses for a supervisor decision, and runs
 
 ## Related
 
-- [Tools](/guides/tools) — how `effectTools` wires the durable executor.
+- [Tools](/guides/tools) — how `tools` wires the durable executor.
 - [Flow Execution Model](/guides/flow-execution) — `action` nodes, where you call `ctx.approve` / `ctx.tool` directly.
 - [Sessions & State](/guides/sessions) — the backend that persists the run log.

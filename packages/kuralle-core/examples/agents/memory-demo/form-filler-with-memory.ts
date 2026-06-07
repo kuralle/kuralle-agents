@@ -195,7 +195,7 @@ function createFormRuntime(form: FormFiller) {
     name: 'Form Filler (Questionnaire + Memory)',
     instructions: () => form.getSystemPrompt(),
     model,
-    tools: buildToolSet({ record_answer: recordAnswerTool, end_call: endCallTool }),
+    tools: { record_answer: recordAnswerTool, end_call: endCallTool },
     memory: {
       preload: { enabled: true },
       ingest: { enabled: true },

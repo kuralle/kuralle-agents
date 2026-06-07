@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai';
 import { z } from 'zod';
-import { defineAgent, defineTool, createRuntime, buildToolSet } from '@kuralle-agents/core';
+import { defineAgent, defineTool, createRuntime } from '@kuralle-agents/core';
 
 const echo = defineTool({
   name: 'echo',
@@ -14,8 +14,7 @@ const agent = defineAgent({
   name: 'Support Agent',
   instructions: 'Helpful support agent. Use the echo tool when asked.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ echo }),   // make the tool model-visible
-  effectTools: { echo },           // wire the durable executor
+  tools: { echo },
 });
 
 const runtime = createRuntime({

@@ -61,7 +61,7 @@ const supportAgent = defineAgent({
   instructions: `You are a customer support agent. Help users with order inquiries.
 Use the lookupOrder tool to find order details.
 If the user wants a refund, hand off to the refunds team.`,
-  tools: buildToolSet({ lookupOrder }),
+  tools: { lookupOrder },
   handoffs: ['refunds'],
 });
 
@@ -72,7 +72,7 @@ const refundAgent = defineAgent({
   instructions: `You are a refund specialist. Process refund requests.
 Use the processRefund tool to issue refunds.
 You receive only recent conversation context (tool history is filtered out).`,
-  tools: buildToolSet({ processRefund }),
+  tools: { processRefund },
 });
 
 const triageAgent = defineAgent({

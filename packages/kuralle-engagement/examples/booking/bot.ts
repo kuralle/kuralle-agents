@@ -240,7 +240,7 @@ export function buildBookingBot(model: LanguageModel) {
     instructions:
       'You are a friendly restaurant reservations assistant. Be concise for messaging channels.',
     model,
-    effectTools: {
+    tools: {
       checkAvailability: checkAvailabilityTool,
       createReservation: createReservationTool,
     },

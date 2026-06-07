@@ -42,7 +42,6 @@ export function buildAgents(model: LanguageModel): AgentConfig[] {
         'Be concise and helpful.',
       ].join(' '),
       tools: searchTools.tools,
-      effectTools: searchTools.effectTools,
       knowledge: {},
     }),
   ];

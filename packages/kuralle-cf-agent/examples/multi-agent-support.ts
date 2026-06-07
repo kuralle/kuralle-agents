@@ -18,6 +18,7 @@ import type { HarnessConfig } from '@kuralle-agents/cf-agent';
 import { createOpenAI } from '@ai-sdk/openai';
 import { tool } from 'ai';
 import { z } from 'zod';
+import { wrapAiSdkTool } from '@kuralle-agents/core';
 import { routeAgentRequest } from 'agents';
 
 interface Env extends Cloudflare.Env {
@@ -93,7 +94,7 @@ export class SupportAgent extends KuralleAgent<Env> {
       model,
       instructions:
         'You are a knowledgeable sales specialist. Help customers understand products and pricing. Be friendly and helpful.',
-      tools: { search_products: searchProducts },
+      tools: { search_products: wrapAiSdkTool('search_products', searchProducts) },
       handoffs: ['technical', 'billing'],
     };
 
@@ -103,7 +104,10 @@ export class SupportAgent extends KuralleAgent<Env> {
       model,
       instructions:
         'You are a technical support specialist. Help users troubleshoot issues and debug problems. Be patient and thorough.',
-      tools: { check_status: checkStatus, lookup_error: lookupError },
+      tools: {
+        check_status: wrapAiSdkTool('check_status', checkStatus),
+        lookup_error: wrapAiSdkTool('lookup_error', lookupError),
+      },
       handoffs: ['sales', 'billing'],
     };
 
@@ -113,7 +117,7 @@ export class SupportAgent extends KuralleAgent<Env> {
       model,
       instructions:
         'You are a billing support specialist. Help customers with payments, refunds, and invoices. Be understanding about billing concerns.',
-      tools: { process_refund: processRefund },
+      tools: { process_refund: wrapAiSdkTool('process_refund', processRefund) },
       handoffs: ['sales', 'technical'],
     };
 

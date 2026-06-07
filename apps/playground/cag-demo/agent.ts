@@ -68,7 +68,6 @@ export function buildAgents(model: LanguageModel): AgentConfig[] {
         'Be warm and welcoming, like a friendly Italian host.',
       ].join(' '),
       tools: menuTools.tools,
-      effectTools: menuTools.effectTools,
       knowledge: {},
     }),
   ];

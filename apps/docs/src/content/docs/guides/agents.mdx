@@ -27,7 +27,7 @@ From there, the fields you add determine the behavior:
 
 | Add these fields | The agent becomes |
 |---|---|
-| `tools` + `effectTools` | A tool-calling agent |
+| `tools` + `tools` | A tool-calling agent |
 | `flows` | A structured flow agent |
 | `routes` + `routing` | A triage router |
 | `agents` + `handoffs` | A composition wrapper |
@@ -44,7 +44,7 @@ defineAgent({
   instructions?: Instructions,              // string | AgentPrompt | (ctx) => Instructions
   model?: LanguageModel,
   tools?: ToolSet,                          // AI SDK ToolSet — what the model sees and can call
-  effectTools?: Record<string, EffectTool>, // durable executors (from defineTool)
+  tools?: Record<string, EffectTool>, // durable executors (from defineTool)
   flows?: Flow[],                           // structured flow graphs
   routes?: Route[],                         // route entries for triage
   routing?: RoutingPolicy,                  // routing config — see Routing guide
@@ -61,9 +61,9 @@ defineAgent({
 
 A string, an `AgentPrompt`, or a function of session state, describing the agent's role and rules. Keep it focused on persona and constraints — if you're writing more than ~20 lines of procedure here, move it to a flow.
 
-### `tools` and `effectTools`
+### `tools` and `tools`
 
-`tools` is the AI SDK `ToolSet` — what the model sees when deciding what to call. `effectTools` is the durable executor map. Pass the same tools to both using `buildToolSet`:
+`tools` is the AI SDK `ToolSet` — what the model sees when deciding what to call. `tools` is the durable executor map. Pass the same tools to both using `buildToolSet`:
 
 ```typescript
 import { defineTool, buildToolSet } from '@kuralle-agents/core';
@@ -75,7 +75,7 @@ defineAgent({
   instructions: '...',
   model: openai('gpt-4o-mini'),
   tools: buildToolSet(tools),   // model-visible
-  effectTools: tools,           // durable executor
+  tools: tools,           // durable executor
 });
 ```
 

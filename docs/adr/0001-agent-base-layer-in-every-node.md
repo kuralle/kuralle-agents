@@ -22,7 +22,7 @@ Introduce an **agent base layer** composed into every flow-node turn:
 
 2. **Global tools.** A new, explicit `AgentConfig.globalTools?: Record<string, AnyTool>` names a **designated, safe subset** of tools that are model-visible in every **speaking** turn (`runAgentTurn`), so e.g. `faq_lookup` is callable wherever the agent talks. Threaded via `RunContext.globalTools`.
 
-   **Safety invariant:** global tools are an explicit allow-list, NOT all `effectTools`. Consequential/mutating tools (e.g. `kapruka_create_order`) MUST NOT be global — they stay flow-gated. Global tools are **not** exposed during silent `collect` extraction (extraction remains submit-tool-only and non-speaking, per ADR-implicit 0.3.5).
+   **Safety invariant:** global tools are an explicit allow-list, NOT all `tools`. Consequential/mutating tools (e.g. `kapruka_create_order`) MUST NOT be global — they stay flow-gated. Global tools are **not** exposed during silent `collect` extraction (extraction remains submit-tool-only and non-speaking, per ADR-implicit 0.3.5).
 
 Threading: `Runtime.run` sets `ctx.baseInstructions = agent.instructions` and `ctx.globalTools = agent.globalTools` after `createRunContext`; `hostLoop` already carries the agent. Drivers resolve `baseInstructions` against current state per node (so state-dependent prompts still work).
 
@@ -36,4 +36,4 @@ Threading: `Runtime.run` sets `ctx.baseInstructions = agent.instructions` and `c
 
 - **Per-node copy of global rules (status quo).** Rejected: duplicative, drift-prone, exactly what failed.
 - **Post-generation contradiction filter.** Rejected as the primary mechanism (can't make voice pre-speech safe; semantic multilingual detection is brittle) — see `opinion-core-backstop`. Kept only as optional defense-in-depth for reply nodes.
-- **Expose all `effectTools` everywhere.** Rejected: would let the model call mutating tools (`create_order`) from any node, bypassing flow gates.
+- **Expose all `tools` everywhere.** Rejected: would let the model call mutating tools (`create_order`) from any node, bypassing flow gates.

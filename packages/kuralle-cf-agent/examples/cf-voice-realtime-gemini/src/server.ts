@@ -13,6 +13,7 @@ import { CloudflareGeminiLiveClient } from "@kuralle-agents/realtime-audio";
 import { routeAgentRequest } from "agents";
 import { tool } from "ai";
 import { z } from "zod";
+import { wrapAiSdkTool } from "@kuralle-agents/core";
 
 export interface Env {
   GEMINI_API_KEY: string;
@@ -72,7 +73,7 @@ export class CfVoiceRealtimeAgent extends KuralleRealtimeVoiceAgent<Env> {
           "## Tools",
           "- If the user asks about the weather, call the getWeather tool and narrate the result naturally in the current language. Do not read the raw JSON; describe it the way a person would.",
         ].join("\n"),
-        tools: { getWeather },
+        tools: { getWeather: wrapAiSdkTool("getWeather", getWeather) },
       },
     ];
   }

@@ -15,6 +15,7 @@ import { CloudflareXAIGrokRealtimeClient } from "@kuralle-agents/realtime-audio"
 import { routeAgentRequest } from "agents";
 import { tool } from "ai";
 import { z } from "zod";
+import { wrapAiSdkTool } from "@kuralle-agents/core";
 
 export interface Env {
   XAI_API_KEY: string;
@@ -68,7 +69,7 @@ export class CfVoiceRealtimeGrokAgent extends KuralleRealtimeVoiceAgent<Env> {
         id: "assistant",
         name: "Assistant",
         instructions: SYSTEM_PROMPT,
-        tools: { getWeather },
+        tools: { getWeather: wrapAiSdkTool("getWeather", getWeather) },
       },
     ];
   }

@@ -50,8 +50,7 @@ const agent = defineAgent({
   name: 'Transfer Phone Call',
   instructions: INSTRUCTIONS,
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
 });
 
 console.log(

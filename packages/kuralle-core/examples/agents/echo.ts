@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import type { OutputProcessor } from '../../src/types/processors.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
-import { buildToolSet, defineTool } from '../../src/tools/effect/defineTool.js';
+import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { loadExampleEnv, runV2Conversation, requireLiveModel } from '../_shared/v2Runner.js';
 
 loadExampleEnv(import.meta.url);
@@ -53,8 +53,7 @@ const agent = defineAgent({
   instructions:
     'Friendly assistant. Call echo once when the user says they are ready to talk to themselves. After echo mode is active, do not call echo again. On goodbye, call end_call briefly.',
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
   guardrails: { output: [echoOutputProcessor] },
 });
 
