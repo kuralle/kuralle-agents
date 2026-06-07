@@ -80,6 +80,7 @@ const sidebar = [
       { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Routing & Handoffs', link: '/guides/routing' },
       { label: 'Sessions & State', link: '/guides/sessions' },
+      { label: 'Memory', link: '/guides/memory' },
       { label: 'Voice Agents', link: '/guides/voice' },
       { label: 'Engagement & Messaging', link: '/guides/engagement' },
       { label: 'Deployment', link: '/guides/deployment' },
