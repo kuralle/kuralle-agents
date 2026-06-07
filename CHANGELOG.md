@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — Tool model cleanup (BREAKING: `AgentConfig.tools`)
+
+**Breaking:** `AgentConfig.effectTools` is renamed to `AgentConfig.tools` (durable `Record<string, AnyTool>`). The old raw `tools?: ToolSet` field on `AgentConfig` is **removed** — third-party AI SDK tools must use `wrapAiSdkTool()`.
+
+**Migration:**
+- `effectTools: { myTool }` → `tools: { myTool }`
+- Remove paired `tools: buildToolSet({ ... })` on the agent when it duplicated executors — flow nodes still use `buildToolSet` for model-visible schema.
+- Raw AI SDK `tool({ execute })` on the agent → `tools: { name: wrapAiSdkTool('name', aiTool) }`
+
+**What's new:**
+- **`wrapAiSdkTool(name, aiTool)`** — adapts AI SDK tools for journaled execution through `CoreToolExecutor`.
+- **`scripts/check-no-raw-tool-execute.sh`** — CI guard wired into `typecheck:all`; fails if raw `execute` could reach `streamText`.
+- Host-reply (off-flow) tools route through the durable journal via `buildToolSet` + registered executors.
+
+See `MIGRATION.md` (Tool model cleanup section) and `rfcs/kuralle-harness/rfc-01-tool-model-cleanup.md`.
+
 ## 0.5.0 — AI-SDK-native by default (BREAKING: web stream output)
 
 Unified minor bump across the graph (0.4.1 → 0.5.0). **Breaking wire-format change for web consumers of `POST /api/chat/sse`** — no compatibility shim on the default path.
@@ -248,7 +264,7 @@ message + non-fatal `error` event) and route to an `escalate` node or a graceful
 
 `agent.globalTools` were made model-visible (0.3.6) but their executors were not
 registered in the tool executor, so a model call to a global tool failed. Now
-registered alongside `effectTools`; visibility remains gated (not exposed during
+registered alongside `tools`; visibility remains gated (not exposed during
 non-speaking collect extraction). Regression test `test/core-agent/global-tools.test.ts`.
 
 ## 0.3.6 — Agent base layer: base instructions + global tools in every node (ADR 0001)
@@ -265,7 +281,7 @@ Patch across the package graph (`0.3.5 → 0.3.6`).
   layer on top. (ElevenLabs-style "base prompt regardless of active node".)
 - **`AgentConfig.globalTools`** — a designated, safe allow-list of tools made
   model-visible in every **speaking** turn (e.g. a returns/FAQ KB lookup callable
-  mid-flow). Safety invariant: NOT all `effectTools` (mutating tools stay
+  mid-flow). Safety invariant: NOT all `tools` (mutating tools stay
   flow-gated), and NOT exposed during non-speaking collect extraction.
 - Implemented for TextDriver and VoiceDriver. ADR `docs/adr/0001`. core 383/383.
 

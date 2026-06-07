@@ -43,7 +43,7 @@ Transitions are **returned** from handlers — `{ goto, data }`, `{ handoff }`, 
 
 ## Effect log and exactly-once tools
 
-Side-effecting tools register in `effectTools` and execute through `ctx.tool`:
+Side-effecting tools register in `tools` and execute through `ctx.tool`:
 
 ```ts
 const charge = defineTool({
@@ -54,7 +54,7 @@ const charge = defineTool({
 
 defineAgent({
   id: 'checkout',
-  effectTools: { charge },
+  tools: { charge },
   tools: buildToolSet({ charge }),
 });
 ```
@@ -74,7 +74,7 @@ import { VoiceDriver } from '@kuralle-agents/core';
 runtime.run({ sessionId, input: transcript, driver: new VoiceDriver({ ... }) });
 ```
 
-Both paths use the same `hostLoop`, `runFlow`, `effectTools`, session store, and hooks.
+Both paths use the same `hostLoop`, `runFlow`, `tools`, session store, and hooks.
 
 ## Derivation from field presence
 
@@ -83,7 +83,7 @@ Both paths use the same `hostLoop`, `runFlow`, `effectTools`, session store, and
 - `flows[]` → flow dispatch
 - `routes` + `routing` → structured routing
 - `handoffs` / nested `agents` → handoff targets
-- `effectTools` → durable tool executor
+- `tools` → durable tool executor
 - `guardrails` → input/output processors
 
 No type tag — populate fields, behavior follows.

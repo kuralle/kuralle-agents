@@ -56,7 +56,7 @@ const agent = defineAgent({
   instructions: 'Helpful support agent. Use the echo tool when asked.',
   model: openai('gpt-4o-mini'),
   tools: buildToolSet({ echo }),   // make the tool model-visible
-  effectTools: { echo },           // wire the durable executor
+  tools: { echo },           // wire the durable executor
 });
 
 const runtime = createRuntime({

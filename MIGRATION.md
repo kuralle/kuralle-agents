@@ -287,3 +287,35 @@ After the codemod: run `tsc`, migrate config manually per tables above, and exec
 | LiveKit as realtime *authority* | Cascaded STT→LLM→TTS only via `KuralleRuntimeLLMAdapter` |
 
 For greenfield projects, start from `packages/kuralle-core/examples/` and `apps/templates/` rather than porting pack JSONC verbatim.
+
+---
+
+## Tool model cleanup (`effectTools` → `tools`, 0.6.0)
+
+**Breaking:** one durable tool field on `AgentConfig`.
+
+| Before | After |
+|--------|--------|
+| `effectTools: { echo }` | `tools: { echo }` |
+| `tools: buildToolSet({ echo })` + `effectTools: { echo }` | `tools: { echo }` only |
+| `tools: someAiSdkToolSet` (raw `ToolSet` on agent) | `tools: { name: wrapAiSdkTool('name', t) }` per entry |
+
+`globalTools` is unchanged (ADR-0001 always-visible safe allow-list).
+
+Flow **nodes** still use `tools: buildToolSet({ ... })` — schema-only `ToolSet` for the model. Agent-level `tools` is the durable executor registry (`defineTool` outputs).
+
+```ts
+import { defineTool, wrapAiSdkTool } from '@kuralle-agents/core';
+import { tool } from 'ai';
+
+const echo = defineTool({ name: 'echo', description: '...', input: z.object({...}), execute: async (...) => ({...}) });
+
+const legacy = tool({ description: '...', inputSchema: z.object({...}), execute: async (...) => ({...}) });
+const agent = defineAgent({
+  id: 'a',
+  model,
+  tools: { echo, legacy: wrapAiSdkTool('legacy', legacy) },
+});
+```
+
+Codemod: replace `effectTools:` with `tools:` across agent configs; delete redundant agent-level `buildToolSet` lines.

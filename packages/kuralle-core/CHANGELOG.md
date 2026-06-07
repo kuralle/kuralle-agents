@@ -24,7 +24,7 @@ Kuralle 2.0 is a complete rewrite of the agent runtime and authoring surface. v1
 
 **Tools**
 - `defineTool` for effect tools with `needsApproval`, voice `interim`, Standard Schema
-- AI SDK `tool()` continues to work as `ToolSet`; durable side effects use `effectTools`
+- AI SDK `tool()` continues to work as `ToolSet`; durable side effects use `tools`
 
 **Removed (v1)**
 - Agent classes: `LLMAgent`, `FlowAgent`, `TriageAgent`, `CompositeAgent`
