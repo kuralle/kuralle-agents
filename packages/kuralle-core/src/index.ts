@@ -250,6 +250,16 @@ export { fsErrorCode } from './types/filesystem.js';
 export { createFsTool } from './tools/fs/createFsTool.js';
 export type { CreateFsToolOptions, GrepHit } from './tools/fs/createFsTool.js';
 export {
+  SkillsCapability,
+  wireAgentSkills,
+  collectRegisteredNames,
+  validateSkillAllowedTools,
+  prepareSkillStore,
+  isSkillStore,
+  InlineSkillStore,
+} from './skills/index.js';
+export type { WiredAgentSkills, SkillWireAgent } from './skills/index.js';
+export {
   buildToolSet,
   toolToAiSdk,
   wrapAiSdkTool,

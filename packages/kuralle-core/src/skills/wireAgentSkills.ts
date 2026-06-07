@@ -1,13 +1,13 @@
-import { defineTool, type AnyTool } from '@kuralle-agents/core';
-import type { PromptSection } from '@kuralle-agents/core/capabilities';
 import { z } from 'zod';
-import { SkillsCapability } from './SkillsCapability.js';
+import { defineTool, type AnyTool } from '../types/effectTool.js';
+import type { PromptSection } from '../capabilities/index.js';
 import {
   collectRegisteredNames,
   prepareSkillStore,
   validateSkillAllowedTools,
   type SkillWireAgent,
 } from './collectSkills.js';
+import { SkillsCapability } from './SkillsCapability.js';
 
 export interface WiredAgentSkills {
   capability: SkillsCapability;
@@ -18,7 +18,7 @@ export interface WiredAgentSkills {
 export async function wireAgentSkills(agent: SkillWireAgent): Promise<WiredAgentSkills | undefined> {
   if (!agent.skills) return undefined;
 
-  const { store, skills } = await prepareSkillStore(agent.skills as import('./types.js').SkillSource);
+  const { store, skills } = await prepareSkillStore(agent.skills);
   validateSkillAllowedTools(skills, collectRegisteredNames(agent));
 
   const metas = await store.list();

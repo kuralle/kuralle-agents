@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { defineAgent, defineTool } from '@kuralle-agents/core';
 import { CoreToolExecutor } from '../../kuralle-core/src/tools/effect/ToolExecutor.js';
 import { defineSkill } from '../src/defineSkill.js';
-import { wireAgentSkills } from '../src/wireAgentSkills.js';
+import { wireAgentSkills } from '@kuralle-agents/core';
 import { buildCtx, reloadRunState, setupDurableHarness } from '../../kuralle-core/test/core-durable/helpers.js';
 
 describe('test:skill-agent', () => {

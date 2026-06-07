@@ -19,6 +19,7 @@ import { createRunContext } from './ctx.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { createFsTool } from '../tools/fs/createFsTool.js';
+import { wireAgentSkills } from '../skills/wireAgentSkills.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
@@ -132,7 +133,6 @@ export class Runtime {
       let skillPrompt: string | undefined;
       let skillTools: Record<string, AnyTool> = {};
       if (opened.agent.skills) {
-        const { wireAgentSkills } = await import('@kuralle-agents/skills');
         const wired = await wireAgentSkills(opened.agent);
         if (wired) {
           skillTools = wired.tools;
