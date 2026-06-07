@@ -41,6 +41,8 @@ reports/
 .claude/
 research/mastra/
 research/cloudflare-agents-sdk/
+research/flue/
+research/hare/
 cloudflare-research/
 .next/
 .wrangler/
@@ -60,3 +62,5 @@ implementation-notes.md
 # OSS-program application drafts — private, never tracked
 OPENAI_CODEX_OSS_APPLICATION.md
 VERCEL_OSS_APPLICATION.md
+research/pi/
+research/kuralle-whatsapp-product/
