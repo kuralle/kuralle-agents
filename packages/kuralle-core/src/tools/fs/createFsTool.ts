@@ -15,31 +15,49 @@ export interface GrepHit {
   text: string;
 }
 
-const workspaceInput = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('ls'), path: z.string().default('/') }),
-  z.object({ op: z.literal('cat'), path: z.string() }),
-  z.object({
-    op: z.literal('grep'),
-    pattern: z.string(),
-    path: z.string().default('/'),
-    flags: z.string().optional(),
-  }),
-  z.object({
-    op: z.literal('find'),
-    root: z.string().default('/'),
-    glob: z.string(),
-  }),
-  z.object({ op: z.literal('read'), path: z.string() }),
-  z.object({ op: z.literal('write'), path: z.string(), content: z.string() }),
-  z.object({
-    op: z.literal('edit'),
-    path: z.string(),
-    find: z.string(),
-    replace: z.string(),
-  }),
-]);
+export interface FsSearchHit {
+  slug: string;
+  chunkIndex: number;
+  text: string;
+}
+
+export interface FsWithSearch extends FileSystem {
+  search?(
+    pattern: string,
+    opts?: { limit?: number; path?: string },
+  ): Promise<FsSearchHit[]>;
+}
+
+const workspaceInput = z.object({
+  op: z.enum(['ls', 'cat', 'grep', 'find', 'read', 'write', 'edit']),
+  path: z.string().optional(),
+  pattern: z.string().optional(),
+  root: z.string().optional(),
+  glob: z.string().optional(),
+  flags: z.string().optional(),
+  content: z.string().optional(),
+  find: z.string().optional(),
+  replace: z.string().optional(),
+});
 
 type WorkspaceInput = z.infer<typeof workspaceInput>;
+
+function normalizeFsPath(path: string | undefined, fallback = '/'): string {
+  if (!path || path.trim() === '') return fallback;
+  return path;
+}
+
+function requireField<T extends WorkspaceInput>(
+  args: T,
+  field: keyof T,
+  op: string,
+): string {
+  const value = args[field];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`EINVAL: missing ${String(field)} for workspace op '${op}'`);
+  }
+  return value;
+}
 
 function eroFs(path: string): Error {
   return new Error(`EROFS: read-only filesystem, write '${path}'`);
@@ -89,6 +107,29 @@ async function grepFiles(
     throw new Error(`EINVAL: invalid grep pattern '${pattern}'`);
   }
 
+  const searchable = fs as FsWithSearch;
+  if (searchable.search) {
+    const coarse = await searchable.search(pattern, { limit: 500, path: root });
+    const slugs = [...new Set(coarse.map((hit) => hit.slug))];
+    const hits: GrepHit[] = [];
+    for (const filePath of slugs) {
+      let content: string;
+      try {
+        content = await fs.readFile(filePath);
+      } catch (err) {
+        if (fsErrorCode(err) === 'EISDIR') continue;
+        throw err;
+      }
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        if (re.test(lines[i]!)) {
+          hits.push({ path: filePath, line: i + 1, text: lines[i]! });
+        }
+      }
+    }
+    return hits;
+  }
+
   const candidates = await listFiles(fs, root);
   const hits: GrepHit[] = [];
   for (const filePath of candidates) {
@@ -127,63 +168,73 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
     execute: async (args: WorkspaceInput) => {
       switch (args.op) {
         case 'ls': {
-          const entries = await fs.readdirWithFileTypes(args.path);
+          const path = normalizeFsPath(args.path);
+          const entries = await fs.readdirWithFileTypes(path);
           return {
             op: args.op,
             ok: true as const,
-            path: args.path,
+            path,
             entries,
           };
         }
         case 'cat':
         case 'read': {
-          const content = await fs.readFile(args.path);
-          return { op: args.op, ok: true as const, path: args.path, content };
+          const path = requireField(args, 'path', args.op);
+          const content = await fs.readFile(path);
+          return { op: args.op, ok: true as const, path, content };
         }
         case 'find': {
-          const paths = await fs.glob(args.glob);
+          const root = normalizeFsPath(args.root);
+          const glob = requireField(args, 'glob', args.op);
+          const paths = await fs.glob(glob);
           const rooted = paths.filter((p) => {
-            const root = args.root === '/' ? '/' : args.root.replace(/\/$/, '');
-            return p === root || p.startsWith(`${root}/`);
+            const normalizedRoot = root === '/' ? '/' : root.replace(/\/$/, '');
+            return p === normalizedRoot || p.startsWith(`${normalizedRoot}/`);
           });
           return {
             op: args.op,
             ok: true as const,
-            root: args.root,
-            glob: args.glob,
+            root,
+            glob,
             paths: rooted,
           };
         }
         case 'grep': {
-          const hits = await grepFiles(fs, args.pattern, args.path, args.flags);
+          const pattern = requireField(args, 'pattern', args.op);
+          const path = normalizeFsPath(args.path);
+          const hits = await grepFiles(fs, pattern, path, args.flags);
           return {
             op: args.op,
             ok: true as const,
-            pattern: args.pattern,
-            path: args.path,
+            pattern,
+            path,
             hits,
           };
         }
         case 'write': {
-          assertWritable(readOnly, args.path);
-          await fs.writeFile(args.path, args.content);
-          return { op: args.op, ok: true as const, path: args.path };
+          const path = requireField(args, 'path', args.op);
+          const content = requireField(args, 'content', args.op);
+          assertWritable(readOnly, path);
+          await fs.writeFile(path, content);
+          return { op: args.op, ok: true as const, path };
         }
         case 'edit': {
-          assertWritable(readOnly, args.path);
-          const current = await fs.readFile(args.path);
-          if (!current.includes(args.find)) {
+          const path = requireField(args, 'path', args.op);
+          const find = requireField(args, 'find', args.op);
+          const replace = requireField(args, 'replace', args.op);
+          assertWritable(readOnly, path);
+          const current = await fs.readFile(path);
+          if (!current.includes(find)) {
             throw new Error(
-              `ENOENT: find string not found in file, edit '${args.path}'`,
+              `ENOENT: find string not found in file, edit '${path}'`,
             );
           }
-          const next = current.replace(args.find, args.replace);
-          await fs.writeFile(args.path, next);
-          return { op: args.op, ok: true as const, path: args.path };
+          const next = current.replace(find, replace);
+          await fs.writeFile(path, next);
+          return { op: args.op, ok: true as const, path };
         }
         default: {
-          const _exhaustive: never = args;
-          throw new Error(`EINVAL: unknown workspace op '${String(_exhaustive)}'`);
+          throw new Error(`EINVAL: unknown workspace op '${String(args.op)}'`);
         }
       }
     },

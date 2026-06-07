@@ -129,6 +129,8 @@ export class Runtime {
         agentTools.workspace = createFsTool({ fs: opened.agent.workspace });
       }
 
+      const workspaceTool = agentTools.workspace;
+
       const toolExecutor = new CoreToolExecutor({
         tools: agentTools,
         enforcer: policies.enforcer,
@@ -179,7 +181,10 @@ export class Runtime {
 
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
-      runCtx.globalTools = opened.agent.globalTools;
+      runCtx.globalTools = {
+        ...(opened.agent.globalTools ?? {}),
+        ...(workspaceTool ? { workspace: workspaceTool } : {}),
+      };
       runCtx.outOfBandControl = opened.agent.experimental?.outOfBandControl ?? false;
 
       await this.hooks?.onStart?.(runCtx);
