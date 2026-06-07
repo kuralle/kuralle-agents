@@ -22,7 +22,8 @@
     "prebuild": "rm -rf dist",
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "bun test src/voice/__tests__ src/__tests__",
+    "test": "bun test src/voice/__tests__ src/__tests__ && vitest run --config vitest.config.ts",
+    "test:sql-memory-workers": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
@@ -39,9 +40,11 @@
     "zod": "^3.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.7",
     "@kuralle-agents/voice-protocol": "workspace:*",
     "agents": "^0.11.5",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=20"

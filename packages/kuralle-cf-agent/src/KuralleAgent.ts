@@ -21,11 +21,13 @@
 
 import { AIChatAgent } from '@cloudflare/ai-chat';
 import { createRuntime, type HarnessConfig, type Runtime } from '@kuralle-agents/core';
+import type { PersistentMemoryStore } from '@kuralle-agents/core';
 import type { HarnessHooks, HarnessStreamPart } from '@kuralle-agents/core';
 import type { StreamTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
 import { BridgeSessionStore } from './BridgeSessionStore.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
+import { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
 import { createSSEResponse } from './StreamAdapter.js';
 import type { StreamAdapterConfig, SqlExecutor } from './types.js';
 import { DEFAULT_STREAM_CONFIG } from './types.js';
@@ -82,6 +84,14 @@ export abstract class KuralleAgent<
    */
   protected getStreamConfig(): Partial<StreamAdapterConfig> {
     return {};
+  }
+
+  /**
+   * Optional: durable working-memory blocks backed by DO SQLite.
+   * When returned, wired into `HarnessConfig.defaultWorkingMemoryStore`.
+   */
+  protected getWorkingMemoryStore(): PersistentMemoryStore | undefined {
+    return new SqlPersistentMemoryStore(this.getSql());
   }
 
   /**
@@ -143,11 +153,15 @@ export abstract class KuralleAgent<
 
     // Build runtime (fresh per request to pick up latest config)
     const extraConfig = this.getRuntimeConfig();
+    const workingMemoryStore = this.getWorkingMemoryStore();
     this.runtime = createRuntime({
       ...extraConfig,
       agents: this.getAgents(),
       defaultAgentId,
       sessionStore,
+      ...(workingMemoryStore && !extraConfig.defaultWorkingMemoryStore
+        ? { defaultWorkingMemoryStore: workingMemoryStore }
+        : {}),
     });
 
     const handle = this.runtime.run({

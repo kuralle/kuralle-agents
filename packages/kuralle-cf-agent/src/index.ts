@@ -27,6 +27,8 @@
 export { KuralleAgent, KuralleAgent as CfChatAgent } from './KuralleAgent.js';
 export { BridgeSessionStore } from './BridgeSessionStore.js';
 export { OrchestrationStore } from './OrchestrationStore.js';
+export { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
+export { createSqlExecutor } from './sqlExecutor.js';
 export { createSSEResponse } from './StreamAdapter.js';
 
 export type {

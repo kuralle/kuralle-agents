@@ -18,6 +18,7 @@ Three backend implementations — sessions, long-term memory, and vector search 
 
 - **`RedisSessionStore`** — `SessionStore` implementation for durable session persistence.
 - **`RedisMemoryService`** — `MemoryService` implementation for cross-session long-term memory.
+- **`RedisPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`RedisVectorStore`** — `VectorStoreCore` implementation for vector similarity search.
 - **`fromUpstash` / `fromNodeRedis` / `fromIORedis`** — client adapters.
 
@@ -91,6 +92,25 @@ const runtime = createRuntime({
   memoryIngestion: 'onEnd',
 });
 ```
+
+## Working memory blocks
+
+```ts
+import { createRuntime } from '@kuralle-agents/core';
+import { RedisPersistentMemoryStore, fromUpstash } from '@kuralle-agents/redis-store';
+import { Redis } from '@upstash/redis';
+
+const client = Redis.fromEnv();
+const workingMemoryStore = new RedisPersistentMemoryStore({ client, prefix: 'kuralle' });
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  defaultWorkingMemoryStore: workingMemoryStore,
+});
+```
+
+On Cloudflare Workers, use `fromUpstash` with the REST client — no TCP socket required.
 
 ## Related
 

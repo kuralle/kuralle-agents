@@ -26,5 +26,11 @@ export {
   FilePersistentMemoryStore,
   type FilePersistentMemoryStoreOptions,
 } from './blocks/FilePersistentMemoryStore.js';
+export {
+  RoutedPersistentMemoryStore,
+  type RoutedPersistentMemoryStoreConfig,
+  type MemoryRouteFn,
+} from './blocks/RoutedPersistentMemoryStore.js';
+export { TieredPersistentMemoryStore } from './blocks/TieredPersistentMemoryStore.js';
 export { scanMemoryWrite, type SafetyScanResult } from './blocks/safetyScanner.js';
 export { buildMemoryBlockTool, type MemoryBlockToolOptions } from './blocks/memoryBlockTool.js';

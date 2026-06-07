@@ -1,0 +1,10 @@
+{
+  "name": "cf-agent-test",
+  "main": "vitest/worker.ts",
+  "compatibility_date": "2026-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "TEST_MEMORY_DO", "class_name": "TestMemoryDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TestMemoryDO"] }]
+}

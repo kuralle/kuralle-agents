@@ -132,10 +132,16 @@ export type {
 export {
   FilePersistentMemoryStore,
   InMemoryPersistentMemoryStore,
+  RoutedPersistentMemoryStore,
+  TieredPersistentMemoryStore,
   scanMemoryWrite,
   buildMemoryBlockTool,
   DEFAULT_BLOCK_CHAR_LIMIT,
   DEFAULT_AUTO_LOAD_BLOCKS,
+} from './memory/index.js';
+export type {
+  RoutedPersistentMemoryStoreConfig,
+  MemoryRouteFn,
 } from './memory/index.js';
 export {
   wireWorkingMemory,
