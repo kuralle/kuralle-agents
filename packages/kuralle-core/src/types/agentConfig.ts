@@ -1,4 +1,4 @@
-import type { LanguageModel, ToolSet } from 'ai';
+import type { LanguageModel } from 'ai';
 import type { AgentPrompt } from '../prompts/AgentPrompt.js';
 import type { Flow } from './flow.js';
 import type { Route, RoutingPolicy } from './route.js';
@@ -6,7 +6,7 @@ import type { Guardrails, Limits } from './guardrails.js';
 import type { AgentKnowledge, AgentMemory } from './grounding.js';
 import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
-import type { Tool, AnyTool } from './effectTool.js';
+import type { AnyTool } from './effectTool.js';
 
 export type Instructions =
   | string
@@ -23,8 +23,8 @@ export interface AgentConfig {
    *  temperature 0 for determinism. Defaults to `model` (the speaker) when unset.
    *  Set this to pin control to a reliable provider independent of the speaker. */
   controlModel?: LanguageModel;
-  tools?: ToolSet;
-  effectTools?: Record<string, AnyTool>;
+  /** Durable, model-callable effect tools (exactly-once on replay). Wrap raw AI SDK tools with wrapAiSdkTool(). */
+  tools?: Record<string, AnyTool>;
   /** Safe, always-available tools made model-visible in EVERY speaking node turn
    *  (the agent "base layer", ADR 0001) — e.g. a returns/FAQ knowledge-base
    *  lookup the user might ask for mid-flow. This is an explicit allow-list:

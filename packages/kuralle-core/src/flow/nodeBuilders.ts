@@ -57,7 +57,7 @@ export function resolveReplyNode(
     prompt: buildNodePrompt(node, state),
     tools,
     // Recover the raw executors from the node's `buildToolSet` tools so they run
-    // in-flow (with run context) — without also needing `agent.effectTools`.
+    // in-flow (with run context) — without also needing `agent.tools`.
     localTools: rawToolsFromSet(tools),
     ...(options?.freeConversation && { freeConversation: true }),
   };
