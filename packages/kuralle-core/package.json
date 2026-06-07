@@ -87,17 +87,10 @@
   },
   "peerDependencies": {
     "ai": "^6.0.0",
-    "zod": "^3.0.0",
-    "@kuralle-agents/fs": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@kuralle-agents/fs": {
-      "optional": true
-    }
+    "zod": "^3.0.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.7",
-    "@kuralle-agents/fs": "workspace:*",
     "@kuralle-agents/realtime-audio": "workspace:*",
     "@ai-sdk/openai": "^3.0.0",
     "@types/node": "^20.11.0",
