@@ -8,6 +8,7 @@ import type { RefinementCapability } from '../capabilities/RefinementCapability.
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
+import type { SkillSource } from './skills.js';
 
 export type Instructions =
   | string
@@ -51,6 +52,9 @@ export interface AgentConfig {
   };
   /** Portable workspace filesystem; auto-registers the durable `workspace` tool when set. */
   workspace?: FileSystem;
+  /** Bundled procedural skills (Anthropic Agent Skill model): Level-1 name+description in prompt,
+   *  body via `load_skill`, resources via `read_skill_resource`. Scripts = `allowedTools` only. */
+  skills?: SkillSource;
 }
 
 export function defineAgent(config: AgentConfig): AgentConfig {

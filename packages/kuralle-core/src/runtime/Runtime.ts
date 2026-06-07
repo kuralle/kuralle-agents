@@ -129,6 +129,18 @@ export class Runtime {
         agentTools.workspace = createFsTool({ fs: opened.agent.workspace });
       }
 
+      let skillPrompt: string | undefined;
+      let skillTools: Record<string, AnyTool> = {};
+      if (opened.agent.skills) {
+        const { wireAgentSkills } = await import('@kuralle-agents/skills');
+        const wired = await wireAgentSkills(opened.agent);
+        if (wired) {
+          skillTools = wired.tools;
+          Object.assign(agentTools, wired.tools);
+          skillPrompt = wired.promptSections.map((s) => s.content).join('\n\n');
+        }
+      }
+
       const workspaceTool = agentTools.workspace;
 
       const toolExecutor = new CoreToolExecutor({
@@ -184,8 +196,10 @@ export class Runtime {
       runCtx.globalTools = {
         ...(opened.agent.globalTools ?? {}),
         ...(workspaceTool ? { workspace: workspaceTool } : {}),
+        ...skillTools,
       };
       runCtx.outOfBandControl = opened.agent.experimental?.outOfBandControl ?? false;
+      runCtx.skillPrompt = skillPrompt;
 
       await this.hooks?.onStart?.(runCtx);
 

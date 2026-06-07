@@ -88,6 +88,8 @@ export interface RunContext {
    *  in every speaking turn. */
   baseInstructions?: Instructions;
   globalTools?: Record<string, AnyTool>;
+  /** Level-1 skill metadata injected by `SkillsCapability` when `AgentConfig.skills` is set. */
+  skillPrompt?: string;
   /** Agent workspace filesystem (same instance as `AgentConfig.workspace`). */
   fs?: FileSystem;
   tool(name: string, args: unknown, options?: { toolCallId?: string; def?: AnyTool; toolCtx?: ToolContext }): Promise<unknown>;

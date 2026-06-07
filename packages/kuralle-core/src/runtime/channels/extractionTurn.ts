@@ -24,7 +24,7 @@ export async function runSilentExtraction(
 ): Promise<TurnResult> {
   const replyNode = node.node as ReplyNode;
   const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
-  const system = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
+  const system = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state, ctx.skillPrompt);
   const messages: ModelMessage[] = [...ctx.runState.messages];
   const aiTools = resolveExtractionTools(node);
   const out: TurnResult = { text: '', toolResults: [] };

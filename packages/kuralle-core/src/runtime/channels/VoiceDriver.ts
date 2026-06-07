@@ -98,7 +98,12 @@ export class VoiceDriver implements ChannelDriver {
     const gather = await runGatherPhase(ctx, scope);
     const out: TurnResult = { text: '', toolResults: [] };
     const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
-    const baseSystem = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
+    const baseSystem = composeSystem(
+      ctx.baseInstructions,
+      nodeSystem,
+      ctx.runState.state,
+      ctx.skillPrompt,
+    );
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
     const geminiTools = resolveVoiceGeminiTools(
       node,
@@ -197,6 +202,7 @@ export class VoiceDriver implements ChannelDriver {
       ctx.baseInstructions,
       resolveInstructions(node.instructions, ctx.runState.state),
       ctx.runState.state,
+      ctx.skillPrompt,
     );
     return resolveStructuredDecide(node, ctx, system);
   }
