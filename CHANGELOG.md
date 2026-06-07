@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased — Tool model cleanup (BREAKING: `AgentConfig.tools`)
+## 0.6.0 — Filesystem, Skills, Working memory (BREAKING: `AgentConfig.tools`)
+
+Unified minor bump across the graph (0.5.0 → 0.6.0). One breaking change (the tool-model rename below); the rest is additive. New packages: **`@kuralle-agents/fs`**, **`@kuralle-agents/skills`**.
 
 **Breaking:** `AgentConfig.effectTools` is renamed to `AgentConfig.tools` (durable `Record<string, AnyTool>`). The old raw `tools?: ToolSet` field on `AgentConfig` is **removed** — third-party AI SDK tools must use `wrapAiSdkTool()`.
 
@@ -14,7 +16,15 @@
 - **`scripts/check-no-raw-tool-execute.sh`** — CI guard wired into `typecheck:all`; fails if raw `execute` could reach `streamText`.
 - Host-reply (off-flow) tools route through the durable journal via `buildToolSet` + registered executors.
 
-See `MIGRATION.md` (Tool model cleanup section) and `rfcs/kuralle-harness/rfc-01-tool-model-cleanup.md`.
+**Filesystem (`@kuralle-agents/fs`, new):** portable `FileSystem` interface + `InMemoryFs` (zero `node:*`, Node + Workers); one durable `workspace` tool (`ls/cat/grep/find/read/write/edit`); `AgentConfig.workspace` (read-only by default). `CompositeFileSystem` routes by path prefix (mount `/kb`, `/docs`, `/scratch`…). `KnowledgeFs` (in `@kuralle-agents/rag`) exposes a vector store as a read-only filesystem (`cat` = chunk reassembly, optional BM25 grep, RBAC tree-prune).
+
+**Skills (`@kuralle-agents/skills`, new):** Anthropic-style Agent Skills — `SKILL.md` + 3-level progressive disclosure via a `SkillsCapability`; `AgentConfig.skills`; scripts are allow-listed durable tools.
+
+**Working memory:** `AgentConfig.memory.workingMemory` — durable USER/MEMORY blocks loaded into the prompt + maintained by the model via the auto-registered `memory_block` tool (Mastra-style directive injected automatically). Stores: `InMemory`, `File` (`~/.kuralle/memories`), `Postgres`, `Redis`/Upstash, and CF-native `SqlPersistentMemoryStore` (DO SQLite). Composite: `RoutedPersistentMemoryStore` (by scope) + `TieredPersistentMemoryStore` (read-through cache). See the new **Memory** guide.
+
+**Cloudflare:** every new primitive ships day-1 Workers support (`workerd` parity tests; cf-agent auto-wires DO-SQLite working memory, zero config).
+
+See `MIGRATION.md` (Tool model cleanup section), `docs/adr/0006-fs-reframe-and-working-memory.md`, and `rfcs/kuralle-harness/`.
 
 ## 0.5.0 — AI-SDK-native by default (BREAKING: web stream output)
 

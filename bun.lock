@@ -222,7 +222,7 @@
     },
     "packages/create-kuralle-agents": {
       "name": "create-kuralle-agents",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "bin": {
         "create-kuralle-agents": "dist/index.js",
       },
@@ -238,7 +238,7 @@
     },
     "packages/kuralle-analytics-sdk": {
       "name": "@kuralle-agents/analytics-sdk",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "zod": "^3.24.0",
       },
@@ -256,7 +256,7 @@
     },
     "packages/kuralle-cf-agent": {
       "name": "@kuralle-agents/cf-agent",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@cloudflare/ai-chat": "^0.1.8",
         "@kuralle-agents/core": "workspace:*",
@@ -383,7 +383,7 @@
     },
     "packages/kuralle-core": {
       "name": "@kuralle-agents/core",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "chrono-node": "^2.6.0",
         "zod-to-json-schema": "^3.24.0",
@@ -433,7 +433,7 @@
     },
     "packages/kuralle-engagement": {
       "name": "@kuralle-agents/engagement",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
@@ -448,7 +448,7 @@
     },
     "packages/kuralle-eval": {
       "name": "@kuralle-agents/eval",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
@@ -456,7 +456,7 @@
     },
     "packages/kuralle-fs": {
       "name": "@kuralle-agents/fs",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -474,7 +474,7 @@
     },
     "packages/kuralle-hono-server": {
       "name": "@kuralle-agents/hono-server",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "ai": "^6.0.0",
@@ -498,7 +498,7 @@
     },
     "packages/kuralle-http-client": {
       "name": "@kuralle-agents/http-client",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@types/node": "^22.13.4",
         "typescript": "^5.8.2",
@@ -506,7 +506,7 @@
     },
     "packages/kuralle-lancedb-store": {
       "name": "@kuralle-agents/lancedb-store",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@lancedb/lancedb": "^0.13.0",
@@ -520,7 +520,7 @@
     },
     "packages/kuralle-livekit-plugin": {
       "name": "@kuralle-agents/livekit-plugin",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@aws-sdk/client-s3": "3.1000.0",
         "@aws-sdk/lib-storage": "3.1000.0",
@@ -542,7 +542,7 @@
     },
     "packages/kuralle-livekit-plugin-transport-http": {
       "name": "@kuralle-agents/livekit-plugin-transport-http",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@hono/node-server": "^1.19.11",
         "hono": "^4.0.0",
@@ -556,7 +556,7 @@
     },
     "packages/kuralle-livekit-plugin-transport-sip": {
       "name": "@kuralle-agents/livekit-plugin-transport-sip",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "jssip": "^3.13.5",
         "node.js-sip": "^1.0.9",
@@ -579,7 +579,7 @@
     },
     "packages/kuralle-livekit-plugin-transport-smartpbx": {
       "name": "@kuralle-agents/livekit-plugin-transport-smartpbx",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "typescript": "^5.5.0",
       },
@@ -591,7 +591,7 @@
     },
     "packages/kuralle-livekit-plugin-transport-twilio": {
       "name": "@kuralle-agents/livekit-plugin-transport-twilio",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "hono": "^4.6.0",
         "tsx": "^4.19.0",
@@ -606,7 +606,7 @@
     },
     "packages/kuralle-livekit-plugin-transport-ws": {
       "name": "@kuralle-agents/livekit-plugin-transport-ws",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "ws": "^8.18.0",
       },
@@ -635,7 +635,7 @@
     },
     "packages/kuralle-messaging": {
       "name": "@kuralle-agents/messaging",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "hono": "^4.7.4",
@@ -647,7 +647,7 @@
     },
     "packages/kuralle-messaging-meta": {
       "name": "@kuralle-agents/messaging-meta",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/http-client": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
@@ -673,7 +673,7 @@
     },
     "packages/kuralle-postgres-store": {
       "name": "@kuralle-agents/postgres-store",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -692,7 +692,7 @@
     },
     "packages/kuralle-rag": {
       "name": "@kuralle-agents/rag",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -711,7 +711,7 @@
     },
     "packages/kuralle-rag-loaders": {
       "name": "@kuralle-agents/rag-loaders",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -735,7 +735,7 @@
     },
     "packages/kuralle-realtime-audio": {
       "name": "@kuralle-agents/realtime-audio",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@google/genai": "^1.0.0",
         "@kuralle-agents/voice-protocol": "workspace:*",
@@ -759,7 +759,7 @@
     },
     "packages/kuralle-redis-store": {
       "name": "@kuralle-agents/redis-store",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -781,7 +781,7 @@
     },
     "packages/kuralle-skills": {
       "name": "@kuralle-agents/skills",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -800,7 +800,7 @@
     },
     "packages/kuralle-tools": {
       "name": "@kuralle-agents/tools",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/rag": "workspace:*",
@@ -820,7 +820,7 @@
     },
     "packages/kuralle-transport-base": {
       "name": "@kuralle-agents/transport-base",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "alawmulaw": "^6.0.0",
       },
@@ -836,7 +836,7 @@
     },
     "packages/kuralle-upstash-store": {
       "name": "@kuralle-agents/upstash-store",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -848,7 +848,7 @@
     },
     "packages/kuralle-vectorize-store": {
       "name": "@kuralle-agents/vectorize-store",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -860,7 +860,7 @@
     },
     "packages/kuralle-voice-protocol": {
       "name": "@kuralle-agents/voice-protocol",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
@@ -878,7 +878,7 @@
     },
     "packages/kuralle-widget": {
       "name": "@kuralle-agents/widget",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
         "nanoid": "^5.0.9",
       },
