@@ -34,5 +34,11 @@ Packages that depend on `@kuralle-agents/core` must NOT be imported by core. The
 3. **`verify-handoff-proof.sh`** threw `KeyError: 'type'` on the S3 proof (schema variant); cosmetic — proofs are substantive.
 4. **Process:** bake a fixed structural pattern into the NEXT sprint's brief proactively (the S4 cycle repeat would have been avoided).
 
+## Post-program: FS reframe + working memory (ADR 0006) — DONE @ `cf4f23f`
+After a "is this even usable?" rethink (worked backwards from the customer-support use case), recorded **ADR 0006** and shipped:
+- **(A) FS reframed** from foundation to power-tool: its real jobs are the Skills/Scripts substrate + bundled local files. Support retrieval stays on RAG/CAG; `KnowledgeFs` repositioned as a page reader (not a grep/BM25 search engine). **`workspace` now read-only by default** and only model-visible (globalTools) when read-only — closes the ADR-0001 mutating-tool hole.
+- **(B) Orphaned memory WIRED** as working memory (`AgentMemory.workingMemory`), Mastra-informed: per-block `template`, resource (user/shared) vs agent owner resolution, blocks auto-loaded into the system prompt + the `memory_block` edit tool auto-registered (run + handoff sites). Core kept Workers-clean via DI: `HarnessConfig.defaultWorkingMemoryStore` injects `FilePersistentMemoryStore` on Node (no `node:fs` in the Workers bundle). Semantic recall (`MemoryService`) unchanged as the second axis.
+- Verified: typecheck:all + test green; 29 working-memory tests pass; **live two-session smoke** — agent recorded "favorite color is teal" in session 1, recalled it in session 2 from the injected USER block. Cycle invariant held (all-core, no dynamic import). Nit: IC proof JSON didn't map `cmd:test` (proof gate INVALID) — cosmetic; manager gate run is authoritative.
+
 ## Release (when user approves)
 Breaking: `effectTools → tools` (consumers migrate; raw `ToolSet` agent field gone → use `wrapAiSdkTool`). Changesets present per sprint (`.changeset/kh-s1..s4`). **Version + `pnpm publish -r` the whole graph together** (workspace:* exact-pin gotcha). New published packages: `@kuralle-agents/fs`, `@kuralle-agents/skills`. Do NOT publish piecemeal. Branch `feat/kuralle-harness` is ready to merge to `main` after review.
