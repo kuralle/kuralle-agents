@@ -11,7 +11,9 @@
 | 1 | Phase 0 — rfc-01-tool-model-cleanup | ✅ DONE — Gate 01 GREEN @ `32c0ab5` |
 | 2 | Phase 1 — rfc-02-filesystem-primitive | ✅ DONE — Gate 02 GREEN @ `fc6adee` (manager fix: broke core↔fs cycle) |
 | 3 | Phase 2 — rfc-03-knowledgefs-rag | ✅ DONE — Gate 03 GREEN @ `9e3dd31` (live multi-page grep+cat KB answer) |
-| 4 | Phase 3 — rfc-04-skills-and-scripts | ✅ DONE — Gate 04 GREEN @ `445d49c` (manager fix: broke core↔skills cycle; live load_skill→script smoke) |
+| 4 | Phase 3 — rfc-04-skills-and-scripts | ✅ DONE — Gate 04 GREEN @ `445d49c` |
+| 5 | CompositeFileSystem (mount table) | ✅ DONE — Gate GREEN @ `c3356bc` (workerd parity + live /docs+/scratch smoke) |
+| 6 | DB-backed + CF-native working memory | IN PROGRESS (Phase A) |
 
 ## Load-bearing docs for the active sprint
 1. `rfcs/kuralle-harness/rfc-04-skills-and-scripts.md` (the contract — read end to end)
