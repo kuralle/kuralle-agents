@@ -1,8 +1,8 @@
 # STATE — kuralle-harness program
 
-**Active sprint:** 4 — Phase 3: Skills & Scripts (RFC-04)
-**Status:** Phase A (implementation) — delegating to cursor
-**Build branch:** `feat/kuralle-harness` (S1 `32c0ab5`, S2 `fc6adee`, S3 `9e3dd31`; no publish until program close)
+**Active sprint:** — PROGRAM COMPLETE (all 4 ship gates green)
+**Status:** Ready for release. Awaiting user approval to version + `pnpm publish -r` the graph together.
+**Build branch:** `feat/kuralle-harness` (S1 `32c0ab5`, S2 `fc6adee`, S3 `9e3dd31`, S4 `445d49c` + closeout)
 **IC worker:** cursor
 
 ## Sprint ledger
@@ -11,7 +11,7 @@
 | 1 | Phase 0 — rfc-01-tool-model-cleanup | ✅ DONE — Gate 01 GREEN @ `32c0ab5` |
 | 2 | Phase 1 — rfc-02-filesystem-primitive | ✅ DONE — Gate 02 GREEN @ `fc6adee` (manager fix: broke core↔fs cycle) |
 | 3 | Phase 2 — rfc-03-knowledgefs-rag | ✅ DONE — Gate 03 GREEN @ `9e3dd31` (live multi-page grep+cat KB answer) |
-| 4 | Phase 3 — rfc-04-skills-and-scripts | IN PROGRESS (Phase A) — LAST sprint |
+| 4 | Phase 3 — rfc-04-skills-and-scripts | ✅ DONE — Gate 04 GREEN @ `445d49c` (manager fix: broke core↔skills cycle; live load_skill→script smoke) |
 
 ## Load-bearing docs for the active sprint
 1. `rfcs/kuralle-harness/rfc-04-skills-and-scripts.md` (the contract — read end to end)
