@@ -9,6 +9,13 @@
  *
  * Defaults to `process.env.KURALLE_MEMORY_DIR ?? <homedir>/.kuralle/memories`.
  *
+ * Relationship to `AgentConfig.workspace` (RFC-02): this store persists long-term
+ * memory *blocks* on the local Node filesystem via `node:fs`. It is not a
+ * portable `FileSystem` backend and is not wired into the agent workspace tool.
+ * Use `@kuralle-agents/fs` (`InMemoryFs`, `KnowledgeFs`, …) for model-visible
+ * workspace exploration; keep `FilePersistentMemoryStore` for durable USER/AGENT
+ * markdown blocks when running on Node.
+ *
  * Atomicity: writes go to a sibling `.tmp` file then `rename` over the
  * target. `rename` is atomic on POSIX within a single filesystem;
  * Windows is best-effort.
