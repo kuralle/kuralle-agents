@@ -90,6 +90,7 @@
     "zod": "^3.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.7",
     "@kuralle-agents/realtime-audio": "workspace:*",
     "@ai-sdk/openai": "^3.0.0",
     "@types/node": "^20.11.0",
@@ -97,6 +98,7 @@
     "bun-types": "^1.3.0",
     "dotenv": "^16.4.0",
     "typescript": "^5.3.0",
+    "vitest": "^3.2.4",
     "zod": "^3.23.0"
   },
   "scripts": {
@@ -105,7 +107,8 @@
     "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "bun test test",
+    "test": "bun test ./test && vitest run --config vitest.config.ts",
+    "test:journal-key-workers": "vitest run --config vitest.config.ts",
     "smoke:textdriver": "bun test ./test/core-channel/textdriver.smoke.ts",
     "smoke:flow": "bun test ./test/core-flow/flow.smoke.ts",
     "smoke:agent": "bun test ./test/core-agent/agent.smoke.ts",
