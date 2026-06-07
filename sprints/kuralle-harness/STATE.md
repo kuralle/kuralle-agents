@@ -1,8 +1,8 @@
 # STATE — kuralle-harness program
 
-**Active sprint:** 3 — Phase 2: KnowledgeFs over RAG (RFC-03)
+**Active sprint:** 4 — Phase 3: Skills & Scripts (RFC-04)
 **Status:** Phase A (implementation) — delegating to cursor
-**Build branch:** `feat/kuralle-harness` (baseline `9ee7241`; S1 @ `32c0ab5`, S2 @ `fc6adee`; no publish until program close)
+**Build branch:** `feat/kuralle-harness` (S1 `32c0ab5`, S2 `fc6adee`, S3 `9e3dd31`; no publish until program close)
 **IC worker:** cursor
 
 ## Sprint ledger
@@ -10,20 +10,23 @@
 |--------|-------------|-------|
 | 1 | Phase 0 — rfc-01-tool-model-cleanup | ✅ DONE — Gate 01 GREEN @ `32c0ab5` |
 | 2 | Phase 1 — rfc-02-filesystem-primitive | ✅ DONE — Gate 02 GREEN @ `fc6adee` (manager fix: broke core↔fs cycle) |
-| 3 | Phase 2 — rfc-03-knowledgefs-rag | IN PROGRESS (Phase A) |
-| 4 | Phase 3 — rfc-04-skills-and-scripts | UNBLOCKED (after Gate 02); runs as Sprint 4 |
+| 3 | Phase 2 — rfc-03-knowledgefs-rag | ✅ DONE — Gate 03 GREEN @ `9e3dd31` (live multi-page grep+cat KB answer) |
+| 4 | Phase 3 — rfc-04-skills-and-scripts | IN PROGRESS (Phase A) — LAST sprint |
 
 ## Load-bearing docs for the active sprint
-1. `rfcs/kuralle-harness/rfc-03-knowledgefs-rag.md` (the contract — read end to end)
-2. `research/_sources/web/mintlify-chromafs.md` (the pattern)
-3. `packages/kuralle-rag/src/types.ts` (`KnowledgeChunk`, `VectorStoreCore`, `VectorFilter`) + `search/` (`BM25Index`)
-4. `packages/kuralle-core/src/types/filesystem.ts` (`FileSystem` interface to implement) + `createFsTool` (note: now in CORE, re-exported by `@kuralle-agents/fs`; the `fs.search` coarse hook is the integration point)
+1. `rfcs/kuralle-harness/rfc-04-skills-and-scripts.md` (the contract — read end to end)
+2. `research/skills-and-scripts-plan.md`; `research/flue/packages/runtime/src/skill-frontmatter.ts` (frontmatter limits)
+3. `packages/kuralle-core/src/capabilities/index.ts` (`Capability` = `getTools()` + `getPromptSections()`) + `capabilities/AutoRetrieveCapability.ts` (on-demand-tool pattern to copy)
+4. `packages/kuralle-core/src/types/filesystem.ts` (`FileSystem` for `FsSkillStore`)
 
-## Exit gate for Sprint 3 (Gate 03)
-`KnowledgeFs` read-only FileSystem over `VectorStoreCore`: `cat`=chunk reassembly, `grep`=coarse→fine, writes→`EROFS`, RBAC tree-prune; `test:kfs-*` green; agent answers a multi-page question via grep+cat (live smoke); `typecheck:all`+`test` green.
+## Exit gate for Sprint 4 (Gate 04)
+`@kuralle-agents/skills`: SKILL.md + 3-level progressive disclosure via `SkillsCapability`; `AgentConfig.skills`; Scripts = allow-listed durable tools (no bash); `MemorySkillStore` identical Node+workerd; `test:skill-*` green; live smoke loads a skill on demand + runs a script tool; `typecheck:all`+`test` green.
 
 ## Next action
-Manager: Sprint 3 delegated to cursor (brief `.handoff/brief-kh-sprint3.md`). On sentinel → proof gate → diff review → run Gate 03 → proceed-evidence → advance to Sprint 4.
+Manager: Sprint 4 delegated to cursor (brief `.handoff/brief-kh-sprint4.md`). On sentinel → diff review → run Gate 04 → proceed-evidence → PROGRAM CLOSE (changesets + version graph together; await user approval before `pnpm publish -r`).
+
+## Cross-cutting refinement logged (post-program)
+ADR-0001: workspace tool (has write/edit) auto-added to globalTools in S3-C4. Safe for read-only KnowledgeFs; for read-write workspaces make read-only the visibility default (`workspace?: { fs; readOnly? }`). Small RFC-02 amendment after the program.
 
 ## Note for live smokes
 Example model resolver (`examples/_shared/v2Runner.ts`) hardcodes stale ids (gemini-2.0-flash 404, grok-2-1212). Force a working provider with `KURALLE_EXAMPLE_PROVIDER=openai` (OPENAI_API_KEY present). Pre-existing; tiny follow-up to bump ids.
