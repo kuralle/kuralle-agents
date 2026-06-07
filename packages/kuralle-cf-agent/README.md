@@ -19,6 +19,7 @@ Peers: `agents` (Cloudflare Agents SDK), `zod`.
 - **`KuralleAgent`** (alias `CfChatAgent`) — abstract base class; extend and implement `getAgents()` and `getDefaultAgentId()`.
 - **`BridgeSessionStore`** — bridges Kuralle `SessionStore` interface to CF's SQLite storage.
 - **`OrchestrationStore`** — Durable Object KV for orchestration state.
+- **`SqlPersistentMemoryStore`** — DO SQLite-backed `PersistentMemoryStore` for USER/MEMORY blocks.
 - **`createSSEResponse`** — helper for streaming SSE responses from Workers.
 
 ## Usage
@@ -62,6 +63,20 @@ class_name = "SupportAgent"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SupportAgent"]
+```
+
+## Working memory blocks
+
+`KuralleAgent` wires `SqlPersistentMemoryStore` into `defaultWorkingMemoryStore` automatically via DO SQLite. Override in `getRuntimeConfig()` or disable by overriding `getWorkingMemoryStore()` to return `undefined`.
+
+```ts
+import { SqlPersistentMemoryStore } from '@kuralle-agents/cf-agent';
+
+protected getRuntimeConfig() {
+  return {
+    defaultWorkingMemoryStore: new SqlPersistentMemoryStore(this.getSql()),
+  };
+}
 ```
 
 ## Flows and routing

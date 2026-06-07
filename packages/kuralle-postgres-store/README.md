@@ -18,6 +18,7 @@ Three backend implementations — sessions, long-term memory, and pgvector simil
 
 - **`PostgresSessionStore`** — `SessionStore` implementation for durable session persistence.
 - **`PostgresMemoryService`** — `MemoryService` implementation for cross-session long-term memory.
+- **`PostgresPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`PgVectorStore`** — `VectorStoreCore` implementation using pgvector for similarity search.
 
 ## Session store
@@ -57,6 +58,22 @@ const runtime = createRuntime({
   memoryIngestion: 'onEnd',
 });
 ```
+
+## Working memory blocks
+
+```ts
+import { PostgresPersistentMemoryStore } from '@kuralle-agents/postgres-store';
+
+const workingMemoryStore = new PostgresPersistentMemoryStore({ client: pool });
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  defaultWorkingMemoryStore: workingMemoryStore,
+});
+```
+
+On Cloudflare Workers, connect the pool through [Hyperdrive](https://developers.cloudflare.com/hyperdrive/) rather than a direct TCP connection.
 
 ## Vector store (pgvector)
 

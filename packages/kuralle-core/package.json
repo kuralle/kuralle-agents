@@ -72,6 +72,10 @@
       "types": "./dist/memory/index.d.ts",
       "default": "./dist/memory/index.js"
     },
+    "./memory/testing": {
+      "types": "./dist/memory/blocks/testing.d.ts",
+      "default": "./dist/memory/blocks/testing.js"
+    },
     "./foundation": {
       "types": "./dist/foundation/index.d.ts",
       "default": "./dist/foundation/index.js"

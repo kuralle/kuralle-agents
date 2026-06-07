@@ -265,9 +265,11 @@
         "zod-to-json-schema": "^3.24.0",
       },
       "devDependencies": {
+        "@cloudflare/vitest-pool-workers": "^0.12.7",
         "@kuralle-agents/voice-protocol": "workspace:*",
         "agents": "^0.11.5",
         "typescript": "^5.7.0",
+        "vitest": "^3.2.4",
       },
       "peerDependencies": {
         "@kuralle-agents/voice-protocol": "workspace:*",
