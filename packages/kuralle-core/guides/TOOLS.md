@@ -27,6 +27,8 @@ const agent = defineAgent({
 
 Set `workspace` to a portable `FileSystem` (from `@kuralle-agents/fs`) to auto-register the durable `workspace` tool (`ls`, `cat`, `grep`, `find`, `read`, `write`, `edit`). The same instance is exposed on `RunContext.fs` for flow `action` nodes.
 
+**Read-only by default** (ADR 0006): a bare `FileSystem` is mounted read-only and exposed in `globalTools` (safe for every speaking turn). Pass `{ fs, readOnly: false }` for a writable scratchpad — the executor is registered, but the tool is **not** auto-added to `globalTools` (mutating tools stay flow-gated).
+
 ```ts
 import { InMemoryFs } from '@kuralle-agents/fs';
 
@@ -35,9 +37,38 @@ const agent = defineAgent({
   model,
   workspace: new InMemoryFs({ '/docs/faq.md': '# FAQ' }),
 });
+
+// Writable scratchpad (not in globalTools):
+// workspace: { fs: new InMemoryFs({ '/scratch': '' }), readOnly: false },
 ```
 
 Requires `@kuralle-agents/fs` when using `workspace`.
+
+## Working memory blocks
+
+Cross-session markdown blocks (`USER`, `MEMORY`, …) via `agent.memory.workingMemory`. Blocks load at session start, inject into the system prompt, and are editable with the auto-registered `memory_block` tool.
+
+```ts
+import { defineAgent, FilePersistentMemoryStore } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  memory: {
+    workingMemory: {
+      store: new FilePersistentMemoryStore(),
+      autoLoad: [
+        { scope: 'user', key: 'USER', template: 'name:\npreferences:' },
+        { scope: 'agent', key: 'MEMORY' },
+      ],
+    },
+  },
+});
+```
+
+On Workers, pass an explicit `store` (or `HarnessConfig.defaultWorkingMemoryStore`). Semantic recall (`preload` / `ingest`) is unchanged — working memory is an additional axis.
+
+See [examples/agents/working-memory.ts](../examples/agents/working-memory.ts) for a live cross-session demo.
 
 ## Tool Basics
 

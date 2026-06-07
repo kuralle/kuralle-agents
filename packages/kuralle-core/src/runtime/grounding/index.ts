@@ -9,6 +9,15 @@ export {
   runMemoryIngest,
   warnMissingUserId,
 } from './memory.js';
+export {
+  wireWorkingMemory,
+  loadWorkingMemoryBlocks,
+  formatWorkingMemorySection,
+  resolveWorkingMemoryStore,
+  resolveWorkingMemoryOwner,
+  type LoadedWorkingMemoryBlock,
+  type WiredWorkingMemory,
+} from './workingMemory.js';
 export { runGatherPhase, type GatherResult, type GatherScope } from './gather.js';
 export { resolveNodeGatherScope } from './nodeScope.js';
 export {

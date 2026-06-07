@@ -90,6 +90,10 @@ export interface RunContext {
   globalTools?: Record<string, AnyTool>;
   /** Level-1 skill metadata injected by `SkillsCapability` when `AgentConfig.skills` is set. */
   skillPrompt?: string;
+  /** Frozen persistent memory blocks loaded at session start (`AgentMemory.workingMemory`). */
+  workingMemoryPrompt?: string;
+  /** Model-visible tools from working memory wiring (not in globalTools — mutating but scoped). */
+  workingMemoryTools?: Record<string, AnyTool>;
   /** Agent workspace filesystem (same instance as `AgentConfig.workspace`). */
   fs?: FileSystem;
   tool(name: string, args: unknown, options?: { toolCallId?: string; def?: AnyTool; toolCtx?: ToolContext }): Promise<unknown>;

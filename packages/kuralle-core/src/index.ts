@@ -126,14 +126,27 @@ export type {
   PersistentMemoryBlock,
   PersistentMemoryConfig,
   MemoryBlockScope,
+  WorkingMemoryBlockSpec,
+  WorkingMemoryConfig,
 } from './memory/index.js';
 export {
   FilePersistentMemoryStore,
+  InMemoryPersistentMemoryStore,
   scanMemoryWrite,
   buildMemoryBlockTool,
   DEFAULT_BLOCK_CHAR_LIMIT,
   DEFAULT_AUTO_LOAD_BLOCKS,
 } from './memory/index.js';
+export {
+  wireWorkingMemory,
+  loadWorkingMemoryBlocks,
+  formatWorkingMemorySection,
+  resolveWorkingMemoryStore,
+} from './runtime/grounding/workingMemory.js';
+export {
+  resolveAgentWorkspace,
+  type ResolvedAgentWorkspace,
+} from './runtime/resolveAgentWorkspace.js';
 
 export {
   DEFAULT_CONTEXT_BUDGET,
@@ -268,7 +281,7 @@ export {
 } from './tools/effect/index.js';
 export type { Tool as EffectTool } from './types/effectTool.js';
 export type { AgentRoute } from './types/processors.js';
-export type { AgentConfig, Instructions } from './types/agentConfig.js';
+export type { AgentConfig, AgentWorkspaceConfig, Instructions } from './types/agentConfig.js';
 export type {
   Flow,
   FlowNode,

@@ -9,6 +9,8 @@ export interface CreateFsToolOptions {
   timeoutMs?: number;
 }
 
+const DEFAULT_READ_ONLY = true;
+
 export interface GrepHit {
   path: string;
   line: number;
@@ -157,7 +159,7 @@ async function grepFiles(
  * static import and no core->fs dependency (RFC-02 §5.2). `@kuralle-agents/fs` re-exports it.
  */
 export function createFsTool(opts: CreateFsToolOptions): AnyTool {
-  const { fs, readOnly = false, timeoutMs } = opts;
+  const { fs, readOnly = DEFAULT_READ_ONLY, timeoutMs } = opts;
 
   return defineTool({
     name: 'workspace',

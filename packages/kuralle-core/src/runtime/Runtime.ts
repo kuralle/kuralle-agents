@@ -37,7 +37,10 @@ import {
   buildKnowledgeProvider,
   buildMemoryService,
   runMemoryIngest,
+  wireWorkingMemory,
 } from './grounding/index.js';
+import { resolveAgentWorkspace } from './resolveAgentWorkspace.js';
+import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { SessionMutex } from './SessionMutex.js';
 
 export interface HarnessConfig {
@@ -53,6 +56,8 @@ export interface HarnessConfig {
   tools?: Record<string, AnyTool>;
   knowledge?: KnowledgeProviderConfig;
   memoryService?: V1MemoryService;
+  /** Default store for `agent.memory.workingMemory` when `workingMemory.store` is omitted. */
+  defaultWorkingMemoryStore?: PersistentMemoryStore;
 }
 
 export interface RunOptions {
@@ -126,8 +131,21 @@ export class Runtime {
         ...(opened.agent.globalTools ?? {}),
       };
 
-      if (opened.agent.workspace) {
-        agentTools.workspace = createFsTool({ fs: opened.agent.workspace });
+      const resolvedWorkspace = resolveAgentWorkspace(opened.agent.workspace);
+      if (resolvedWorkspace) {
+        agentTools.workspace = createFsTool({
+          fs: resolvedWorkspace.fs,
+          readOnly: resolvedWorkspace.readOnly,
+        });
+      }
+
+      const wiredWorkingMemory = await wireWorkingMemory(
+        opened.agent,
+        opened.session,
+        this.config.defaultWorkingMemoryStore,
+      );
+      if (wiredWorkingMemory) {
+        agentTools.memory_block = wiredWorkingMemory.memoryBlockTool;
       }
 
       let skillPrompt: string | undefined;
@@ -188,18 +206,24 @@ export class Runtime {
         memoryService: this.config.memoryService
           ? buildMemoryService(this.config.memoryService, opened.agent)
           : undefined,
-        fs: opened.agent.workspace,
+        fs: resolvedWorkspace?.fs,
       });
 
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = {
         ...(opened.agent.globalTools ?? {}),
-        ...(workspaceTool ? { workspace: workspaceTool } : {}),
+        ...(workspaceTool && resolvedWorkspace?.readOnly !== false
+          ? { workspace: workspaceTool }
+          : {}),
         ...skillTools,
       };
       runCtx.outOfBandControl = opened.agent.experimental?.outOfBandControl ?? false;
       runCtx.skillPrompt = skillPrompt;
+      runCtx.workingMemoryPrompt = wiredWorkingMemory?.promptSection;
+      runCtx.workingMemoryTools = wiredWorkingMemory
+        ? { memory_block: wiredWorkingMemory.memoryBlockTool }
+        : undefined;
 
       await this.hooks?.onStart?.(runCtx);
 
@@ -252,6 +276,15 @@ export class Runtime {
               : undefined;
             runCtx.memoryService = this.config.memoryService
               ? buildMemoryService(this.config.memoryService, target)
+              : undefined;
+            const targetWorkingMemory = await wireWorkingMemory(
+              target,
+              opened.session,
+              this.config.defaultWorkingMemoryStore,
+            );
+            runCtx.workingMemoryPrompt = targetWorkingMemory?.promptSection;
+            runCtx.workingMemoryTools = targetWorkingMemory
+              ? { memory_block: targetWorkingMemory.memoryBlockTool }
               : undefined;
             await runCtx.runStore.putRunState(runCtx.runState);
             continue;

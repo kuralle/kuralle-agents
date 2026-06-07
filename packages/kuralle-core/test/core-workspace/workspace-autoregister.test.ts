@@ -26,9 +26,12 @@ describe('test:workspace-autoregister', () => {
     });
 
     const agentTools: Record<string, import('../../src/types/effectTool.js').AnyTool> = {};
-    if (agent.workspace) {
-      const { createFsTool } = await import('@kuralle-agents/fs');
-      agentTools.workspace = createFsTool({ fs: agent.workspace });
+    const resolved = (await import('../../src/runtime/resolveAgentWorkspace.js')).resolveAgentWorkspace(
+      agent.workspace,
+    );
+    if (resolved) {
+      const { createFsTool } = await import('../../src/tools/fs/createFsTool.js');
+      agentTools.workspace = createFsTool({ fs: resolved.fs, readOnly: resolved.readOnly });
     }
 
     expect(agentTools.workspace).toBeDefined();
@@ -42,7 +45,7 @@ describe('test:workspace-autoregister', () => {
       runStore,
       runState,
       toolExecutor,
-      fs: agent.workspace,
+      fs: resolved?.fs,
     });
 
     expect(ctx.fs).toBe(workspace);
@@ -66,7 +69,7 @@ describe('test:workspace-autoregister', () => {
       runStore,
       runState: await reloadRunState(runStore, runState.runId),
       toolExecutor,
-      fs: agent.workspace,
+      fs: resolved?.fs,
     });
     const replay = await ctx2.tool('workspace', { op: 'cat', path: '/kb/faq.md' });
     expect(replay).toMatchObject({ content: 'FAQ content' });

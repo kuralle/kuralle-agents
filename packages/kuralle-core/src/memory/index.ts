@@ -16,10 +16,12 @@ export type {
   PersistentMemoryConfig,
   MemoryBlockScope,
 } from './blocks/types.js';
+export type { WorkingMemoryBlockSpec, WorkingMemoryConfig } from '../types/grounding.js';
 export {
   DEFAULT_BLOCK_CHAR_LIMIT,
   DEFAULT_AUTO_LOAD_BLOCKS,
 } from './blocks/types.js';
+export { InMemoryPersistentMemoryStore } from './blocks/InMemoryPersistentMemoryStore.js';
 export {
   FilePersistentMemoryStore,
   type FilePersistentMemoryStoreOptions,
