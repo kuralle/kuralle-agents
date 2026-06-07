@@ -136,7 +136,7 @@ export const AnalyticsEventSchema = z.object({
   agentId: z.string(),
   workspaceId: z.string().min(1, "workspaceId is required"),
   type: AnalyticsEventTypeSchema,
-  data: z.record(z.unknown()),
+  data: z.record(z.string(), z.unknown()),
 });
 
 /** Throws on invalid event. Use to fail loud at the caller. */

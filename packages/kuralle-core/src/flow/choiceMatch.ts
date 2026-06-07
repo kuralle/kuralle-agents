@@ -36,12 +36,12 @@ export function isChoiceFieldSchema(schema: unknown): schema is z.ZodObject<{ ch
   return schema.shape.choice instanceof z.ZodString;
 }
 
-export function buildChoiceEnumSchema(choices: ChoiceOption[]): z.ZodObject<{ choice: z.ZodEnum<[string, ...string[]]> }> {
+export function buildChoiceEnumSchema(choices: ChoiceOption[]): z.ZodObject<{ choice: z.ZodEnum<Record<string, string>> }> {
   const ids = choices.map((c) => c.id);
   if (ids.length === 0) {
     return z.object({ choice: z.enum([CHOICE_NONE]) });
   }
-  const members = [ids[0]!, ...ids.slice(1), CHOICE_NONE] as [string, ...string[]];
+  const members = [ids[0]!, ...ids.slice(1), CHOICE_NONE];
   return z.object({ choice: z.enum(members) });
 }
 

@@ -117,7 +117,7 @@ export class ExtractionCapability implements Capability, ExtractionStrategy {
     if (parsed.success) return [];
     return [...new Set(
       (parsed.error.issues ?? [])
-        .map((issue: { path: (string | number)[] }) => issue.path.join('.'))
+        .map((issue) => issue.path.join('.'))
         .filter(Boolean),
     )];
   }

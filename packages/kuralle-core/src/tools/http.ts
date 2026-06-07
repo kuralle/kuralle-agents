@@ -101,7 +101,7 @@ function getZodType(type: ParamType): z.ZodTypeAny {
     case 'boolean':
       return z.boolean();
     case 'object':
-      return z.record(z.unknown());
+      return z.record(z.string(), z.unknown());
     case 'array':
       return z.array(z.unknown());
     default:

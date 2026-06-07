@@ -35,7 +35,7 @@
     "@vercel/sandbox": "^1.9.3",
     "ai": "^6.0.0",
     "ws": "^8.19.0",
-    "zod": "^3.23.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

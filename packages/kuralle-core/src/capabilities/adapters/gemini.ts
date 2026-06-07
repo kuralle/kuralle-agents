@@ -1,4 +1,4 @@
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 import type { ToolDeclaration } from '../index.js';
 
 export interface GeminiFunctionDeclaration {
@@ -19,7 +19,7 @@ export function toGeminiDeclarations(tools: ToolDeclaration[]): GeminiFunctionDe
     name: tool.name,
     description: tool.description,
     parameters: tool.parameters
-      ? stripUnsupported(zodToJsonSchema(tool.parameters, { target: 'openApi3' }) as Record<string, unknown>)
+      ? stripUnsupported(z.toJSONSchema(tool.parameters, { target: 'openapi-3.0' }) as Record<string, unknown>)
       : { type: 'object', properties: {} },
   }));
 }

@@ -14,11 +14,16 @@
 
 import { KuralleRealtimeVoiceAgent } from "@kuralle-agents/cf-agent/voice";
 import { CloudflareGeminiLiveClient } from "@kuralle-agents/realtime-audio";
-import { createFlowTransition, defineFlow, defineAgent, reply } from "@kuralle-agents/core";
+import {
+  createFlowTransition,
+  defineFlow,
+  defineAgent,
+  reply,
+  buildToolSet,
+  defineTool,
+} from "@kuralle-agents/core";
 import { routeAgentRequest } from "agents";
-import { tool } from "ai";
 import { z } from "zod";
-import { wrapAiSdkTool } from "@kuralle-agents/core";
 
 export interface Env {
   GEMINI_API_KEY: string;
@@ -60,10 +65,11 @@ const trackingNode = reply({
     "Once you have it, call lookup_order.",
     "When the customer is done tracking, call back_to_hub.",
   ].join("\n"),
-  tools: {
-    lookup_order: tool({
+  tools: buildToolSet({
+    lookup_order: defineTool({
+      name: "lookup_order",
       description: "Look up order status by order number",
-      inputSchema: z.object({
+      input: z.object({
         orderNumber: z.string().describe("Order number like ORD-10042"),
       }),
       execute: async ({ orderNumber }) => ({
@@ -73,12 +79,13 @@ const trackingNode = reply({
         eta: "Tomorrow by 5pm",
       }),
     }),
-    back_to_hub: tool({
+    back_to_hub: defineTool({
+      name: "back_to_hub",
       description: "Return to the main menu when tracking is done",
-      inputSchema: z.object({}),
+      input: z.object({}),
       execute: async () => createFlowTransition("hub"),
     }),
-  },
+  }),
 });
 
 const hubNode = reply({
@@ -88,13 +95,14 @@ const hubNode = reply({
     "Handle general questions directly (store hours: 9am to 6pm Monday through Saturday).",
     "If the customer wants to track an order, call route_to_tracking.",
   ].join("\n"),
-  tools: {
-    route_to_tracking: tool({
+  tools: buildToolSet({
+    route_to_tracking: defineTool({
+      name: "route_to_tracking",
       description: "Route to order tracking when the customer wants to track an order",
-      inputSchema: z.object({}),
+      input: z.object({}),
       execute: async () => createFlowTransition("tracking"),
     }),
-  },
+  }),
 });
 
 const ecomFlow = defineFlow({
