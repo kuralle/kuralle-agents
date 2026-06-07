@@ -1,10 +1,16 @@
-# Skills - Knowledge Base for Agents
+# Skills — procedural memory for agents
 
-## What Are Skills?
+## What are skills?
 
-**Skills are a knowledge base** - they provide information to the LLM that it can reference when responding to users.
+**Skills are Anthropic-style procedural bundles** (`SKILL.md` + optional resources) loaded via **progressive disclosure** in `@kuralle-agents/skills`:
 
-**Skills are NOT executable** - they don't perform actions or modify state. They simply return markdown content that the LLM reads and uses to inform its response.
+| Level | What loads | When |
+|-------|------------|------|
+| 1 | `name` + `description` only | Always in the system prompt |
+| 2 | Full `SKILL.md` body | Model calls `load_skill` when relevant |
+| 3 | Bundled files (`exceptions.md`, etc.) | Model calls `read_skill_resource` |
+
+Skills guide *how* to handle a workflow. They are not a substitute for **tools** (data/actions) or **flows** (stateful SOP).
 
 ---
 
@@ -382,24 +388,36 @@ All orders include tracking. Check status at: example.com/track
 
 ---
 
-## Configuration
+## Configuration (`AgentConfig.skills`)
 
-### Permissions
+```ts
+import { defineSkill } from '@kuralle-agents/skills';
 
-Control which skills are available:
-
-```jsonc
-{
-  "permissions": {
-    "skill": "allow"
-    // or selective:
-    // "skill": {
-    //   "shipping": "allow",
-    //   "billing": "deny"
-    // }
-  }
-}
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'Calm support agent.',
+  tools: { lookup_order: lookupOrder },
+  skills: [returnsPolicy], // or MemorySkillStore / FsSkillStore
+});
 ```
+
+Runtime auto-registers `load_skill` + `read_skill_resource` and injects Level-1 metadata into the prompt.
+
+### Scripts = allow-listed tools (not bash)
+
+A skill's `allowedTools` lists durable tool or flow names the body may reference. Each name must exist on the agent at wire time (`tools`, `globalTools`, or `flows`) — unknown names throw immediately.
+
+```ts
+defineSkill({
+  name: 'returns-policy',
+  description: '...',
+  allowedTools: ['lookup_order'],
+  body: 'Run `lookup_order` with the order id.',
+});
+```
+
+Portable bash is intentionally unsupported (Workers + "tools return data only").
 
 ---
 
