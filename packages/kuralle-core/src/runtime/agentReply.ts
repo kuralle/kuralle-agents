@@ -1,5 +1,6 @@
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { ReplyNode } from '../types/flow.js';
+import { buildToolSet } from '../tools/effect/defineTool.js';
 
 export function buildAgentReplyNode(agent: AgentConfig): ReplyNode {
   const label = agent.name ?? agent.id;
@@ -11,7 +12,7 @@ export function buildAgentReplyNode(agent: AgentConfig): ReplyNode {
     kind: 'reply',
     id: `${agent.id}__host`,
     instructions,
-    tools: agent.tools,
+    tools: agent.tools ? buildToolSet(agent.tools) : undefined,
     model: agent.model,
   };
 }
