@@ -18,6 +18,7 @@ import { TextDriver } from './channels/TextDriver.js';
 import { createRunContext } from './ctx.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
+import { createFsTool } from '../tools/fs/createFsTool.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
@@ -125,7 +126,6 @@ export class Runtime {
       };
 
       if (opened.agent.workspace) {
-        const { createFsTool } = await import('@kuralle-agents/fs');
         agentTools.workspace = createFsTool({ fs: opened.agent.workspace });
       }
 

@@ -389,7 +389,6 @@
       "devDependencies": {
         "@ai-sdk/openai": "^3.0.0",
         "@cloudflare/vitest-pool-workers": "^0.12.7",
-        "@kuralle-agents/fs": "workspace:*",
         "@kuralle-agents/realtime-audio": "workspace:*",
         "@types/node": "^20.11.0",
         "ai": "^6.0.0",
@@ -400,13 +399,9 @@
         "zod": "^3.23.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/fs": "workspace:*",
         "ai": "^6.0.0",
         "zod": "^3.0.0",
       },
-      "optionalPeers": [
-        "@kuralle-agents/fs",
-      ],
     },
     "packages/kuralle-e2e-tests": {
       "name": "@kuralle-agents/e2e-tests",
