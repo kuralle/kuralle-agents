@@ -1,4 +1,5 @@
 export { defineTool, toolToAiSdk, buildToolSet } from './defineTool.js';
+export { wrapAiSdkTool } from './wrapAiSdkTool.js';
 export { CoreToolExecutor } from './ToolExecutor.js';
 export type { CoreToolExecutorConfig, CoreExecuteArgs } from './ToolExecutor.js';
 export {
