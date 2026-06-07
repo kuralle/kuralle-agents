@@ -24,7 +24,7 @@
     "build:packages": "bash scripts/build-packages.sh",
     "build:apps": "bun run --filter './apps/*/*' build",
     "typecheck": "bash scripts/typecheck-all.sh",
-    "typecheck:all": "bash scripts/typecheck-tsconfigs.sh && bash scripts/typecheck-playground.sh && bun run lint",
+    "typecheck:all": "bash scripts/typecheck-tsconfigs.sh && bash scripts/typecheck-playground.sh && bash scripts/check-no-raw-tool-execute.sh && bun run lint",
     "typecheck:playground": "bash scripts/typecheck-playground.sh",
     "lint": "eslint 'packages/*/src/**/*.ts' 'packages/*/test/**/*.ts' 'packages/*/tests/**/*.ts'",
     "dev": "bun run --filter './apps/*/*' dev",
