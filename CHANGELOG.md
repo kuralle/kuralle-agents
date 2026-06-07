@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1 — zod 4
+
+Unified patch bump across the graph (0.6.0 → 0.6.1). Migrates the framework from **zod 3 to zod 4**.
+
+- All packages now depend on (and peer) **`zod@^4`**. Consumers should be on zod 4.
+- Internals migrated off the zod-3-only `zod-to-json-schema` to zod 4's native `z.toJSONSchema`; `z.record` calls updated to the 2-arg form; tool-type inference fixes.
+- `wrapAiSdkTool()` now accepts any structurally-compatible AI SDK tool (decoupled from a specific `ai` instance/version).
+- Resolves the `@kuralle-agents/cf-agent` npm `ERESOLVE` (the `agents` SDK peers `zod@^4`; the dependency graph now matches).
+
+No API changes beyond the zod peer bump. Verified: full build + `typecheck:all` + test suite green.
+
 ## 0.6.0 — Filesystem, Skills, Working memory (BREAKING: `AgentConfig.tools`)
 
 Unified minor bump across the graph (0.5.0 → 0.6.0). One breaking change (the tool-model rename below); the rest is additive. New packages: **`@kuralle-agents/fs`**, **`@kuralle-agents/skills`**.
