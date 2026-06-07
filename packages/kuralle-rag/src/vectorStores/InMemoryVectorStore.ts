@@ -46,6 +46,27 @@ export class InMemoryVectorStore implements VectorStoreCore, VectorStoreIndexAdm
     }
   }
 
+  async listEntries(
+    indexName: string,
+    params?: { filter?: VectorFilter },
+  ): Promise<
+    Array<{ id: string; metadata?: Record<string, unknown>; document?: string }>
+  > {
+    const index = this.getIndex(indexName);
+    const out: Array<{
+      id: string;
+      metadata?: Record<string, unknown>;
+      document?: string;
+    }> = [];
+    for (const [id, entry] of index.entries) {
+      if (params?.filter && !matchFilter(entry.metadata ?? {}, params.filter)) {
+        continue;
+      }
+      out.push({ id, metadata: entry.metadata, document: entry.document });
+    }
+    return out;
+  }
+
   async query(
     indexName: string,
     params: VectorQueryParams,
