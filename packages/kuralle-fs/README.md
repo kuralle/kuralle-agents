@@ -49,17 +49,48 @@ Tools return structured data (`{ op, ok, ... }`), not conversational text.
 
 When `AgentConfig.workspace` is set, the same `FileSystem` instance is available on `RunContext.fs` and `ActionContext.fs` for flow `action` nodes — useful for staging files the model should not see in the transcript.
 
+## Composite mounts
+
+`CompositeFileSystem` federates multiple backends behind one `FileSystem` — longest path-prefix wins, `readdir('/')` lists mount roots, and `cp`/`mv` work across mounts:
+
+```ts
+import { CompositeFileSystem, InMemoryFs } from '@kuralle-agents/fs';
+
+const workspace = new CompositeFileSystem({
+  mounts: {
+    '/docs': new InMemoryFs({ '/handbook.md': '# Handbook' }),
+    '/scratch': new InMemoryFs(),
+  },
+});
+
+const workspaceTool = createFsTool({ fs: workspace, readOnly: false });
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'Read bundled docs from /docs; draft notes under /scratch.',
+  workspace: { fs: workspace, readOnly: false },
+  globalTools: { workspace: workspaceTool },
+});
+```
+
+Writable workspaces are not auto-exposed in `globalTools` (ADR 0006); register the tool explicitly when `readOnly: false`.
+
+Mark a mount read-only with a `readOnly: true` property on the backend instance (e.g. `KnowledgeFs`). `CompositeFileSystem.readOnly` is `true` only when every mount is read-only.
+
 ## API
 
 - `FileSystem` — async POSIX-ish interface (types live in `@kuralle-agents/core`, re-exported here)
 - `InMemoryFs` — in-memory tree, seed with `new InMemoryFs({ '/path': 'content' })`
+- `CompositeFileSystem` — path-routed mount table over multiple `FileSystem` backends
 - `createFsTool` — durable workspace tool factory
 - `path-utils`, `encoding` — portable helpers (no Node built-ins)
 
-## Example
+## Examples
 
 ```bash
 bun packages/kuralle-fs/examples/kb-agent.ts
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/composite-workspace.ts
 ```
 
 ## License

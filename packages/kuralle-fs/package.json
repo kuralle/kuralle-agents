@@ -35,7 +35,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "test": "bun test test/in-memory-fs.test.ts test/fs-tool.test.ts && vitest run --config vitest.config.ts",
+    "test": "bun test test/in-memory-fs.test.ts test/fs-tool.test.ts test/composite-fs.test.ts && vitest run --config vitest.config.ts",
     "test:inmemoryfs": "bun test test/in-memory-fs.test.ts",
     "test:fs-tool": "bun test test/fs-tool.test.ts",
     "test:fs-workers": "vitest run --config vitest.config.ts",
