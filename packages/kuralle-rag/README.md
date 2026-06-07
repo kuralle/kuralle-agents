@@ -23,6 +23,7 @@ Everything between a raw document and a grounded agent response: chunk documents
 - **Retrievers** — `VectorRetriever`, `HybridRetriever`, `FusionRetriever`, `MultiHopRetriever`, `createLLMRetriever`
 - **Rerankers** — `LLMReranker`, `CohereReranker`
 - **Search** — `BM25Index` (keyword search for hybrid retrieval)
+- **KnowledgeFs** — read-only `FileSystem` over a vector store (`@kuralle-agents/rag/fs`); see [guides/KNOWLEDGEFS.md](./guides/KNOWLEDGEFS.md)
 - **Pipeline** — `RagPipeline`, `RetrievalQualityChecker`
 - **Cache** — `RetrievalCache`, `TurnCache`, `PredictivePreFetcher`
 
