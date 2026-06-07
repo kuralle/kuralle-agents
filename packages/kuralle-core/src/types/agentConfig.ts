@@ -7,6 +7,7 @@ import type { AgentKnowledge, AgentMemory } from './grounding.js';
 import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { AnyTool } from './effectTool.js';
+import type { FileSystem } from './filesystem.js';
 
 export type Instructions =
   | string
@@ -48,6 +49,8 @@ export interface AgentConfig {
     /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1). Default OFF. */
     outOfBandControl?: boolean;
   };
+  /** Portable workspace filesystem; auto-registers the durable `workspace` tool when set. */
+  workspace?: FileSystem;
 }
 
 export function defineAgent(config: AgentConfig): AgentConfig {

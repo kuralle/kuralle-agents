@@ -13,6 +13,7 @@ import type { RefinementCapability } from '../capabilities/RefinementCapability.
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { InputProcessor, OutputProcessor } from '../types/processors.js';
 import type { Limits } from '../types/guardrails.js';
+import type { FileSystem } from '../types/filesystem.js';
 import type { RunState, StepKind, StepRecord } from './durable/types.js';
 import type { RunStore } from './durable/RunStore.js';
 import { SuspendError } from './durable/RunStore.js';
@@ -48,6 +49,7 @@ export interface CtxDeps {
   limits?: Limits;
   autoRetrieve?: AutoRetrieveProvider;
   memoryService?: MemoryService;
+  fs?: FileSystem;
   bargeIn?: AbortSignal;
   abortSignal?: AbortSignal;
   clock?: EffectClock;
@@ -184,6 +186,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     limits: deps.limits,
     autoRetrieve: deps.autoRetrieve,
     memoryService: deps.memoryService,
+    fs: deps.fs,
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
     turnInputConsumed: false,

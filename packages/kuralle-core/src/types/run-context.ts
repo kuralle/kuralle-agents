@@ -8,6 +8,7 @@ import type { RefinementCapability } from '../capabilities/RefinementCapability.
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { Limits } from './guardrails.js';
 import type { AnyTool } from './effectTool.js';
+import type { FileSystem } from './filesystem.js';
 import type { Instructions } from './agentConfig.js';
 import type { AgentKnowledgeOverrides, SourceRef } from './voice.js';
 
@@ -87,6 +88,8 @@ export interface RunContext {
    *  in every speaking turn. */
   baseInstructions?: Instructions;
   globalTools?: Record<string, AnyTool>;
+  /** Agent workspace filesystem (same instance as `AgentConfig.workspace`). */
+  fs?: FileSystem;
   tool(name: string, args: unknown, options?: { toolCallId?: string; def?: AnyTool; toolCtx?: ToolContext }): Promise<unknown>;
   approve(req: { title: string; description?: string }): Promise<{ approved: boolean; by?: string }>;
   signal(name: string, opts?: { deadline?: number; meta?: Record<string, unknown> }): Promise<unknown>;
@@ -96,12 +99,12 @@ export interface RunContext {
 
 export type ActionContext = Pick<
   RunContext,
-  'tool' | 'approve' | 'signal' | 'now' | 'uuid' | 'emit'
+  'tool' | 'approve' | 'signal' | 'now' | 'uuid' | 'emit' | 'fs'
 >;
 
 export type ToolContext = Pick<
   RunContext,
-  'session' | 'runState' | 'tool' | 'now' | 'uuid' | 'emit'
+  'session' | 'runState' | 'tool' | 'now' | 'uuid' | 'emit' | 'fs'
 >;
 
 export type { ModelMessage };

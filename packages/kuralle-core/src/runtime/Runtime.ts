@@ -115,7 +115,7 @@ export class Runtime {
       });
 
       const policies = resolveAgentPolicies(opened.agent);
-      const agentTools = {
+      const agentTools: Record<string, AnyTool> = {
         ...(this.config.tools ?? {}),
         ...(opened.agent.tools ?? {}),
         // Global tools (ADR 0001) are model-visible in speaking turns via the
@@ -123,6 +123,11 @@ export class Runtime {
         // run them. Visibility stays gated (not exposed during collect extraction).
         ...(opened.agent.globalTools ?? {}),
       };
+
+      if (opened.agent.workspace) {
+        const { createFsTool } = await import('@kuralle-agents/fs');
+        agentTools.workspace = createFsTool({ fs: opened.agent.workspace });
+      }
 
       const toolExecutor = new CoreToolExecutor({
         tools: agentTools,
@@ -169,6 +174,7 @@ export class Runtime {
         memoryService: this.config.memoryService
           ? buildMemoryService(this.config.memoryService, opened.agent)
           : undefined,
+        fs: opened.agent.workspace,
       });
 
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.

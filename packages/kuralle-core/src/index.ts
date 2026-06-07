@@ -246,6 +246,7 @@ export {
   confirmGate,
 } from './authoring/index.js';
 export { defineTool } from './types/effectTool.js';
+export { fsErrorCode } from './types/filesystem.js';
 export {
   buildToolSet,
   toolToAiSdk,

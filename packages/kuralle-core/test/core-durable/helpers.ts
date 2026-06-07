@@ -57,6 +57,7 @@ export async function buildCtx(
     runStore: SessionRunStore;
     runState: RunState;
     toolExecutor: EffectToolExecutor;
+    fs?: import('../../src/types/filesystem.js').FileSystem;
     clock?: { now(): number; uuid(): string };
     emit?: (part: import('../../src/types/stream.js').HarnessStreamPart) => void;
   },
@@ -71,6 +72,7 @@ export async function buildCtx(
     steps,
     toolExecutor: args.toolExecutor,
     model: stubModel,
+    fs: args.fs,
     clock: args.clock,
     emit: args.emit,
   });
