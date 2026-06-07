@@ -91,7 +91,6 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.7",
-    "@kuralle-agents/skills": "workspace:*",
     "@kuralle-agents/realtime-audio": "workspace:*",
     "@ai-sdk/openai": "^3.0.0",
     "@types/node": "^20.11.0",

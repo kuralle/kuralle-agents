@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import { defineAgent, defineTool } from '@kuralle-agents/core';
-import { defineSkill, wireAgentSkills } from '@kuralle-agents/skills';
+import { defineAgent, defineTool, wireAgentSkills } from '@kuralle-agents/core';
 
 describe('test:skill-wire', () => {
   const lookupOrder = defineTool({
@@ -11,12 +10,12 @@ describe('test:skill-wire', () => {
     execute: async () => ({ ok: true }),
   });
 
-  const returnsPolicy = defineSkill({
+  const returnsPolicy = {
     name: 'returns-policy',
     description: 'Return policy.',
     body: 'Policy body',
     allowedTools: ['lookup_order'],
-  });
+  };
 
   it('defineAgent({ skills }) exposes load_skill and read_skill_resource', async () => {
     const agent = defineAgent({
@@ -34,12 +33,12 @@ describe('test:skill-wire', () => {
   });
 
   it('unknown allowedTool fails fast at wire time', async () => {
-    const badSkill = defineSkill({
+    const badSkill = {
       name: 'bad-skill',
       description: 'Bad skill.',
       body: 'body',
       allowedTools: ['missing_tool'],
-    });
+    };
 
     const agent = defineAgent({
       id: 'support',

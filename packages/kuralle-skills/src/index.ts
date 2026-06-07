@@ -5,13 +5,13 @@ export type { ParseSkillMarkdownOptions } from './parseSkillMarkdown.js';
 export { MemorySkillStore } from './stores/memory.js';
 export { BundledSkillStore } from './stores/bundled.js';
 export { FsSkillStore } from './stores/fs.js';
-export { SkillsCapability } from './SkillsCapability.js';
-export { toSkillStore, isSkillStore } from './toSkillStore.js';
-export { wireAgentSkills } from './wireAgentSkills.js';
-export type { WiredAgentSkills } from './wireAgentSkills.js';
 export {
+  SkillsCapability,
+  wireAgentSkills,
   collectRegisteredNames,
   validateSkillAllowedTools,
-  collectSkillsFromAgent,
   type SkillWireAgent,
-} from './collectSkills.js';
+  type WiredAgentSkills,
+} from '@kuralle-agents/core';
+export { toSkillStore, isSkillStore } from './toSkillStore.js';
+export { collectSkillsFromAgent, collectSkillsFromSource, prepareSkillStore } from './collectSkills.js';

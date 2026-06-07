@@ -4,12 +4,12 @@ import type {
   CapabilityAction,
   PromptSection,
   ToolDeclaration,
-} from '@kuralle-agents/core/capabilities';
-import type { SkillMeta, SkillStore } from './types.js';
+} from '../capabilities/index.js';
+import type { SkillMeta, SkillStoreLike } from '../types/skills.js';
 
 export class SkillsCapability implements Capability {
   constructor(
-    private readonly store: SkillStore,
+    private readonly store: SkillStoreLike,
     private readonly metas: SkillMeta[],
   ) {}
 

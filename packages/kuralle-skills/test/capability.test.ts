@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { CapabilityHost } from '@kuralle-agents/core/capabilities';
 import { defineSkill } from '../src/defineSkill.js';
 import { MemorySkillStore } from '../src/stores/memory.js';
-import { SkillsCapability } from '../src/SkillsCapability.js';
+import { SkillsCapability } from '@kuralle-agents/core';
 
 describe('test:skill-capability', () => {
   const skill = defineSkill({
