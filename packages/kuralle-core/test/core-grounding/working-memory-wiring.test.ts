@@ -182,7 +182,10 @@ describe('working memory wiring', () => {
       [{ scope: 'user', key: 'USER' }],
       (scope) => resolveWorkingMemoryOwner(scope, 'agent-x', 'file-user'),
     );
-    expect(formatWorkingMemorySection(reloaded)).toContain('timezone: US/Pacific');
+    const section = formatWorkingMemorySection(reloaded, [{ scope: 'user', key: 'USER' }]);
+    expect(section).toContain('timezone: US/Pacific');
+    // Directive is injected so the model proactively maintains the block (Mastra-informed).
+    expect(section).toContain('memory_block');
 
     await fs.rm(rootDir, { recursive: true, force: true });
   });
