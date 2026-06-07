@@ -37,7 +37,7 @@ Turn tasks into verifiable goals ("add validation" → "write tests for invalid 
 
 Kuralle is a **TypeScript framework for building conversational AI agents** — text and voice — with structured flows, routing, and durable tool execution. Monorepo on Bun workspaces; built on the Vercel AI SDK (OpenAI, Anthropic, Google, xAI).
 
-- **Agents** — one tagless primitive: `defineAgent({ id, model, instructions, tools?, tools?, flows?, routes?, routing?, agents?, handoffs? })`. Behavior is derived from the fields you populate: `flows[]` → flow agent, `routes` + `routing` → triage, `agents[]` → composition.
+- **Agents** — one tagless primitive: `defineAgent({ id, model, instructions, tools?, globalTools?, flows?, routes?, routing?, agents?, handoffs? })`. Behavior is derived from the fields you populate: `flows[]` → flow agent, `routes` + `routing` → triage, `agents[]` → composition.
 - **Flows** — node graphs via `defineFlow` + `reply`/`collect`/`action`/`decide`; each node returns its next transition. Hybrid mode answers off-flow questions, then resumes.
 - **Runtime** — `createRuntime(...)` → `Runtime`; `runtime.run({ input, sessionId })` → `TurnHandle` (`.events` AsyncIterable, awaitable result, `toResponseStream('sse')`). Orchestrates sessions, history, handoffs, streaming, hooks. Flow state lives in the session.
 - **Tools** — `defineTool({ name, description, input: <zod>, execute })` creates a durable effect tool; `buildToolSet(...)` exposes it to the model (model-visible schema) while `tools` runs the durable executor (effect log → exactly-once on retry).

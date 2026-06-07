@@ -18,7 +18,7 @@ This skill is a map. Read only the sections you need and follow the checklists.
 
 | Concept | API |
 |---------|-----|
-| Agent | `defineAgent({ id, instructions, model, tools, tools, flows, routes, handoffs, agents })` |
+| Agent | `defineAgent({ id, instructions, model, tools, globalTools, flows, routes, handoffs, agents })` |
 | Flow | `defineFlow({ name, description, start, nodes, hybrid? })` |
 | Nodes | `reply`, `collect`, `action`, `decide` |
 | Tools | `defineTool` + `buildToolSet` for model; `tools` for durable `ctx.tool` |
