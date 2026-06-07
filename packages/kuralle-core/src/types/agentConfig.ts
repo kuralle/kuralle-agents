@@ -10,6 +10,8 @@ import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
 import type { SkillSource } from './skills.js';
 
+export type AgentWorkspaceConfig = FileSystem | { fs: FileSystem; readOnly?: boolean };
+
 export type Instructions =
   | string
   | AgentPrompt
@@ -50,8 +52,10 @@ export interface AgentConfig {
     /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1). Default OFF. */
     outOfBandControl?: boolean;
   };
-  /** Portable workspace filesystem; auto-registers the durable `workspace` tool when set. */
-  workspace?: FileSystem;
+  /** Portable workspace filesystem; auto-registers the durable `workspace` tool when set.
+   *  Defaults to read-only; pass `{ fs, readOnly: false }` for write/edit. Read-only workspaces
+   *  are exposed in globalTools (ADR 0001); read-write ones are executor-only. */
+  workspace?: AgentWorkspaceConfig;
   /** Bundled procedural skills (Anthropic Agent Skill model): Level-1 name+description in prompt,
    *  body via `load_skill`, resources via `read_skill_resource`. Scripts = `allowedTools` only. */
   skills?: SkillSource;

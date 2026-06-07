@@ -28,11 +28,12 @@
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  type PersistentMemoryStore,
-  type PersistentMemoryBlock,
-  type MemoryBlockScope,
+import type {
+  PersistentMemoryStore,
+  PersistentMemoryBlock,
+  MemoryBlockScope,
 } from './types.js';
+import { registerNodeDefaultWorkingMemoryStore } from '../../runtime/grounding/defaultStoreRegistry.js';
 
 export interface FilePersistentMemoryStoreOptions {
   /** Root directory. Defaults to `KURALLE_MEMORY_DIR` or `~/.kuralle/memories`. */
@@ -136,3 +137,5 @@ export class FilePersistentMemoryStore implements PersistentMemoryStore {
 function isNodeError(err: unknown): err is NodeJS.ErrnoException {
   return typeof err === 'object' && err !== null && 'code' in err;
 }
+
+registerNodeDefaultWorkingMemoryStore(() => new FilePersistentMemoryStore());

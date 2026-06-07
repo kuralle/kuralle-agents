@@ -23,7 +23,7 @@ async function main() {
     defaultAgentId: 'kb',
   });
 
-  const tool = createFsTool({ fs: workspace });
+  const tool = createFsTool({ fs: workspace }); // read-only by default (ADR 0006)
 
   const listed = await tool.execute!({ op: 'ls', path: '/kb' });
   console.log('ls /kb:', JSON.stringify(listed, null, 2));

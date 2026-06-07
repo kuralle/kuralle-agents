@@ -32,9 +32,12 @@ export function composeSystem(
   nodeSystem: string,
   state: FlowState,
   skillPrompt?: string,
+  workingMemoryPrompt?: string,
 ): string {
   const baseText = base ? resolveInstructions(base, state) : '';
-  return [baseText, skillPrompt, nodeSystem].filter((s) => s && s.trim()).join('\n\n');
+  return [baseText, skillPrompt, workingMemoryPrompt, nodeSystem]
+    .filter((s) => s && s.trim())
+    .join('\n\n');
 }
 
 function buildNodeTools(node: ReplyNode, state: FlowState): ToolSet {

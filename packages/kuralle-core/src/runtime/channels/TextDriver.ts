@@ -59,6 +59,7 @@ export class TextDriver implements ChannelDriver {
       nodeSystem,
       ctx.runState.state,
       ctx.skillPrompt,
+      ctx.workingMemoryPrompt,
     );
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
     const messages: ModelMessage[] = [...ctx.runState.messages];
@@ -185,6 +186,7 @@ export class TextDriver implements ChannelDriver {
       resolveInstructions(node.instructions, ctx.runState.state),
       ctx.runState.state,
       ctx.skillPrompt,
+      ctx.workingMemoryPrompt,
     );
     return resolveStructuredDecide(node, ctx, system);
   }
@@ -199,6 +201,7 @@ export class TextDriver implements ChannelDriver {
     const merged: Record<string, AnyTool> = {
       ...this.toolDefs,
       ...(ctx.globalTools ?? {}),
+      ...(ctx.workingMemoryTools ?? {}),
       ...(resolved.localTools ?? {}),
     };
     const aiTools: ToolSet = { ...resolved.tools };

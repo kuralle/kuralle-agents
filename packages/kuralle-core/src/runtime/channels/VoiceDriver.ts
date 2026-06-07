@@ -103,11 +103,12 @@ export class VoiceDriver implements ChannelDriver {
       nodeSystem,
       ctx.runState.state,
       ctx.skillPrompt,
+      ctx.workingMemoryPrompt,
     );
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
     const geminiTools = resolveVoiceGeminiTools(
       node,
-      { ...this.toolDefs, ...(ctx.globalTools ?? {}) },
+      { ...this.toolDefs, ...(ctx.globalTools ?? {}), ...(ctx.workingMemoryTools ?? {}) },
       { siloFlowControl: ctx.outOfBandControl && !node.freeConversation },
     );
     const toolCallsMade: ToolCallRecord[] = [];
@@ -203,6 +204,7 @@ export class VoiceDriver implements ChannelDriver {
       resolveInstructions(node.instructions, ctx.runState.state),
       ctx.runState.state,
       ctx.skillPrompt,
+      ctx.workingMemoryPrompt,
     );
     return resolveStructuredDecide(node, ctx, system);
   }
