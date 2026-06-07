@@ -249,6 +249,7 @@ export { defineTool } from './types/effectTool.js';
 export {
   buildToolSet,
   toolToAiSdk,
+  wrapAiSdkTool,
   ToolApprovalDeniedError,
   ToolTimeoutError,
 } from './tools/effect/index.js';
