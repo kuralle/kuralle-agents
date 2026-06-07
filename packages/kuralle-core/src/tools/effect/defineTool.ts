@@ -65,7 +65,7 @@ export function toolToAiSdk<TInput = unknown, TOutput = unknown>(
 // `buildToolSet` produces a model-facing ToolSet whose entries are schema-only
 // (`toolToAiSdk` strips `execute`). Stash the raw effect tools (with executors),
 // keyed by the returned ToolSet, so a flow node can recover its executors for
-// in-flow execution without separately registering them on `agent.effectTools`
+// in-flow execution without separately registering them on `agent.tools`.
 // (see `resolveReplyNode`). The WeakMap is GC-friendly and invisible to callers.
 const rawToolsBySet = new WeakMap<ToolSet, Record<string, AnyTool>>();
 

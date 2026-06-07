@@ -115,9 +115,9 @@ export class Runtime {
       });
 
       const policies = resolveAgentPolicies(opened.agent);
-      const effectTools = {
+      const agentTools = {
         ...(this.config.tools ?? {}),
-        ...(opened.agent.effectTools ?? {}),
+        ...(opened.agent.tools ?? {}),
         // Global tools (ADR 0001) are model-visible in speaking turns via the
         // drivers; register their executors here too so a model call can actually
         // run them. Visibility stays gated (not exposed during collect extraction).
@@ -125,7 +125,7 @@ export class Runtime {
       };
 
       const toolExecutor = new CoreToolExecutor({
-        tools: effectTools,
+        tools: agentTools,
         enforcer: policies.enforcer,
         agentId: opened.agent.id,
         onInterim: (message) => {
