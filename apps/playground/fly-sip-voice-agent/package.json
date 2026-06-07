@@ -13,6 +13,6 @@
     "@kuralle-agents/livekit-plugin-transport-sip": "workspace:*",
     "@livekit/agents": "^1.2.6",
     "ai": "latest",
-    "zod": "^3.23.0"
+    "zod": "^4.0.0"
   }
 }

@@ -48,21 +48,16 @@
     "test": "node --test src/__tests__/*.test.js"
   },
   "peerDependencies": {
-    "zod": "^3.23.0",
-    "zod-to-json-schema": "^3.24.0"
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "zod": {
-      "optional": true
-    },
-    "zod-to-json-schema": {
       "optional": true
     }
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "typescript": "^5.3.0",
-    "zod": "^3.23.0",
-    "zod-to-json-schema": "^3.24.0"
+    "zod": "^4.0.0"
   }
 }

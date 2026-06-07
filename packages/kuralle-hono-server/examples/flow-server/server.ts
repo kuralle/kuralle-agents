@@ -12,6 +12,7 @@ import {
   defineAgent,
   defineFlow,
   defineTool,
+  type AnyTool,
   MemoryStore,
   reply,
   type Runtime,
@@ -49,7 +50,7 @@ const reservationSystem = new MockReservationSystem();
 const roleMessage =
   'You are a restaurant reservation assistant for La Maison, an upscale French restaurant. Be casual and friendly.';
 
-function toToolSet(tools: Record<string, ReturnType<typeof defineTool>>): ToolSet {
+function toToolSet(tools: Record<string, AnyTool>): ToolSet {
   const set: ToolSet = {};
   for (const [key, def] of Object.entries(tools)) {
     const name = def.name ?? key;

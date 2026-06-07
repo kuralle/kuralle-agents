@@ -209,7 +209,7 @@ function toNullablePartialSchema(schema: StandardSchemaV1): z.ZodTypeAny {
     return schema as z.ZodTypeAny;
   }
 
-  const partialShape: z.ZodRawShape = {};
+  const partialShape: Record<string, z.ZodTypeAny> = {};
   for (const [key, fieldSchema] of Object.entries(zodSchema.shape)) {
     partialShape[key] = (fieldSchema as z.ZodTypeAny).optional().nullable();
   }

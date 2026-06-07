@@ -10,7 +10,6 @@
  * don't need it installed.
  */
 
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import { z } from 'zod';
 import type { ZodTypeAny } from 'zod';
 
@@ -59,7 +58,7 @@ export function toolSetToJsonSchema(
   return Object.entries(toolSet).map(([name, toolDef]) => {
     const rawSchema = toolDef.inputSchema ?? toolDef.parameters;
     const parameters = rawSchema
-      ? (zodToJsonSchema(rawSchema as ZodTypeAny, { target: 'openApi3' }) as Record<string, unknown>)
+      ? (z.toJSONSchema(rawSchema as ZodTypeAny, { target: 'openapi-3.0' }) as Record<string, unknown>)
       : { type: 'object', properties: {} };
 
     return {

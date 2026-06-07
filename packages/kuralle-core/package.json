@@ -91,7 +91,7 @@
   },
   "peerDependencies": {
     "ai": "^6.0.0",
-    "zod": "^3.0.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.7",
@@ -103,7 +103,7 @@
     "dotenv": "^16.4.0",
     "typescript": "^5.3.0",
     "vitest": "^3.2.4",
-    "zod": "^3.23.0"
+    "zod": "^4.0.0"
   },
   "scripts": {
     "prebuild": "rm -rf dist",
@@ -123,7 +123,6 @@
     "smoke:realtime": "bun test ./test/core-voice/realtime.smoke.ts"
   },
   "dependencies": {
-    "chrono-node": "^2.6.0",
-    "zod-to-json-schema": "^3.24.0"
+    "chrono-node": "^2.6.0"
   }
 }

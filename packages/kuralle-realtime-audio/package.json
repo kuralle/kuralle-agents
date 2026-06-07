@@ -38,13 +38,12 @@
   "dependencies": {
     "@kuralle-agents/voice-protocol": "workspace:*",
     "@google/genai": "^1.0.0",
-    "ws": "^8.19.0",
-    "zod-to-json-schema": "^3.24.0"
+    "ws": "^8.19.0"
   },
   "peerDependencies": {
     "@kuralle-agents/core": "workspace:*",
     "ai": "^6.0.0",
-    "zod": "^3.0.0"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@kuralle-agents/core": "workspace:*",
@@ -53,6 +52,6 @@
     "ai": "^6.0.0",
     "dotenv": "^16.4.0",
     "typescript": "^5.3.0",
-    "zod": "^3.23.0"
+    "zod": "^4.0.0"
   }
 }

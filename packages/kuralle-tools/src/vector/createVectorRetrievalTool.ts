@@ -136,7 +136,7 @@ export function createVectorRetrievalTool(options: VectorRetrievalToolOptions) {
     ? z.object({
         ...baseParams,
         filter: z
-          .record(z.unknown())
+          .record(z.string(), z.unknown())
           .optional()
           .describe(
             'Optional metadata filter to narrow results. ' +
