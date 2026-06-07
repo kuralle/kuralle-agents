@@ -66,10 +66,21 @@ Parse files with `parseSkillMarkdown(md, { path, directoryName })`.
 | `BundledSkillStore` | Node + Workers | `Record<name, Skill>` manifest |
 | `FsSkillStore` | Any `FileSystem` | Lists `*/SKILL.md` under a root (uses `@kuralle-agents/fs` / `AgentConfig.workspace` backend) |
 
-## Live smoke
+## Multi-turn & reloading
+
+A `load_skill` result stays in the conversation transcript (restored each turn), so a loaded skill is
+**reused across turns without reloading** — a follow-up about an already-loaded skill is answered from
+context. `load_skill` is model-driven with **no framework-level dedup**: each call re-fetches the body,
+and the model decides whether to reload. Nudge reuse in the agent instructions
+(*"reuse a skill already loaded earlier"*); a redundant reload only costs tokens, never correctness.
+An agent can also load **multiple skills in a single turn**.
+
+## Live smokes
 
 ```bash
-KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-skills/examples/support-skill.ts
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-skills/examples/support-skill.ts        # one skill, one turn
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-skills/examples/multi-turn-skills.ts    # 5 skills, multi-turn selection
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-skills/examples/skill-history-inspect.ts # proves cross-turn reuse
 ```
 
 ## Security

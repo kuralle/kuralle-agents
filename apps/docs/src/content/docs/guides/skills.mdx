@@ -1,0 +1,97 @@
+---
+title: Skills
+description: Anthropic-style Agent Skills — SKILL.md knowledge an agent loads on demand via progressive disclosure.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Skills are reusable units of procedural knowledge — a name, a one-line description, and a body of
+instructions (plus optional bundled resources). The agent sees only the **names and descriptions**
+up front and pulls a skill's full body **on demand** when the task matches. This keeps the prompt
+small no matter how many skills you attach.
+
+```bash
+npm install @kuralle-agents/skills
+```
+
+## Quick start
+
+```typescript
+import { defineSkill } from '@kuralle-agents/skills';
+import { defineAgent } from '@kuralle-agents/core';
+
+const returnsPolicy = defineSkill({
+  name: 'returns-policy',
+  description: 'Returns, refunds, exchanges, and the 30-day window. Use when a customer asks about returning an order.',
+  allowedTools: ['lookup_order'],
+  body: [
+    '# Returns',
+    '1. Confirm the order id, then run `lookup_order`.',
+    '2. If the order is under 30 days old, it is returnable.',
+    '3. Refunds take 5-7 business days to the original method.',
+  ].join('\n'),
+  resources: { 'exceptions.md': '# Non-returnable\n- Gift cards\n- Final-sale items' },
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'You are a support agent. Load the matching skill before answering policy questions; never guess.',
+  tools: { lookup_order: lookupOrder },
+  skills: [returnsPolicy, shippingInfo, warrantyClaims /* …attach as many as you like */],
+});
+```
+
+## Progressive disclosure (the 3 levels)
+
+1. **Level 1 — always in context (cheap).** Every turn, Kuralle injects an `## Available skills`
+   block listing each skill's `name` + `description`. That's all the model sees by default —
+   N skills cost only N description lines, not N full bodies.
+2. **Level 2 — on demand.** When a task matches a description, the model calls the
+   `load_skill(name)` tool and gets that skill's full `body` back as a tool result.
+3. **Level 3 — bundled resources.** A skill can ship reference files in `resources`; the model
+   reads one with `read_skill_resource(name, path)` only when it needs it.
+
+```
+system prompt ──▶ ## Available skills      (names + descriptions — every turn)
+   model ──▶ load_skill("returns-policy")  ──▶ full SKILL.md body (tool result)
+   model ──▶ read_skill_resource("returns-policy", "exceptions.md")  ──▶ file content
+```
+
+## Many skills, multi-turn
+
+- **Attach as many skills as you want** — only descriptions are ever in the base prompt, so the menu
+  scales. The model selects by matching the task to a description, and can load **more than one skill
+  in a single turn** (e.g. answer a gift-card question and a 2FA question together).
+- **Loaded skills persist across turns.** A `load_skill` result stays in the conversation transcript,
+  which Kuralle restores on each turn. So a follow-up question about an already-loaded skill is
+  answered **without reloading** — the body is still in context.
+
+<Aside type="note" title="load_skill is model-driven, not deduplicated">
+`load_skill` is a plain tool: each call re-fetches and re-injects the skill body — there is **no
+framework-level "already loaded" guard**. In practice the model sees the body already in the
+transcript and skips the redundant call, and the system prompt nudges it to reuse rather than reload.
+If you want to discourage repeat loads, say so in the agent instructions
+(*"reuse a skill already loaded earlier instead of reloading it"*). A redundant reload is only a cost
+concern (extra tokens + a tool round-trip), never a correctness one.
+</Aside>
+
+## `defineSkill` options
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | `string` | Stable identifier the model passes to `load_skill`. |
+| `description` | `string` | The Level-1 selector — write it so the model knows *when* to load this skill. |
+| `body` | `string` | The full instructions returned by `load_skill` (your `SKILL.md`). |
+| `allowedTools?` | `string[]` | Tools this skill is allowed to drive (advisory scoping). |
+| `resources?` | `Record<string, string>` | Bundled files exposed via `read_skill_resource`. |
+
+You can also load skills from `SKILL.md` folders or a custom `SkillStore` instead of inline
+`defineSkill` objects — see the `@kuralle-agents/skills` README for store backends.
+
+## Where it runs
+
+Skills are pure data + two tools, so they run identically on Node and Cloudflare Workers. The
+`@kuralle-agents/skills` workerd parity test verifies a skill body loads byte-identically inside the
+Cloudflare runtime, and a `KuralleAgent` Durable Object does `load_skill` over a deployed Worker with
+no changes (see `examples-deploy/kuralle-skill-smoke`).
