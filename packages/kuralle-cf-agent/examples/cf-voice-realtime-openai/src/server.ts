@@ -22,6 +22,7 @@ import {
 import { routeAgentRequest } from "agents";
 import { tool } from "ai";
 import { z } from "zod";
+import { wrapAiSdkTool } from "@kuralle-agents/core";
 
 export interface Env {
   OPENAI_API_KEY?: string;
@@ -93,7 +94,7 @@ export class CfVoiceRealtimeOpenAIAgent extends KuralleRealtimeVoiceAgent<Env> {
           "## Tools",
           "- If the user asks about the weather, call getWeather and narrate the result naturally in the current language. Do not read raw JSON.",
         ].join("\n"),
-        tools: { getWeather },
+        tools: { getWeather: wrapAiSdkTool("getWeather", getWeather) },
       },
     ];
   }

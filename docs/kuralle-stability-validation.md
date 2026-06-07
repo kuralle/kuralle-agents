@@ -40,7 +40,7 @@ Reproduction across the 4 domains. UNIVERSAL = seen in all/most agents on both p
 
 ## 5. Coverage Gaps (authoring / smoke)
 
-**None at the authoring layer.** All four agents reported `compiles: true` and `smokeOk: true` with honest verification (each ran `bunx tsc --noEmit` clean for its own file + a live happy-path and confirm-path smoke). The authoring notes surfaced and fixed one real bug (`support_refund`: `effectTools` is `Record<string,AnyTool>`, not an array) and flagged a pre-existing sibling tsc error.
+**None at the authoring layer.** All four agents reported `compiles: true` and `smokeOk: true` with honest verification (each ran `bunx tsc --noEmit` clean for its own file + a live happy-path and confirm-path smoke). The authoring notes surfaced and fixed one real bug (`support_refund`: `tools` is `Record<string,AnyTool>`, not an array) and flagged a pre-existing sibling tsc error.
 
 **Observability gaps that limit red-team coverage (not authoring failures):**
 - **Effect-tool calls are invisible to the harness** on every agent/provider: `ctx.tool()` inside action nodes does not emit model `tool-call` stream events, so `toolCalls`/`allTools` stay `[]`. Tool discipline could only be *inferred* from grounded text or *instrumented* directly (done for sales_qualify's create_lead). Model tool-call discipline inside flow nodes was effectively unexercised on gpt.

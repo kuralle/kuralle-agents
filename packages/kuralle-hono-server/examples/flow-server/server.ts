@@ -159,7 +159,7 @@ const agent = defineAgent({
   name: 'Restaurant Reservation',
   instructions: roleMessage,
   model,
-  effectTools: {
+  tools: {
     collect_party_size: collectPartySize,
     check_availability: checkAvailability,
     end_conversation: endConversation,

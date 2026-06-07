@@ -22,7 +22,7 @@ Deep example for `@kuralle-agents/engagement`: **free-form extraction**, **conse
 
 ## Copay approval
 
-`chargeCopay` is registered with `needsApproval: true`. The first `ctx.tool('chargeCopay', …)` in **payment** suspends on signal `__approval` until a human (or test harness) delivers `{ approved: true }`. Denied approval throws `ToolApprovalDeniedError` and never runs the charge effect. See `packages/kuralle-core/test/core-policy/needs-approval.test.ts` for the core contract; this example wires the tool on the agent’s `effectTools` map.
+`chargeCopay` is registered with `needsApproval: true`. The first `ctx.tool('chargeCopay', …)` in **payment** suspends on signal `__approval` until a human (or test harness) delivers `{ approved: true }`. Denied approval throws `ToolApprovalDeniedError` and never runs the charge effect. See `packages/kuralle-core/test/core-policy/needs-approval.test.ts` for the core contract; this example wires the tool on the agent’s `tools` map.
 
 ## Run (live model, fake Meta clients)
 

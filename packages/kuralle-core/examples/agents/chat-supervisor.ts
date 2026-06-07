@@ -45,8 +45,7 @@ const agent = defineAgent({
   name: 'Chat Supervisor Agent',
   instructions: CHAT_INSTRUCTIONS,
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
 });
 
 console.log("Intro: Hey! I'm here to help with whatever is on your mind. What would you like to talk about?");

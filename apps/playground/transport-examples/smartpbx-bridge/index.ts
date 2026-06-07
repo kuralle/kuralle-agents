@@ -84,13 +84,12 @@ Guidelines:
 - Keep responses conversational and friendly
 - Be concise - phone conversations should be brief`,
       tools: wired.tools,
-      effectTools: wired.effectTools,
     }),
   ],
   defaultAgentId: 'support',
   defaultModel: openai('gpt-4o-mini'),
   voiceMode: true,
-  tools: wired.effectTools,
+  tools: wired.tools,
 });
 
 // ============================================================================

@@ -55,7 +55,7 @@ const agent = defineAgent({
   id: 'form-filler',
   name: 'Appointment Scheduler',
   model,
-  effectTools: { end_call: endCall },
+  tools: { end_call: endCall },
   flows: [defineFlow({ name: 'intake', description: 'Schedule appointment', start: intake, nodes: [intake, confirm] })],
 });
 

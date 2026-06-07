@@ -148,7 +148,6 @@ export function buildSupportRuntime(model: LanguageModel) {
       instructions: supportInstructions,
       model,
       tools: wired.tools,
-      effectTools: wired.effectTools,
     }),
   ];
 
@@ -157,7 +156,7 @@ export function buildSupportRuntime(model: LanguageModel) {
     defaultAgentId: 'support',
     defaultModel: model,
     voiceMode: true,
-    tools: wired.effectTools,
+    tools: wired.tools,
   });
 }
 

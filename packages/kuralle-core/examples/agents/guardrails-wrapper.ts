@@ -84,8 +84,7 @@ const agent = defineAgent({
   name: 'Guardrails Wrapped Cartesia Assistant',
   instructions: INSTRUCTIONS,
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
   guardrails: { input: [guardrailProcessor] },
 });
 

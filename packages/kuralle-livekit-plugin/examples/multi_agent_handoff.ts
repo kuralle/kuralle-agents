@@ -18,7 +18,7 @@
 
 import { WebSocketAgentServer } from '@kuralle-agents/livekit-plugin-transport-ws';
 import { KuralleVoiceSession } from '@kuralle-agents/livekit-plugin';
-import { Runtime } from '@kuralle-agents/core';
+import { Runtime, wrapAiSdkTool } from '@kuralle-agents/core';
 import { openai } from '@ai-sdk/openai';
 import { GeminiLiveSTT, GeminiLiveTTS } from '@kuralle-agents/livekit-plugin/gemini';
 import { initializeLogger, voice } from '@livekit/agents';
@@ -39,26 +39,32 @@ const runtime = new Runtime({
 light control, and games. If the user wants to play a game, hand off to
 the game agent.`,
       tools: {
-        getWeather: tool({
-          description: 'Get the weather for a given location.',
-          inputSchema: z.object({
-            location: z.string().describe('The location to get the weather for'),
+        getWeather: wrapAiSdkTool(
+          'getWeather',
+          tool({
+            description: 'Get the weather for a given location.',
+            inputSchema: z.object({
+              location: z.string().describe('The location to get the weather for'),
+            }),
+            execute: async ({ location }) => {
+              return `The weather in ${location} is sunny today.`;
+            },
           }),
-          execute: async ({ location }) => {
-            return `The weather in ${location} is sunny today.`;
-          },
-        }),
-        toggleLight: tool({
-          description: 'Turn on or off the light in a room.',
-          inputSchema: z.object({
-            room: z.enum(['bedroom', 'living room', 'kitchen', 'bathroom', 'office'])
-              .describe('The room to control'),
-            switchTo: z.enum(['on', 'off']).describe('Turn the light on or off'),
+        ),
+        toggleLight: wrapAiSdkTool(
+          'toggleLight',
+          tool({
+            description: 'Turn on or off the light in a room.',
+            inputSchema: z.object({
+              room: z.enum(['bedroom', 'living room', 'kitchen', 'bathroom', 'office'])
+                .describe('The room to control'),
+              switchTo: z.enum(['on', 'off']).describe('Turn the light on or off'),
+            }),
+            execute: async ({ room, switchTo }) => {
+              return `The light in the ${room} is now ${switchTo}.`;
+            },
           }),
-          execute: async ({ room, switchTo }) => {
-            return `The light in the ${room} is now ${switchTo}.`;
-          },
-        }),
+        ),
       },
       handoffs: ['game'],
     },
@@ -71,14 +77,17 @@ the user. Pick a random number between 1 and 100 and let the user guess.
 Give hints like "higher" or "lower". When they guess correctly or want to
 stop, hand off back to the router agent.`,
       tools: {
-        getRandomNumber: tool({
-          description: 'Generate a random number between 1 and 100.',
-          inputSchema: z.object({}),
-          execute: async () => {
-            const number = Math.floor(Math.random() * 100) + 1;
-            return `The secret number is ${number}. Remember this but don't tell the user!`;
-          },
-        }),
+        getRandomNumber: wrapAiSdkTool(
+          'getRandomNumber',
+          tool({
+            description: 'Generate a random number between 1 and 100.',
+            inputSchema: z.object({}),
+            execute: async () => {
+              const number = Math.floor(Math.random() * 100) + 1;
+              return `The secret number is ${number}. Remember this but don't tell the user!`;
+            },
+          }),
+        ),
       },
       handoffs: ['router'],
     },

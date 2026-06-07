@@ -94,7 +94,7 @@ const agent = defineAgent({
   id: 'form-filler-extraction-agent',
   name: 'Form Filler (Extraction-First)',
   model,
-  effectTools: { submit_form: submitForm, end_call: endCall },
+  tools: { submit_form: submitForm, end_call: endCall },
   flows: [
     defineFlow({
       name: 'intake',

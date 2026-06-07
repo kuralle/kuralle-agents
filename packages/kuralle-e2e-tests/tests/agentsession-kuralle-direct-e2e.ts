@@ -22,7 +22,7 @@ import * as deepgram from '@livekit/agents-plugin-deepgram';
 import { google } from '@ai-sdk/google';
 import { tool } from 'ai';
 import { z } from 'zod';
-import { Runtime, createFlowTransition, defineAgent, defineFlow, reply } from '@kuralle-agents/core';
+import { Runtime, createFlowTransition, defineAgent, defineFlow, reply, wrapAiSdkTool } from '@kuralle-agents/core';
 import { KuralleRuntimeLLMAdapter } from '@kuralle-agents/livekit-plugin';
 import { WebSocketTransportAdapter } from '@kuralle-agents/livekit-plugin-transport-ws';
 
@@ -299,28 +299,34 @@ function singleAgentScenario() {
         'ALWAYS use get_time when asked about time.',
       ].join('\n'),
       tools: {
-        check_weather: tool({
-          description: 'Check the current weather for a city',
-          inputSchema: z.object({ city: z.string() }),
-          execute: async ({ city }) => {
-            console.log(`  [tool] check_weather("${city}")`);
-            runtimeToolLog.push('check_weather');
-            return { city, temperature: 22, unit: 'celsius', condition: 'partly cloudy' };
-          },
-        }),
-        get_time: tool({
-          description: 'Get the current time in a timezone',
-          inputSchema: z.object({ timezone: z.string() }),
-          execute: async ({ timezone }) => {
-            console.log(`  [tool] get_time("${timezone}")`);
-            runtimeToolLog.push('get_time');
-            try {
-              return { timezone, time: new Date().toLocaleTimeString('en-US', { timeZone: timezone }) };
-            } catch {
-              return { timezone, time: new Date().toLocaleTimeString('en-US') };
-            }
-          },
-        }),
+        check_weather: wrapAiSdkTool(
+          'check_weather',
+          tool({
+            description: 'Check the current weather for a city',
+            inputSchema: z.object({ city: z.string() }),
+            execute: async ({ city }) => {
+              console.log(`  [tool] check_weather("${city}")`);
+              runtimeToolLog.push('check_weather');
+              return { city, temperature: 22, unit: 'celsius', condition: 'partly cloudy' };
+            },
+          }),
+        ),
+        get_time: wrapAiSdkTool(
+          'get_time',
+          tool({
+            description: 'Get the current time in a timezone',
+            inputSchema: z.object({ timezone: z.string() }),
+            execute: async ({ timezone }) => {
+              console.log(`  [tool] get_time("${timezone}")`);
+              runtimeToolLog.push('get_time');
+              try {
+                return { timezone, time: new Date().toLocaleTimeString('en-US', { timeZone: timezone }) };
+              } catch {
+                return { timezone, time: new Date().toLocaleTimeString('en-US') };
+              }
+            },
+          }),
+        ),
       },
     })],
     defaultAgentId: 'assistant',
@@ -415,15 +421,18 @@ function triageAgentScenario() {
     model,
     instructions: 'You help customers track orders. Ask for the order number, then use lookup_order.',
     tools: {
-      lookup_order: tool({
-        description: 'Look up order status by order number',
-        inputSchema: z.object({ orderNumber: z.string() }),
-        execute: async ({ orderNumber }) => {
-          console.log(`  [tool] lookup_order("${orderNumber}")`);
-          runtimeToolLog.push('lookup_order');
-          return { orderNumber, status: 'shipped', carrier: 'FedEx', eta: 'Tomorrow by 5pm' };
-        },
-      }),
+      lookup_order: wrapAiSdkTool(
+        'lookup_order',
+        tool({
+          description: 'Look up order status by order number',
+          inputSchema: z.object({ orderNumber: z.string() }),
+          execute: async ({ orderNumber }) => {
+            console.log(`  [tool] lookup_order("${orderNumber}")`);
+            runtimeToolLog.push('lookup_order');
+            return { orderNumber, status: 'shipped', carrier: 'FedEx', eta: 'Tomorrow by 5pm' };
+          },
+        }),
+      ),
     },
   });
 

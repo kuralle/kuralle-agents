@@ -58,7 +58,7 @@ describe('agent globalTools are executable (ADR 0001)', () => {
     }
     await handle;
 
-    // Before the fix the executor only knew effectTools, so this call could not run.
+    // Before the fix the executor only knew tools, so this call could not run.
     expect(spy.count).toBeGreaterThan(0);
   });
 });

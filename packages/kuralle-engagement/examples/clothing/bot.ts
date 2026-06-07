@@ -387,7 +387,7 @@ export function buildClothingBot(model: LanguageModel) {
     instructions:
       'You help customers shop demo apparel. Be concise on messaging channels. Never claim real payment processing.',
     model,
-    effectTools: {
+    tools: {
       catalog: catalogTool,
       addToCart: addToCartTool,
       removeLast: removeLastTool,

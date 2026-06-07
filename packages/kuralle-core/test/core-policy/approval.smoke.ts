@@ -70,7 +70,7 @@ describeLive(`core-v2 durable approval smoke (${lm?.label ?? 'no live key'})`, (
       id: 'billing',
       flows: [flow],
       model,
-      effectTools: { charge: chargeTool },
+      tools: { charge: chargeTool },
     });
 
     const sessionStore = new MemoryStore();

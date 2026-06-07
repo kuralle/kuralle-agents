@@ -49,8 +49,7 @@ const agent = defineAgent({
   description: 'Line basic_chat parity agent',
   instructions: INSTRUCTIONS,
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
 });
 
 runV2Conversation({

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { openai } from '@ai-sdk/openai';
 import { tool } from 'ai';
 import { z } from 'zod';
-import { createRuntime, defineAgent } from '@kuralle-agents/core';
+import { createRuntime, defineAgent, wrapAiSdkTool } from '@kuralle-agents/core';
 import { RedisSessionStore, type RedisClientLike } from '../../src/index.js';
 
 const envPath = join(dirname(fileURLToPath(import.meta.url)), '.env');
@@ -55,7 +55,7 @@ const supportAgent = defineAgent({
   model,
   instructions: `You are customer support. Help with orders and shipping.
 Use lookupOrder for order status. Hand off to refunds for refund requests.`,
-  tools: { lookupOrder },
+  tools: { lookupOrder: wrapAiSdkTool('lookupOrder', lookupOrder) },
   handoffs: ['refunds'],
 });
 
@@ -64,7 +64,7 @@ const refundAgent = defineAgent({
   name: 'Refunds',
   model,
   instructions: 'You process refunds. Use processRefund when details are clear.',
-  tools: { processRefund },
+  tools: { processRefund: wrapAiSdkTool('processRefund', processRefund) },
 });
 
 const triageAgent = defineAgent({

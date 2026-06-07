@@ -42,8 +42,7 @@ const supportAgent = defineAgent({
   description: 'Handles customer support.',
   instructions: 'Helpful customer support specialist. Be concise.',
   model,
-  tools: buildToolSet(supportTools),
-  effectTools: supportTools,
+  tools: supportTools,
 });
 
 const qaRecordFinding = tool({

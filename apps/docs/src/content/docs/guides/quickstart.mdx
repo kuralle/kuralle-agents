@@ -36,7 +36,7 @@ import firstAgentExample from '../../../examples/quickstart/first-agent.ts?raw';
    });
    ```
 
-4. Define an agent and wire the tool. `tools: buildToolSet({ echo })` makes it model-visible; `effectTools: { echo }` wires the durable executor.
+4. Define an agent and wire the tool. `tools: buildToolSet({ echo })` makes it model-visible; `tools: { echo }` wires the durable executor.
 
    ```typescript
    import { openai } from '@ai-sdk/openai';
@@ -46,8 +46,7 @@ import firstAgentExample from '../../../examples/quickstart/first-agent.ts?raw';
      id: 'support',
      instructions: 'Helpful support agent. Use the echo tool when asked.',
      model: openai('gpt-4o-mini'),
-     tools: buildToolSet({ echo }),
-     effectTools: { echo },
+     tools: { echo },
    });
    ```
 

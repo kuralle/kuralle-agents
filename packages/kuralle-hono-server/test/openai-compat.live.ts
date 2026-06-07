@@ -63,7 +63,7 @@ describeLive(`OpenAI compat live SDK round-trip (${lm?.label ?? 'no live key'})`
         'You MUST call the end_call tool (never reply with text only) when the user message contains the exact phrase END CALL NOW.',
       model,
       tools: endCallTools,
-      effectTools: { end_call: endCall },
+      tools: { end_call: endCall },
     });
 
     const sessionStore = new MemoryStore();

@@ -32,8 +32,7 @@ const spanishAgent = defineAgent({
   name: 'Spanish Agent',
   instructions: 'Eres un asistente amable y servicial. Tenga una conversacion natural con el usuario. Habla solo en espanol.',
   model,
-  tools: buildToolSet({ end_call: endCall }),
-  effectTools: { end_call: endCall },
+  tools: { end_call: endCall },
 });
 
 const englishTools = { end_call: endCall, transfer_to_spanish: transferToSpanish };
@@ -46,8 +45,7 @@ const englishAgent = defineAgent({
   model,
   handoffs: ['spanish-agent'],
   agents: [spanishAgent],
-  tools: buildToolSet(englishTools),
-  effectTools: englishTools,
+  tools: englishTools,
 });
 
 runV2Conversation({

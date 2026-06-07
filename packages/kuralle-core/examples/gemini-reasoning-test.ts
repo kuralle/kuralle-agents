@@ -112,14 +112,14 @@ async function singleAgentScenario(model: LanguageModel, reasoning: boolean): Pr
     model,
     instructions:
       'You are a weather assistant. Use check_weather for weather questions. Keep responses to 1 sentence.',
-    tools: buildToolSet({
+    tools: {
       check_weather: defineTool({
         name: 'check_weather',
         description: 'Check weather for a city',
         input: z.object({ city: z.string() }),
         execute: async ({ city }) => ({ city, temp: 22, condition: 'partly cloudy' }),
       }),
-    }),
+    },
   });
 
   const runtime = createRuntime({
@@ -237,14 +237,14 @@ async function triageScenario(model: LanguageModel, reasoning: boolean): Promise
     name: 'Tracking',
     model,
     instructions: 'Help track orders. Use lookup_order. Keep responses short.',
-    tools: buildToolSet({
+    tools: {
       lookup_order: defineTool({
         name: 'lookup_order',
         description: 'Look up order status',
         input: z.object({ orderNumber: z.string() }),
         execute: async ({ orderNumber }) => ({ orderNumber, status: 'shipped', eta: 'Tomorrow' }),
       }),
-    }),
+    },
   });
 
   const billing = defineAgent({

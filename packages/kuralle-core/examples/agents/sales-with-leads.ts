@@ -163,8 +163,7 @@ const agent = defineAgent({
   name: 'Sales With Leads Agent',
   instructions: INSTRUCTIONS,
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
 });
 
 runV2Conversation({

@@ -80,7 +80,7 @@ export function buildEcommerceAgents(model) {
     nodes: [hub, tracking],
   });
 
-  const effectTools = {
+  const tools = {
     lookup_order: lookupOrder,
     route_to_tracking: routeToTracking,
     back_to_hub: backToHub,
@@ -98,7 +98,7 @@ export function buildEcommerceAgents(model) {
       ].join('\n'),
       model,
       flows: [flow],
-      effectTools,
+      tools,
     }),
   ];
 }
@@ -143,7 +143,6 @@ export function buildSingleAgent(model) {
       ].join('\n'),
       model,
       tools: wired.tools,
-      effectTools: wired.effectTools,
     }),
   ];
 }
@@ -181,8 +180,7 @@ export function buildTriageAgents(model) {
       'Ask for the order number, then use lookup_order.',
       'Keep responses to 1-2 sentences.',
     ].join('\n'),
-    tools: buildToolSet({ lookup_order: lookupOrder }),
-    effectTools: { lookup_order: lookupOrder },
+    tools: { lookup_order: lookupOrder },
     handoffs: ['triage'],
   });
 
@@ -195,8 +193,7 @@ export function buildTriageAgents(model) {
       'Use check_balance to look up account balance.',
       'Keep responses to 1-2 sentences.',
     ].join('\n'),
-    tools: buildToolSet({ check_balance: checkBalance }),
-    effectTools: { check_balance: checkBalance },
+    tools: { check_balance: checkBalance },
     handoffs: ['triage'],
   });
 
@@ -248,7 +245,6 @@ export function createSupportRuntime(model, supportTools, instructions) {
       instructions,
       model,
       tools: wired.tools,
-      effectTools: wired.effectTools,
     }),
   ];
   return createRuntime({
@@ -256,6 +252,6 @@ export function createSupportRuntime(model, supportTools, instructions) {
     defaultAgentId: 'support',
     defaultModel: model,
     voiceMode: true,
-    tools: wired.effectTools,
+    tools: wired.tools,
   });
 }

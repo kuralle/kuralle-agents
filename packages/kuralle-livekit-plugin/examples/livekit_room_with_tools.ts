@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { KuralleLivekitSession } from '@kuralle-agents/livekit-plugin';
 import { GeminiLiveSTT, GeminiLiveTTS } from '@kuralle-agents/livekit-plugin/gemini';
 import { openai } from '@ai-sdk/openai';
+import { wrapAiSdkTool } from '@kuralle-agents/core';
 import { tool } from 'ai';
 import { z } from 'zod';
 
@@ -34,21 +35,27 @@ const agentConfig = {
       instructions: `You are a helpful voice assistant in a LiveKit room.
 Be friendly and concise. You can check weather and control lights.`,
       tools: {
-        getWeather: tool({
-          description: 'Get the weather for a given location.',
-          inputSchema: z.object({
-            location: z.string().describe('The location to check'),
+        getWeather: wrapAiSdkTool(
+          'getWeather',
+          tool({
+            description: 'Get the weather for a given location.',
+            inputSchema: z.object({
+              location: z.string().describe('The location to check'),
+            }),
+            execute: async ({ location }) => `The weather in ${location} is sunny.`,
           }),
-          execute: async ({ location }) => `The weather in ${location} is sunny.`,
-        }),
-        toggleLight: tool({
-          description: 'Turn a light on or off in a room.',
-          inputSchema: z.object({
-            room: z.enum(['bedroom', 'living room', 'kitchen', 'office']).describe('The room'),
-            state: z.enum(['on', 'off']).describe('On or off'),
+        ),
+        toggleLight: wrapAiSdkTool(
+          'toggleLight',
+          tool({
+            description: 'Turn a light on or off in a room.',
+            inputSchema: z.object({
+              room: z.enum(['bedroom', 'living room', 'kitchen', 'office']).describe('The room'),
+              state: z.enum(['on', 'off']).describe('On or off'),
+            }),
+            execute: async ({ room, state }) => `The light in the ${room} is now ${state}.`,
           }),
-          execute: async ({ room, state }) => `The light in the ${room} is now ${state}.`,
-        }),
+        ),
       },
     },
   ],

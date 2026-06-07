@@ -105,8 +105,7 @@ const agent = defineAgent({
   name: 'Interview Agent',
   instructions: PROMPT_MAIN,
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
   limits: { toolMaxSteps: 5 },
 });
 

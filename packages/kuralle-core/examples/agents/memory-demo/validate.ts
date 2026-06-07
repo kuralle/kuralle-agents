@@ -7,6 +7,7 @@
 import { openai } from '@ai-sdk/openai';
 import { defineAgent } from '../../../src/authoring/defineAgent.js';
 import { createLoadMemoryTool } from '../../../src/tools/memory.js';
+import { wrapAiSdkTool } from '../../../src/tools/effect/wrapAiSdkTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
 import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
@@ -47,7 +48,7 @@ const agent = defineAgent({
 You can remember things from past conversations.
 When the user refers to something from before, recall it naturally.
 Keep responses concise (1-2 sentences).`,
-  tools: { loadMemory: createLoadMemoryTool() },
+  tools: { loadMemory: wrapAiSdkTool('loadMemory', createLoadMemoryTool()) },
   memory: {
     preload: { enabled: true, tokenBudget: 5000 },
     ingest: { enabled: true },

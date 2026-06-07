@@ -14,7 +14,7 @@ const roleMessage =
 
 // Each tool is defined once and exposed to the model per node via buildToolSet.
 // Flow-node tools self-register their executors (core >= 0.2.1) and receive the run
-// context, so no separate `effectTools` wiring is needed.
+// context, so no separate `tools` wiring is needed.
 const getDeliveryEstimate = defineTool({
   name: 'get_delivery_estimate',
   description: 'Provide delivery estimate information.',

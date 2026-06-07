@@ -41,7 +41,7 @@ const agent = defineAgent({
   instructions: 'You are a helpful support agent.',
   model: openai('gpt-4o-mini'),
   tools: buildToolSet({ echo }),   // model-visible
-  effectTools: { echo },           // durable executor
+  tools: { echo },           // durable executor
 });
 
 const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });

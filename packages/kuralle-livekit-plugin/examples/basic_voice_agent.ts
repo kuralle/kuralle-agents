@@ -19,7 +19,7 @@
 
 import { WebSocketAgentServer } from '@kuralle-agents/livekit-plugin-transport-ws';
 import { KuralleVoiceSession } from '@kuralle-agents/livekit-plugin';
-import { Runtime } from '@kuralle-agents/core';
+import { Runtime, wrapAiSdkTool } from '@kuralle-agents/core';
 import { openai } from '@ai-sdk/openai';
 import { GeminiLiveSTT, GeminiLiveTTS } from '@kuralle-agents/livekit-plugin/gemini';
 import { initializeLogger, voice } from '@livekit/agents';
@@ -38,15 +38,18 @@ const runtime = new Runtime({
     instructions: `You are a helpful voice assistant. You can hear the user's
 message and respond to it. Keep responses concise and conversational.`,
     tools: {
-      getWeather: tool({
-        description: 'Get the weather for a given location.',
-        inputSchema: z.object({
-          location: z.string().describe('The location to get the weather for'),
+      getWeather: wrapAiSdkTool(
+        'getWeather',
+        tool({
+          description: 'Get the weather for a given location.',
+          inputSchema: z.object({
+            location: z.string().describe('The location to get the weather for'),
+          }),
+          execute: async ({ location }) => {
+            return `The weather in ${location} is sunny.`;
+          },
         }),
-        execute: async ({ location }) => {
-          return `The weather in ${location} is sunny.`;
-        },
-      }),
+      ),
     },
   }],
   defaultAgentId: 'assistant',

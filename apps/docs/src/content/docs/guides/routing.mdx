@@ -62,8 +62,7 @@ const englishAgent = defineAgent({
   model: openai('gpt-4o-mini'),
   handoffs: ['spanish-agent'],
   agents: [spanishAgent],
-  tools: buildToolSet({ transfer_to_spanish: transferToSpanish }),
-  effectTools: { transfer_to_spanish: transferToSpanish },
+  tools: { transfer_to_spanish: transferToSpanish },
 });
 ```
 

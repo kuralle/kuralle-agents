@@ -336,7 +336,7 @@ export function buildPharmacyBot(model: LanguageModel) {
       'Never claim to store real PHI; this is a demonstration.',
     ].join(' '),
     model,
-    effectTools: {
+    tools: {
       verifyPatient: verifyPatientTool,
       checkInteractions: checkInteractionsTool,
       chargeCopay: chargeCopayTool,

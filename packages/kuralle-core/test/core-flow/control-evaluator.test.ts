@@ -10,7 +10,7 @@ import { resolveVoiceGeminiTools } from '../../src/runtime/channels/voiceTools.j
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { hostLoop } from '../../src/runtime/hostLoop.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
-import { CoreToolExecutor, defineTool } from '../../src/tools/effect/index.js';
+import { CoreToolExecutor, defineTool, wrapAiSdkTool, buildToolSet } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { HarnessStreamPart } from '../../src/types/stream.js';
 import { tool as aiTool } from 'ai';
@@ -293,15 +293,18 @@ describe('H1 out-of-band control (flag-gated)', () => {
       model: stubModel,
       experimental: { outOfBandControl: true },
       tools: {
-        handoff: aiTool({
-          description: 'handoff',
-          inputSchema: z.object({ targetAgentId: z.string(), reason: z.string() }),
-          execute: async () => ({
-            __handoff: true,
-            targetAgentId: 'billing',
-            reason: 'billing',
+        handoff: wrapAiSdkTool(
+          'handoff',
+          aiTool({
+            description: 'handoff',
+            inputSchema: z.object({ targetAgentId: z.string(), reason: z.string() }),
+            execute: async () => ({
+              __handoff: true,
+              targetAgentId: 'billing',
+              reason: 'billing',
+            }),
           }),
-        }),
+        ),
       },
     });
 
@@ -321,7 +324,7 @@ describe('H1 out-of-band control (flag-gated)', () => {
     await hostLoop({ agent, run: runState, driver, ctx });
 
     const resolved = resolveReplyNode(
-      { kind: 'reply', id: 'free-agent__host', instructions: 'help', tools: agent.tools },
+      { kind: 'reply', id: 'free-agent__host', instructions: 'help', tools: agent.tools ? buildToolSet(agent.tools) : undefined },
       runState.state,
       { freeConversation: true },
     );

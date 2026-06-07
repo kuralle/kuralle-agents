@@ -97,7 +97,6 @@ const assistant = defineAgent({
   model: google('gemini-2.0-flash'),
   instructions: 'You are a friendly voice assistant. Keep responses to 1-2 sentences. Use check_weather when asked about weather.',
   tools: { check_weather: weatherTool },
-  effectTools: {},
   knowledge: {},
 });
 
