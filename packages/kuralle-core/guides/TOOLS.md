@@ -23,6 +23,22 @@ const agent = defineAgent({
 });
 ```
 
+## Agent workspace
+
+Set `workspace` to a portable `FileSystem` (from `@kuralle-agents/fs`) to auto-register the durable `workspace` tool (`ls`, `cat`, `grep`, `find`, `read`, `write`, `edit`). The same instance is exposed on `RunContext.fs` for flow `action` nodes.
+
+```ts
+import { InMemoryFs } from '@kuralle-agents/fs';
+
+const agent = defineAgent({
+  id: 'kb',
+  model,
+  workspace: new InMemoryFs({ '/docs/faq.md': '# FAQ' }),
+});
+```
+
+Requires `@kuralle-agents/fs` when using `workspace`.
+
 ## Tool Basics
 
 ```ts
