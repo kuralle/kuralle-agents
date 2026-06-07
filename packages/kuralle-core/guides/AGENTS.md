@@ -16,7 +16,7 @@ const model = openai('gpt-4o-mini');
 | Fields | Effect |
 |--------|--------|
 | `id`, `model`, `instructions` | Base conversational agent |
-| `tools`, `effectTools` | Tool access during free conversation and flow nodes |
+| `tools`, `globalTools` | Durable tool access during free conversation and flow nodes |
 | `flows` | Structured multi-step SOPs (`defineFlow` + node builders) |
 | `routes`, `routing` | Route to flows or specialist agents |
 | `agents` | Nested sub-agent configs for composition |
@@ -210,8 +210,7 @@ const lead = defineAgent({
   instructions:
     'Research assistant. Use consult_weather for weather and consult_news for news. Combine answers clearly.',
   model,
-  tools: buildToolSet(tools),
-  effectTools: tools,
+  tools: tools,
 });
 
 const runtime = createRuntime({

@@ -29,7 +29,7 @@ const collectDate = defineTool({
 const greeting = reply({
   id: 'greeting',
   instructions: 'Welcome. What date would you like to book?',
-  tools: { collect_date: collectDate }, // wire via effectTools + ToolSet in production
+  tools: { collect_date: collectDate }, // wire via tools + ToolSet in production
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'collect_date');
     return r?.result ? { goto: confirm, data: r.result as Record<string, unknown> } : 'stay';
@@ -46,7 +46,7 @@ const agent = defineAgent({
   id: 'booking',
   instructions: 'You are a booking assistant.',
   model,
-  effectTools: { collect_date: collectDate },
+  tools: { collect_date: collectDate },
   flows: [
     defineFlow({
       name: 'booking',

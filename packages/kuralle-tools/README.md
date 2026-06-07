@@ -40,8 +40,7 @@ const agent = defineAgent({
   id: 'support',
   instructions: 'Answer questions using the provided knowledge.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ retrieve: retrieveTool, answer: answerTool }),
-  effectTools: { retrieve: retrieveTool, answer: answerTool },
+  tools: { retrieve: retrieveTool, answer: answerTool },
 });
 ```
 

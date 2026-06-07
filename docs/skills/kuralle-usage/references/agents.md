@@ -32,8 +32,7 @@ const supportAgent = defineAgent({
   name: 'Support Agent',
   instructions: 'Be concise and helpful.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ lookup_order: lookupOrder }),
-  effectTools: { lookup_order: lookupOrder },
+  tools: { lookup_order: lookupOrder },
   handoffs: ['billing'],
 });
 
@@ -114,8 +113,7 @@ const leadAgent = defineAgent({
   id: 'lead',
   instructions: 'Use consult_weather when asked about weather.',
   model: openai('gpt-4o'),
-  tools: buildToolSet({ consult_weather: weatherLookup }),
-  effectTools: { consult_weather: weatherLookup },
+  tools: { consult_weather: weatherLookup },
 });
 ```
 

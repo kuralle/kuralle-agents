@@ -2,6 +2,27 @@
 
 Kuralle tools use the Vercel AI SDK `tool(...)` API. Tools are how agents read data, write state, and trigger flow transitions.
 
+## Durable agent tools
+
+Agent-level `tools` is a `Record<string, AnyTool>` from `defineTool` — every call is journaled (exactly-once on replay). Flow nodes use `buildToolSet({ ... })` for model-visible schema; executors come from the agent registry and flow-local tools.
+
+For third-party AI SDK tools, use `wrapAiSdkTool(name, aiTool)` — it captures `execute` and routes through the same journal:
+
+```ts
+import { defineTool, wrapAiSdkTool } from '@kuralle-agents/core';
+import { tool } from 'ai';
+
+const native = defineTool({ name: 'lookup', description: '...', input: z.object({ id: z.string() }), execute: async ({ id }) => ({ id }) });
+
+const sdk = tool({ description: 'Legacy SDK tool', inputSchema: z.object({ id: z.string() }), execute: async ({ id }) => ({ id }) });
+
+const agent = defineAgent({
+  id: 'a',
+  model,
+  tools: { lookup: native, legacy: wrapAiSdkTool('legacy', sdk) },
+});
+```
+
 ## Tool Basics
 
 ```ts
@@ -70,8 +91,7 @@ const lead = defineAgent({
   instructions:
     'Research assistant. Use consult_weather for weather questions. Combine answers clearly.',
   model,
-  tools: buildToolSet({ consult_weather: consultWeather }),
-  effectTools: { consult_weather: consultWeather },
+  tools: { consult_weather: consultWeather },
 });
 
 const runtime = createRuntime({

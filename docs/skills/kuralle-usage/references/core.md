@@ -9,7 +9,7 @@
 - `createRuntime` / `Runtime` — multi-agent harness
 - `defineAgent` — single agent primitive (behavior derived from fields)
 - `defineFlow`, `reply`, `collect`, `action`, `decide` — flow node kinds
-- `defineTool`, `buildToolSet`, `effectTools` — durable tool execution
+- `defineTool`, `buildToolSet`, `tools` — durable tool execution
 - `runFlow`, `hostLoop` — flow dispatch and turn composition
 - `TurnHandle` — await result, iterate events, pipe to response stream
 - `TextDriver`, `VoiceDriver` — channel drivers (same agent definition)

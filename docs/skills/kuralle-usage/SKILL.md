@@ -18,10 +18,10 @@ This skill is a map. Read only the sections you need and follow the checklists.
 
 | Concept | API |
 |---------|-----|
-| Agent | `defineAgent({ id, instructions, model, tools, effectTools, flows, routes, handoffs, agents })` |
+| Agent | `defineAgent({ id, instructions, model, tools, tools, flows, routes, handoffs, agents })` |
 | Flow | `defineFlow({ name, description, start, nodes, hybrid? })` |
 | Nodes | `reply`, `collect`, `action`, `decide` |
-| Tools | `defineTool` + `buildToolSet` for model; `effectTools` for durable `ctx.tool` |
+| Tools | `defineTool` + `buildToolSet` for model; `tools` for durable `ctx.tool` |
 | Runtime | `createRuntime({ agents, defaultAgentId })` |
 | Turn | `runtime.run({ sessionId, input, driver? })` → `TurnHandle` |
 | Text channel | default `TextDriver` |
@@ -57,7 +57,7 @@ Read only what you need:
 - `references/flows.md` - `defineFlow`, node kinds, returned transitions
 - `references/extraction-nodes.md` - `collect` nodes, Standard Schema, multi-turn gather
 - `references/triage.md` - `routes` + structured routing without leaks
-- `references/tools.md` - `defineTool`, `effectTools`, approval pauses
+- `references/tools.md` - `defineTool`, `tools`, approval pauses
 - `references/llm-solidness-playbook.md` - production hardening checklist
 
 **Capabilities:**
@@ -109,7 +109,7 @@ Rules:
 
 3) **Define tools**
    - `defineTool` with Standard Schema input
-   - Register in `effectTools` for durable execution
+   - Register in `tools` for durable execution
    - `buildToolSet` for model-facing `tools`
    - Tools return data only
 
@@ -166,8 +166,7 @@ const gather = collect({
 const agent = defineAgent({
   id: 'demo',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ echo }),
-  effectTools: { echo },
+  tools: { echo },
   flows: [defineFlow({
     name: 'intake',
     description: 'Collect a name',
@@ -186,7 +185,7 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'demo' });
 - Tools must not speak to users.
 - Flow control via node `next` / returned transitions — not tool prose.
 - Grounding must be explicit if you promise it.
-- Side-effecting tools go through `effectTools` / `ctx.tool` for exactly-once.
+- Side-effecting tools go through `tools` / `ctx.tool` for exactly-once.
 - `userId` required for MemoryService.
 - Same `defineAgent` for text and voice — channel is the driver, not a separate config.
 
