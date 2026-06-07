@@ -13,7 +13,7 @@
 | 3 | Phase 2 — rfc-03-knowledgefs-rag | ✅ DONE — Gate 03 GREEN @ `9e3dd31` (live multi-page grep+cat KB answer) |
 | 4 | Phase 3 — rfc-04-skills-and-scripts | ✅ DONE — Gate 04 GREEN @ `445d49c` |
 | 5 | CompositeFileSystem (mount table) | ✅ DONE — Gate GREEN @ `c3356bc` (workerd parity + live /docs+/scratch smoke) |
-| 6 | DB-backed + CF-native working memory | IN PROGRESS (Phase A) |
+| 6 | DB-backed + CF-native working memory | ✅ DONE — Gate GREEN @ `3bbb54d` (5 stores; CF SqlPersistentMemoryStore + workerd test) |
 
 ## Load-bearing docs for the active sprint
 1. `rfcs/kuralle-harness/rfc-04-skills-and-scripts.md` (the contract — read end to end)
