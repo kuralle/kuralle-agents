@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-skills"
   },
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Anthropic-style Agent Skills with progressive disclosure for Kuralle",
   "type": "module",
   "main": "dist/index.js",
