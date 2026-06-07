@@ -3,6 +3,7 @@ export * from './telemetry.js';
 export * from './processors.js';
 export * from './agentConfig.js';
 export * from './filesystem.js';
+export * from './skills.js';
 export * from './flow.js';
 export * from './session.js';
 export * from './tool.js';

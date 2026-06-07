@@ -91,6 +91,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.7",
+    "@kuralle-agents/skills": "workspace:*",
     "@kuralle-agents/realtime-audio": "workspace:*",
     "@ai-sdk/openai": "^3.0.0",
     "@types/node": "^20.11.0",
@@ -110,6 +111,7 @@
     "test": "bun test ./test && vitest run --config vitest.config.ts",
     "test:journal-key-workers": "vitest run --config vitest.config.ts",
     "test:workspace-autoregister": "bun test ./test/core-workspace/workspace-autoregister.test.ts",
+    "test:skill-wire": "bun test ./test/core-skills/skill-wire.test.ts",
     "smoke:textdriver": "bun test ./test/core-channel/textdriver.smoke.ts",
     "smoke:flow": "bun test ./test/core-flow/flow.smoke.ts",
     "smoke:agent": "bun test ./test/core-agent/agent.smoke.ts",

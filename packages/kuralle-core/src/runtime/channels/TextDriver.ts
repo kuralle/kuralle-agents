@@ -54,7 +54,12 @@ export class TextDriver implements ChannelDriver {
     const out: TurnResult = { text: '', toolResults: [] };
     const model = replyNode.model ?? ctx.model;
     const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
-    const baseSystem = composeSystem(ctx.baseInstructions, nodeSystem, ctx.runState.state);
+    const baseSystem = composeSystem(
+      ctx.baseInstructions,
+      nodeSystem,
+      ctx.runState.state,
+      ctx.skillPrompt,
+    );
     const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
     const messages: ModelMessage[] = [...ctx.runState.messages];
     const aiTools = this.resolveTools(node, ctx);
@@ -179,6 +184,7 @@ export class TextDriver implements ChannelDriver {
       ctx.baseInstructions,
       resolveInstructions(node.instructions, ctx.runState.state),
       ctx.runState.state,
+      ctx.skillPrompt,
     );
     return resolveStructuredDecide(node, ctx, system);
   }

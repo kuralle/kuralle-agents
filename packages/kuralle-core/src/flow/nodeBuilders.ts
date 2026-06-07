@@ -31,9 +31,10 @@ export function composeSystem(
   base: Instructions | undefined,
   nodeSystem: string,
   state: FlowState,
+  skillPrompt?: string,
 ): string {
   const baseText = base ? resolveInstructions(base, state) : '';
-  return [baseText, nodeSystem].filter((s) => s && s.trim()).join('\n\n');
+  return [baseText, skillPrompt, nodeSystem].filter((s) => s && s.trim()).join('\n\n');
 }
 
 function buildNodeTools(node: ReplyNode, state: FlowState): ToolSet {
