@@ -34,7 +34,7 @@ A runtime helper `deriveAgentShape(agent)` classifies the agent:
 "No user-facing dispatch text" is required where the channel can't take prose back. This derives from the **driver's output capability**, not a bare `voice` label (a native-realtime `VoiceDriver` may have already played provider audio — ADR-0004 — which cannot be un-spoken):
 
 - **Kuralle-controlled text / cascaded voice** → relaxed default: stream; if control wins after text started, emit `text-cancel` and persist no canceled text. One narrow override `routing.dispatch?: 'strict'` (buffer until the guard/control decision is known) for compliance text.
-- **Production voice where Kuralle controls TTS** → strict default: buffer outgoing text/audio to TTS until the guard returns; flush on `keep`, abort + dispatch silently on control.
+- **Production voice where Kuralle controls TTS** → strict default: buffer outgoing text/audio until the model's answer intent is observable (first substantive token → flush; empty → emit nothing). The streaming gate never consults the guard; on an empty turn the host loop guards once and dispatches silently on a route (see §D″).
 - **Native realtime speech-to-speech** → strict cannot be implemented by cancelling transcript events after provider audio starts. Either suppress provider audio until guard resolution, **or** run the internal classifier before `requestResponse()`. If neither is available, the runtime **must not claim** no-dispatch-text for that turn (honest, consistent with the ADR-0004 post-hoc gate).
 
 ### D. Host-control ordering invariant

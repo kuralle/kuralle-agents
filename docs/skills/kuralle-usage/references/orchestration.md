@@ -22,7 +22,7 @@ closeRun → persist RunState, memory ingest, emit done
 |-----------|--------|
 | Active flow in RunState | `runFlow` over current node |
 | Pure dispatcher (routes/agents, no answering surface) | Silent model classify → enter flow or transfer |
-| Answering agent (instructions/flows/tools…) | Speaking turn with `enter_flow`/`transfer_to_agent` tools + concurrent guard |
+| Answering agent (instructions/flows/tools…) | Speaking turn with `enter_flow`/`transfer_to_agent` tools; a lazy guard classifies only when the turn produces no text and no control tool |
 | No host targets | Free conversation via `ChannelDriver` |
 | Handoff requested | Loop up to `maxHandoffs` |
 
