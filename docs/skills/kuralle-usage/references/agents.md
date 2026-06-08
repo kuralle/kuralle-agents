@@ -82,11 +82,10 @@ const agent = defineAgent({
 ```ts
 import { defineAgent } from '@kuralle-agents/core';
 
+// No instructions/flows/tools → derives as a silent pure dispatcher.
 const triageAgent = defineAgent({
   id: 'triage',
-  instructions: 'Route to the best specialist. Never speak to the user.',
   model: openai('gpt-4o-mini'),
-  routing: { mode: 'structured' },
   routes: [
     { agent: 'support', when: 'Technical issues and bugs' },
     { agent: 'billing', when: 'Payments and account questions' },

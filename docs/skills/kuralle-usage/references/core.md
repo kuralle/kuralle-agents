@@ -55,13 +55,12 @@ const next = reply({
 
 ## Routing
 
-When an agent has `routes`, use structured mode to prevent leaks:
+An agent with `routes`/`agents` and no answering surface (no `instructions`/`flows`/`tools`) derives as a **silent pure dispatcher** — it classifies and routes without leaking text:
 
 ```ts
 const agent = defineAgent({
   id: 'router',
-  routing: { mode: 'structured', always: true },
-  routes: [{ agent: 'support', when: 'General support' }],
+  routes: [{ agent: 'support', when: 'General support or anything else' }],
   agents: [supportAgent],
 });
 ```
