@@ -27,7 +27,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 - **Agents** — `defineAgent` with instructions and tools. Behavior is derived from what you populate, not a type flag.
 - **Flows** — node graphs (`reply`, `collect`, `action`, `decide`) where each node returns its next transition. Your SOP becomes a typed state machine you didn't have to hand-write.
 - **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
-- **Routing & Handoffs** — structured routing (`routes`) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
+- **Routing & Handoffs** — model-reasoned routing (`routes`/`agents`, derived from agent shape — no `routing.mode`) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
 - **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `HarnessStreamPart` JSON-SSE.
 
 ## Why Kuralle
@@ -38,7 +38,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 
 **Durable tool execution.** Every `defineTool` call is logged in an append-only effect log. Retries replay against the log — a payment tool doesn't charge twice, a booking tool doesn't double-book.
 
-**Few primitives, composed.** `defineAgent`, `defineFlow`, `defineTool`, `createRuntime`. That's the core API. Structured routing, multi-agent composition, and session persistence are all derived from these.
+**Few primitives, composed.** `defineAgent`, `defineFlow`, `defineTool`, `createRuntime`. That's the core API. Routing, multi-agent composition, and session persistence are all derived from these.
 
 ## Installation
 

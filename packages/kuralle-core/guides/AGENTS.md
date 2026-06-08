@@ -285,4 +285,4 @@ See [standalone-agent.ts](../examples/agents/standalone-agent.ts) (Example 4) fo
 | Explicit handoffs | `handoffs: ['billing']` exposes the `handoff` tool | Yes (invisible) | Active specialist after handoff |
 | Free conversation | No `flows` or `routes` | No | Same agent throughout |
 
-**Agent consultation** keeps the customer with one lead persona. **Structured routing** transfers session control to a specialist when the topic matches.
+**Agent consultation** keeps the customer with one lead persona. **Derived routing** transfers session control to a specialist when the topic matches.

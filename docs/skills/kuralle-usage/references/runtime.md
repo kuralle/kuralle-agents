@@ -86,10 +86,9 @@ const runtime = new Runtime({
 const triageAgent = {
   id: 'triage',
   name: 'Triage',
-  triageMode: 'structured',
-  instructions: 'Route to the correct specialist.',
+  // No instructions/flows/tools → derives as a silent pure dispatcher.
   routes: [
-    { agentId: 'support', description: 'General support issues' },
+    { agent: 'support', when: 'General support issues or anything else' },
   ],
 };
 
@@ -97,9 +96,9 @@ const runtime = new Runtime({
   agents: [triageAgent, supportAgent],
   defaultAgentId: 'support',
   defaultModel: openai('gpt-4o-mini') as any,
-  triageAgentId: 'triage',
-  alwaysRouteThroughTriage: true,
 });
+// Routing is derived: make `triage` the defaultAgentId and a pure dispatcher
+// (routes/agents only) to route every turn through it — no triage flags.
 ```
 
 ## Tips

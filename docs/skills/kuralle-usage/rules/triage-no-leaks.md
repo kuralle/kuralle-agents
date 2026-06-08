@@ -12,12 +12,12 @@
 
 ## Config
 
-```jsonc
-{
-  "runtime": {
-    "triageMode": "structured",
-    "triageAgent": "triage",
-    "alwaysRouteThroughTriage": true
-  }
-}
+```ts
+// Triage = a pure dispatcher: routes/agents only, no answering surface
+// (no instructions/flows/tools). It derives a silent model classifier and
+// never emits user-facing text — no routing.mode flag needed.
+const triage = defineAgent({
+  id: 'triage',
+  routes: [{ agent: 'support', when: 'general support or anything else' }],
+});
 ```

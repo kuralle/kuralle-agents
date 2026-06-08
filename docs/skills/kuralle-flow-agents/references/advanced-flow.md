@@ -1,8 +1,8 @@
 # Advanced Flow Techniques
 
-## routing.model — reduce hybrid mode latency by 20-40%
+## routing.model — use a fast control model for routing
 
-In hybrid mode (`defineFlow({ hybrid: true })`), every user message gets classified as on-flow or detour. Using a smaller, faster model for routing reduces latency without quality loss.
+`routing.model` sets the model used on the host control path — the concurrent guard (answering agents) and the pure-dispatcher classifier. Using a smaller, faster model there cuts routing latency without quality loss; it does not affect the speaking model.
 
 ```ts
 import { defineAgent, defineFlow, reply } from '@kuralle-agents/core';
