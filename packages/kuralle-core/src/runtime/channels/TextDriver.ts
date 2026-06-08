@@ -166,7 +166,10 @@ export class TextDriver implements ChannelDriver {
     });
 
     out.text = spoken.text;
-    out.control = spoken.control;
+    // The post-turn gate's control (grounding/recover) wins when set; otherwise
+    // preserve any control raised during tool execution (e.g. enter_flow / handoff
+    // tool results classified at out.control above), which speakGated doesn't see.
+    out.control = spoken.control ?? out.control;
     out.confidence = spoken.confidence;
 
     ctx.emit({ type: 'turn-end' });

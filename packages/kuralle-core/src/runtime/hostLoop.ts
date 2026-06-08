@@ -123,11 +123,21 @@ async function runFreeConversation(
   incrementTurnCount(run);
   assertWithinTurnLimit(run, ctx.limits);
 
-  const replyNode = buildAgentReplyNode(agent);
+  const replyNode = buildAgentReplyNode(agent, run);
   const turn = await driver.runAgentTurn(
     resolveReplyNode(replyNode, run.state, { freeConversation: true }),
     ctx,
   );
+
+  // routing.mode:'tools' — the model chose to enter a flow via the enter_flow
+  // tool. Enter it in this same turn; the flow's first node owns the user-facing
+  // copy, so any prose this turn produced is discarded (one utterance per turn).
+  if (turn.control?.type === 'enterFlow') {
+    const flow = findFlowByName(agent, turn.control.flowName);
+    if (flow) {
+      return await runActiveFlow(flow, run, driver, ctx, agent);
+    }
+  }
 
   if (turn.text.trim()) {
     const message: ModelMessage = { role: 'assistant', content: turn.text };
