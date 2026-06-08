@@ -169,7 +169,6 @@ export class TextDriver implements ChannelDriver {
           source,
           runGate,
           dispatchMode: node.hostControl.dispatchMode,
-          guard: node.hostControl.guard,
           getToolControl: () => out.control,
         })
       : (await import('./streaming/speakGated.js')).speakGated({

@@ -184,13 +184,12 @@ describe('guard does not override a substantive answer', () => {
     resolved.hostControl = {
       dispatchMode: 'relaxed',
       advisoryDispatch: false,
-      guard: Promise.resolve({ action: 'enterFlow', flowName: 'book' }),
     };
     const result = await new TextDriver().runAgentTurn(resolved, ctx);
     return { result, parts };
   }
 
-  it('keeps the answer and does not route or cancel when the model answered', async () => {
+  it('keeps the answer and does not cancel when the model answered (relaxed)', async () => {
     const { mock, afterEach } = await import('bun:test');
     afterEach(() => mock.restore());
     await mockStreamText('Hello, the deadline is March 31.')();
@@ -201,14 +200,18 @@ describe('guard does not override a substantive answer', () => {
     expect(parts.some((p) => p.type === 'text-cancel')).toBe(false);
   });
 
-  it('applies the guard route when the model produced no answer', async () => {
+  it('emits nothing and returns no control on an empty turn (hostLoop owns the guard)', async () => {
     const { mock, afterEach } = await import('bun:test');
     afterEach(() => mock.restore());
     await mockStreamText('')();
 
-    const { result } = await runWithGuard('');
-    expect(result.control?.type).toBe('enterFlow');
+    // speakWithHostControl no longer consults the guard — it emits nothing on an
+    // empty turn and returns no control; hostLoop runs the guard (see
+    // routing-debt-bugs.test.ts "empty turn calls classifier once and routes").
+    const { result, parts } = await runWithGuard('');
+    expect(result.control).toBeUndefined();
     expect(result.text).toBe('');
+    expect(parts.some((p) => p.type === 'text-delta')).toBe(false);
   });
 });
 
@@ -252,18 +255,18 @@ describe('strict dispatch flush-on-keep', () => {
     resolved.hostControl = {
       dispatchMode: 'strict',
       advisoryDispatch: false,
-      guard: new Promise((r) => setTimeout(() => r({ action: 'keep' }), 20)),
     };
 
     const result = await new TextDriver().runAgentTurn(resolved, ctx);
     const firstDelta = events.find((e) => e.type === 'text-delta');
     expect(result.text).toBe('One two');
     expect(firstDelta).toBeDefined();
-    // Flushed at guard (~20ms); the old full-buffer path emitted only after ~400ms.
+    // Flushed at the first substantive token (~0ms); the old full-buffer path
+    // emitted only after the ~400ms tail.
     expect(firstDelta!.at).toBeLessThan(250);
   });
 
-  it('emits no text and routes when the guard routes on an empty answer (no leak)', async () => {
+  it('strict empty turn emits NO text and returns no control (no leak; hostLoop guards)', async () => {
     const { mock, afterEach } = await import('bun:test');
     afterEach(() => mock.restore());
     mock.module('ai', () => {
@@ -294,18 +297,17 @@ describe('strict dispatch flush-on-keep', () => {
     resolved.hostControl = {
       dispatchMode: 'strict',
       advisoryDispatch: false,
-      guard: Promise.resolve({ action: 'enterFlow', flowName: 'book' }),
     };
 
+    // Strict no-leak: an empty turn emits nothing. Routing happens in hostLoop
+    // (covered by routing-debt-bugs.test.ts), not in the streaming gate.
     const result = await new TextDriver().runAgentTurn(resolved, ctx);
-    expect(result.control?.type).toBe('enterFlow');
+    expect(result.control).toBeUndefined();
     expect(result.text).toBe('');
     expect(events.some((e) => e.type === 'text-delta')).toBe(false);
   });
 
-  // RR-09: a guard that resolves BEFORE the first token must not route a turn the
-  // model is about to answer substantively (answer-authoritative, pre-first-token).
-  it('does not route when the guard resolves before a substantive answer arrives', async () => {
+  it('strict answered turn flushes the answer with no control', async () => {
     const { mock, afterEach } = await import('bun:test');
     afterEach(() => mock.restore());
     mock.module('ai', () => {
@@ -314,7 +316,6 @@ describe('strict dispatch flush-on-keep', () => {
         ...actual,
         streamText: () => ({
           fullStream: (async function* () {
-            await new Promise((r) => setTimeout(r, 50)); // answer arrives AFTER the guard
             yield Object.assign({ type: 'text-delta' }, { text: 'Substantive answer.' });
           })(),
           finishReason: Promise.resolve('stop'),
@@ -323,8 +324,7 @@ describe('strict dispatch flush-on-keep', () => {
         }),
       };
     });
-    const events: HarnessStreamPart[] = [];
-    const { session, runStore, runState } = await setupDurableHarness('strict-race', 'strict-race');
+    const { session, runStore, runState } = await setupDurableHarness('strict-lazy', 'strict-lazy');
     const ctx = await createRunContext({
       session,
       runStore,
@@ -332,14 +332,13 @@ describe('strict dispatch flush-on-keep', () => {
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
       model: stubModel,
-      emit: (p) => events.push(p),
+      emit: () => {},
     });
     const node = reply({ id: 'g', instructions: 'hi' });
     const resolved = resolveReplyNode(node, {}, { freeConversation: true });
     resolved.hostControl = {
       dispatchMode: 'strict',
       advisoryDispatch: false,
-      guard: Promise.resolve({ action: 'enterFlow', flowName: 'book' }), // resolves immediately
     };
 
     const result = await new TextDriver().runAgentTurn(resolved, ctx);

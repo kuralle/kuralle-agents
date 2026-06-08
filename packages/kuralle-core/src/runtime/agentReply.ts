@@ -18,7 +18,9 @@ export function buildAgentReplyNode(agent: AgentConfig, run?: RunState): ReplyNo
   const instructions =
     agent.instructions ??
     (shape.isAnsweringAgent
-      ? `You are ${label}. Help the user concisely. Do not mention internal routing or flows.`
+      ? `You are ${label}. Help the user concisely. Do not mention internal routing or flows. ` +
+        'If the user wants a specialist or a procedure, CALL the control tool (enter_flow or transfer_to_agent) — ' +
+        'do not first say a filler or acknowledgement like "Sure" or "One moment".'
       : '');
 
   return {

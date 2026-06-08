@@ -257,7 +257,7 @@ describe('control model channel (H2)', () => {
 
     const driver = {
       async runAgentTurn() {
-        return { text: 'ok', toolResults: [] };
+        return { text: '', toolResults: [] };
       },
       async awaitUser() {
         return { type: 'message' as const, input: 'more' };

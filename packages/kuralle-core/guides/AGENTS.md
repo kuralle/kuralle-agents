@@ -52,8 +52,6 @@ await handle;
 
 Attach one or more flows with `flows: [ defineFlow({ ... }) ]`. Build nodes with `reply`, `collect`, `decide`, and `action`. The runtime emits `node-enter`, `flow-transition`, and `flow-end` events on the turn stream.
 
-Hybrid mode (`hybrid: true` on `defineFlow`) lets the agent answer off-flow questions between steps and resume the SOP.
-
 ```ts
 import { z } from 'zod';
 
@@ -78,7 +76,6 @@ const bookingFlow = defineFlow({
   description: 'Book an appointment',
   start: collectDate,
   nodes: [collectDate, confirm],
-  hybrid: true,
 });
 
 const bookingAgent = defineAgent({

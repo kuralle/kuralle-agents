@@ -2,7 +2,6 @@ import type { ToolSet } from 'ai';
 import type { RunContext } from './run-context.js';
 import type { FlowNode } from './flow.js';
 import type { Tool, AnyTool } from './effectTool.js';
-import type { HostGuardVerdict } from '../runtime/select.js';
 import type { DispatchMode } from '../runtime/dispatchMode.js';
 
 export type DriverOutputCapability =
@@ -13,7 +12,6 @@ export type DriverOutputCapability =
 export interface HostControlContext {
   dispatchMode: DispatchMode;
   advisoryDispatch: boolean;
-  guard?: Promise<HostGuardVerdict>;
 }
 
 export interface ResolvedNode {

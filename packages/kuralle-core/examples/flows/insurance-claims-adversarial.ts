@@ -118,7 +118,7 @@ async function runScenario(scenario: Scenario): Promise<void> {
 
 async function main() {
   console.log('=== Insurance Claims Adjuster — Adversarial SOP Test (v2) ===');
-  console.log('12 nodes | hybrid mode | collect/decide/reply/action nodes');
+  console.log('12 nodes | collect/decide/reply/action nodes');
   console.log('Model: gpt-4.1-mini\n');
 
   for (const scenario of scenarios) {

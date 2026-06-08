@@ -9,8 +9,6 @@ Attach one or more flows to an agent via `defineAgent({ flows: [...] })`. The `R
 Key features:
 - Node builders: `reply`, `collect`, `decide`, `action`
 - Tool-driven transitions via `createFlowTransition()` (AI SDK tools) or `next` callbacks on `reply` nodes
-- Hybrid mode (`hybrid: true` on `defineFlow`) to answer off-topic questions and resume the flow
-
 ## Minimal flow example
 
 See `examples/flows/restaurant-reservation.ts` for a full runnable example. Sketch:
@@ -52,7 +50,6 @@ const agent = defineAgent({
       name: 'booking',
       start: greeting,
       nodes: [greeting, confirm],
-      hybrid: true,
     }),
   ],
 });
@@ -74,4 +71,3 @@ For tools that return `createFlowTransition(targetId, data)`, the runtime interp
 - Return `createFlowTransition(targetId, data)` from tool `execute` handlers that move the flow.
 - On `reply` nodes, return `{ goto: nextNode, data }` from `next` when a tool result is ready.
 - Use `createFlowUpdate(data, text, keys)` to merge state without leaving the node.
-- Set `hybrid: true` on the flow when the agent should answer off-script questions between steps.

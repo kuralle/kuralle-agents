@@ -1,10 +1,21 @@
 import type { TurnControl } from '../../../types/channel.js';
 import type { RunContext } from '../../../types/run-context.js';
-import type { HostGuardVerdict } from '../../select.js';
-import { guardVerdictToControl } from '../../hostControlGuard.js';
 import { speakGated, type TokenSource, type GateOutcome } from './speakGated.js';
 import type { StreamMode } from './mode.js';
 
+/**
+ * Streaming dispatch gate. Its only job is to control EMISSION per dispatch mode
+ * and surface the model's own control tool — it does NOT consult the host guard.
+ * The guard has a single owner (`hostLoop`): when this returns empty text and no
+ * control, `hostLoop` runs the guard exactly once. Keeping the guard out of here
+ * avoids double-evaluation and keeps guard telemetry attributable.
+ *
+ * - relaxed: stream live; if the model's own control tool fires, cancel any
+ *   streamed text and return that control.
+ * - strict: emit NOTHING until the model's intent is known — buffer until the
+ *   first substantive token (answering → flush + stream the rest live) or source
+ *   end (no answer → return empty; `hostLoop` then guards with no leak).
+ */
 export async function speakWithHostControl(args: {
   ctx: RunContext;
   mode: StreamMode;
@@ -12,28 +23,18 @@ export async function speakWithHostControl(args: {
   source: TokenSource;
   runGate: (fullOrSentence: string, final: boolean) => Promise<GateOutcome>;
   dispatchMode: 'strict' | 'relaxed';
-  guard?: Promise<HostGuardVerdict>;
   getToolControl: () => TurnControl | undefined;
 }): Promise<{ text: string; control?: TurnControl; confidence?: number }> {
-  const { ctx, mode, turnId, source, runGate, dispatchMode, guard, getToolControl } = args;
+  const { ctx, mode, turnId, source, runGate, dispatchMode, getToolControl } = args;
 
-  if (dispatchMode === 'strict' && guard) {
-    // Strict no-dispatch: emit NOTHING until we know keep vs route. The answer is
-    // authoritative, so a guard ROUTE may only be honored once we know the model
-    // did NOT answer — i.e. after the model's intent is observable. We therefore
-    // buffer until the FIRST substantive token (model is answering), source end
-    // (no answer), or the model's own control tool. We do NOT race the guard:
-    // honoring an early guard verdict before any token would mis-route a turn the
-    // model was about to answer (the answer-authoritative rule, pre-first-token).
+  if (dispatchMode === 'strict') {
     const it = source[Symbol.asyncIterator]();
     const buffered: { delta: string }[] = [];
-    let sourceDone = false;
     let answered = false;
 
     while (!getToolControl()) {
       const r = await it.next();
       if (r.done) {
-        sourceDone = true;
         break;
       }
       buffered.push(r.value);
@@ -43,32 +44,29 @@ export async function speakWithHostControl(args: {
       }
     }
 
-    const guardVerdict = await guard;
     const toolControl = getToolControl();
     if (toolControl) {
       return { text: '', control: toolControl };
     }
-    // Guard is a forgot-to-route net: honored only when the model did not answer.
-    const guardControl = guardVerdictToControl(guardVerdict);
-    if (guardControl && !answered) {
-      return { text: '', control: guardControl };
+
+    // No substantive text → emit nothing; hostLoop owns the empty-turn guard.
+    if (!answered) {
+      return { text: '', control: undefined };
     }
 
-    // Keep: flush buffered, then stream the remainder live (TTFT ≈ first token).
+    // Answering: flush the buffered prefix, then stream the remainder live.
     const flushSource: TokenSource = {
       async *[Symbol.asyncIterator]() {
         for (const chunk of buffered) {
           yield chunk;
         }
-        if (!sourceDone) {
-          let cur = await it.next();
-          while (!cur.done) {
-            if (getToolControl()) {
-              return;
-            }
-            yield cur.value;
-            cur = await it.next();
+        let cur = await it.next();
+        while (!cur.done) {
+          if (getToolControl()) {
+            return;
           }
+          yield cur.value;
+          cur = await it.next();
         }
       },
     };
@@ -76,6 +74,7 @@ export async function speakWithHostControl(args: {
     return speakGated({ ctx, mode, turnId, source: flushSource, runGate });
   }
 
+  // Relaxed: stream live; stop if the model's own control tool fires.
   let toolControl: TurnControl | undefined;
   const wrappedSource: TokenSource = {
     async *[Symbol.asyncIterator]() {
@@ -89,13 +88,7 @@ export async function speakWithHostControl(args: {
     },
   };
 
-  const spoken = await speakGated({
-    ctx,
-    mode,
-    turnId,
-    source: wrappedSource,
-    runGate,
-  });
+  const spoken = await speakGated({ ctx, mode, turnId, source: wrappedSource, runGate });
 
   toolControl = getToolControl();
   if (toolControl) {
@@ -103,17 +96,6 @@ export async function speakWithHostControl(args: {
       ctx.emit({ type: 'text-cancel', id: turnId, reason: 'host-control' });
     }
     return { text: '', control: toolControl };
-  }
-
-  // Guard is a forgot-to-route net: only override when the model produced no
-  // substantive answer. A real answer is authoritative — never cancel a correct
-  // keep answer because the guard disagrees (that mis-routes Q&A turns).
-  if (guard && !spoken.text.trim()) {
-    const guardVerdict = await guard;
-    const guardControl = guardVerdictToControl(guardVerdict);
-    if (guardControl) {
-      return { text: '', control: guardControl };
-    }
   }
 
   return spoken;

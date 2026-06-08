@@ -2,7 +2,7 @@
 
 ## routing.model — use a fast control model for routing
 
-`routing.model` sets the model used on the host control path — the concurrent guard (answering agents) and the pure-dispatcher classifier. Using a smaller, faster model there cuts routing latency without quality loss; it does not affect the speaking model.
+`routing.model` sets the model used on the host control path — the lazy guard (answering agents, empty turns only) and the pure-dispatcher classifier. Using a smaller, faster model there cuts routing latency without quality loss; it does not affect the speaking model.
 
 ```ts
 import { defineAgent, defineFlow, reply } from '@kuralle-agents/core';
@@ -17,7 +17,6 @@ const agent = defineAgent({
     description: 'Insurance claims intake',
     start: intakeNode,
     nodes: [intakeNode],
-    hybrid: true,
   })],
 });
 ```
@@ -112,6 +111,3 @@ action({
 | `action` | Deterministic step via `ctx.tool` |
 | `decide` | Structured branch |
 
-## Hybrid detours
-
-With `hybrid: true` on a flow, off-topic questions get answered, then the flow resumes at the current node. Use for customer service flows that must handle FAQs without breaking SOP.

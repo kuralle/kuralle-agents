@@ -157,9 +157,12 @@ describe('H3 per-session turn lock', () => {
       },
     });
 
+    let driverCalls = 0;
     const driver: ChannelDriver = {
       async runAgentTurn() {
-        return { text: 'ok', toolResults: [] };
+        driverCalls += 1;
+        // Empty host turns invoke the lazy guard; flow nodes answer with prose.
+        return { text: driverCalls <= 2 ? '' : 'ok', toolResults: [] };
       },
       async awaitUser() {
         return { type: 'message', input: 'x' };
