@@ -186,7 +186,10 @@ export class VoiceDriver implements ChannelDriver {
     transcript.close('complete');
     const spoken = await speakPromise;
     out.text = spoken.text;
-    out.control = spoken.control;
+    // Preserve host-control raised during provider tool execution (enter_flow /
+    // transfer_to_agent); the post-hoc gate must not clobber it (else native
+    // realtime silently drops valid routing). Same fix as TextDriver.
+    out.control = spoken.control ?? out.control;
     out.confidence = spoken.confidence;
 
     if (postHocGate) {

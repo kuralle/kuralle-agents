@@ -81,7 +81,7 @@ Both paths use the same `hostLoop`, `runFlow`, `tools`, session store, and hooks
 `deriveAgent` (internal) maps `AgentConfig` fields to runtime capabilities:
 
 - `flows[]` → flow dispatch
-- `routes` + `routing` → structured routing
+- `routes`/`agents` with no answering surface → silent pure dispatcher; with one → host-control tools + guard
 - `handoffs` / nested `agents` → handoff targets
 - `tools` → durable tool executor
 - `guardrails` → input/output processors

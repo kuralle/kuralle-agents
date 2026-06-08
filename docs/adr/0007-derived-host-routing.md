@@ -40,6 +40,14 @@ A runtime helper `deriveAgentShape(agent)` classifies the agent:
 ### D. Host-control ordering invariant
 Every host control (`enterFlow`, `handoff`, `transfer_to_agent`, `end`, `escalate`, `recover`) is handled **before** any same-turn assistant text is persisted or finalized. (Today `enterFlow` is handled before persistence but `handoff` after — inconsistent.)
 
+### D′. Guard policy (override discipline + cost)
+The `hostControlGuard` is a **forgot-to-route net, not a second-guesser**: it overrides the speaking turn **only when the model produced no substantive answer** (and no control tool of its own). A real answer is authoritative — the model chose `keep` by answering, and a disagreeing guard must not hijack it (an early build let the guard route correct Q&A answers into flows; see the regression tests). The main model's own valid control tool always wins; the guard applies only to no-answer turns.
+- **Cost / when it runs:** for an answering agent with host targets, the guard runs **concurrently** with the speaking turn every turn (a single control-model `generateObject`). It is hidden behind answer TTFT (no latency-coherence cost) but is a real extra call — point `routing.model` at a fast control model. Disabling it per-agent is a future knob.
+- **Known limitation (tracked):** the "substantive answer" predicate is currently `trim().length > 0`. A model that emits only a short filler/ack ("Sure.") and *should* have routed is not caught. This is accepted as the lesser evil vs. hijacking correct answers, and is mitigated because the answering model holds the `enter_flow`/`transfer_to_agent` tools directly. A **model-reasoned answer-adequacy verdict** (filler vs. real answer, no lexical rules) is the planned refinement.
+
+### D″. Strict dispatch flushes on keep
+Strict dispatch buffers tokens only **until the guard resolves** — not the whole turn. On a `keep` verdict it flushes the buffered tokens and streams the remainder live, so strict (controlled-TTS / compliance-text) TTFT ≈ guard latency, not full-generation. Only host control (tool or guard) suppresses emission entirely.
+
 ### E. Delete the mode/lexical surface (breaking)
 - **Delete** `routing.mode`, `routing.always`, `routing.default` from public config.
 - **Delete** `deterministicRouteMatch` + `keywordRouteFallback` and all lexical/deterministic/keyword/embedding-prototype routing from the hot path.
