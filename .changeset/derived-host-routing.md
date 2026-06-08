@@ -42,7 +42,7 @@
 2. **Delete `routing.always` and `routing.default`** — model a fallback as a normal semantic route/child agent (e.g. a "general support" target), not a config default.
 3. **Routes-only agents** become silent pure dispatchers (no fallback prose). Add `instructions` or a child route if the agent must speak before routing.
 4. **Host-control tools** — answering agents with multiple flows or transfer targets receive `enter_flow` / `transfer_to_agent` automatically; call them instead of routing prose.
-5. **Internal API:** `HostControlContext.guard` promise replaced by `startGuard()` thunk (framework-internal; no consumer action unless you extended drivers).
+5. **Internal API:** the `HostControlContext.guard` field is removed — drivers no longer own the guard. `HostControlContext` carries only `dispatchMode`/`advisoryDispatch`; the host loop is the sole guard owner and invokes the classifier only on empty no-control turns (framework-internal; no consumer action unless you extended drivers).
 
 ## Affected packages
 
