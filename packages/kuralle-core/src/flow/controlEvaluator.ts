@@ -26,9 +26,7 @@ function controlToTransition(control: TurnControl): NormalizedTransition {
     case 'recover':
       return { kind: 'end', reason: control.reason ?? 'error_degraded' };
     case 'enterFlow':
-      // enter_flow is a host-turn-only control (routing.mode:'tools'); it is
-      // never injected into in-flow reply nodes, so it cannot reach the in-flow
-      // evaluator. Treated as an invariant violation if it ever does.
+      // enter_flow is host-turn-only; never injected into in-flow reply nodes.
       throw new Error(
         `enter_flow control reached the in-flow evaluator (flow "${control.flowName}") — it is host-only`,
       );

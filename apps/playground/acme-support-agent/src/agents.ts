@@ -48,7 +48,7 @@ export function buildAgents(model: LanguageModel): AgentConfig[] {
         when: 'Billing: subscription pricing, plan changes, payment issues, invoices',
       },
     ],
-    routing: { default: 'support', mode: 'structured' },
+    routing: {},
     agents: [support, billing],
   });
 

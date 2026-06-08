@@ -275,7 +275,7 @@ describe('H4 choice-decide constrained enum + code-first', () => {
     expect(isChoiceFieldSchema(capturedSchema)).toBe(false);
   });
 
-  it('selectHostTarget resolves a clear keyword route without generateObject', async () => {
+  it('classifyHostTarget always uses generateObject (no lexical routing)', async () => {
     let llmCalled = false;
     mock.module('ai', () => {
       const actual = require('ai');
@@ -283,7 +283,15 @@ describe('H4 choice-decide constrained enum + code-first', () => {
         ...actual,
         generateObject: async () => {
           llmCalled = true;
-          throw new Error('LLM should not run on deterministic route');
+          return {
+            object: {
+              action: 'enterFlow',
+              flowName: 'billing',
+              agentId: null,
+              reason: 'billing',
+              confidence: 0.9,
+            },
+          };
         },
       };
     });
@@ -305,7 +313,8 @@ describe('H4 choice-decide constrained enum + code-first', () => {
     const { runState } = await setupDurableHarness('sel-det', 'sel-det-run');
     runState.messages = [{ role: 'user', content: 'I have a billing question about my invoice' }];
 
-    const result = await selectHostTarget({
+    const { classifyHostTarget } = await import('../../src/runtime/select.js');
+    const result = await classifyHostTarget({
       agent: {
         id: 'router',
         flows: [faq, billing],
@@ -313,13 +322,15 @@ describe('H4 choice-decide constrained enum + code-first', () => {
       },
       run: runState,
       model: {} as LanguageModel,
+      allowKeep: true,
     });
 
-    expect(llmCalled).toBe(false);
-    expect(result).toEqual({ kind: 'enterFlow', flow: billing });
+    expect(llmCalled).toBe(true);
+    expect(result.action).toBe('enterFlow');
+    expect(result.flowName).toBe('billing');
   });
 
-  it('selectHostTarget calls generateObject when deterministic match is ambiguous', async () => {
+  it('selectHostTarget calls generateObject for routing decisions', async () => {
     let llmCalled = false;
     mock.module('ai', () => {
       const actual = require('ai');

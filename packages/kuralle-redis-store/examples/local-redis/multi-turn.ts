@@ -76,7 +76,7 @@ const triageAgent = defineAgent({
     { agent: 'support', when: 'General support, orders, shipping, product issues' },
     { agent: 'refunds', when: 'Refunds, returns, billing disputes' },
   ],
-  routing: { default: 'support', mode: 'structured' },
+  routing: {},
   agents: [supportAgent, refundAgent],
 });
 

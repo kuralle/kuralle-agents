@@ -91,7 +91,7 @@ Everything else that lived on v1 `HarnessConfig` is **removed**, **moved to per-
 | `layeredPrompting` | Layered prompt assembly config |
 | `deferPersistence` | Deferred session writes |
 | `channels` | Multi-channel `conversationStore` / policies on harness |
-| `alwaysRouteThroughTriage` / `triageAgentId` | Use `AgentConfig.routing.always` |
+| `alwaysRouteThroughTriage` / `triageAgentId` | Removed — pure dispatchers classify every turn; answering agents use host-control tools + guard |
 | `retriagePolicy` | Retriage rules |
 | `outputRedaction` | Regex redaction on streamed assistant text |
 | `telemetry` | Harness-level telemetry |
@@ -109,7 +109,7 @@ Everything else that lived on v1 `HarnessConfig` is **removed**, **moved to per-
 | Global `enforcementRules` | `guardrails.enforcement` |
 | `promptMemoryAllowlist` | Same field on agent (if needed) |
 | `maxSteps` | `limits` |
-| `alwaysRouteThroughTriage` | `routing.always` |
+| `alwaysRouteThroughTriage` | (removed — see ADR 0007 derived host routing) |
 | `triageAgentId` | Implicit via `routes` / default agent |
 | `telemetry` | **Removed** from agent type (Group A) |
 

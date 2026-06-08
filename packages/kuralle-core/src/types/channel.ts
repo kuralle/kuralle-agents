@@ -2,6 +2,19 @@ import type { ToolSet } from 'ai';
 import type { RunContext } from './run-context.js';
 import type { FlowNode } from './flow.js';
 import type { Tool, AnyTool } from './effectTool.js';
+import type { HostGuardVerdict } from '../runtime/select.js';
+import type { DispatchMode } from '../runtime/dispatchMode.js';
+
+export type DriverOutputCapability =
+  | 'kuralle-controlled-text'
+  | 'kuralle-controlled-tts'
+  | 'native-realtime';
+
+export interface HostControlContext {
+  dispatchMode: DispatchMode;
+  advisoryDispatch: boolean;
+  guard?: Promise<HostGuardVerdict>;
+}
 
 export interface ResolvedNode {
   node: FlowNode;
@@ -10,9 +23,11 @@ export interface ResolvedNode {
   localTools?: Record<string, AnyTool>;
   /** Free-conversation reply (host loop): keeps model control tools even when outOfBandControl is on. */
   freeConversation?: boolean;
+  hostControl?: HostControlContext;
 }
 
 export interface ChannelDriver {
+  readonly outputCapability?: DriverOutputCapability;
   runAgentTurn(node: ResolvedNode, ctx: RunContext): Promise<TurnResult>;
   awaitUser(ctx: RunContext): Promise<UserSignal>;
   runStructured?(node: Extract<FlowNode, { kind: 'decide' }>, ctx: RunContext): Promise<unknown>;

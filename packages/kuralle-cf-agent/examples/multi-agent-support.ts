@@ -131,7 +131,7 @@ export class SupportAgent extends KuralleAgent<Env> {
         { agent: 'technical', when: 'Bugs, errors, API issues, integrations' },
         { agent: 'billing', when: 'Payments, refunds, invoices, subscriptions' },
       ],
-      routing: { default: 'sales', mode: 'structured' as const },
+      routing: {},
       agents: [salesAgent, technicalAgent, billingAgent],
     };
 

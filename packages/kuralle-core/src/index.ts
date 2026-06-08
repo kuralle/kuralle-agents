@@ -200,9 +200,7 @@ export type * from './types/index.js';
 
 export {
   CapabilityHost,
-  TriageCapability,
   ExtractionCapability,
-  HandoffCapability,
   GuardrailCapability,
   AutoRetrieveCapability,
   PassThroughRefinement,
@@ -219,7 +217,6 @@ export type {
   PromptSection as CapabilityPromptSection,
   GeminiFunctionDeclaration,
   ExtractionCapabilityConfig,
-  HandoffTarget,
   RetrieveProvider,
   AutoRetrieveCapabilityConfig,
   RefinementCapability,

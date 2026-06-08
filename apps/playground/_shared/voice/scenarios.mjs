@@ -212,7 +212,7 @@ export function buildTriageAgents(model) {
       { agent: 'tracking', when: 'Order tracking and shipment status' },
       { agent: 'billing', when: 'Billing, balance, and payment questions' },
     ],
-    routing: { default: 'triage', mode: 'structured' },
+    routing: {},
     agents: [tracking, billing],
   });
 

@@ -47,7 +47,7 @@ Kuralle is a **TypeScript framework for building conversational AI agents** — 
 
 ### Non-negotiable design rules
 - **SOP lives in flows, not prompts** — pasting >20 lines of procedure into a system prompt means it belongs in a flow.
-- **Triage must be structured when it routes** — `routing: { mode: 'structured' }` so dispatch never leaks to the user.
+- **Pure dispatchers route silently by derived shape; answering agents use host-control tools + guard** — no `routing.mode`; dispatch never leaks to the user.
 - **Tools return data only** — never conversational text; flow control comes from node transitions, not tool output.
 - **Grounding is explicit if promised** — CAG tools + retrieval for always-grounded agents.
 

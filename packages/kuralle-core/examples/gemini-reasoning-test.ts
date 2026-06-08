@@ -263,7 +263,7 @@ async function triageScenario(model: LanguageModel, reasoning: boolean): Promise
       { agent: 'tracking', when: 'order tracking or shipment status' },
       { agent: 'billing', when: 'billing or payment questions' },
     ],
-    routing: { mode: 'structured', always: true },
+    routing: {},
     agents: [tracking, billing],
   });
 

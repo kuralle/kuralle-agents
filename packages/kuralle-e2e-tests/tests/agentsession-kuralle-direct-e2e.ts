@@ -447,7 +447,7 @@ function triageAgentScenario() {
     ].join('\n'),
     routes: [{ agent: 'tracking', when: 'order tracking or shipment status' }],
     agents: [tracking],
-    routing: { mode: 'structured', model },
+    routing: { model },
   });
 
   const runtime = new Runtime({

@@ -81,7 +81,7 @@ protected getRuntimeConfig() {
 
 ## Flows and routing
 
-Attach `flows` for structured SOPs or `routes` + `routing: { mode: 'structured' }` for triage — same `defineAgent` primitive as Node/Bun. No runtime differences.
+Attach `flows` for structured SOPs or `routes`/`agents` for triage — same `defineAgent` primitive as Node/Bun. No runtime differences.
 
 ## Related
 

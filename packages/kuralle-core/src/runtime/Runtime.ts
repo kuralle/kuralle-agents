@@ -23,7 +23,8 @@ import { wireAgentSkills } from '../skills/wireAgentSkills.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
-import type { selectHostTarget } from './select.js';
+import type { classifyHostTarget, selectHostTarget } from './select.js';
+import { adaptHostSelect } from './hostClassifyAdapter.js';
 import { openRun } from './openRun.js';
 import { closeRun } from './closeRun.js';
 import { SessionRunStore } from './durable/SessionRunStore.js';
@@ -52,6 +53,8 @@ export interface HarnessConfig {
   terminalHandoffTargets?: string[];
   hooks?: Hooks;
   voiceMode?: boolean;
+  hostClassify?: typeof classifyHostTarget;
+  /** @deprecated Use hostClassify — test injection adapter for HostSelection stubs. */
   hostSelect?: typeof selectHostTarget;
   tools?: Record<string, AnyTool>;
   knowledge?: KnowledgeProviderConfig;
@@ -241,7 +244,9 @@ export class Runtime {
             run: runCtx.runState,
             driver,
             ctx: runCtx,
-            select: this.config.hostSelect,
+            classify:
+              this.config.hostClassify ??
+              (this.config.hostSelect ? adaptHostSelect(this.config.hostSelect) : undefined),
           });
 
           if (loopResult.kind === 'handoff') {

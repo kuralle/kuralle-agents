@@ -99,17 +99,15 @@ Rule of thumb: if you're pasting more than ~20 lines of procedure into a system 
 ```ts
 const triage = defineAgent({
   id: 'triage',
-  instructions: 'Route to the right specialist.',
   model: openai('gpt-4o-mini'),
   routes: [
     { agent: 'billing', when: 'billing question' },
-    { agent: 'support', when: 'support request' },
+    { agent: 'support', when: 'support request or anything else' },
   ],
-  routing: { mode: 'structured', default: 'support' },
 });
 ```
 
-`mode: 'structured'` routes via schema — the routing decision never surfaces to the user.
+With only `routes`/`agents` and no answering surface (no `instructions`/`flows`/`tools`), `triage` derives as a **pure dispatcher**: it silently classifies and routes. The decision is model-reasoned over the `when` descriptions and never surfaces to the user. Model every fallback as a normal route with a semantic `when` (e.g. "or anything else") — there is no `routing.default`. Optionally set `routing: { model }` to pick the control-reasoning model.
 
 ## Sessions
 

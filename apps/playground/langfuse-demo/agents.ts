@@ -113,7 +113,7 @@ export function buildAgents(model: LanguageModel): AgentConfig[] {
       { agent: 'support', when: 'Orders, shipping, returns, tracking, delivery' },
       { agent: 'billing', when: 'Billing, invoices, payments, pricing, discounts' },
     ],
-    routing: { default: 'support', mode: 'structured' },
+    routing: {},
     agents: [support, billing],
   });
 

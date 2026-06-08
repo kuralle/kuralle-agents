@@ -58,7 +58,7 @@ describeLive(`core-v2 agent live smoke (${lm?.label ?? 'no live key'})`, () => {
         { flow: 'name-intake', when: 'update or change their name, profile name, or account name' },
         { flow: 'book-demo', when: 'book, schedule, or request a product demo or appointment' },
       ],
-      routing: { mode: 'structured', model },
+      routing: { model },
     });
 
     const sessionStore = new MemoryStore();

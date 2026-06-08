@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock, afterEach } from 'bun:test';
+
+afterEach(() => mock.restore());
 import { z } from 'zod';
 import { collect, defineFlow, reply } from '../../src/types/flow.js';
 import { runFlow } from '../../src/flow/runFlow.js';
@@ -96,6 +98,22 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
   });
 
   it('flag-ON route: intent switch handoffs with collect node parked', async () => {
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        generateObject: async () => ({
+          object: {
+            action: 'transfer',
+            flowName: null,
+            agentId: 'billing-agent',
+            reason: 'billing',
+            confidence: 0.95,
+          },
+        }),
+      };
+    });
+
     const { ask, flow } = makeCollectFlow();
     const billingDone = reply({ id: 'bill-end', instructions: 'billing', next: () => ({ end: 'ok' }) });
     const billing = defineFlow({
@@ -132,12 +150,28 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const result = await runFlow(flow, runState, noAdvanceDriver(), ctx, agent);
 
-    expect(result).toEqual({ kind: 'handoff', to: 'billing-agent' });
+    expect(result).toEqual({ kind: 'handoff', to: 'billing-agent', reason: 'billing' });
     expect(runState.activeNode).toBe(ask.id);
     expect(getCollectData(runState.state, ask.id).name).toBeUndefined();
   });
 
   it('flag-ON enterFlow: switches flow and parks collect position', async () => {
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        generateObject: async () => ({
+          object: {
+            action: 'enterFlow',
+            flowName: 'billing',
+            agentId: null,
+            reason: 'billing',
+            confidence: 0.95,
+          },
+        }),
+      };
+    });
+
     const { ask, flow } = makeCollectFlow();
     const billingHold = reply({ id: 'bill-reply', instructions: 'How can I help with billing?' });
     const billing = defineFlow({

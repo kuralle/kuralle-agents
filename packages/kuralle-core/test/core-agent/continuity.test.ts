@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock, afterEach } from 'bun:test';
+
+afterEach(() => mock.restore());
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { collect, defineFlow, reply } from '../../src/types/flow.js';
@@ -7,11 +9,26 @@ import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
-import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 
 describe('RunState continuity across Runtime.run calls', () => {
   it('restores activeAgentId, activeNode, and flow position after mid-flow turn boundary', async () => {
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        generateObject: async () => ({
+          object: {
+            action: 'keep',
+            flowName: null,
+            agentId: null,
+            reason: null,
+            confidence: 1,
+          },
+        }),
+      };
+    });
+
     const confirm = reply({
       id: 'confirm',
       instructions: 'Confirm the name briefly',
@@ -45,12 +62,18 @@ describe('RunState continuity across Runtime.run calls', () => {
     const runId = sessionDerivedRunId(sessionId);
 
     let agentTurn = 0;
-    const hostSelect = async (): Promise<HostSelection> => ({ kind: 'enterFlow', flow });
 
     const driver: ChannelDriver = {
-      async runAgentTurn() {
+      async runAgentTurn(_node, ctx) {
         agentTurn += 1;
-        if (agentTurn === 1) {
+        if (!ctx.runState.activeFlow) {
+          return {
+            text: '',
+            toolResults: [],
+            control: { type: 'enterFlow', flowName: 'name-intake' },
+          };
+        }
+        if (agentTurn === 2) {
           return { text: 'What is your name?', toolResults: [] };
         }
         return {
@@ -74,7 +97,6 @@ describe('RunState continuity across Runtime.run calls', () => {
       defaultAgentId: 'support',
       sessionStore,
       defaultModel: stubModel,
-      hostSelect,
     });
 
     await runtime.run({

@@ -65,6 +65,7 @@ export interface VoiceDriverConfig {
 type CollectOutcome = 'complete' | 'interrupted';
 
 export class VoiceDriver implements ChannelDriver {
+  readonly outputCapability = 'native-realtime' as const;
   private readonly client: RealtimeAudioClient;
   private readonly toolDefs: Record<string, AnyTool>;
   private readonly maxSteps: number;
