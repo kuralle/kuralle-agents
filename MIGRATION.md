@@ -319,3 +319,38 @@ const agent = defineAgent({
 ```
 
 Codemod: replace `effectTools:` with `tools:` across agent configs; delete redundant agent-level `buildToolSet` lines.
+
+## Derived host routing (0.7.0)
+
+**Breaking:** the public routing-mode surface is removed. Routing behavior is derived from **(agent shape × driver output capability)**. See `docs/adr/0007-derived-host-routing.md`.
+
+| Before | After |
+|--------|--------|
+| `routing: { mode: 'structured' }` (or `'tools'` / `'llm'`) | Remove `mode` — behavior is derived from `flows` / `routes` / `agents` / `instructions` |
+| `routing: { default: 'support' }` | Model the fallback as a normal route with a semantic `when` (e.g. `{ agent: 'support', when: 'general support or anything else' }`) |
+| `routing: { always: true }` | Removed — there is no per-turn forced selector |
+| A triage agent with `instructions` + `routes` (meant to never speak) | Drop `instructions` so it derives as a **silent pure dispatcher** (routes/agents only) |
+
+What you keep: `routing: { model }` (the control-reasoning model for the lazy guard / pure-dispatcher classifier). What you gain: `routing: { dispatch: 'strict' }` (optional no-dispatch-text override for compliance text).
+
+```ts
+// Before
+const triage = defineAgent({
+  id: 'triage',
+  instructions: 'Route to the right specialist. Never speak to the user.',
+  routing: { mode: 'structured', default: 'support' },
+  routes: [{ agent: 'billing', when: 'billing' }, { agent: 'support', when: 'support' }],
+});
+
+// After — no instructions → derives as a silent pure dispatcher; fallback is a semantic route
+const triage = defineAgent({
+  id: 'triage',
+  routes: [
+    { agent: 'billing', when: 'billing or payment' },
+    { agent: 'support', when: 'general support or anything else' },
+  ],
+  routing: { model }, // optional: cheap control model for the classifier
+});
+```
+
+**Behavior change:** an answering agent (with `instructions`/`flows`/`tools`) now folds `enter_flow` / `transfer_to_agent` tools into its speaking turn — it answers or routes in one model call (no upfront per-turn selector). A routes/agents-only agent with no answering surface becomes a silent pure dispatcher. Internal: `HostControlContext.guard` removed — no consumer action unless you extended a `ChannelDriver`.

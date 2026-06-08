@@ -33,7 +33,7 @@ Each `routes` entry needs a `when` description and a target — either an `agent
 Routing is derived from which fields you populate — there is no `routing.mode`:
 
 - **Pure dispatcher** — `routes` / `agents` / `handoffs` only, with no local answering surface (no `instructions`, `tools`, `flows`, etc.). The runtime runs a silent internal classifier and dispatches without speaking.
-- **Answering agent** — has `instructions`, `flows`, `tools`, or other local affordances. Host-control tools (`enter_flow`, `transfer_to_agent`) fold routing into the speaking turn; a concurrent model-reasoned guard catches missed routes.
+- **Answering agent** — has `instructions`, `flows`, `tools`, or other local affordances. Host-control tools (`enter_flow`, `transfer_to_agent`) fold routing into the speaking turn; a **lazy** model-reasoned guard runs only when the turn produces no answer and no control tool, catching the case where the model neither answered nor routed.
 
 Set `routing: { model }` to classify with a separate (e.g. cheaper) control model. For compliance text that must never stream before dispatch resolves, set `routing: { dispatch: 'strict' }`.
 

@@ -91,7 +91,7 @@ See the [Flows guide](/guides/flows) for the full node model.
 
 ### `routes` and `routing`
 
-Add `routes` to make the agent route between specialists. Pure dispatchers (routes only, no answering surface) classify silently; answering agents use host-control tools plus a concurrent guard so dispatch never leaks as prose.
+Add `routes` to make the agent route between specialists. Pure dispatchers (routes only, no answering surface) classify silently; answering agents use host-control tools plus a lazy guard (it classifies only on a turn that produces no answer and no control tool) so dispatch never leaks as prose.
 
 See [Routing & Handoffs](/guides/routing).
 
