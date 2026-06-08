@@ -1,4 +1,4 @@
-import type { AgentConfig } from '../types/agentConfig.js';
+import type { AgentConfig, Instructions } from '../types/agentConfig.js';
 
 export interface DerivedAgentCapabilities {
   hasRoutes: boolean;
@@ -8,11 +8,84 @@ export interface DerivedAgentCapabilities {
   precedence: 'routes' | 'flows' | 'free';
 }
 
+export interface AgentShape {
+  hasDispatchTargets: boolean;
+  hasLocalProcedure: boolean;
+  hasLocalAnsweringSurface: boolean;
+  isAnsweringAgent: boolean;
+  isPureDispatcher: boolean;
+}
+
+function hasPopulatedInstructions(instructions?: Instructions): boolean {
+  if (instructions === undefined) {
+    return false;
+  }
+  if (typeof instructions === 'string') {
+    return instructions.trim().length > 0;
+  }
+  return true;
+}
+
+export function hasLocalAnsweringSurface(agent: AgentConfig): boolean {
+  if (hasPopulatedInstructions(agent.instructions)) {
+    return true;
+  }
+  if (agent.tools && Object.keys(agent.tools).length > 0) {
+    return true;
+  }
+  if (agent.globalTools && Object.keys(agent.globalTools).length > 0) {
+    return true;
+  }
+  if (agent.knowledge) {
+    return true;
+  }
+  if (agent.memory) {
+    return true;
+  }
+  if (agent.skills) {
+    return true;
+  }
+  if (agent.workspace) {
+    return true;
+  }
+  return false;
+}
+
+export function hasDispatchTargets(agent: AgentConfig): boolean {
+  const routes = agent.routes ?? [];
+  if (routes.some((route) => route.agent || route.flow)) {
+    return true;
+  }
+  if ((agent.agents?.length ?? 0) > 0) {
+    return true;
+  }
+  if ((agent.handoffs?.length ?? 0) > 0) {
+    return true;
+  }
+  return false;
+}
+
+export function deriveAgentShape(agent: AgentConfig): AgentShape {
+  const hasLocalProcedure = (agent.flows?.length ?? 0) > 0;
+  const answeringSurface = hasLocalAnsweringSurface(agent);
+  const dispatchTargets = hasDispatchTargets(agent);
+  const isAnsweringAgent = hasLocalProcedure || answeringSurface;
+  const isPureDispatcher = dispatchTargets && !isAnsweringAgent;
+
+  return {
+    hasDispatchTargets: dispatchTargets,
+    hasLocalProcedure,
+    hasLocalAnsweringSurface: answeringSurface,
+    isAnsweringAgent,
+    isPureDispatcher,
+  };
+}
+
 export function deriveAgentCapabilities(agent: AgentConfig): DerivedAgentCapabilities {
+  const shape = deriveAgentShape(agent);
   const hasRoutes = (agent.routes?.length ?? 0) > 0;
-  const hasFlows = (agent.flows?.length ?? 0) > 0;
+  const hasFlows = shape.hasLocalProcedure;
   const hasHandoffs = (agent.agents?.length ?? 0) > 0 || (agent.handoffs?.length ?? 0) > 0;
-  const hasFreeConversation = true;
 
   const precedence: DerivedAgentCapabilities['precedence'] = hasRoutes
     ? 'routes'
@@ -23,24 +96,8 @@ export function deriveAgentCapabilities(agent: AgentConfig): DerivedAgentCapabil
   return {
     hasRoutes,
     hasFlows,
-    hasFreeConversation,
+    hasFreeConversation: shape.isAnsweringAgent,
     hasHandoffs,
     precedence,
   };
-}
-
-export function shouldRunHostSelector(agent: AgentConfig, activeFlow?: string, alwaysRoute?: boolean): boolean {
-  if (activeFlow) {
-    return false;
-  }
-  if (alwaysRoute) {
-    return true;
-  }
-  // tools-mode folds flow entry into the speaking turn (enter_flow tool) — no
-  // upfront selector on keep turns. Routes still need it (no transfer tool yet).
-  if (agent.routing?.mode === 'tools') {
-    return false;
-  }
-  const { hasRoutes, hasFlows } = deriveAgentCapabilities(agent);
-  return hasRoutes || hasFlows;
 }

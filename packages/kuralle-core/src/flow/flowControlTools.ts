@@ -2,6 +2,7 @@
 export const FLOW_TRANSITION_CONTROL_TOOL_NAMES = new Set([
   'handoff',
   'transfer_to_agent',
+  'enter_flow',
   'final',
   'escalate',
   'recover',

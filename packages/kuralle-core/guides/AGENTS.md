@@ -99,7 +99,7 @@ See [FLOWS.md](./FLOWS.md) for transition patterns and a full runnable example.
 
 ## Routing and triage
 
-Add `routes` and `routing: { mode: 'structured', model }` to route user input to specialist agents or flows via the invisible `handoff` tool. Nest specialists in `agents`.
+Add `routes`/`agents` to route user input to specialists. Routing is derived from shape: an agent with its own answering surface (instructions/flows/tools) folds an invisible `transfer_to_agent` tool into its turn; a routes-only agent with no answering surface becomes a silent **pure dispatcher**. Set `routing: { model }` to choose the control-reasoning model. Nest specialists in `agents`.
 
 ```ts
 const billing = defineAgent({
@@ -117,7 +117,7 @@ const support = defineAgent({
   routes: [
     { agent: 'billing', when: 'billing, payment, invoice, or refund questions' },
   ],
-  routing: { mode: 'structured', model },
+  routing: { model },
   agents: [billing],
 });
 
@@ -160,7 +160,7 @@ const lead = defineAgent({
   model,
   routes: [{ agent: 'specialist', when: 'specialist topic' }],
   agents: [specialist],
-  routing: { mode: 'structured', model },
+  routing: { model },
 });
 ```
 
@@ -281,7 +281,7 @@ See [standalone-agent.ts](../examples/agents/standalone-agent.ts) (Example 4) fo
 | Pattern | Description | Handoffs | User sees |
 |---------|-------------|----------|-----------|
 | Agent Consultation | Lead calls specialist tools, synthesizes one answer | No | One agent |
-| Structured routing | `routes` + `routing: { mode: 'structured' }` picks a specialist | Yes (invisible) | Active specialist after route |
+| Derived routing | `routes`/`agents` route to a specialist (model-reasoned over `when`) | Yes (invisible) | Active specialist after route |
 | Explicit handoffs | `handoffs: ['billing']` exposes the `handoff` tool | Yes (invisible) | Active specialist after handoff |
 | Free conversation | No `flows` or `routes` | No | Same agent throughout |
 

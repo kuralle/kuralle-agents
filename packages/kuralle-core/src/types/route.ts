@@ -9,13 +9,10 @@ export interface Route {
 }
 
 export interface RoutingPolicy {
-  /** `'tools'` folds flow entry into the speaking turn via an `enter_flow` tool
-   *  (no upfront `generateObject` selector on keep turns). `'structured'`/`'llm'`
-   *  run the classic pre-generation host selector. Default: legacy selector. */
-  mode?: 'structured' | 'llm' | 'tools';
+  /** Model for control-path reasoning (guard, pure-dispatcher classifier). */
   model?: LanguageModel;
-  default?: string;
-  always?: boolean;
+  /** Buffer text until guard/control resolves (compliance text). Default: relaxed cancel-on-late-control. */
+  dispatch?: 'strict';
 }
 
 export type { HandoffInputFilter } from '../runtime/handoffFilters.js';

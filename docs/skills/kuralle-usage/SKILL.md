@@ -11,7 +11,7 @@ This skill is a map. Read only the sections you need and follow the checklists.
 
 - Default to **npm install** usage. Monorepo paths are fallback only.
 - Put **SOP in flows**, not prompts.
-- Use **structured routing** (`routes` + `routing.mode: 'structured'`) to prevent user-facing dispatch leaks.
+- **Pure dispatchers** (`routes` only, no answering surface) route silently; **answering agents** use host-control tools + guard so dispatch never leaks.
 - Keep tools deterministic and data-only; flow control is node transitions.
 
 ## v2 mental model

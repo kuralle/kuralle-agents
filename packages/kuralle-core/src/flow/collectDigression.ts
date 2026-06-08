@@ -80,7 +80,6 @@ export async function runCollectDigression(
     agent,
     run,
     model: agent.routing?.model ?? ctx.controlModel,
-    alwaysRoute: agent.routing?.always === true,
     excludeFlowNames: [activeFlowName],
   });
 

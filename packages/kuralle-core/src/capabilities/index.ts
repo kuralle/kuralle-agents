@@ -227,11 +227,8 @@ function assemblePromptSections(basePrompt: string | undefined, sections: Prompt
 
 // ─── Re-exports ──────────────────────────────────────────────────────────────
 
-export { TriageCapability } from './TriageCapability.js';
 export { ExtractionCapability } from './ExtractionCapability.js';
 export type { ExtractionCapabilityConfig } from './ExtractionCapability.js';
-export { HandoffCapability } from './HandoffCapability.js';
-export type { HandoffTarget } from './HandoffCapability.js';
 export { GuardrailCapability } from './GuardrailCapability.js';
 export { AutoRetrieveCapability } from './AutoRetrieveCapability.js';
 export type { AutoRetrieveCapabilityConfig, RetrieveProvider } from './AutoRetrieveCapability.js';

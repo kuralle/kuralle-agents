@@ -23,9 +23,7 @@ export function isEnterFlowResult(result: unknown): result is EnterFlowResult {
   );
 }
 
-/** Build the model-visible `enter_flow` control tool from the currently
- *  available flows (caller excludes completed/active flows). Used only on the
- *  host free-conversation turn when `routing.mode === 'tools'`. */
+/** Build the model-visible `enter_flow` control tool from available flows. */
 export function createEnterFlowTool(availableFlows: Flow[]): AnyTool {
   const names = availableFlows.map((flow) => flow.name) as [string, ...string[]];
   const lines = availableFlows

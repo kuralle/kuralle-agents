@@ -104,8 +104,8 @@ For external side effects, tools receive a stable `idempotencyKey` in
 
 ## Routing & Handoffs
 
-Use `routes` + `routing: { mode: 'structured', model }` for triage without user-visible leaks.
-Use `handoffs: ['billing']` to expose the invisible `handoff` tool to specialists.
+Use `routes`/`agents` for triage without user-visible leaks — routing is derived from shape (a routes-only agent is a silent pure dispatcher; an answering agent folds `transfer_to_agent` into its turn). Set `routing: { model }` to choose the control model.
+Use `handoffs: ['billing']` to expose the invisible `transfer_to_agent` tool to specialists.
 
 ```ts
 const support = defineAgent({

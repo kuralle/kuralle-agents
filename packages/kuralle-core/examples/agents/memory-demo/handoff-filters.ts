@@ -88,7 +88,7 @@ const triageAgent = defineAgent({
       filter: composeFilters(handoffFilters.removeToolHistory, handoffFilters.keepRecentMessages(5)),
     },
   ],
-  routing: { default: 'support', mode: 'structured' },
+  routing: {},
   agents: [supportAgent, refundAgent],
 });
 

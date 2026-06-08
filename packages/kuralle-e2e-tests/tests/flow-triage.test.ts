@@ -65,7 +65,7 @@ describe('v2 offline flow + triage (text Runtime)', () => {
     model: stubModel,
     routes: [{ agent: 'billing', when: 'billing or payment questions' }],
     agents: [billing],
-    routing: { mode: 'structured', model: stubModel },
+    routing: { model: stubModel },
   });
 
   it('progresses a flow across two nodes over multiple turns', async () => {

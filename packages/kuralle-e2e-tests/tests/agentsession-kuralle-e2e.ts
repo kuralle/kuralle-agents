@@ -456,7 +456,7 @@ function triageAgentScenario() {
       { agent: 'billing', when: 'billing, balance, or payment questions' },
     ],
     agents: [tracking, billing],
-    routing: { mode: 'structured', model },
+    routing: { model },
   });
 
   const runtime = new Runtime({

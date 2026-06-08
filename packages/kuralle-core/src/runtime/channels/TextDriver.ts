@@ -12,7 +12,8 @@ import { consumePendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
-import { speakGated, type TokenSource } from './streaming/speakGated.js';
+import { speakWithHostControl } from './streaming/hostControlSpeak.js';
+import type { TokenSource } from './streaming/speakGated.js';
 import { resolveStreamMode } from './streaming/mode.js';
 import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
@@ -24,6 +25,7 @@ export interface TextDriverConfig {
 }
 
 export class TextDriver implements ChannelDriver {
+  readonly outputCapability = 'kuralle-controlled-text' as const;
   private readonly toolDefs: Record<string, AnyTool>;
   private readonly maxSteps: number;
 
@@ -148,27 +150,39 @@ export class TextDriver implements ChannelDriver {
       },
     };
 
-    const spoken = await speakGated({
-      ctx,
-      mode,
-      turnId,
-      source,
-      runGate: async (text, _final) => {
-        const r = await applyPostTurnPolicies(ctx, text, toolCallsMade, gather.citations ?? []);
-        return {
-          blocked: !r.proceed,
-          text: r.proceed ? r.text : (r.blockedMessage ?? r.text),
-          reason: r.control?.reason,
-          control: r.control,
-          confidence: r.confidence,
-        };
-      },
-    });
+    const runGate = async (text: string, _final: boolean) => {
+      const r = await applyPostTurnPolicies(ctx, text, toolCallsMade, gather.citations ?? []);
+      return {
+        blocked: !r.proceed,
+        text: r.proceed ? r.text : (r.blockedMessage ?? r.text),
+        reason: r.control?.reason,
+        control: r.control,
+        confidence: r.confidence,
+      };
+    };
+
+    const speakFn = node.hostControl
+      ? speakWithHostControl({
+          ctx,
+          mode,
+          turnId,
+          source,
+          runGate,
+          dispatchMode: node.hostControl.dispatchMode,
+          guard: node.hostControl.guard,
+          getToolControl: () => out.control,
+        })
+      : (await import('./streaming/speakGated.js')).speakGated({
+          ctx,
+          mode,
+          turnId,
+          source,
+          runGate,
+        });
+
+    const spoken = await speakFn;
 
     out.text = spoken.text;
-    // The post-turn gate's control (grounding/recover) wins when set; otherwise
-    // preserve any control raised during tool execution (e.g. enter_flow / handoff
-    // tool results classified at out.control above), which speakGated doesn't see.
     out.control = spoken.control ?? out.control;
     out.confidence = spoken.confidence;
 

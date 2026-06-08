@@ -18,25 +18,26 @@ import { defineAgent } from '@kuralle-agents/core';
 
 const triage = defineAgent({
   id: 'triage',
-  instructions: 'Route the user to the right specialist.',
-  model: openai('gpt-4o-mini'),
   routes: [
     { agent: 'billing', when: 'billing question or payment issue' },
-    { agent: 'support', when: 'product support request' },
+    { agent: 'support', when: 'general product support or anything else' },
   ],
-  routing: { mode: 'structured' },
+  routing: { model: openai('gpt-4o-mini') },
 });
 ```
 
 Each `routes` entry needs a `when` description and a target — either an `agent` (a destination agent's `id`) or a `flow` (a flow on this agent). The model uses the `when` descriptions to select the right route.
 
-## Structured routing
+## Derived routing behavior
 
-The router always classifies via schema: an internal classifier model returns a structured decision, so the routing choice never reaches the user as prose. By default the router runs only when no flow is active — set `routing: { always: true }` to re-run it on every turn, and `routing: { model }` to classify with a separate (e.g. cheaper) model.
+Routing is derived from which fields you populate — there is no `routing.mode`:
 
-<Aside type="note">
-  `mode` and `default` are accepted on `routing` but the runtime does not yet act on them — routing is always structured, and an unmatched turn is handled by the triage agent's own reply rather than routed to a fallback. Give every specialist a clear `when` so the classifier can place each request.
-</Aside>
+- **Pure dispatcher** — `routes` / `agents` / `handoffs` only, with no local answering surface (no `instructions`, `tools`, `flows`, etc.). The runtime runs a silent internal classifier and dispatches without speaking.
+- **Answering agent** — has `instructions`, `flows`, `tools`, or other local affordances. Host-control tools (`enter_flow`, `transfer_to_agent`) fold routing into the speaking turn; a concurrent model-reasoned guard catches missed routes.
+
+Set `routing: { model }` to classify with a separate (e.g. cheaper) control model. For compliance text that must never stream before dispatch resolves, set `routing: { dispatch: 'strict' }`.
+
+Model every fallback as a normal route with a semantic `when` (e.g. "general support") — there is no `routing.default`.
 
 ## Handoffs
 
