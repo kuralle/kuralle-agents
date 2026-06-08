@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.0 — Derived host routing (BREAKING)
+
+Unified minor bump across the graph (0.6.1 → 0.7.0). **Breaking**: removes the public routing-mode surface. Routing behavior is now derived from **(agent shape × driver output capability)** — see `docs/adr/0007-derived-host-routing.md`.
+
+**Removed (breaking):**
+- `routing.mode`, `routing.always`, `routing.default` from `RoutingPolicy` — there is no routing-mode enum.
+- Lexical/deterministic routing (`deterministicRouteMatch`, `keywordRouteFallback`) on the hot path — routing is **model-reasoned only** (multilingual-safe).
+- Stale `Flow.hybrid` / "hybrid mode" doc references (the feature was removed in the v2 reset).
+
+**What's new:**
+- **Derived routing** — answering agents (`instructions`/`flows`/`tools`/…) fold `enter_flow` + `transfer_to_agent` control tools into the speaking turn; routes/agents-only agents with no answering surface become **silent pure dispatchers**. A keep turn pays **zero** routing cost (the per-turn `generateObject` selector is gone — keep-turn TTFT ~2.9s → ~0.9s in the A/B smoke).
+- **Lazy host-control guard** — a forgot-to-route net that classifies **only** when an answering turn ends with no control tool and no substantive text. Answered + main-control turns make zero classifier calls; the guard has a single owner (the host loop) and is evaluated at most once per turn. Emits `host-guard` telemetry.
+- **`routing.dispatch?: 'strict'`** — optional compliance override (no user-facing dispatch text) for controlled-TTS / text channels. Strictness otherwise derives from the driver's output capability (native-realtime stays advisory, consistent with ADR-0004).
+- **`routing.model`** — still selects the control-reasoning model for the guard / pure-dispatcher classifier.
+
+**Migration:**
+- Remove `routing.mode` (`'tools'`/`'structured'`/`'llm'`), `routing.always`, `routing.default` — populate `flows`/`routes`/`agents`/`instructions` and the runtime derives behavior. Model a fallback as a normal semantic route/child agent, not `routing.default`.
+- A routes-only triage agent now derives as a **silent pure dispatcher** (no fallback prose) — add `instructions` if it must speak before routing.
+- Internal: `HostControlContext.guard` removed (drivers no longer own the guard). No consumer action unless you extended a `ChannelDriver`.
+
+See `MIGRATION.md` and `docs/adr/0007-derived-host-routing.md`.
+
 ## 0.6.1 — zod 4
 
 Unified patch bump across the graph (0.6.0 → 0.6.1). Migrates the framework from **zod 3 to zod 4**.
