@@ -9,7 +9,10 @@ export interface Route {
 }
 
 export interface RoutingPolicy {
-  mode?: 'structured' | 'llm';
+  /** `'tools'` folds flow entry into the speaking turn via an `enter_flow` tool
+   *  (no upfront `generateObject` selector on keep turns). `'structured'`/`'llm'`
+   *  run the classic pre-generation host selector. Default: legacy selector. */
+  mode?: 'structured' | 'llm' | 'tools';
   model?: LanguageModel;
   default?: string;
   always?: boolean;

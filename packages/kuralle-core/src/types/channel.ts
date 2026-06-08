@@ -47,6 +47,7 @@ interface ToolResultRecord {
 
 export type TurnControl =
   | { type: 'handoff'; target: string; reason?: string }
+  | { type: 'enterFlow'; flowName: string; reason?: string }
   | { type: 'end'; reason: string }
   | { type: 'escalate'; reason: string }
   | { type: 'recover'; reason?: string };

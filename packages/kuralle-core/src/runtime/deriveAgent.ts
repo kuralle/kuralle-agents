@@ -36,6 +36,11 @@ export function shouldRunHostSelector(agent: AgentConfig, activeFlow?: string, a
   if (alwaysRoute) {
     return true;
   }
+  // tools-mode folds flow entry into the speaking turn (enter_flow tool) — no
+  // upfront selector on keep turns. Routes still need it (no transfer tool yet).
+  if (agent.routing?.mode === 'tools') {
+    return false;
+  }
   const { hasRoutes, hasFlows } = deriveAgentCapabilities(agent);
   return hasRoutes || hasFlows;
 }
