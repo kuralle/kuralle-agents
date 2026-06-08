@@ -21,12 +21,12 @@ closeRun → persist RunState, memory ingest, emit done
 | Condition | Action |
 |-----------|--------|
 | Active flow in RunState | `runFlow` over current node |
-| Agent has `routes` | Structured selector → enter flow or handoff |
-| Agent has `flows` | Intent selector → enter matching flow |
-| Otherwise | Free conversation via `ChannelDriver` |
+| Pure dispatcher (routes/agents, no answering surface) | Silent model classify → enter flow or transfer |
+| Answering agent (instructions/flows/tools…) | Speaking turn with `enter_flow`/`transfer_to_agent` tools + concurrent guard |
+| No host targets | Free conversation via `ChannelDriver` |
 | Handoff requested | Loop up to `maxHandoffs` |
 
-Precedence: routes wrap flows wrap free conversation.
+Behavior derives from shape: a routes/agents-only agent is a silent pure dispatcher; an answering agent folds host-control tools + a guard into its turn.
 
 ## runFlow and node kinds
 

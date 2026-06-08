@@ -8,10 +8,10 @@ Behavior is **derived from field presence** — no agent type tag:
 |---------------|---------------------|
 | `instructions` + `tools` | Free conversation with tools |
 | `+ flows` | Runs intent-selected SOPs via `runFlow` |
-| `+ routes` | Dispatches each turn (structured routing) |
+| `+ routes` | Routes each turn — model-reasoned (silent dispatcher, or host-control tools) |
 | `+ agents` / `handoffs` | Escalates or hands off to specialists |
 
-Precedence: routes → flows → free conversation.
+Behavior derives from shape: routes/agents-only → silent pure dispatcher; answering surface → host-control tools + guard.
 
 ## Free conversation agent
 

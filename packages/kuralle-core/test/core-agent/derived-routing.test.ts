@@ -302,6 +302,50 @@ describe('strict dispatch flush-on-keep', () => {
     expect(result.text).toBe('');
     expect(events.some((e) => e.type === 'text-delta')).toBe(false);
   });
+
+  // RR-09: a guard that resolves BEFORE the first token must not route a turn the
+  // model is about to answer substantively (answer-authoritative, pre-first-token).
+  it('does not route when the guard resolves before a substantive answer arrives', async () => {
+    const { mock, afterEach } = await import('bun:test');
+    afterEach(() => mock.restore());
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        streamText: () => ({
+          fullStream: (async function* () {
+            await new Promise((r) => setTimeout(r, 50)); // answer arrives AFTER the guard
+            yield Object.assign({ type: 'text-delta' }, { text: 'Substantive answer.' });
+          })(),
+          finishReason: Promise.resolve('stop'),
+          response: Promise.resolve({ messages: [] }),
+          toolCalls: Promise.resolve([]),
+        }),
+      };
+    });
+    const events: HarnessStreamPart[] = [];
+    const { session, runStore, runState } = await setupDurableHarness('strict-race', 'strict-race');
+    const ctx = await createRunContext({
+      session,
+      runStore,
+      runState,
+      steps: [],
+      toolExecutor: new CoreToolExecutor({ tools: {} }),
+      model: stubModel,
+      emit: (p) => events.push(p),
+    });
+    const node = reply({ id: 'g', instructions: 'hi' });
+    const resolved = resolveReplyNode(node, {}, { freeConversation: true });
+    resolved.hostControl = {
+      dispatchMode: 'strict',
+      advisoryDispatch: false,
+      guard: Promise.resolve({ action: 'enterFlow', flowName: 'book' }), // resolves immediately
+    };
+
+    const result = await new TextDriver().runAgentTurn(resolved, ctx);
+    expect(result.control).toBeUndefined();
+    expect(result.text).toBe('Substantive answer.');
+  });
 });
 
 // RR-01: native realtime must not drop a host-control tool result. The post-hoc

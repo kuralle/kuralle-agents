@@ -251,7 +251,7 @@ await handle;
 
 ### When NOT to Use
 
-- **Routing to a different agent persona** — Use `routes` + structured routing instead
+- **Routing to a different agent persona** — Use `routes`/`agents` (derived routing) instead
 - **Simple API calls** — Use `defineTool` / `createTool` directly without the specialist framing
 
 ### Example
@@ -271,7 +271,7 @@ See [standalone-agent.ts](../examples/agents/standalone-agent.ts) (Example 4) fo
 ## Best Practices
 
 1. **Keep SOPs in flows** — If instructions exceed ~20 lines of procedure, move them into flow nodes
-2. **Use structured routing for triage** — Prevents user-visible handoff leaks
+2. **Use derived routing for triage** — Prevents user-visible handoff leaks
 3. **Tools return data only** — No conversational text in tool outputs; flow tools return transitions
 4. **Filter handoff context** — Use `handoffFilters` on routes when specialists need trimmed history
 5. **Lead agent synthesizes** — Consultation tools return structured data; the lead agent speaks to the user

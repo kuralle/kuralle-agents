@@ -103,6 +103,11 @@ function bookingDriver(overrides?: {
 }): ChannelDriver {
   return {
     async runAgentTurn(resolved) {
+      // Host free-conversation turn: no answer so the injected guard routes
+      // into the flow (derived routing — ADR 0007).
+      if (resolved.node.id.endsWith('__host')) {
+        return { text: '', toolResults: [] };
+      }
       if (resolved.node.id.startsWith('collectDetails')) {
         const payload =
           overrides?.collectPayload ?? {
@@ -274,6 +279,17 @@ describe('booking_example', () => {
         streamText: () => {
           streamCall += 1;
           if (streamCall === 1) {
+            // Host free-conversation turn: no answer → the injected guard routes
+            // into the flow (derived routing — ADR 0007).
+            return {
+              fullStream: (async function* () {})(),
+              finishReason: Promise.resolve('stop'),
+              response: Promise.resolve({ messages: [] }),
+              toolCalls: Promise.resolve([]),
+            };
+          }
+          if (streamCall === 2) {
+            // Flow greet node.
             return {
               fullStream: (async function* () {
                 yield Object.assign({ type: 'text-delta' }, { text: 'Welcome!' });
