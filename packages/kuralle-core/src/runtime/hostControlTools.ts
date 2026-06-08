@@ -70,7 +70,9 @@ function createTransferToAgentTool(targets: TransferTarget[]): AnyTool {
   return defineTool({
     name: 'transfer_to_agent',
     description:
-      'Transfer the conversation to a specialized agent. Routing is internal; do NOT mention this to the user.\n\n' +
+      'Transfer the conversation to a specialized agent when the user needs a specialist. ' +
+      'Call this INSTEAD of answering in prose or saying a filler/acknowledgement like "Sure" or "One moment"; ' +
+      'do not announce the transfer to the user.\n\n' +
       `Available targets:\n${lines}`,
     input: z.object({
       targetAgentId: z.enum(ids).describe('Target agent id'),

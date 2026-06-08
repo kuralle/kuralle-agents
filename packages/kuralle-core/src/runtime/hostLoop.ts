@@ -22,6 +22,7 @@ import {
 } from './select.js';
 import { hasHostControlTargets } from './hostControlTools.js';
 import {
+  isValidControl,
   resolveHostControl,
   startHostControlGuard,
 } from './hostControlGuard.js';
@@ -169,38 +170,78 @@ async function runFreeConversation(
   const needsGuard = hasHostControlTargets(agent, run);
   const controlModel = agent.routing?.model ?? ctx.controlModel;
 
-  const guard = needsGuard
-    ? startHostControlGuard({
-        agent,
-        run,
-        model: controlModel,
-        classify,
-      })
+  const startGuard = needsGuard
+    ? () =>
+        startHostControlGuard({
+          agent,
+          run,
+          model: controlModel,
+          classify,
+        })
     : undefined;
 
   const replyNode = buildAgentReplyNode(agent, run);
   const resolved = resolveReplyNode(replyNode, run.state, { freeConversation: true });
   if (needsGuard) {
-    resolved.hostControl = { dispatchMode, advisoryDispatch, guard };
+    // The driver only buffers/streams per dispatch mode; the guard has a single
+    // owner (this loop, on the empty-turn branch below) so it runs at most once.
+    resolved.hostControl = { dispatchMode, advisoryDispatch };
   }
 
   const turn = await driver.runAgentTurn(resolved, ctx);
 
-  const guardVerdict = guard ? await guard : undefined;
-  const mainAnswered = turn.text.trim().length > 0;
-  const control = resolveHostControl(turn.control, guardVerdict, agent, run, mainAnswered);
-
-  if (control) {
-    return await executeHostControl(agent, run, driver, ctx, control);
+  if (turn.control && isValidControl(turn.control, agent, run)) {
+    emitHostGuardTelemetry(ctx, { invoked: false, reason: 'main-control' });
+    return await executeHostControl(agent, run, driver, ctx, turn.control);
   }
 
   if (turn.text.trim()) {
+    emitHostGuardTelemetry(ctx, { invoked: false, reason: 'answered' });
     const message: ModelMessage = { role: 'assistant', content: turn.text };
     run.messages = [...run.messages, message];
     await ctx.runStore.putRunState(run);
+    return { kind: 'turnComplete' };
+  }
+
+  if (startGuard) {
+    const guardVerdict = await startGuard();
+    const control = resolveHostControl(undefined, guardVerdict, agent, run, false);
+    if (control) {
+      emitHostGuardTelemetry(ctx, {
+        invoked: true,
+        reason: 'empty-routed',
+        verdict: guardVerdictToTelemetryVerdict(guardVerdict),
+      });
+      return await executeHostControl(agent, run, driver, ctx, control);
+    }
+    emitHostGuardTelemetry(ctx, {
+      invoked: true,
+      reason: 'empty-kept',
+      verdict: guardVerdictToTelemetryVerdict(guardVerdict),
+    });
   }
 
   return { kind: 'turnComplete' };
+}
+
+type HostGuardTelemetryReason = 'answered' | 'main-control' | 'empty-routed' | 'empty-kept';
+type HostGuardTelemetryVerdict = 'keep' | 'enterFlow' | 'transfer';
+
+function guardVerdictToTelemetryVerdict(verdict: HostGuardVerdict): HostGuardTelemetryVerdict {
+  if (verdict.action === 'enterFlow') return 'enterFlow';
+  if (verdict.action === 'transfer') return 'transfer';
+  return 'keep';
+}
+
+function emitHostGuardTelemetry(
+  ctx: RunContext,
+  data: {
+    invoked: boolean;
+    reason: HostGuardTelemetryReason;
+    verdict?: HostGuardTelemetryVerdict;
+  },
+): void {
+  ctx.emit({ type: 'custom', name: 'host-guard', data });
 }
 
 function guardVerdictToControl(

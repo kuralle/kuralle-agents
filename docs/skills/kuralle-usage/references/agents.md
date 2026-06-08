@@ -71,7 +71,6 @@ const agent = defineAgent({
       description: 'Issue intake',
       start: collectIssue,
       nodes: [collectIssue, createTicket],
-      hybrid: true,
     }),
   ],
 });

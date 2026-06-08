@@ -20,7 +20,7 @@ Use this skill when building structured conversation flows: appointment booking,
 
 - `references/implicit-tools.md` - Transition tools via `next` handlers
 - `references/extraction-nodes.md` - **`collect` nodes** (structured fields across turns)
-- `references/advanced-flow.md` - **routing.model, contextStrategy, hybrid mode, metrics**
+- `references/advanced-flow.md` - **routing.model, contextStrategy, metrics**
 - `references/prompt-best-practices.md` - Prompt patterns that work vs don't
 - `references/tool-calling-debug.md` - Debugging when models won't call tools
 - `references/production-checklist.md` - Pre-deployment verification
