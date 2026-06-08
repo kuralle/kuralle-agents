@@ -192,7 +192,7 @@ Extend `AgentConfig` fields and `deriveAgentCapabilities`. Do not add `type` dis
 
 ### Routing safety
 
-Structured routing must not emit user-visible dispatch text.
+Routing/dispatch must not emit user-visible dispatch text.
 
 ### Durability
 

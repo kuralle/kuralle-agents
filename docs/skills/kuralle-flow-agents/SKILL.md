@@ -13,7 +13,7 @@ Use this skill when building structured conversation flows: appointment booking,
 - **`collect` nodes collect multi-field data with zero manual submit wiring**: use them instead of rolling your own collection tools
 - **Don't duplicate transition tools**: One tool per transition; let `next` handlers route on tool results
 - **Prompts matter more than architecture**: Short, direct prompts = better tool calling
-- **`routing.model` in hybrid mode reduces latency 20-40%**: set it to a cheap/fast model on `routing`
+- **`routing.model` is the control model for routing** (the host guard / pure-dispatcher classifier): set a cheap/fast model on `routing` to cut routing latency
 - **Test via full Runtime + TurnHandle**: Production behavior differs from isolated node tests
 
 ## Navigation

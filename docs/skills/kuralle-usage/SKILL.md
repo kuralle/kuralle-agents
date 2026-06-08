@@ -181,7 +181,7 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'demo' });
 ## Non-negotiables
 
 - SOP lives in flows (`reply`/`collect`/`action`/`decide`), not system prompts.
-- Structured routing when `routes` dispatch.
+- Model-reasoned routing when `routes` dispatch.
 - Tools must not speak to users.
 - Flow control via node `next` / returned transitions — not tool prose.
 - Grounding must be explicit if you promise it.

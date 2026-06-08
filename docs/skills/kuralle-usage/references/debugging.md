@@ -13,8 +13,7 @@
 Symptom: user sees “handoff” language.
 
 Fix:
-- Set `triageMode: "structured"`
-- Ensure triage agent never emits text
+- Make the triage agent a **pure dispatcher**: give it only `routes`/`agents` and no answering surface (no `instructions`/`flows`/`tools`) so it derives a silent classifier and never emits text
 
 ## No context retrieved
 

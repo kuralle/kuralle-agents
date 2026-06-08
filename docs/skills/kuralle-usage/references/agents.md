@@ -94,7 +94,7 @@ const triageAgent = defineAgent({
 });
 ```
 
-Structured routing emits schema-only output — no user-facing dispatch leaks.
+Routing is model-reasoned and schema-only — no user-facing dispatch leaks.
 
 ## Sub-agent consultation via tools
 

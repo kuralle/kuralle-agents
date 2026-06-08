@@ -46,7 +46,7 @@ The `hostControlGuard` is a **forgot-to-route net, not a second-guesser**: it ov
 - **Known limitation (tracked):** the "substantive answer" predicate is currently `trim().length > 0`. A model that emits only a short filler/ack ("Sure.") and *should* have routed is not caught. This is accepted as the lesser evil vs. hijacking correct answers, and is mitigated because the answering model holds the `enter_flow`/`transfer_to_agent` tools directly. A **model-reasoned answer-adequacy verdict** (filler vs. real answer, no lexical rules) is the planned refinement.
 
 ### D″. Strict dispatch flushes on keep
-Strict dispatch buffers tokens only **until the guard resolves** — not the whole turn. On a `keep` verdict it flushes the buffered tokens and streams the remainder live, so strict (controlled-TTS / compliance-text) TTFT ≈ guard latency, not full-generation. Only host control (tool or guard) suppresses emission entirely.
+Strict dispatch buffers tokens until the model's answer intent is observable — the first substantive token (the model is answering), source end (no answer), or the model's own control tool — and only then awaits the guard. A guard route is honored only when the model did not answer (answer-authoritative). On `keep` it flushes the buffered tokens and streams the remainder live, so strict (controlled-TTS / compliance-text) TTFT ≈ first-token / guard latency, not full-generation. Any host control (tool or guard) suppresses emission entirely.
 
 ### E. Delete the mode/lexical surface (breaking)
 - **Delete** `routing.mode`, `routing.always`, `routing.default` from public config.

@@ -26,7 +26,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 
 **Durable tool execution.** Every `defineTool` call is logged in an append-only effect log. Retries replay against the log — a payment tool doesn't charge twice, a booking tool doesn't double-book.
 
-**Few primitives, composed.** `defineAgent`, `defineFlow`, `defineTool`, `createRuntime`. That's the core API. Structured routing, multi-agent composition, and session persistence are all derived from these.
+**Few primitives, composed.** `defineAgent`, `defineFlow`, `defineTool`, `createRuntime`. That's the core API. Routing, multi-agent composition, and session persistence are all derived from these.
 
 ## Installation
 
