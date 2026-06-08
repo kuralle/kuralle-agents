@@ -111,6 +111,11 @@ function pharmacyDriver(overrides?: {
 }): ChannelDriver {
   return {
     async runAgentTurn(resolved) {
+      // Host free-conversation turn: no answer so the injected guard routes
+      // into the flow (derived routing — ADR 0007).
+      if (resolved.node.id.endsWith('__host')) {
+        return { text: '', toolResults: [] };
+      }
       if (resolved.node.id.startsWith('verifyIdentity')) {
         const payload =
           overrides?.identityPayload ?? {

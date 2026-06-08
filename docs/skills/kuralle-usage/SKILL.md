@@ -27,7 +27,7 @@ This skill is a map. Read only the sections you need and follow the checklists.
 | Text channel | default `TextDriver` |
 | Voice channel | `VoiceDriver` (same agent definition) |
 
-Behavior is **derived from field presence** — no agent type tag. Precedence: routes → flows → free conversation.
+Behavior is **derived from field presence** — no agent type tag, no `routing.mode`. A routes/agents-only agent (no answering surface) is a silent pure dispatcher; an answering agent folds host-control tools (`enter_flow`/`transfer_to_agent`) + a guard into its turn.
 
 ## Build path
 
@@ -56,7 +56,7 @@ Read only what you need:
 **Flows and tools:**
 - `references/flows.md` - `defineFlow`, node kinds, returned transitions
 - `references/extraction-nodes.md` - `collect` nodes, Standard Schema, multi-turn gather
-- `references/triage.md` - `routes` + structured routing without leaks
+- `references/triage.md` - `routes` + model-reasoned routing without leaks
 - `references/tools.md` - `defineTool`, `tools`, approval pauses
 - `references/llm-solidness-playbook.md` - production hardening checklist
 

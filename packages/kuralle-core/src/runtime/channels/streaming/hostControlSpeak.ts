@@ -18,33 +18,29 @@ export async function speakWithHostControl(args: {
   const { ctx, mode, turnId, source, runGate, dispatchMode, guard, getToolControl } = args;
 
   if (dispatchMode === 'strict' && guard) {
-    // Strict no-dispatch: emit NOTHING until the guard resolves. Buffer tokens
-    // only until the guard returns — NOT the whole source — so a keep verdict
-    // flushes immediately and streams the remainder live (TTFT ≈ guard latency,
-    // not full-generation). Any host control (tool or guard) emits no text.
+    // Strict no-dispatch: emit NOTHING until we know keep vs route. The answer is
+    // authoritative, so a guard ROUTE may only be honored once we know the model
+    // did NOT answer — i.e. after the model's intent is observable. We therefore
+    // buffer until the FIRST substantive token (model is answering), source end
+    // (no answer), or the model's own control tool. We do NOT race the guard:
+    // honoring an early guard verdict before any token would mis-route a turn the
+    // model was about to answer (the answer-authoritative rule, pre-first-token).
     const it = source[Symbol.asyncIterator]();
     const buffered: { delta: string }[] = [];
-    let inflight: Promise<IteratorResult<{ delta: string }>> | undefined = it.next();
-    const guardSentinel = guard.then(() => 'guard' as const);
+    let sourceDone = false;
+    let answered = false;
 
-    while (inflight) {
-      const winner = await Promise.race([
-        inflight.then((r) => ({ kind: 'chunk' as const, r })),
-        guardSentinel.then(() => ({ kind: 'guard' as const })),
-      ]);
-      if (winner.kind === 'guard') {
+    while (!getToolControl()) {
+      const r = await it.next();
+      if (r.done) {
+        sourceDone = true;
         break;
       }
-      if (winner.r.done) {
-        inflight = undefined;
+      buffered.push(r.value);
+      if (r.value.delta.trim().length > 0) {
+        answered = true;
         break;
       }
-      if (getToolControl()) {
-        inflight = undefined;
-        break;
-      }
-      buffered.push(winner.r.value);
-      inflight = it.next();
     }
 
     const guardVerdict = await guard;
@@ -52,33 +48,27 @@ export async function speakWithHostControl(args: {
     if (toolControl) {
       return { text: '', control: toolControl };
     }
-    // Guard is a forgot-to-route net: only honor it when the model produced no
-    // substantive answer. A real answer is authoritative (model chose keep).
-    const answered = buffered.map((b) => b.delta).join('').trim().length > 0;
+    // Guard is a forgot-to-route net: honored only when the model did not answer.
     const guardControl = guardVerdictToControl(guardVerdict);
     if (guardControl && !answered) {
       return { text: '', control: guardControl };
     }
 
-    // Keep: flush buffered, then continue streaming live (incl. the in-flight chunk).
+    // Keep: flush buffered, then stream the remainder live (TTFT ≈ first token).
     const flushSource: TokenSource = {
       async *[Symbol.asyncIterator]() {
         for (const chunk of buffered) {
           yield chunk;
         }
-        if (inflight) {
-          const r = await inflight;
-          if (!r.done && !getToolControl()) {
-            yield r.value;
+        if (!sourceDone) {
+          let cur = await it.next();
+          while (!cur.done) {
+            if (getToolControl()) {
+              return;
+            }
+            yield cur.value;
+            cur = await it.next();
           }
-        }
-        let cur = await it.next();
-        while (!cur.done) {
-          if (getToolControl()) {
-            return;
-          }
-          yield cur.value;
-          cur = await it.next();
         }
       },
     };
