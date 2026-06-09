@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.1 — On-demand retrieval (declared grounding contract)
+
+Unified patch bump across the graph (0.7.0 → 0.7.1). No API removed, no type change, not breaking; the existing `knowledge.autoRetrieve` boolean now declares **who invokes retrieval** — the runtime or the model. See `docs/adr/0008-declared-grounding-contract.md`.
+
+**What's new:**
+- **`knowledge.autoRetrieve: false` now means on-demand, not off.** Previously `false` left knowledge inert (declared, nothing wired). It now skips pre-injection **and** wires a core `knowledge_search` global tool, so the model retrieves only when it answers — routing/dispatch turns pay **zero** retrieval tax (grounding becomes model-discretion). `true` (default) is unchanged: pre-inject before every answering turn.
+- The pre-injection provider and the `knowledge_search` tool are mutually exclusive, selected by the existing boolean — no new mode field, no behavior fork to configure.
+
+**Behavior change (non-breaking, no type change):**
+- Agents that set `knowledge.autoRetrieve: false` previously got no retrieval at all; they now expose `knowledge_search` to the model. Drop `knowledge` entirely to disable retrieval.
+- **Unchanged:** `knowledge.autoRetrieve: true`/omitted (guaranteed pre-injection); node-level `grounding.knowledge.autoRetrieve: false` (per-node opt-out).
+
+See `MIGRATION.md` and `docs/adr/0008-declared-grounding-contract.md`.
+
 ## 0.7.0 — Derived host routing (BREAKING)
 
 Unified minor bump across the graph (0.6.1 → 0.7.0). **Breaking**: removes the public routing-mode surface. Routing behavior is now derived from **(agent shape × driver output capability)** — see `docs/adr/0007-derived-host-routing.md`.

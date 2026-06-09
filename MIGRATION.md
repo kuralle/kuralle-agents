@@ -320,6 +320,31 @@ const agent = defineAgent({
 
 Codemod: replace `effectTools:` with `tools:` across agent configs; delete redundant agent-level `buildToolSet` lines.
 
+## On-demand retrieval (0.7.1)
+
+**No type change, no rename.** `knowledge.autoRetrieve` stays a boolean; `true` (default) is unchanged. The only change is that `autoRetrieve: false` now means **on-demand**, not off. See `docs/adr/0008-declared-grounding-contract.md`.
+
+| `knowledge.autoRetrieve` | Before | After |
+|--------|--------|--------|
+| `true` / omitted | pre-inject before every answering turn | **unchanged** |
+| `false` | inert (declared, nothing wired) | skips pre-injection **and** wires a `knowledge_search` tool the model calls when answering |
+
+No edit is required for `autoRetrieve: true` (or omitted) — guaranteed grounding is the default. **Action needed only if you relied on `autoRetrieve: false` to mean "off":** drop `knowledge` entirely to disable retrieval, since `false` now exposes the search tool.
+
+**Unchanged:** per-node `grounding.knowledge.autoRetrieve: false` on flow nodes (opts out of guaranteed pre-injection for that node only).
+
+```ts
+// Guaranteed grounding (default) — pre-inject every answering turn. Unchanged.
+defineAgent({ id: 'support', knowledge: { autoRetrieve: true } }); // or knowledge: {}
+
+// On-demand — model retrieves via knowledge_search only when answering;
+// routing/dispatch turns pay zero retrieval tax.
+defineAgent({ id: 'router', knowledge: { autoRetrieve: false } });
+
+// Disabled — no retrieval at all.
+defineAgent({ id: 'plain' /* no knowledge */ });
+```
+
 ## Derived host routing (0.7.0)
 
 **Breaking:** the public routing-mode surface is removed. Routing behavior is derived from **(agent shape × driver output capability)**. See `docs/adr/0007-derived-host-routing.md`.

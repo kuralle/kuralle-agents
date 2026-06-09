@@ -1,7 +1,10 @@
+import { z } from 'zod';
 import type { AgentConfig } from '../../types/agentConfig.js';
 import type { AutoRetrieveProvider, RunContext } from '../../types/run-context.js';
 import type { HarnessStreamPart } from '../../types/stream.js';
+import type { AnyTool } from '../../types/effectTool.js';
 import type { AgentKnowledgeOverrides, KnowledgeProviderConfig } from '../../types/voice.js';
+import { defineTool } from '../../tools/effect/defineTool.js';
 import { normalizeCitations } from '../citations/index.js';
 import { KnowledgeProvider } from '../KnowledgeProvider.js';
 
@@ -81,6 +84,50 @@ export function buildAutoRetrieveProvider(
       return { block, citations: citations.length > 0 ? citations : undefined };
     },
   };
+}
+
+export function buildKnowledgeTool(
+  provider: KnowledgeProvider,
+  agent: AgentConfig,
+): AnyTool | undefined {
+  if (!agent.knowledge || agent.knowledge.autoRetrieve !== false) {
+    return undefined;
+  }
+  if (!provider.hasRetriever && !provider.hasCompiled) {
+    return undefined;
+  }
+
+  const overrides = agent.knowledge as AgentKnowledgeOverrides;
+
+  return defineTool({
+    name: 'knowledge_search',
+    description:
+      'Search the knowledge base for facts needed to answer the user. Call this whenever you need grounded information before answering. Returns relevant document snippets.',
+    input: z.object({
+      query: z
+        .string()
+        .trim()
+        .min(1, 'Query must not be empty.')
+        .describe("What to look up, in the user's language."),
+    }),
+    execute: async ({ query }, ctx) => {
+      const { results, events } = await provider.retrieve(query, undefined, overrides, false);
+
+      if (ctx?.emit) {
+        for (const event of events) {
+          ctx.emit(event as HarnessStreamPart);
+        }
+      }
+
+      const compiled = provider.getCompiledKnowledge(overrides);
+      return {
+        documents: [
+          ...(compiled ? [compiled] : []),
+          ...results.map((result) => result.text),
+        ],
+      };
+    },
+  });
 }
 
 export function appendGatherBlocks(system: string, blocks: Array<string | undefined>): string {
