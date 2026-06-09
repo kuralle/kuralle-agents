@@ -1,0 +1,22 @@
+{
+  "name": "cf-latency-ab",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "A/B latency probe: guaranteed vs on-demand grounding on Cloudflare Workers (kuralle 0.7.1)",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "measure": "node measure.mjs"
+  },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@ai-sdk/openai": "^2.0.0",
+    "ai": "^6.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
+  }
+}

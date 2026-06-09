@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kuralle-latency-ab",
+  "main": "src/server.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "GuaranteedDO", "class_name": "GuaranteedDO" },
+      { "name": "OnDemandDO", "class_name": "OnDemandDO" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GuaranteedDO", "OnDemandDO"]
+    }
+  ],
+  "observability": { "enabled": true }
+  // OPENAI_API_KEY is a secret: wrangler secret put OPENAI_API_KEY
+}
