@@ -25,6 +25,18 @@ export interface NormalizedWebhookEvents {
   statuses: NormalizedStatus[];
   /** Emoji reactions on existing messages. */
   reactions: NormalizedReaction[];
+  /** Account-level webhook errors (WhatsApp `value.errors`). */
+  errors: NormalizedWebhookError[];
+}
+
+/** Account-level error from a Meta webhook payload. */
+export interface NormalizedWebhookError {
+  code: number;
+  title?: string;
+  message?: string;
+  error_data?: { details?: string };
+  href?: string;
+  phoneNumberId?: string;
 }
 
 /** A single inbound message extracted from the webhook payload. */
@@ -69,12 +81,36 @@ export interface NormalizedMessage {
       currency: string;
     }>;
   };
-  /** Quoted/replied-to message context. */
-  context?: { message_id: string; from?: string };
+  /** Quoted/replied-to message context (normalized: WhatsApp's raw `context.id` maps to `message_id`). */
+  context?: {
+    message_id: string;
+    from?: string;
+    /** Set when the message was forwarded (WhatsApp). */
+    forwarded?: boolean;
+    /** Set when forwarded many times (WhatsApp). */
+    frequently_forwarded?: boolean;
+    /** Catalog product the user is asking about (WhatsApp product inquiry). */
+    referred_product?: { catalog_id: string; product_retailer_id: string };
+  };
   /** Reaction (only set for WhatsApp reaction messages before they're split out). */
   reaction?: { message_id: string; emoji: string };
   /** Click-to-WhatsApp ad referral data. */
-  referral?: unknown;
+  referral?: WhatsAppReferral;
+}
+
+/** Click-to-WhatsApp ad referral object from WhatsApp webhooks. */
+export interface WhatsAppReferral {
+  source_url?: string;
+  source_id?: string;
+  source_type?: string;
+  body?: string;
+  headline?: string;
+  media_type?: string;
+  image_url?: string;
+  video_url?: string;
+  thumbnail_url?: string;
+  ctwa_clid?: string;
+  welcome_message?: { text?: string };
 }
 
 /** A delivery status update. */
@@ -83,12 +119,16 @@ export interface NormalizedStatus {
   id: string;
   /** Recipient identifier. */
   recipientId: string;
-  /** Status value. */
-  status: 'sent' | 'delivered' | 'read' | 'failed';
+  /** Status value (`played` is WhatsApp voice-note playback). */
+  status: 'sent' | 'delivered' | 'read' | 'failed' | 'played' | (string & {});
   /** Unix timestamp (seconds) as a string. */
   timestamp: string;
   /** Phone number ID or page ID that sent the original message. */
   phoneNumberId: string;
+  /** Recipient type (WhatsApp). */
+  recipient_type?: string;
+  /** Opaque callback data echoed from the send request (WhatsApp). */
+  biz_opaque_callback_data?: string;
   /** Conversation metadata (WhatsApp-specific). */
   conversation?: {
     id: string;
@@ -99,10 +139,17 @@ export interface NormalizedStatus {
   pricing?: {
     billable: boolean;
     pricing_model: string;
-    category: string;
+    category: string | (string & {});
+    type?: 'regular' | 'free_customer_service' | 'free_entry_point' | (string & {});
   };
   /** Error details when `status === "failed"`. */
-  errors?: Array<{ code: number; title?: string; message?: string }>;
+  errors?: Array<{
+    code: number;
+    title?: string;
+    message?: string;
+    error_data?: { details?: string };
+    href?: string;
+  }>;
 }
 
 /** An emoji reaction on an existing message. */
@@ -145,6 +192,7 @@ interface RawChangeValue {
   contacts?: Array<{ profile?: { name?: string }; wa_id?: string }>;
   messages?: RawWhatsAppMessage[];
   statuses?: RawWhatsAppStatus[];
+  errors?: Array<Record<string, unknown>>;
 }
 
 interface RawWhatsAppMessage {
@@ -163,7 +211,13 @@ interface RawWhatsAppMessage {
   interactive?: Record<string, unknown>;
   button?: Record<string, unknown>;
   order?: Record<string, unknown>;
-  context?: Record<string, unknown>;
+  context?: {
+    id?: string;
+    from?: string;
+    forwarded?: boolean;
+    frequently_forwarded?: boolean;
+    referred_product?: { catalog_id?: string; product_retailer_id?: string };
+  };
   reaction?: { message_id?: string; emoji?: string };
   referral?: unknown;
 }
@@ -171,6 +225,8 @@ interface RawWhatsAppMessage {
 interface RawWhatsAppStatus {
   id?: string;
   recipient_id?: string;
+  recipient_type?: string;
+  biz_opaque_callback_data?: string;
   status?: string;
   timestamp?: string;
   conversation?: Record<string, unknown>;
@@ -188,6 +244,7 @@ interface RawMessagingEvent {
     attachments?: Array<{ type?: string; payload?: Record<string, unknown> }>;
     is_echo?: boolean;
     reply_to?: { mid?: string };
+    quick_reply?: { payload?: string };
   };
   postback?: { title?: string; payload?: string; mid?: string };
   reaction?: { reaction?: string; emoji?: string; action?: string; mid?: string };
@@ -225,6 +282,7 @@ export function normalizeWebhook(payload: unknown): NormalizedWebhookEvents {
     messages: [],
     statuses: [],
     reactions: [],
+    errors: [],
   };
 
   if (!payload || typeof payload !== 'object') {
@@ -259,6 +317,7 @@ function normalizeWhatsAppWebhook(payload: RawPayload): NormalizedWebhookEvents 
     messages: [],
     statuses: [],
     reactions: [],
+    errors: [],
   };
 
   const entries = payload.entry ?? [];
@@ -317,10 +376,31 @@ function normalizeWhatsAppWebhook(payload: RawPayload): NormalizedWebhookEvents 
         if (msg.interactive) normalized.interactive = msg.interactive as NormalizedMessage['interactive'];
         if (msg.button) normalized.button = msg.button as NormalizedMessage['button'];
         if (msg.order) normalized.order = msg.order as NormalizedMessage['order'];
-        if (msg.context) normalized.context = msg.context as NormalizedMessage['context'];
-        if (msg.referral) normalized.referral = msg.referral;
+        if (msg.context) {
+          // Real WhatsApp webhooks send `context.{id, from}` (plus forwarding
+          // flags / referred_product) — normalize raw `id` to `message_id`.
+          const referred = msg.context.referred_product;
+          normalized.context = {
+            message_id: msg.context.id ?? '',
+            from: msg.context.from,
+            forwarded: msg.context.forwarded,
+            frequently_forwarded: msg.context.frequently_forwarded,
+            referred_product:
+              referred?.catalog_id && referred.product_retailer_id
+                ? {
+                    catalog_id: referred.catalog_id,
+                    product_retailer_id: referred.product_retailer_id,
+                  }
+                : undefined,
+          };
+        }
+        if (msg.referral) normalized.referral = msg.referral as WhatsAppReferral;
 
         result.messages.push(normalized);
+      }
+
+      for (const err of value.errors ?? []) {
+        result.errors.push(normalizeWebhookError(err, phoneNumberId));
       }
 
       // --- Statuses ---
@@ -332,6 +412,11 @@ function normalizeWhatsAppWebhook(payload: RawPayload): NormalizedWebhookEvents 
           timestamp: status.timestamp ?? '',
           phoneNumberId,
         };
+
+        if (status.recipient_type) normalizedStatus.recipient_type = status.recipient_type;
+        if (status.biz_opaque_callback_data) {
+          normalizedStatus.biz_opaque_callback_data = status.biz_opaque_callback_data;
+        }
 
         if (status.conversation) {
           normalizedStatus.conversation = status.conversation as NormalizedStatus['conversation'];
@@ -366,6 +451,7 @@ function normalizePageWebhook(payload: RawPayload): NormalizedWebhookEvents {
     messages: [],
     statuses: [],
     reactions: [],
+    errors: [],
   };
 
   const entries = payload.entry ?? [];
@@ -412,6 +498,14 @@ function normalizePageWebhook(payload: RawPayload): NormalizedWebhookEvents {
         // Reply context.
         if (msg.reply_to?.mid) {
           normalized.context = { message_id: msg.reply_to.mid };
+        }
+
+        if (msg.quick_reply?.payload) {
+          normalized.type = 'postback';
+          normalized.button = {
+            text: msg.text ?? '',
+            payload: msg.quick_reply.payload,
+          };
         }
 
         result.messages.push(normalized);
@@ -494,15 +588,34 @@ function resolvePageMessageType(msg: NonNullable<RawMessagingEvent['message']>):
   return 'unknown';
 }
 
-/** Normalise a status string to the union type, defaulting to `"sent"`. */
+/** Normalise a status string; unknown values pass through unchanged. */
 function normalizeStatusValue(raw: string | undefined): NormalizedStatus['status'] {
+  if (!raw) return 'sent';
   switch (raw) {
     case 'sent':
     case 'delivered':
     case 'read':
     case 'failed':
+    case 'played':
       return raw;
     default:
-      return 'sent';
+      return raw;
   }
+}
+
+function normalizeWebhookError(
+  err: Record<string, unknown>,
+  phoneNumberId: string,
+): NormalizedWebhookError {
+  return {
+    code: typeof err.code === 'number' ? err.code : 0,
+    title: typeof err.title === 'string' ? err.title : undefined,
+    message: typeof err.message === 'string' ? err.message : undefined,
+    error_data:
+      err.error_data && typeof err.error_data === 'object'
+        ? (err.error_data as { details?: string })
+        : undefined,
+    href: typeof err.href === 'string' ? err.href : undefined,
+    phoneNumberId,
+  };
 }

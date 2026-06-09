@@ -47,6 +47,23 @@ function audioSource(data: FilePart['data']): FilePart['data'] {
   return data;
 }
 
+/** Merge multiple user inputs into one turn (ingress coalescing / mid-turn drain). */
+export function mergeUserInputContents(items: UserInputContent[]): UserInputContent | undefined {
+  if (items.length === 0) return undefined;
+  if (items.length === 1) return items[0];
+
+  const parts: UserContentPart[] = [];
+  for (const item of items) {
+    if (typeof item === 'string') {
+      if (item.length > 0) parts.push({ type: 'text', text: item });
+    } else {
+      parts.push(...item);
+    }
+  }
+  if (parts.length === 0) return '';
+  return parts;
+}
+
 /** Text projection of user input — for confirm-gate parsing, choice matching, and
  *  extraction hints. Non-text parts are dropped. A plain string returns as-is. */
 export function userInputToText(input: UserInputContent): string {

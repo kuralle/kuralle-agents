@@ -97,9 +97,14 @@ export function classifyMetaError(
     return new PermissionError(metaMessage, platform);
   }
 
-  // --- 24-hour window closed (Meta code 131047) ---
-  if (metaCode === 131047) {
+  // --- 24-hour window closed (WhatsApp 131047, Messenger 1545041) ---
+  if (metaCode === 131047 || metaCode === 1545041) {
     return new WindowClosedError(metaMessage, platform, new Date());
+  }
+
+  // --- Person unavailable (Messenger 551) ---
+  if (metaCode === 551 || metaSubcode === 551) {
+    return new MessagingError(metaMessage, 'person_unavailable', platform);
   }
 
   // --- Recipient not reachable (HTTP 404 or Meta code 131026) ---

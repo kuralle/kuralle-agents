@@ -419,7 +419,15 @@ export {
 export type { RuntimeLike } from './runtime/RuntimeLike.js';
 export {
   userInputToText,
+  mergeUserInputContents,
   hasMediaParts,
   transcribeAudioParts,
   type UserInputContent,
 } from './runtime/userInput.js';
+export {
+  setPendingUserInput,
+  consumePendingUserInput,
+  consumeAllPendingUserInput,
+  peekPendingUserInput,
+  hasPendingUserInput,
+} from './runtime/channels/inputBuffer.js';

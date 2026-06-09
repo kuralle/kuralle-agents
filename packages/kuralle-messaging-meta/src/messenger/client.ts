@@ -248,11 +248,12 @@ export class MessengerClient extends BaseMetaClient<
     return this.toSendResult(to, response);
   }
 
-  async markAsRead(messageId: string): Promise<void> {
-    // Messenger's mark_seen is a sender action that requires the recipient ID,
-    // not a message ID. We accept the recipient PSID here since the platform
-    // does not support marking individual messages.
-    await this.sendSenderAction(messageId, 'mark_seen');
+  async markAsRead(recipientId: string): Promise<void> {
+    /**
+     * Messenger/Instagram `mark_seen` targets the conversation partner (PSID),
+     * not a message id. Pass the user's PSID despite the PlatformClient param name.
+     */
+    await this.sendSenderAction(recipientId, 'mark_seen');
   }
 
   async sendTypingIndicator(to: string): Promise<void> {
@@ -353,7 +354,7 @@ export class MessengerClient extends BaseMetaClient<
     },
 
     delete: async (personaId: string): Promise<void> => {
-      await this.graphApi.post(personaId, { _method: 'DELETE' });
+      await this.graphApi.delete(personaId);
     },
   };
 

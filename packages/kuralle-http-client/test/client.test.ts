@@ -42,6 +42,23 @@ describe('HttpClient — happy path', () => {
     expect(JSON.parse(init.body as string)).toEqual({ name: 'x' });
   });
 
+  it('performs DELETE with query params and optional JSON body', async () => {
+    const { fetch, calls } = makeFetch([
+      new Response(JSON.stringify({ deleted: true }), { status: 200 }),
+    ]);
+    const client = new HttpClient({ baseUrl: 'https://api.test', fetchImpl: fetch });
+
+    const out = await client.delete<{ deleted: boolean }>('items/42', {
+      params: { name: 'tpl' },
+      body: { fields: ['ice_breakers'] },
+    });
+
+    expect(out).toEqual({ deleted: true });
+    expect(calls[0].init?.method).toBe('DELETE');
+    expect(calls[0].url).toContain('items/42?name=tpl');
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ fields: ['ice_breakers'] });
+  });
+
   it('applies dynamic default headers on every call', async () => {
     const { fetch, calls } = makeFetch([
       new Response('{}', { status: 200 }),

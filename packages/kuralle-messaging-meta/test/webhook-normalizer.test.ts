@@ -614,6 +614,7 @@ describe('normalizeWebhook — edge cases', () => {
     expect(result.messages).toHaveLength(0);
     expect(result.statuses).toHaveLength(0);
     expect(result.reactions).toHaveLength(0);
+    expect(result.errors).toHaveLength(0);
   });
 
   it('returns empty arrays for null/undefined', () => {
@@ -665,5 +666,112 @@ describe('normalizeWebhook — edge cases', () => {
     };
 
     expect(() => normalizeWebhook(payload)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WhatsApp reply / product-inquiry context (real wire shape: { from, id })
+// ---------------------------------------------------------------------------
+
+describe('normalizeWebhook — WhatsApp context', () => {
+  function waPayload(message: Record<string, unknown>) {
+    return {
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          id: 'WABA_ID',
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                messaging_product: 'whatsapp',
+                metadata: { phone_number_id: '123456', display_phone_number: '+1234567890' },
+                contacts: [{ profile: { name: 'Alice' }, wa_id: '5511999999999' }],
+                messages: [message],
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('maps raw reply context { from, id } to normalized { message_id, from }', () => {
+    const result = normalizeWebhook(
+      waPayload({
+        id: 'wamid.reply1',
+        from: '5511999999999',
+        timestamp: '1700000000',
+        type: 'text',
+        text: { body: 'replying to your quote' },
+        // Real webhook shape per Meta docs — NOT { message_id }.
+        context: { from: '15550001111', id: 'wamid.original99', forwarded: true },
+      }),
+    );
+
+    expect(result.messages[0]?.context).toEqual({
+      message_id: 'wamid.original99',
+      from: '15550001111',
+      forwarded: true,
+      frequently_forwarded: undefined,
+      referred_product: undefined,
+    });
+  });
+
+  it('maps a product-inquiry context with referred_product', () => {
+    const result = normalizeWebhook(
+      waPayload({
+        id: 'wamid.inq1',
+        from: '5511999999999',
+        timestamp: '1700000000',
+        type: 'text',
+        text: { body: 'Is this cake gluten free?' },
+        context: {
+          from: '15550001111',
+          id: 'wamid.productmsg1',
+          referred_product: {
+            catalog_id: '194836987003835',
+            product_retailer_id: 'retail-cake-choc',
+          },
+        },
+      }),
+    );
+
+    const context = result.messages[0]?.context;
+    expect(context?.message_id).toBe('wamid.productmsg1');
+    expect(context?.referred_product).toEqual({
+      catalog_id: '194836987003835',
+      product_retailer_id: 'retail-cake-choc',
+    });
+  });
+});
+
+describe('normalizeWebhook — WhatsApp status played', () => {
+  it('preserves played status without coercing to sent', () => {
+    const result = normalizeWebhook({
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                metadata: { phone_number_id: '123456' },
+                statuses: [
+                  {
+                    id: 'wamid.voice1',
+                    recipient_id: '5511999999999',
+                    status: 'played',
+                    timestamp: '1700000010',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.statuses[0]?.status).toBe('played');
   });
 });

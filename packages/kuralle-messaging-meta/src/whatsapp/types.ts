@@ -33,7 +33,7 @@ export interface WhatsAppClientConfig {
   phoneNumberId: string;
   /** Custom verify token for webhook subscription validation. */
   verifyToken: string;
-  /** Graph API version (e.g. `"v21.0"`). Default `"v21.0"`. */
+  /** Graph API version (e.g. `"v24.0"`). Default `"v24.0"`. */
   apiVersion?: string;
   /** Base URL for the Graph API. Default `"https://graph.facebook.com"`. */
   baseUrl?: string;
@@ -138,6 +138,8 @@ export interface TemplateParameter {
   payload?: string;
   /** Action payload (when `type` is `"action"`). */
   action?: Record<string, unknown>;
+  /** Parameter name for named-parameter templates. */
+  parameter_name?: string;
 }
 
 // ====================================
@@ -170,7 +172,7 @@ export interface MediaObject {
 /**
  * A list-style interactive message with expandable sections.
  *
- * Supports up to 10 sections with up to 10 rows each. The `button` text
+ * Supports up to 10 rows total across all sections. The `button` text
  * appears on the collapsed list control.
  */
 export interface ListMessage {
@@ -269,8 +271,8 @@ export interface FlowInteractiveInput {
   flowId: string;
   /** Call-to-action button text that opens the flow. */
   flowCta: string;
-  /** Unique token for this flow session. */
-  flowToken: string;
+  /** Unique token for this flow session (omit when not required). */
+  flowToken?: string;
   /** Flow action type. */
   flowAction: 'navigate' | 'data_exchange';
   /** Optional initial data for the flow. */
@@ -441,6 +443,14 @@ export interface WhatsAppInboundAddress {
   values: WhatsAppAddressValues;
 }
 
+/** A product inquiry from an inbound message context.referred_product. */
+export interface WhatsAppInboundProductInquiry {
+  catalog_id: string;
+  product_retailer_id: string;
+  context_message_id?: string;
+  context_from?: string;
+}
+
 // ====================================
 // LOCATION & CONTACTS
 // ====================================
@@ -510,6 +520,15 @@ export interface TemplateDefinition {
   components: TemplateDefinitionComponent[];
   /** Whether Meta can auto-recategorize the template. */
   allow_category_change?: boolean;
+  /** Named vs positional parameter placeholders. */
+  parameter_format?: 'named' | 'positional';
+}
+
+/** Response from creating a message template. */
+export interface TemplateCreateResponse {
+  id: string;
+  status: string;
+  category: string;
 }
 
 /** A component within a template definition. */
@@ -556,11 +575,28 @@ export interface TemplateInfo {
 export interface FlowDefinition {
   /** Flow name. */
   name: string;
-  /** Flow categories. */
-  categories?: string[];
+  /** Flow categories (at least one required by the API). */
+  categories: FlowCategory[];
   /** Clone from an existing flow. */
   clone_flow_id?: string;
+  /** Initial flow JSON definition. */
+  flow_json?: string;
+  /** Publish immediately after creation. */
+  publish?: boolean;
+  /** Endpoint URI for data_exchange flows. */
+  endpoint_uri?: string;
 }
+
+/** Valid WhatsApp Flow categories. */
+export type FlowCategory =
+  | 'SIGN_UP'
+  | 'SIGN_IN'
+  | 'APPOINTMENT_BOOKING'
+  | 'LEAD_GENERATION'
+  | 'CONTACT_US'
+  | 'CUSTOMER_SUPPORT'
+  | 'SURVEY'
+  | 'OTHER';
 
 /** Information about an existing WhatsApp Flow. */
 export interface FlowInfo {

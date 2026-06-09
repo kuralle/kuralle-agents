@@ -96,6 +96,19 @@ describe('classifyMetaError — window closed', () => {
     expect(err).toBeInstanceOf(WindowClosedError);
     expect(err).toBeInstanceOf(MessagingError);
   });
+
+  it('Meta code 1545041 -> WindowClosedError (Messenger)', () => {
+    const err = classifyMetaError(400, metaBody(1545041), 'messenger');
+    expect(err).toBeInstanceOf(WindowClosedError);
+  });
+});
+
+describe('classifyMetaError — person unavailable', () => {
+  it('Meta code 551 -> person_unavailable MessagingError', () => {
+    const err = classifyMetaError(400, metaBody(551), 'messenger');
+    expect(err).toBeInstanceOf(MessagingError);
+    expect(err.code).toBe('person_unavailable');
+  });
 });
 
 describe('classifyMetaError — recipient', () => {

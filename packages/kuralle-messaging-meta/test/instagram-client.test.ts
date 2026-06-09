@@ -343,38 +343,35 @@ describe('InstagramClient — threadId format', () => {
   });
 });
 
-describe('InstagramClient — Instagram-specific: sendMedia type restriction', () => {
-  it('sendMedia with non-image type throws MediaError', async () => {
+describe('InstagramClient — Instagram-specific: sendMedia', () => {
+  it('sendMedia with video URL uses video attachment type', async () => {
     const client = new InstagramClient(baseConfig);
-    await expect(
-      client.sendMedia('IGSID_123', {
-        type: 'video',
-        mimeType: 'video/mp4',
-        data: 'https://example.com/video.mp4',
-      }),
-    ).rejects.toThrow(/only supports image/i);
+    Object.assign((client as unknown as { graphApi: Record<string, unknown> }).graphApi, {
+      post: async (_endpoint: string, body: unknown) => {
+        (client as unknown as { _lastBody: unknown })._lastBody = body;
+        return { message_id: 'mid.video' };
+      },
+    });
+
+    await client.sendMedia('IGSID_123', {
+      type: 'video',
+      mimeType: 'video/mp4',
+      data: 'https://example.com/video.mp4',
+    });
+
+    const body = (client as unknown as { _lastBody: { message?: { attachment?: { type?: string } } } })._lastBody;
+    expect(body.message?.attachment?.type).toBe('video');
   });
 
-  it('sendMedia with audio type throws MediaError', async () => {
+  it('sendMedia with Buffer throws unsupported', async () => {
     const client = new InstagramClient(baseConfig);
     await expect(
       client.sendMedia('IGSID_123', {
-        type: 'audio',
-        mimeType: 'audio/mpeg',
-        data: 'https://example.com/audio.mp3',
+        type: 'image',
+        mimeType: 'image/png',
+        data: Buffer.from('png'),
       }),
-    ).rejects.toThrow(/only supports image/i);
-  });
-
-  it('sendMedia with document type throws MediaError', async () => {
-    const client = new InstagramClient(baseConfig);
-    await expect(
-      client.sendMedia('IGSID_123', {
-        type: 'document',
-        mimeType: 'application/pdf',
-        data: 'https://example.com/doc.pdf',
-      }),
-    ).rejects.toThrow(/only supports image/i);
+    ).rejects.toThrow(/public URL/i);
   });
 });
 

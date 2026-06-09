@@ -11,6 +11,7 @@ export { resolveVoiceGeminiTools, v2ToolsToGemini } from './voiceTools.js';
 export {
   setPendingUserInput,
   consumePendingUserInput,
+  consumeAllPendingUserInput,
   peekPendingUserInput,
   hasPendingUserInput,
 } from './inputBuffer.js';

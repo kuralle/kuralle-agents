@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9.0 (unreleased) — WhatsApp first-class: Meta API conformance, inbound coalescing, interactive-by-default
+
+Contains **breaking** `@kuralle-agents/messaging-meta` contract fixes (hence a minor bump per repo convention). Grounded in a live conformance audit of every wire payload against developers.facebook.com (June 2026; 27 findings) plus an industry survey of burst-message handling (`research/inbound-coalescing-design.md`).
+
+**Meta API conformance (`@kuralle-agents/messaging-meta` + `@kuralle-agents/http-client`):**
+- **Webhook reply `context` fixed** — real WhatsApp payloads send `{from, id}` (not `{message_id}`): reply correlation (`context.messageId`) was always `undefined`. Normalized properly + new `forwarded`/`frequently_forwarded`/`referred_product` (product-inquiry) fields with a typed `parseProductInquiry` accessor.
+- **WhatsApp typing indicators wired** (the 2025 API: read + `typing_indicator` payload) — `markAsRead(id, { typing })` / `sendTypingIndicatorFor(id)`; the "not supported" claim removed.
+- **Real HTTP `DELETE`** added to `kuralle-http-client`/GraphAPIClient; all `_method:'DELETE'` POST hacks replaced (templates / personas / ice-breakers). **BREAKING:** `templates.delete` signature; `flows.delete` now truly `DELETE /{flow-id}` (drafts) with new `flows.deprecate` for published flows.
+- **Statuses**: `played` (voice-note playback) no longer coerced to `sent`; `pricing.type` (2025 per-message pricing), `error_data`, `biz_opaque_callback_data`, new category enums.
+- **Instagram un-gated**: audio/video/file/gif sends (image-only claim was years stale); inbound media keeps its CDN `url` (was dropped → unfetchable); `mark_seen` wired; ice-breakers `get` parse fixed; upload/download replaced with honest unsupported errors (IG messaging is URL-based). **BREAKING:** `sendMedia` is URL-only on IG.
+- **Messenger/IG quick-reply payloads parsed** (machine selection no longer lost as plain text); Messenger window-closed error `1545041` classified; `markAsRead` PSID contract documented.
+- **Templates**: named parameters (`parameter_format`/`parameter_name`), cursor-paginated `list` (was first-page-only of up to 6000), correct create-response type. **Flows**: `categories` required (API rejects without), `flow_json`/`publish`/`endpoint_uri`. **BREAKING** for `FlowDefinition` users.
+- **Default Graph API version v21.0 → v24.0** (v21 nears sunset; window logic already derives from inbound timestamps, unaffected by v24's conversation-object removal).
+
+**Inbound message coalescing (`@kuralle-agents/messaging` + core):**
+- `MessagingRouterConfig.inboundCoalescing` — per-thread sliding debounce (default-off; `debounceMs` 3000, `maxWaitMs` 10000 cap, `maxMessages` 10, interactive selections flush immediately): rapid bursts ("hi" / "i want to order" / "the blue one") merge into ONE multimodal turn (image-then-caption → `[FilePart, TextPart]`).
+- Core: `consumeAllPendingUserInput` + `mergeUserInputContents` — messages arriving mid-turn drain into one merged next turn instead of N serialized answers (Twilio same-execution / LangGraph-enqueue semantics).
+
+**Interactive replies render by default (`@kuralle-agents/messaging`):**
+- The default `StreamMapper` now renders trailing `interactive` stream parts as native buttons/lists via `renderChoices` (moved here from engagement, which re-exports) — flow choices reach WhatsApp without a custom `ResponseMapper`.
+
+**Verification:** WhatsApp workflow E2E suite (`kuralle-engagement/test/whatsapp-workflow-e2e.test.ts`): 8 wire-level workflows — signed webhook → router → engagement policies → runtime → captured Graph payloads (interactive round-trip, closed-window template recovery, media→multimodal, inbound order, status/window updates, consent STOP, window-safe proactive wake).
+
 ## 0.8.5 — Agentic harness completion (escalation, wake, memory lifecycle, guardrails, commerce, simulation)
 
 Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes below ship in this same release). **Not breaking** — every surface is additive. Closes the six gaps from the industry-baseline evaluation; most wire dormant seams the v2 recon flagged as "shipped but silent". See `docs/adr/0010-agentic-harness-completion.md`, `docs/adr/0011-commerce-package.md`, and `MIGRATION.md`.

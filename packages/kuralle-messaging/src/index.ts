@@ -26,6 +26,8 @@ export type {
   StatusHandler,
   ReactionHandler,
   MessagingRouterConfig,
+  InboundCoalescingConfig,
+  CoalescedInboundItem,
   SessionResolver,
   ResponseMapper,
   ResponseContext,
@@ -53,6 +55,8 @@ export {
 // Adapter
 // ====================================
 export { createMessagingRouter } from './adapter/createMessagingRouter.js';
+export { createInputCoalescer } from './adapter/input-coalescer.js';
+export type { InputCoalescer, InputCoalescerOptions } from './adapter/input-coalescer.js';
 export { defaultSessionResolver } from './adapter/session-resolver.js';
 export {
   SessionResolverChain,
@@ -121,3 +125,11 @@ export type {
   DeferReason,
 } from './types/outbound.js';
 export { isTemplateCapable, isTagCapable } from './types/outbound.js';
+
+export {
+  renderChoices,
+  BUTTON_TITLE_MAX,
+  LIST_ROW_TITLE_MAX,
+  BUTTON_COUNT_MAX,
+  LIST_ROW_COUNT_MAX,
+} from './adapter/render-choices.js';

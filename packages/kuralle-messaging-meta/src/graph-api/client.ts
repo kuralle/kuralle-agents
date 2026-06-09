@@ -21,7 +21,7 @@ export interface GraphAPIClientConfig {
   accessToken: string;
   /** App secret used for webhook signature verification and appsecret_proof. */
   appSecret: string;
-  /** Graph API version (e.g. `"v21.0"`). Default `"v21.0"`. */
+  /** Graph API version (e.g. `"v24.0"`). Default `"v24.0"`. */
   apiVersion?: string;
   /** Base URL for the Graph API. Default `"https://graph.facebook.com"`. */
   baseUrl?: string;
@@ -56,7 +56,7 @@ export class GraphAPIClient {
     this.accessToken = config.accessToken;
     this.appSecret = config.appSecret;
 
-    const apiVersion = config.apiVersion ?? 'v21.0';
+    const apiVersion = config.apiVersion ?? 'v24.0';
     const baseUrl = (config.baseUrl ?? 'https://graph.facebook.com').replace(/\/+$/, '');
 
     this.http = new HttpClient({
@@ -86,6 +86,17 @@ export class GraphAPIClient {
   /** POST with a multipart body (e.g. media uploads). */
   async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {
     return this.http.postFormData<T>(endpoint, formData);
+  }
+
+  /** DELETE with `access_token` query param applied. */
+  async delete<T>(
+    endpoint: string,
+    opts?: { params?: Record<string, string>; body?: unknown },
+  ): Promise<T> {
+    return this.http.delete<T>(endpoint, {
+      params: { access_token: this.accessToken, ...(opts?.params ?? {}) },
+      body: opts?.body,
+    });
   }
 
   /** Fetch a binary resource from an absolute CDN URL. */

@@ -14,6 +14,7 @@ export type { VoiceDriverConfig } from './channels/index.js';
 export {
   setPendingUserInput,
   consumePendingUserInput,
+  consumeAllPendingUserInput,
   peekPendingUserInput,
   hasPendingUserInput,
 } from './channels/index.js';
@@ -22,6 +23,7 @@ export {
 // transcribe audio so ingress adapters (web/messaging) can build it uniformly.
 export {
   userInputToText,
+  mergeUserInputContents,
   hasMediaParts,
   transcribeAudioParts,
   type UserInputContent,

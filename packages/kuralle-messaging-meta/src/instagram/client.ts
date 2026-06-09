@@ -8,33 +8,28 @@
  * inherited. Only Instagram-specific outbound paths and inbound
  * normalization live here.
  *
- * Key quirks vs Messenger:
+ * Key differences from WhatsApp / Messenger:
  * - Base URL is `graph.instagram.com` by default.
- * - Only IMAGE attachments are supported.
- * - Send API caps at 1000 UTF-8 bytes per message — long text is split
- *   via the shared {@link ByteLimitSplitter} strategy.
- * - Send response only carries `message_id` (no `recipient_id`).
- * - Mark-as-read is a no-op (platform doesn't expose it).
+ * - Media is sent by public URL (audio, image, video, file attachments).
+ * - Message limit is 1000 bytes (UTF-8), not characters.
+ * - Send response contains `message_id` (recipient id is implicit).
+ * - Only `HUMAN_AGENT` message tag is supported (7-day window).
+ * - Ice breakers replace persistent menus.
  */
 
 import {
-  MediaError,
   MessagingError,
   type FormatConverter,
   type InboundMessage,
   type InteractiveMessage,
-  type MediaCache,
   type MediaDownload,
   type MediaHandle,
   type MediaPayload,
   type MediaReference,
-  type MediaStrategy,
   type MediaUploadOptions,
   type ReactionData,
   type SendResult,
   type StatusUpdate,
-  FileHashDedupStrategy,
-  UploadStrategy,
 } from '@kuralle-agents/messaging';
 
 import { BaseMetaClient } from '../base-client.js';
@@ -99,8 +94,6 @@ export class InstagramClient extends BaseMetaClient<
 
   private readonly config: InternalInstagramConfig;
   private readonly formatConverterInstance: InstagramFormatConverter;
-  private readonly mediaCache?: MediaCache;
-  private readonly mediaStrategy: MediaStrategy;
   private readonly splitter = new ByteLimitSplitter(MAX_MESSAGE_BYTES);
 
   constructor(config: InstagramClientConfig) {
@@ -118,10 +111,6 @@ export class InstagramClient extends BaseMetaClient<
     super(full, graphApi);
     this.config = full;
     this.formatConverterInstance = new InstagramFormatConverter();
-    this.mediaCache = config.mediaCache;
-    this.mediaStrategy = new FileHashDedupStrategy(
-      new UploadStrategy((file, opts) => this.uploadMedia(file, opts)),
-    );
   }
 
   /** Instagram-specific format converter (plain text). */
@@ -148,34 +137,26 @@ export class InstagramClient extends BaseMetaClient<
   }
 
   /**
-   * Send an image. Instagram only supports image attachments.
-   *
-   * Uses {@link MediaStrategy} so identical Buffer uploads dedup by
-   * SHA-256 content hash (C-13.7).
+   * Send a media message by URL. Instagram messaging supports audio, image,
+   * video, and file attachments via `attachment.payload.url`.
    */
   async sendMedia(to: string, media: MediaPayload): Promise<SendResult> {
-    if (media.type !== 'image') {
-      throw new MediaError(
-        `Instagram only supports image attachments. Received: ${media.type}`,
+    if (typeof media.data !== 'string') {
+      throw new MessagingError(
+        'Instagram messaging sends media by public URL — pass media.data as a URL string.',
+        'unsupported',
         'instagram',
       );
     }
 
-    // Normalize stream → Buffer so dedup can hash.
-    const normalized: MediaPayload =
-      typeof media.data === 'string' || Buffer.isBuffer(media.data)
-        ? media
-        : { ...media, data: await streamToBuffer(media.data) };
-
-    const resolved = await this.mediaStrategy.resolve(normalized);
-    const url = resolved.kind === 'url' ? resolved.url : (resolved.handle.url ?? '');
+    const attachmentType = this.resolveAttachmentType(media.mimeType, media.type);
 
     const response = await this.graphApi.post<InstagramSendResponse>(
       `${this.config.igId}/messages`,
       {
         recipient: { id: to },
         message: {
-          attachments: [{ type: 'image', payload: { url } }],
+          attachment: { type: attachmentType, payload: { url: media.data } },
         },
       },
     );
@@ -240,9 +221,15 @@ export class InstagramClient extends BaseMetaClient<
     return this.toSendResult(to, response);
   }
 
-  /** Instagram has no mark-as-read endpoint; this is a no-op. */
-  async markAsRead(_messageId: string): Promise<void> {
-    // intentionally empty
+  /**
+   * Messenger/Instagram `mark_seen` targets the conversation partner (PSID),
+   * not a message id. Pass the user's IGSID despite the PlatformClient param name.
+   */
+  async markAsRead(recipientId: string): Promise<void> {
+    await this.graphApi.post(`${this.config.igId}/messages`, {
+      recipient: { id: recipientId },
+      sender_action: 'mark_seen',
+    });
   }
 
   async sendTypingIndicator(to: string): Promise<void> {
@@ -257,39 +244,22 @@ export class InstagramClient extends BaseMetaClient<
   // =========================================================================
 
   async uploadMedia(
-    file: Buffer | ReadableStream,
-    options: MediaUploadOptions,
+    _file: Buffer | ReadableStream,
+    _options: MediaUploadOptions,
   ): Promise<MediaHandle> {
-    const buffer = Buffer.isBuffer(file) ? file : await streamToBuffer(file);
-    const blob = new Blob([buffer], { type: options.mimeType });
-
-    const formData = new FormData();
-    formData.append('file', blob, options.filename ?? 'file');
-    formData.append('type', options.mimeType);
-
-    const response = await this.graphApi.postFormData<{ id: string; url?: string }>(
-      `${this.config.igId}/media`,
-      formData,
+    throw new MessagingError(
+      'Instagram messaging sends media by public URL — uploadMedia is not supported. Pass a URL via sendMedia instead.',
+      'unsupported',
+      'instagram',
     );
-
-    return { mediaId: response.id, url: response.url };
   }
 
-  async downloadMedia(mediaId: string): Promise<MediaDownload> {
-    if (this.mediaCache) {
-      return this.mediaCache.getOrDownload(mediaId, async () => {
-        const mediaInfo = await this.graphApi.get<{ id: string; url: string; mime_type: string }>(
-          mediaId,
-        );
-        const data = await this.graphApi.fetchBinary(mediaInfo.url);
-        return { data, mimeType: mediaInfo.mime_type };
-      });
-    }
-    const mediaInfo = await this.graphApi.get<{ id: string; url: string; mime_type: string }>(
-      mediaId,
+  async downloadMedia(_mediaId: string): Promise<MediaDownload> {
+    throw new MessagingError(
+      'Instagram inbound media arrives as CDN URLs in webhooks — downloadMedia is not supported.',
+      'unsupported',
+      'instagram',
     );
-    const data = await this.graphApi.fetchBinary(mediaInfo.url);
-    return { data, mimeType: mediaInfo.mime_type };
   }
 
   // =========================================================================
@@ -401,17 +371,17 @@ export class InstagramClient extends BaseMetaClient<
     },
 
     get: async (): Promise<IceBreakerConfig[]> => {
-      const result = await this.graphApi.get<{ data: Array<{ ice_breakers?: IceBreakerConfig[] }> }>(
-        `${this.config.igId}/messenger_profile`,
-        { fields: 'ice_breakers' },
-      );
-      return result.data?.[0]?.ice_breakers ?? [];
+      const result = await this.graphApi.get<{
+        data: Array<{ call_to_actions?: IceBreakerConfig['call_to_actions']; locale?: string }>;
+      }>(`${this.config.igId}/messenger_profile`, { fields: 'ice_breakers' });
+      const row = result.data?.[0];
+      if (!row?.call_to_actions) return [];
+      return [{ call_to_actions: row.call_to_actions, locale: row.locale }];
     },
 
     delete: async (): Promise<void> => {
-      await this.graphApi.post(`${this.config.igId}/messenger_profile`, {
-        fields: ['ice_breakers'],
-        _method: 'DELETE',
+      await this.graphApi.delete(`${this.config.igId}/messenger_profile`, {
+        body: { fields: ['ice_breakers'] },
       });
     },
   };
@@ -516,6 +486,8 @@ export class InstagramClient extends BaseMetaClient<
       image: 'image',
       video: 'video',
       audio: 'audio',
+      file: 'document',
+      document: 'document',
       sticker: 'sticker',
       interactive: 'interactive',
       postback: 'interactive',
@@ -533,20 +505,33 @@ export class InstagramClient extends BaseMetaClient<
   }
 
   private extractMedia(msg: NormalizedMessage): MediaReference | undefined {
-    const mediaTypes = ['image', 'video', 'audio', 'sticker'] as const;
+    const mediaTypes = ['image', 'video', 'audio', 'document', 'sticker'] as const;
 
     for (const type of mediaTypes) {
       const media = msg[type];
-      if (media && 'id' in media) {
+      if (media && ('id' in media || 'url' in media)) {
         return {
-          id: media.id,
+          id: 'id' in media ? (media.id as string) : '',
           mimeType: 'mime_type' in media ? (media.mime_type as string) : undefined,
+          url: 'url' in media ? (media.url as string) : undefined,
           caption: 'caption' in media ? (media.caption as string) : undefined,
+          filename: 'filename' in media ? (media.filename as string) : undefined,
         };
       }
     }
 
     return undefined;
+  }
+
+  private resolveAttachmentType(
+    mimeType: string,
+    mediaType?: MediaPayload['type'],
+  ): 'audio' | 'video' | 'file' | 'image' {
+    if (mediaType === 'document') return 'file';
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    return 'file';
   }
 
   private async sendSingleText(to: string, text: string): Promise<SendResult> {
@@ -560,21 +545,4 @@ export class InstagramClient extends BaseMetaClient<
 
     return this.toSendResult(to, response);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Utility
-// ---------------------------------------------------------------------------
-
-async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
-  const chunks: Uint8Array[] = [];
-  const reader = stream.getReader();
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-
-  return Buffer.concat(chunks);
 }

@@ -15,7 +15,7 @@
 import type { InboundMessage } from '@kuralle-agents/messaging';
 
 import type { NormalizedMessage } from '../webhook/normalizer.js';
-import type { WhatsAppInboundOrder, WhatsAppInboundAddress } from './types.js';
+import type { WhatsAppInboundOrder, WhatsAppInboundAddress, WhatsAppInboundProductInquiry } from './types.js';
 
 export type {
   ProductMessage,
@@ -28,6 +28,7 @@ export type {
   WhatsAppOrderItem,
   WhatsAppInboundOrder,
   WhatsAppInboundAddress,
+  WhatsAppInboundProductInquiry,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -110,4 +111,24 @@ export function parseInboundAddress(message: InboundMessage): WhatsAppInboundAdd
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Extract a product inquiry from an inbound message when the user replied
+ * in the context of a catalog product message (`context.referred_product`).
+ */
+export function parseProductInquiry(
+  message: InboundMessage,
+): WhatsAppInboundProductInquiry | undefined {
+  const raw = message.raw as NormalizedMessage | undefined;
+  const referred = raw?.context?.referred_product;
+  if (!referred?.catalog_id || !referred.product_retailer_id) {
+    return undefined;
+  }
+  return {
+    catalog_id: referred.catalog_id,
+    product_retailer_id: referred.product_retailer_id,
+    context_message_id: raw?.context?.message_id,
+    context_from: raw?.context?.from,
+  };
 }

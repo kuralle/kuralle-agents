@@ -60,6 +60,7 @@ import type {
   TemplateInfo,
   TemplateDefinition,
   TemplateDefinitionComponent,
+  TemplateCreateResponse,
   TextOrTemplateOptions,
   ListMessage,
   ButtonMessage,
@@ -232,7 +233,7 @@ export class WhatsAppClient extends BaseMetaClient<
         footer: msg.footer ? { text: msg.footer } : undefined,
         flowId: msg.action.flowId,
         flowCta: 'Continue',
-        flowToken: msg.action.flowToken ?? '',
+        flowToken: msg.action.flowToken,
         flowAction: 'navigate',
         flowActionPayload: msg.action.parameters,
       });
@@ -259,15 +260,27 @@ export class WhatsAppClient extends BaseMetaClient<
     return this.toSendResult(to, response);
   }
 
-  async markAsRead(messageId: string): Promise<void> {
-    await this.graphApi.post(`${this.config.phoneNumberId}/messages`, {
+  async markAsRead(messageId: string, opts?: { typing?: boolean }): Promise<void> {
+    const body: Record<string, unknown> = {
       messaging_product: 'whatsapp',
       status: 'read',
       message_id: messageId,
-    });
+    };
+    if (opts?.typing) {
+      body.typing_indicator = { type: 'text' };
+    }
+    await this.graphApi.post(`${this.config.phoneNumberId}/messages`, body);
   }
 
-  /** WhatsApp Cloud API does not support typing indicators — no-op. */
+  /** Show a typing indicator for 25s (requires a recent inbound message id). */
+  async sendTypingIndicatorFor(messageId: string): Promise<void> {
+    await this.markAsRead(messageId, { typing: true });
+  }
+
+  /**
+   * WhatsApp typing indicators are keyed by message ID, not recipient.
+   * Use {@link sendTypingIndicatorFor} with the inbound message id instead.
+   */
   async sendTypingIndicator(_to: string): Promise<void> {
     // intentionally empty
   }
@@ -314,6 +327,15 @@ export class WhatsAppClient extends BaseMetaClient<
   // =========================================================================
 
   async sendListMessage(to: string, list: ListMessage): Promise<SendResult> {
+    const totalRows = list.sections.reduce((sum, section) => sum + section.rows.length, 0);
+    if (totalRows > 10) {
+      throw new MessagingError(
+        `List message exceeds maximum of 10 rows across all sections (has ${totalRows})`,
+        'INVALID_LIST_MESSAGE',
+        'whatsapp',
+      );
+    }
+
     const response = await this.graphApi.post<WhatsAppSendResponse>(
       `${this.config.phoneNumberId}/messages`,
       {
@@ -388,6 +410,17 @@ export class WhatsAppClient extends BaseMetaClient<
   }
 
   async sendInteractiveFlow(to: string, flow: FlowInteractiveInput): Promise<SendResult> {
+    const parameters: Record<string, unknown> = {
+      flow_message_version: '3',
+      flow_id: flow.flowId,
+      flow_cta: flow.flowCta,
+      flow_action: flow.flowAction,
+      flow_action_payload: flow.flowActionPayload,
+    };
+    if (flow.flowToken) {
+      parameters.flow_token = flow.flowToken;
+    }
+
     const response = await this.graphApi.post<WhatsAppSendResponse>(
       `${this.config.phoneNumberId}/messages`,
       {
@@ -401,14 +434,7 @@ export class WhatsAppClient extends BaseMetaClient<
           footer: flow.footer,
           action: {
             name: 'flow',
-            parameters: {
-              flow_message_version: '3',
-              flow_id: flow.flowId,
-              flow_cta: flow.flowCta,
-              flow_token: flow.flowToken,
-              flow_action: flow.flowAction,
-              flow_action_payload: flow.flowActionPayload,
-            },
+            parameters,
           },
         },
       },
@@ -612,21 +638,44 @@ export class WhatsAppClient extends BaseMetaClient<
 
   readonly templates = {
     list: async (wabaId: string): Promise<TemplateInfo[]> => {
-      const result = await this.graphApi.get<{ data: RawTemplateListRow[] }>(
-        `${wabaId}/message_templates`,
-      );
-      return result.data.map(mapListTemplateRow);
+      const all: TemplateInfo[] = [];
+      let endpoint = `${wabaId}/message_templates`;
+      let extraParams: Record<string, string> | undefined;
+
+      for (let page = 0; page < 50; page++) {
+        const result = await this.graphApi.get<{
+          data: RawTemplateListRow[];
+          paging?: { next?: string };
+        }>(endpoint, extraParams);
+
+        all.push(...result.data.map(mapListTemplateRow));
+
+        const next = result.paging?.next;
+        if (!next) break;
+
+        const parsed = parseGraphPagingNext(next);
+        endpoint = parsed.endpoint;
+        extraParams = parsed.params;
+      }
+
+      return all;
     },
 
-    create: async (wabaId: string, template: TemplateDefinition): Promise<TemplateInfo> => {
-      return this.graphApi.post<TemplateInfo>(`${wabaId}/message_templates`, template);
+    create: async (
+      wabaId: string,
+      template: TemplateDefinition,
+    ): Promise<TemplateCreateResponse> => {
+      return this.graphApi.post<TemplateCreateResponse>(`${wabaId}/message_templates`, template);
     },
 
-    delete: async (wabaId: string, name: string): Promise<void> => {
-      await this.graphApi.post(`${wabaId}/message_templates`, {
-        name,
-        _method: 'DELETE',
-      });
+    delete: async (
+      wabaId: string,
+      opts: { name?: string; hsm_id?: string },
+    ): Promise<void> => {
+      const params: Record<string, string> = {};
+      if (opts.name) params.name = opts.name;
+      if (opts.hsm_id) params.hsm_id = opts.hsm_id;
+      await this.graphApi.delete(`${wabaId}/message_templates`, { params });
     },
   };
 
@@ -693,8 +742,12 @@ export class WhatsAppClient extends BaseMetaClient<
       await this.graphApi.post(`${flowId}/publish`, {});
     },
 
+    deprecate: async (flowId: string): Promise<void> => {
+      await this.graphApi.post(`${flowId}/deprecate`, {});
+    },
+
     delete: async (flowId: string): Promise<void> => {
-      await this.graphApi.post(flowId, { status: 'DEPRECATED' });
+      await this.graphApi.delete(flowId);
     },
 
     getAssets: async (flowId: string): Promise<FlowAssets> => {
@@ -779,7 +832,10 @@ export class WhatsAppClient extends BaseMetaClient<
           }
         : undefined,
       context: msg.context
-        ? { messageId: msg.context.message_id, from: msg.context.from }
+        ? {
+            messageId: msg.context.message_id,
+            from: msg.context.from,
+          }
         : undefined,
       raw: msg,
     };
@@ -812,6 +868,7 @@ export class WhatsAppClient extends BaseMetaClient<
         ? {
             model: status.pricing.pricing_model,
             category: status.pricing.category,
+            ...(status.pricing.type ? { type: status.pricing.type } : {}),
           }
         : undefined,
       raw: status,
@@ -973,6 +1030,20 @@ function mapListTemplateRow(raw: RawTemplateListRow): TemplateInfo {
     quality,
     paused,
   };
+}
+
+function parseGraphPagingNext(nextUrl: string): {
+  endpoint: string;
+  params?: Record<string, string>;
+} {
+  const url = new URL(nextUrl);
+  const parts = url.pathname.split('/').filter(Boolean);
+  const endpoint = parts.slice(1).join('/');
+  const params: Record<string, string> = {};
+  for (const [key, value] of url.searchParams.entries()) {
+    if (key !== 'access_token') params[key] = value;
+  }
+  return { endpoint, params: Object.keys(params).length > 0 ? params : undefined };
 }
 
 // ---------------------------------------------------------------------------

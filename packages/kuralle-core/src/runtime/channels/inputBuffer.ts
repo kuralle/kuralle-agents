@@ -1,5 +1,5 @@
 import type { Session } from '../../types/session.js';
-import type { UserInputContent } from '../userInput.js';
+import { mergeUserInputContents, type UserInputContent } from '../userInput.js';
 
 const PENDING_INPUT_KEY = '__v2_pendingUserInput';
 
@@ -14,12 +14,20 @@ export function setPendingUserInput(session: Session, input: UserInputContent): 
   session.workingMemory[PENDING_INPUT_KEY] = [...queue(session), input];
 }
 
+/** Dequeue one pending input. Built-in drivers drain the full queue via {@link consumeAllPendingUserInput}. */
 export function consumePendingUserInput(session: Session): UserInputContent {
   const q = queue(session);
   const next = q.shift() ?? '';
   if (q.length === 0) delete session.workingMemory[PENDING_INPUT_KEY];
   else session.workingMemory[PENDING_INPUT_KEY] = q;
   return next;
+}
+
+/** Drain the pending-input FIFO and merge into one turn (mid-turn enqueue-merge). */
+export function consumeAllPendingUserInput(session: Session): UserInputContent | undefined {
+  const q = queue(session);
+  delete session.workingMemory[PENDING_INPUT_KEY];
+  return mergeUserInputContents(q);
 }
 
 export function peekPendingUserInput(session: Session): UserInputContent | undefined {
