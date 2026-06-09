@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.2 — Wire provider prompt caching (was shipped-but-dead)
+
+Unified patch bump across the graph (0.7.1 → 0.7.2). `runtime/promptCache.ts` shipped full provider-prompt-cache support since 0.6.x but had **zero callers** and was **not exported** — every speaking-turn `streamText` ran with no `providerOptions`, so OpenAI `promptCacheKey` was never set and Anthropic `cache_control` was never applied. Found by the syrinx team's loop-back; verified (zero callers, not exported, no `providerOptions` on `TextDriver:77` / `extractionTurn:39`).
+
+**What's new:**
+- **Prompt caching is now wired and default-on**, gated by conservative provider detectors. New single owner `applyPromptCache(model, sessionId, messages)` is called from both `streamText` sites (`TextDriver`, `extractionTurn`):
+  - **Anthropic** → `cache_control` breakpoints (caches the `system + tools` prefix + recent history; ~up to 75% input-cost + a TTFT chunk off every multi-turn turn — Anthropic caching is opt-in, so this was 0% before).
+  - **OpenAI Responses** → `promptCacheKey = sessionId` (pins same-session turns to one cache slot) + `truncation: 'auto'` overflow safety net.
+  - Other providers → untouched (no-op).
+- The helpers (`applyPromptCache`, `applyAnthropicCacheControl`, `buildOpenAIResponsesProviderOptions`, `isAnthropicLanguageModel`, `isOpenAIResponsesModel`) are now **exported from `@kuralle-agents/core`** so custom drivers can opt in.
+
+Prompt assembly was already cache-friendly (static instructions first, volatile RAG/memory appended last), so this is a pure wiring fix. No API change, not breaking. Note: the separate Layer-2 *retrieval* cache is still unwired (see ADR 0008) — a distinct follow-up.
+
 ## 0.7.1 — On-demand retrieval (declared grounding contract)
 
 Unified patch bump across the graph (0.7.0 → 0.7.1). No API removed, no type change, not breaking; the existing `knowledge.autoRetrieve` boolean now declares **who invokes retrieval** — the runtime or the model. See `docs/adr/0008-declared-grounding-contract.md`.

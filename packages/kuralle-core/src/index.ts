@@ -165,6 +165,14 @@ export {
 } from './runtime/ContextBudget.js';
 export type { ContextBudgetConfig } from './runtime/ContextBudget.js';
 export { TokenAccumulator } from './runtime/TokenAccumulator.js';
+export {
+  applyPromptCache,
+  applyAnthropicCacheControl,
+  buildOpenAIResponsesProviderOptions,
+  isAnthropicLanguageModel,
+  isOpenAIResponsesModel,
+} from './runtime/promptCache.js';
+export type { AnthropicCacheTtl, OpenAIResponsesCompactOptions } from './runtime/promptCache.js';
 
 export {
   handoffFilters,
