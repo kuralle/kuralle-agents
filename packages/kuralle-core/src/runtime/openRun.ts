@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { ModelMessage } from 'ai';
+import type { ModelMessage, TranscriptionModel } from 'ai';
+import { transcribeAudioParts, type UserInputContent } from './userInput.js';
 import type { Session } from '../types/session.js';
 import type { SessionStore } from '../session/SessionStore.js';
 import type { AgentConfig } from '../types/agentConfig.js';
@@ -13,12 +14,15 @@ import { recordSignalDelivery } from './durable/replay.js';
 export interface OpenRunOptions {
   sessionId: string;
   userId?: string;
-  input?: string;
+  input?: UserInputContent;
   selection?: ResolvedSelection;
+  /** Agent-initiated turn: no user input; a wake note is appended instead. */
+  wake?: { reason: string; payload?: Record<string, unknown> };
   agentId?: string;
   seedMessages?: ModelMessage[];
   historyDelta?: ModelMessage[];
   signalDelivery?: SignalDelivery;
+  transcriptionModel?: TranscriptionModel;
   defaultAgentId: string;
   sessionStore: SessionStore;
 }
@@ -82,9 +86,17 @@ export async function openRun(
     await runStore.putRunState(runState);
   }
 
-  const effectiveInput = options.selection?.id ?? options.input;
+  const rawInput = options.selection?.id ?? options.input;
+  const effectiveInput =
+    rawInput === undefined
+      ? undefined
+      : await transcribeAudioParts(rawInput, options.transcriptionModel);
+  const hasInput =
+    typeof effectiveInput === 'string'
+      ? effectiveInput.length > 0
+      : Array.isArray(effectiveInput) && effectiveInput.length > 0;
 
-  if (effectiveInput) {
+  if (hasInput && effectiveInput !== undefined) {
     runState.updatedAt = Date.now();
     if (runState.activeFlow) {
       await runStore.putRunState(runState);
@@ -100,6 +112,25 @@ export async function openRun(
       sessionAfterPersist.messages = [...sessionAfterPersist.messages, userMessage];
       await options.sessionStore.save(sessionAfterPersist);
     }
+  }
+
+  if (options.wake && !hasInput) {
+    const payloadNote = options.wake.payload
+      ? ` Context: ${JSON.stringify(options.wake.payload)}.`
+      : '';
+    const wakeMessage: ModelMessage = {
+      role: 'system',
+      content:
+        `[Scheduled wake: ${options.wake.reason}]${payloadNote} ` +
+        'There is no new user message. Re-engage the user proactively per your instructions; ' +
+        'if a task is in progress, follow up on it gently.',
+    };
+    runState.messages = [...runState.messages, wakeMessage];
+    runState.updatedAt = Date.now();
+    await runStore.putRunState(runState);
+    const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
+    sessionAfterPersist.messages = [...sessionAfterPersist.messages, wakeMessage];
+    await options.sessionStore.save(sessionAfterPersist);
   }
 
   const agent = agentsById.get(runState.activeAgentId);

@@ -21,6 +21,12 @@ One tagless primitive — `defineAgent` — derives behavior from the fields you
 - **`defineTool` + `buildToolSet`** — typed effect tools wired to both the model and the executor.
 - **`createRuntime` / `Runtime`** — orchestrator: sessions, handoffs, streaming, flow state.
 - **`MemoryStore`** — in-process `SessionStore`; swap for Redis or Postgres in production.
+- **`HarnessConfig.escalation` + `resumeFromEscalation`** — the human-handoff loop: handoff brief, handler, ownership claim (via engagement), resume-with-resolution.
+- **`RunOptions.wake` + `Scheduler`** — agent-initiated turns (follow-ups, cart abandonment) on in-process timers or Cloudflare DO alarms (`@kuralle-agents/cf-agent`).
+- **`HarnessConfig.compaction`** — automatic history summarization + context-overflow recovery for long-running threads.
+- **`createFactMemoryService`** — cross-session fact memory (LLM merge-on-ingest) keyed by `userId` on any persistent block store.
+- **Built-in guardrails** — `createPromptInjectionGuard`, `createPiiInputGuard`/`OutputGuard`, `createModerationGuard`, `createGroundingValidator` (see `guides/GUARDRAILS.md`).
+- **Simulation eval** — `simulateConversation` + `createJudge` + `runSimulationSuite`: persona-driven simulated users scored by an LLM judge.
 
 ## Usage
 

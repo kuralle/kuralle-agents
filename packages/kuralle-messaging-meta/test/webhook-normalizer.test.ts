@@ -156,6 +156,107 @@ describe('normalizeWebhook — WhatsApp', () => {
     expect(result.messages[0].interactive?.list_reply?.id).toBe('row_1');
   });
 
+  it('normalizes an inbound order message', () => {
+    // Built from the Meta docs order-webhook example.
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          id: '102290129340398',
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                messaging_product: 'whatsapp',
+                metadata: { display_phone_number: '15550783881', phone_number_id: '106540352242922' },
+                contacts: [{ profile: { name: 'Sheena Nelson' }, wa_id: '16505551234' }],
+                messages: [
+                  {
+                    from: '16505551234',
+                    id: 'wamid.HBgLMTY1MDM4Nzk0MzkVAgASGBQzQUFERjg0NDEzNDdFODU3MUMxMAA=',
+                    timestamp: '1750096325',
+                    type: 'order',
+                    order: {
+                      catalog_id: '194836987003835',
+                      text: 'Love these!',
+                      product_items: [
+                        { product_retailer_id: 'di9ozbzfi4', quantity: 2, item_price: 30, currency: 'USD' },
+                        { product_retailer_id: 'nqryix03ez', quantity: 1, item_price: 25, currency: 'USD' },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = normalizeWebhook(payload);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].type).toBe('order');
+    expect(result.messages[0].contactName).toBe('Sheena Nelson');
+    expect(result.messages[0].order?.catalog_id).toBe('194836987003835');
+    expect(result.messages[0].order?.text).toBe('Love these!');
+    expect(result.messages[0].order?.product_items).toHaveLength(2);
+    expect(result.messages[0].order?.product_items[0]).toEqual({
+      product_retailer_id: 'di9ozbzfi4',
+      quantity: 2,
+      item_price: 30,
+      currency: 'USD',
+    });
+  });
+
+  it('normalizes an address message response (nfm_reply)', () => {
+    // Built from the Meta docs address-message reply example.
+    const responseJson =
+      '{"saved_address_id":"address1","values":{"in_pin_code":"400063","city":"Mumbai","name":"CUSTOMER_NAME","phone_number":"+91xxxxxxxxxx"}}';
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          id: 'WABA_ID',
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                messaging_product: 'whatsapp',
+                metadata: { phone_number_id: '123456' },
+                contacts: [],
+                messages: [
+                  {
+                    context: { from: 'FROM_PHONE_NUMBER_ID', id: 'wamid.request001' },
+                    from: '919999999999',
+                    id: 'wamid.addr001',
+                    timestamp: '1671498855',
+                    type: 'interactive',
+                    interactive: {
+                      type: 'nfm_reply',
+                      nfm_reply: {
+                        response_json: responseJson,
+                        body: 'CUSTOMER_NAME\n +91xxxxxxxxxx\n 400063, Mumbai',
+                        name: 'address_message',
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = normalizeWebhook(payload);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].type).toBe('interactive');
+    expect(result.messages[0].interactive?.type).toBe('nfm_reply');
+    expect(result.messages[0].interactive?.nfm_reply?.name).toBe('address_message');
+    expect(result.messages[0].interactive?.nfm_reply?.response_json).toBe(responseJson);
+    expect(result.messages[0].interactive?.nfm_reply?.body).toContain('Mumbai');
+  });
+
   it('splits reaction messages into reactions[]', () => {
     const payload = {
       object: 'whatsapp_business_account',

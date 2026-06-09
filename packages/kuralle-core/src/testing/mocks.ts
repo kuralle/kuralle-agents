@@ -5,11 +5,12 @@ import type { TurnResult } from '../types/channel.js';
 import type { Session } from '../types/session.js';
 import type { SessionStore } from '../session/SessionStore.js';
 import type { RunOptions } from '../runtime/Runtime.js';
+import type { UserInputContent } from '../runtime/userInput.js';
 import type { RuntimeLike } from '../runtime/RuntimeLike.js';
 
 export interface MockRuntimeRunCall {
   sessionId?: string;
-  input?: string;
+  input?: UserInputContent;
   agentId?: string;
   seedMessages?: unknown[];
 }

@@ -68,6 +68,7 @@ const plugins = [
 const sidebar = [
   { label: 'Overview', link: '/' },
   { label: 'Quickstart', link: '/guides/quickstart' },
+  { label: 'Build an Agent', link: '/guides/build-an-agent' },
   { label: 'Templates', link: '/guides/templates' },
   {
     label: 'Guides',
@@ -77,6 +78,7 @@ const sidebar = [
       { label: 'Flows', link: '/guides/flows' },
       { label: 'Flow Execution Model', link: '/guides/flow-execution' },
       { label: 'Tools', link: '/guides/tools' },
+      { label: 'Multimodal Input', link: '/guides/multimodal' },
       { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Routing & Handoffs', link: '/guides/routing' },
       { label: 'Sessions & State', link: '/guides/sessions' },

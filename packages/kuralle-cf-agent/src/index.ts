@@ -30,6 +30,7 @@ export { OrchestrationStore } from './OrchestrationStore.js';
 export { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
 export { createSqlExecutor } from './sqlExecutor.js';
 export { createSSEResponse } from './StreamAdapter.js';
+export { lastUserInputFromMessages } from './cfMessageInput.js';
 
 export type {
   StreamAdapterConfig,

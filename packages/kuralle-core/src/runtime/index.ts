@@ -17,6 +17,15 @@ export {
   peekPendingUserInput,
   hasPendingUserInput,
 } from './channels/index.js';
+// Multimodal user input — `UserInputContent` is the runtime's accepted user-turn
+// shape (text or AI SDK file/image/audio parts). Helpers project to text and
+// transcribe audio so ingress adapters (web/messaging) can build it uniformly.
+export {
+  userInputToText,
+  hasMediaParts,
+  transcribeAudioParts,
+  type UserInputContent,
+} from './userInput.js';
 
 export {
   isAbortSignal,

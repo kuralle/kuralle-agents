@@ -6,6 +6,7 @@ import type { RunContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
 import { runCollectDigression } from './collectDigression.js';
 import { hasPendingUserInput } from '../runtime/channels/inputBuffer.js';
+import { userInputToText, type UserInputContent } from '../runtime/userInput.js';
 import { resolveCollectExtractionNode } from './nodeBuilders.js';
 import {
   computeMissingFields,
@@ -28,7 +29,7 @@ function appendAssistantMessage(run: RunState, text: string): void {
   run.messages = [...run.messages, message];
 }
 
-function appendUserMessage(run: RunState, input: string): void {
+function appendUserMessage(run: RunState, input: UserInputContent): void {
   const message: ModelMessage = { role: 'user', content: input };
   run.messages = [...run.messages, message];
 }
@@ -173,8 +174,9 @@ function mergeExtractionFromTurn(
 function peekLatestUserMessage(run: RunState): string | undefined {
   for (let i = run.messages.length - 1; i >= 0; i -= 1) {
     const message = run.messages[i];
-    if (message?.role === 'user' && typeof message.content === 'string') {
-      return message.content;
+    if (message?.role === 'user') {
+      const text = userInputToText(message.content);
+      if (text) return text;
     }
   }
   return undefined;

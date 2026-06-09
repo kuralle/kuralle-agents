@@ -20,8 +20,15 @@
  */
 
 import { AIChatAgent } from '@cloudflare/ai-chat';
-import { createRuntime, type HarnessConfig, type Runtime } from '@kuralle-agents/core';
-import type { PersistentMemoryStore } from '@kuralle-agents/core';
+import { createRuntime, isWakeJob, wakeJob, type HarnessConfig, type Runtime } from '@kuralle-agents/core';
+import type {
+  PersistentMemoryStore,
+  UserInputContent,
+  SignalDelivery,
+  ScheduledJob,
+  Scheduler,
+  WakeJobPayload,
+} from '@kuralle-agents/core';
 import type { HarnessHooks, HarnessStreamPart } from '@kuralle-agents/core';
 import type { StreamTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
@@ -32,6 +39,7 @@ import { createSSEResponse } from './StreamAdapter.js';
 import type { StreamAdapterConfig, SqlExecutor } from './types.js';
 import { DEFAULT_STREAM_CONFIG } from './types.js';
 import { durableAgentSurface } from './durable-agent-surface.js';
+import { lastUserInputFromMessages } from './cfMessageInput.js';
 
 /**
  * Abstract base class for running Kuralle agents on Cloudflare.
@@ -110,6 +118,15 @@ export abstract class KuralleAgent<
   }
 
   /**
+   * The hex Durable Object id for this instance. Subclasses use it to mint
+   * out-of-band callbacks (e.g. a payment link) that route back to this exact DO
+   * via `namespace.idFromString(...)`, then resume it through `resumeWithSignal`.
+   */
+  protected getDurableObjectId(): string {
+    return this.getSessionId();
+  }
+
+  /**
    * Called by CF when a chat message arrives.
    *
    * CF has already:
@@ -141,28 +158,7 @@ export abstract class KuralleAgent<
     }
 
     const sessionId = this.getSessionId();
-    const defaultAgentId = this.getDefaultAgentId();
-
-    // Build session store that bridges CF messages with Kuralle state
-    const sessionStore = new BridgeSessionStore({
-      sqlExecutor: this.getSql(),
-      cfMessages: this.messages,
-      sessionId,
-      defaultAgentId,
-    });
-
-    // Build runtime (fresh per request to pick up latest config)
-    const extraConfig = this.getRuntimeConfig();
-    const workingMemoryStore = this.getWorkingMemoryStore();
-    this.runtime = createRuntime({
-      ...extraConfig,
-      agents: this.getAgents(),
-      defaultAgentId,
-      sessionStore,
-      ...(workingMemoryStore && !extraConfig.defaultWorkingMemoryStore
-        ? { defaultWorkingMemoryStore: workingMemoryStore }
-        : {}),
-    });
+    this.runtime = this.buildRuntime();
 
     const handle = this.runtime.run({
       input: lastUserMessage,
@@ -186,21 +182,72 @@ export abstract class KuralleAgent<
   }
 
   /**
-   * Extract the text content of the last user message from CF's messages array.
+   * Build a Kuralle runtime for this DO (fresh per request to pick up latest
+   * config). Bridges CF messages + DO-backed orchestration/working-memory state.
+   * Shared by the chat path and the durable resume path.
    */
-  private getLastUserInput(): string | null {
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      const msg = this.messages[i];
-      if (msg.role !== 'user') continue;
+  private buildRuntime(): Runtime {
+    const sessionId = this.getSessionId();
+    const defaultAgentId = this.getDefaultAgentId();
+    const sessionStore = new BridgeSessionStore({
+      sqlExecutor: this.getSql(),
+      cfMessages: this.messages,
+      sessionId,
+      defaultAgentId,
+    });
+    const extraConfig = this.getRuntimeConfig();
+    const workingMemoryStore = this.getWorkingMemoryStore();
+    return createRuntime({
+      ...extraConfig,
+      agents: this.getAgents(),
+      defaultAgentId,
+      sessionStore,
+      ...(workingMemoryStore && !extraConfig.defaultWorkingMemoryStore
+        ? { defaultWorkingMemoryStore: workingMemoryStore }
+        : {}),
+    });
+  }
 
-      const text = msg.parts
-        ?.filter((part): part is { type: 'text'; text: string } => part.type === 'text')
-        .map((part) => part.text)
-        .join('');
+  /**
+   * Resume a suspended run by delivering a durable signal — the server-side
+   * counterpart to a human/out-of-band event (e.g. a paid checkout link being
+   * hit). Drives the resumed turn to completion, then persists **and broadcasts**
+   * the resumed assistant reply through CF's machinery, so a live client sees it
+   * and a reconnecting client replays it from history.
+   *
+   * Idempotent at the durable layer: delivering the same `signal.signalId` twice
+   * is deduplicated by the effect log, so a double-clicked link is safe.
+   *
+   * @returns the assistant text produced by the resumed turn (may be empty).
+   */
+  protected async resumeWithSignal(signal: SignalDelivery): Promise<{ text: string }> {
+    const sessionId = this.getSessionId();
+    const runtime = this.buildRuntime();
+    const handle = runtime.run({ sessionId, signalDelivery: signal });
 
-      if (text?.trim()) return text;
+    let text = '';
+    for await (const part of handle.events) {
+      if (part.type === 'text-delta') text += part.delta;
     }
-    return null;
+    await handle;
+
+    if (text.trim()) {
+      const assistantMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        parts: [{ type: 'text', text }],
+      };
+      await this.persistMessages([...this.messages, assistantMessage]);
+    }
+    return { text };
+  }
+
+  /**
+   * Extract the last user turn from CF's messages as runtime input (multimodal).
+   * See `lastUserInputFromMessages`.
+   */
+  private getLastUserInput(): UserInputContent | null {
+    return lastUserInputFromMessages(this.messages);
   }
 
   /**
@@ -225,11 +272,103 @@ export abstract class KuralleAgent<
   }
 
   /**
+   * Durable scheduler backed by the agents SDK's DO-alarm scheduling
+   * (`this.schedule`). Jobs survive isolate restarts and fire in this exact
+   * DO via `runScheduledKuralleJob`. Satisfies the core `Scheduler` contract,
+   * so engagement drips/broadcasts and runtime wake turns can share it.
+   */
+  protected wakeScheduler(): Scheduler {
+    return {
+      enqueue: async (job: ScheduledJob, opts?: { delayMs?: number }) => {
+        const delaySeconds = Math.max(0, Math.ceil((opts?.delayMs ?? 0) / 1000));
+        const schedule = await this.schedule(
+          delaySeconds,
+          'runScheduledKuralleJob' as keyof this,
+          job,
+        );
+        return schedule.id;
+      },
+      cancel: async (jobId: string) => {
+        await this.cancelSchedule(jobId);
+      },
+    };
+  }
+
+  /**
+   * Schedule a proactive wake turn for this DO's conversation (cart
+   * abandonment nudge, "check back in an hour", delivery follow-up).
+   * Returns the schedule id (cancellable via `wakeScheduler().cancel`).
+   */
+  protected async scheduleWake(
+    delayMs: number,
+    wake: Omit<WakeJobPayload, 'sessionId'>,
+  ): Promise<string> {
+    return this.wakeScheduler().enqueue(
+      wakeJob({ ...wake, sessionId: this.getSessionId() }),
+      { delayMs },
+    );
+  }
+
+  /**
+   * DO-alarm callback for scheduled jobs. Wake jobs run an agent-initiated
+   * turn and persist + broadcast the assistant reply through CF's machinery
+   * (same path as `resumeWithSignal`); other job kinds go to
+   * `onScheduledJob` for subclasses to handle.
+   */
+  async runScheduledKuralleJob(job: ScheduledJob): Promise<void> {
+    if (!isWakeJob(job)) {
+      await this.onScheduledJob(job);
+      return;
+    }
+
+    const { reason, payload } = job.payload as unknown as WakeJobPayload;
+    const runtime = this.buildRuntime();
+    const handle = runtime.run({
+      sessionId: this.getSessionId(),
+      wake: { reason, payload },
+    });
+
+    let text = '';
+    for await (const part of handle.events) {
+      if (part.type === 'text-delta') text += part.delta;
+    }
+    await handle;
+
+    if (text.trim()) {
+      const assistantMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        parts: [{ type: 'text', text }],
+      };
+      await this.persistMessages([...this.messages, assistantMessage]);
+    }
+  }
+
+  /**
+   * Override to handle non-wake scheduled jobs (engagement drips, cleanup…).
+   * Default: no-op with a warning, so a mis-routed job is visible.
+   */
+  protected async onScheduledJob(job: ScheduledJob): Promise<void> {
+    console.warn(`[KuralleAgent] Unhandled scheduled job kind: ${job.kind}`);
+  }
+
+  /**
    * HTTP endpoint handler.
    * Adds Kuralle-specific endpoints on top of CF's defaults.
    */
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    // Durable resume: deliver a signal to a suspended run (e.g. a paid checkout
+    // link). Body: { signalId: string, name: string, payload?: unknown }.
+    if (request.method === 'POST' && url.pathname.endsWith('/resume')) {
+      const body = (await request.json().catch(() => null)) as SignalDelivery | null;
+      if (!body || typeof body.signalId !== 'string' || typeof body.name !== 'string') {
+        return Response.json({ error: 'signalId and name are required' }, { status: 400 });
+      }
+      const { text } = await this.resumeWithSignal(body);
+      return Response.json({ ok: true, text });
+    }
 
     if (url.pathname.endsWith('/orchestration-state')) {
       const store = new OrchestrationStore(this.getSql());

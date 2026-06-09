@@ -12,6 +12,10 @@ export interface PreTurnResult {
   proceed: boolean;
   userMessage: string;
   blockedMessage?: string;
+  /** Id of the processor/policy that blocked (set when `proceed` is false). */
+  blockedBy?: string;
+  /** Machine-readable block reason (set when `proceed` is false). */
+  blockedReason?: string;
 }
 
 export interface PostTurnResult {
@@ -22,11 +26,23 @@ export interface PostTurnResult {
   confidence?: number;
 }
 
+function userTextProjection(content: ModelMessage['content']): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return (content as Array<Record<string, unknown>>)
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text as string)
+    .join('\n');
+}
+
+// Guards must see multimodal turns too: a WhatsApp image whose CAPTION carries
+// a card number is still PII; an injection attempt in a caption is still an
+// injection. Project the text parts — file/image parts pass through untouched.
 function latestUserMessage(messages: ModelMessage[]): string {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message?.role === 'user' && typeof message.content === 'string') {
-      return message.content;
+    if (message?.role === 'user') {
+      return userTextProjection(message.content);
     }
   }
   return '';
@@ -125,6 +141,8 @@ async function runRefinementPolicies(
         proceed: false,
         userMessage: current,
         blockedMessage: decision.userFacingMessage ?? decision.rationale ?? 'Input blocked',
+        blockedBy: policy.name,
+        blockedReason: decision.rationale,
       };
     }
     if (decision.decision === 'rewrite') {
@@ -186,7 +204,7 @@ async function runValidationPolicies(
         proceed: false,
         text: safe,
         blockedMessage: safe,
-        control: { type: 'escalate', reason: decision.rationale },
+        control: { type: 'escalate', reason: decision.rationale, category: decision.escalationReason },
         confidence: decision.confidence,
       };
     }
@@ -223,10 +241,16 @@ export async function applyPreTurnPolicies(ctx: RunContext): Promise<PreTurnResu
         proceed: false,
         userMessage,
         blockedMessage: outcome.message,
+        blockedBy: outcome.processorId,
+        blockedReason: outcome.reason,
       };
     }
     if (outcome.input !== userMessage) {
       patchLatestUserMessage(ctx.runState.messages, outcome.input);
+      patchLatestUserMessage(ctx.session.messages, outcome.input);
+      // Persist immediately: a redaction (e.g. PII) must replace the raw
+      // value in the durable record, not only in this turn's memory.
+      await ctx.runStore.putRunState(ctx.runState);
     }
   }
 
@@ -275,7 +299,16 @@ function patchLatestUserMessage(messages: ModelMessage[], next: string): void {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (message?.role === 'user') {
-      messages[index] = { role: 'user', content: next };
+      if (Array.isArray(message.content)) {
+        // Multimodal turn: rewrite the text while preserving file/image parts.
+        const mediaParts = message.content.filter((part) => part.type !== 'text');
+        messages[index] = {
+          role: 'user',
+          content: [{ type: 'text' as const, text: next }, ...mediaParts],
+        };
+      } else {
+        messages[index] = { role: 'user', content: next };
+      }
       return;
     }
   }

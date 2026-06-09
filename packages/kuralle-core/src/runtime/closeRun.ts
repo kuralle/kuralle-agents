@@ -53,5 +53,9 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
   const latest = (await sessionStore.get(session.id)) ?? session;
   latest.currentAgent = runState.activeAgentId;
   latest.activeAgentId = runState.activeAgentId;
+  // Sync the session-level message mirror to the canonical run record — it
+  // otherwise lacks assistant turns and keeps pre-guardrail (unredacted)
+  // user input written at openRun.
+  latest.messages = [...runState.messages];
   await sessionStore.save(latest);
 }

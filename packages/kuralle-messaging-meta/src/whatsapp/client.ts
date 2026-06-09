@@ -5,8 +5,9 @@
  *
  * Extends {@link BaseMetaClient} for shared webhook verification, payload
  * normalization, handler dispatch, and `/webhook` Hono sub-app. Templates,
- * Flows, phone-number management, CTA buttons, reactions, location, and
- * contact messages remain in this file as WhatsApp-specific surface.
+ * Flows, phone-number management, CTA buttons, commerce (product, catalog,
+ * and address messages), reactions, location, and contact messages remain
+ * in this file as WhatsApp-specific surface.
  *
  * @example
  * ```ts
@@ -64,6 +65,10 @@ import type {
   ButtonMessage,
   CTAButtonMessage,
   FlowInteractiveInput,
+  ProductMessage,
+  ProductListMessage,
+  CatalogMessage,
+  AddressMessage,
   LocationPayload,
   ContactPayload,
   MediaObject,
@@ -72,6 +77,11 @@ import type {
   FlowInfo,
   FlowAssets,
 } from './types.js';
+
+import {
+  MAX_PRODUCT_LIST_SECTIONS,
+  MAX_PRODUCT_LIST_PRODUCTS,
+} from './commerce.js';
 
 import { WhatsAppFormatConverter } from './format.js';
 
@@ -101,8 +111,8 @@ export function createWhatsAppClient(config: WhatsAppClientConfig): WhatsAppClie
  * Full-featured WhatsApp Cloud API client.
  *
  * Implements the `PlatformClient` interface via {@link BaseMetaClient}.
- * Layers WhatsApp-specific capabilities (templates, Flows, reactions, CTA
- * buttons, locations, contacts) on top.
+ * Layers WhatsApp-specific capabilities (templates, Flows, commerce,
+ * reactions, CTA buttons, locations, contacts) on top.
  */
 export class WhatsAppClient extends BaseMetaClient<
   WhatsAppInbound,
@@ -408,6 +418,146 @@ export class WhatsAppClient extends BaseMetaClient<
   }
 
   // =========================================================================
+  // WhatsApp-specific — Commerce (products, catalog, addresses)
+  // =========================================================================
+
+  /**
+   * Send a single-product message (`interactive.type: "product"`).
+   *
+   * Displays one catalog product with a **View** button; the user can open
+   * the Product Detail Page, add to cart, and send an order. Orders arrive
+   * as inbound `type: "order"` messages — see {@link parseInboundOrder}.
+   */
+  async sendProduct(to: string, product: ProductMessage): Promise<SendResult> {
+    const response = await this.graphApi.post<WhatsAppSendResponse>(
+      `${this.config.phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'product',
+          body: product.body,
+          footer: product.footer,
+          action: {
+            catalog_id: product.catalogId,
+            product_retailer_id: product.productRetailerId,
+          },
+        },
+      },
+    );
+
+    return this.toSendResult(to, response);
+  }
+
+  /**
+   * Send a multi-product message (`interactive.type: "product_list"`).
+   *
+   * Displays up to {@link MAX_PRODUCT_LIST_PRODUCTS} catalog products across
+   * up to {@link MAX_PRODUCT_LIST_SECTIONS} sections. Header and body are
+   * required by the Cloud API.
+   *
+   * @throws {MessagingError} `INVALID_PRODUCT_LIST` when the section or
+   *         product limits are violated, or a section has no products.
+   */
+  async sendProductList(to: string, list: ProductListMessage): Promise<SendResult> {
+    this.validateProductList(list);
+
+    const response = await this.graphApi.post<WhatsAppSendResponse>(
+      `${this.config.phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'product_list',
+          header: list.header,
+          body: list.body,
+          footer: list.footer,
+          action: {
+            catalog_id: list.catalogId,
+            sections: list.sections.map((section) => ({
+              title: section.title,
+              product_items: section.productRetailerIds.map((id) => ({
+                product_retailer_id: id,
+              })),
+            })),
+          },
+        },
+      },
+    );
+
+    return this.toSendResult(to, response);
+  }
+
+  /**
+   * Send a catalog message (`interactive.type: "catalog_message"`).
+   *
+   * Displays a product thumbnail header, custom body text, and a
+   * **View catalog** button that opens the full catalog within WhatsApp.
+   */
+  async sendCatalog(to: string, catalog: CatalogMessage): Promise<SendResult> {
+    const response = await this.graphApi.post<WhatsAppSendResponse>(
+      `${this.config.phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'catalog_message',
+          body: catalog.body,
+          footer: catalog.footer,
+          action: {
+            name: 'catalog_message',
+            parameters: catalog.thumbnailProductRetailerId
+              ? { thumbnail_product_retailer_id: catalog.thumbnailProductRetailerId }
+              : undefined,
+          },
+        },
+      },
+    );
+
+    return this.toSendResult(to, response);
+  }
+
+  /**
+   * Send an address request message (`interactive.type: "address_message"`).
+   *
+   * Country-gated by Meta — currently India-based businesses and their
+   * India customers only. The user's submission arrives as an inbound
+   * `nfm_reply` interactive message — see {@link parseInboundAddress}.
+   */
+  async sendAddressRequest(to: string, address: AddressMessage): Promise<SendResult> {
+    const response = await this.graphApi.post<WhatsAppSendResponse>(
+      `${this.config.phoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'address_message',
+          body: address.body,
+          action: {
+            name: 'address_message',
+            parameters: {
+              country: address.country,
+              values: address.values,
+              saved_addresses: address.savedAddresses,
+              validation_errors: address.validationErrors,
+            },
+          },
+        },
+      },
+    );
+
+    return this.toSendResult(to, response);
+  }
+
+  // =========================================================================
   // WhatsApp-specific — Reactions, location, contacts
   // =========================================================================
 
@@ -681,6 +831,37 @@ export class WhatsAppClient extends BaseMetaClient<
   // Private — conversion helpers
   // =========================================================================
 
+  private validateProductList(list: ProductListMessage): void {
+    if (list.sections.length === 0 || list.sections.length > MAX_PRODUCT_LIST_SECTIONS) {
+      throw new MessagingError(
+        `Product list must have between 1 and ${MAX_PRODUCT_LIST_SECTIONS} sections (has ${list.sections.length})`,
+        'INVALID_PRODUCT_LIST',
+        'whatsapp',
+      );
+    }
+
+    const emptySection = list.sections.find((s) => s.productRetailerIds.length === 0);
+    if (emptySection) {
+      throw new MessagingError(
+        `Product list section "${emptySection.title}" has no products`,
+        'INVALID_PRODUCT_LIST',
+        'whatsapp',
+      );
+    }
+
+    const totalProducts = list.sections.reduce(
+      (sum, s) => sum + s.productRetailerIds.length,
+      0,
+    );
+    if (totalProducts > MAX_PRODUCT_LIST_PRODUCTS) {
+      throw new MessagingError(
+        `Product list exceeds maximum of ${MAX_PRODUCT_LIST_PRODUCTS} products across all sections (has ${totalProducts})`,
+        'INVALID_PRODUCT_LIST',
+        'whatsapp',
+      );
+    }
+  }
+
   private toSendResult(to: string, response: WhatsAppSendResponse): SendResult {
     return {
       messageId: response.messages[0]?.id ?? '',
@@ -714,6 +895,7 @@ export class WhatsAppClient extends BaseMetaClient<
     if (msg.button) return msg.button.text;
     if (msg.interactive?.button_reply) return msg.interactive.button_reply.title;
     if (msg.interactive?.list_reply) return msg.interactive.list_reply.title;
+    if (msg.order?.text) return msg.order.text;
     if (msg.location) {
       return msg.location.name ?? `${msg.location.latitude},${msg.location.longitude}`;
     }

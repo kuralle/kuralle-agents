@@ -190,6 +190,15 @@ function makeCtx(deps: CtxDeps): RunContext {
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
     turnInputConsumed: false,
+    // Rebase durable effect callsites to 0. Called at flow entry so a flow's
+    // effects (and any suspend/resume callsite) are anchored to the flow itself —
+    // identical whether the flow was entered fresh after an answering turn (which
+    // may have consumed callsites via enter_flow / tool calls) or re-entered on
+    // resume (where that answering turn does not re-run). Without this, a suspend's
+    // recorded callsite would not match on resume and the run would re-suspend.
+    resetCallsites: () => {
+      effectOrdinal = 0;
+    },
     tool: async (name, args, options) => {
       // needsApproval gate: a tool flagged `needsApproval` must be approved by a human
       // before it runs. Approval is a durable pause (the `__approval` signal); on resume

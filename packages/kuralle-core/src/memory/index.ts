@@ -8,6 +8,10 @@ export type {
 export { InMemoryMemoryService } from './stores/InMemoryMemoryService.js';
 export { preloadMemoryContext } from './preloadMemory.js';
 export { extractMemories } from './utils.js';
+export {
+  createFactMemoryService,
+  type FactMemoryServiceOptions,
+} from './factMemoryService.js';
 
 // ── Persistent memory blocks (PR-5) ─────────────────────────────────
 export type {

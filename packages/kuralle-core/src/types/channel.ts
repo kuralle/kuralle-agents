@@ -1,8 +1,10 @@
 import type { ToolSet } from 'ai';
+import type { UserInputContent } from '../runtime/userInput.js';
 import type { RunContext } from './run-context.js';
 import type { FlowNode } from './flow.js';
 import type { Tool, AnyTool } from './effectTool.js';
 import type { DispatchMode } from '../runtime/dispatchMode.js';
+import type { EscalationReason } from '../escalation/types.js';
 
 export type DriverOutputCapability =
   | 'kuralle-controlled-text'
@@ -49,7 +51,7 @@ export interface TurnResult {
   gateScope?: 'advisory';
 }
 
-export type UserSignal = { type: 'message'; input: string };
+export type UserSignal = { type: 'message'; input: UserInputContent };
 
 interface ToolResultRecord {
   name: string;
@@ -62,5 +64,5 @@ export type TurnControl =
   | { type: 'handoff'; target: string; reason?: string }
   | { type: 'enterFlow'; flowName: string; reason?: string }
   | { type: 'end'; reason: string }
-  | { type: 'escalate'; reason: string }
+  | { type: 'escalate'; reason: string; category?: EscalationReason }
   | { type: 'recover'; reason?: string };

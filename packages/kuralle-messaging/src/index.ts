@@ -67,6 +67,7 @@ export {
   defaultInboundChain,
 } from './adapter/input-resolver-chain.js';
 export type { InboundResolverPlugin } from './adapter/input-resolver-chain.js';
+export { attachInboundMedia } from './adapter/inbound-media.js';
 export { StreamMapper } from './adapter/stream-mapper.js';
 export { WindowTracker } from './adapter/window-tracker.js';
 export type { WindowStore, WindowState } from './adapter/window-store.js';

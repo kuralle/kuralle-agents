@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.8.5 — Agentic harness completion (escalation, wake, memory lifecycle, guardrails, commerce, simulation)
+
+Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes below ship in this same release). **Not breaking** — every surface is additive. Closes the six gaps from the industry-baseline evaluation; most wire dormant seams the v2 recon flagged as "shipped but silent". See `docs/adr/0010-agentic-harness-completion.md`, `docs/adr/0011-commerce-package.md`, and `MIGRATION.md`.
+
+**Escalation/handoff loop** (`@kuralle-agents/core` + `@kuralle-agents/engagement`):
+- `HarnessConfig.escalation { handler, summarize?, model?, recentMessageCount? }` — every escalation path (validator `escalate`, host control, terminal handoff, flow `escalate()`) builds an `EscalationRequest` (state snapshot + recent messages + optional LLM handoff brief) and invokes the handler; outcome recorded on `session.metadata.lastEscalation` and emitted as an `escalation` stream part. Flow escalations notify at the `__escalate` pause; a one-shot latch prevents double-fire after resume.
+- `runtime.resumeFromEscalation(sessionId, { resolutionSummary? })` — appends the human's resolution as context, clears parked flow/signal state, resumes the bot.
+- Engagement bridge: `createOwnershipEscalationHandler({ ownership, notify? })` claims thread ownership (bot sends suppressed by `ownershipGate`); `resolveEscalation` releases + resumes.
+
+**Proactive turns + one scheduler contract**:
+- `RunOptions.wake { reason, payload? }` — agent-initiated turns (cart abandonment, follow-ups): a system wake note enters history, free-conversation agents re-engage, active flows re-prompt their current step; `wake` stream part emitted.
+- `Scheduler`/`ScheduledJob` contract moved to core (engagement re-exports; `SendJob` = alias). `createWakeJobRunner(runtime, { deliver })` runs wake jobs and hands the produced parts to the host's delivery (e.g. the window-safe outbound pipeline). `createScheduleFollowupTool(scheduler)` lets the agent schedule its own follow-ups.
+- **Cloudflare DO-alarm backend**: `KuralleAgent.wakeScheduler()` / `scheduleWake()` ride the agents SDK's durable scheduling; wake turns persist + broadcast through CF's machinery. Workerd parity test included.
+
+**Memory lifecycle**:
+- `HarnessConfig.compaction { model?, triggerTokens?, keepRecentMessages?, summaryPrompt? }` — post-turn history summarization (off the latency path); kept tail always starts at a user message. Emits `context-compacted` / `compaction-skipped`.
+- Context-overflow recovery wired (the classifier shipped since v2 with zero callers): on a provider overflow the runtime strips the failed turn's partials, force-compacts once, retries once; emits `context-overflow-recovered`.
+- `createFactMemoryService({ store, model })` — LLM fact extraction with merge-on-ingest (existing facts + transcript → complete updated list), per-user block on any `PersistentMemoryStore` (file / Postgres / Redis / CF DO SQLite), injection-scanned writes. Identity verified end-to-end: messaging `customerId` → `RunOptions.userId` → memory owner.
+
+**Real guardrails** (the pipeline existed; the guards now ship):
+- `createPromptInjectionGuard()` (audited pattern set shared with memory-write scanning), `createPiiInputGuard()`/`createPiiOutputGuard()` (Luhn-validated cards + emails by default, opt-in phone/IBAN, redact-or-block), `createModerationGuard()`/`createModerationOutputGuard()` (temperature-0 LLM classifier, fail-open default), `createGroundingValidator()` (the productized Kapruka H6 gate: completed-action claims vs tool calls/state/citations, rewrite-not-block).
+- Pre-turn blocks now emit `safety-blocked { moderator, rationale, userFacingMessage }`.
+
+**Commerce**:
+- New `@kuralle-agents/commerce`: integer minor-unit `Money`, `ProductCatalog` contract, durable cart tools in flow state (`product_search`/`cart_add`/`cart_remove`/`cart_view`), idempotent `createOrderTool` (content-key ledger + in-flight coalescing — the Kapruka pattern, productized), `toWhatsAppProductList` mapper.
+- `@kuralle-agents/messaging-meta` WhatsApp commerce surface: `sendProduct`, `sendProductList` (limits validated), `sendCatalog`, `sendAddressRequest`; inbound `order` webhooks normalized with typed `parseInboundOrder` / `parseInboundAddress`. Payment messages deliberately out of scope.
+
+**Simulated-user eval + LLM judge** (`@kuralle-agents/core`):
+- `simulateConversation({ runtime, persona, userModel })` — an LLM persona (profile/goal/temperament) drives a real runtime to goal-met/give-up/max-turns; `createJudge({ model, dimensions? })` scores transcripts 1–5 on goal completion, grounding, tone, efficiency; `runSimulationSuite` is the CI gate (gave-up always fails).
+
+**New exports** also include: `ToolContext`, `ActionContext`, `AnyTool`, `compactMessages`, `isContextOverflowError`, `buildEscalationRequest`, `ensureSessionMetadata`.
+
+## 0.8.0 — Multimodal intake + Cloudflare durable HITL (BREAKING)
+
+Unified minor bump across the graph (0.7.2 → 0.8.0). **Breaking type change**: the runtime accepts multimodal user input instead of only `string`. See `docs/adr/0009-multimodal-intake.md`.
+
+**Cloudflare (`@kuralle-agents/cf-agent`):**
+- **Upgraded to `agents@^0.15` + `@cloudflare/ai-chat@^0.8.4`** (was `agents@0.11.5` + `ai-chat@0.1.x`, a peer mismatch that crashed the chat path with `this.mcp.ensureJsonSchema is not a function`). `KuralleAgent` needed no API changes.
+- **Multimodal on CF** — `KuralleAgent.getLastUserInput` now maps CF UIMessage file parts to `UserInputContent` (was text-only), so prescription images / uploads reach the model. Exposed as `lastUserInputFromMessages`.
+- **Durable human-in-the-loop on CF** — new `KuralleAgent.resumeWithSignal(signal)` + a `POST …/resume` route deliver a durable signal to a suspended run, then persist + broadcast the resumed assistant turn. This is the "payment link → resume the conversation" primitive.
+- **Fix: durable runs now persist on CF** — `BridgeSessionStore` round-trips the Kuralle run journal (`durableRuns`) through `OrchestrationStore`; without it, durable tools and suspend/resume failed with "Run not found".
+- **Fix (core): `RunContext.resetCallsites()` at flow entry** — anchors a flow's durable effect callsites to the flow itself, so a run entered via `enter_flow` (after an answering turn) resumes correctly instead of re-suspending on a callsite mismatch.
+- New exports: core — `SignalDelivery`, `SessionDurableRuns`, `PersistedRun`, `DURABLE_RUNS_KEY`. Verified end-to-end on a live Workers+DO deploy (`apps/playground/pharmacy-rx-agent`): multimodal intake, multi-tenant DO isolation, persistent cart, and payment-link → resume → order-complete.
+
+**Why:** the runtime accepted only text — `RunOptions.input` was `string`, and every ingress collapsed rich input to text *before* it reached the runtime (web `extractInputFromBody` filtered UIMessage parts to text-only; messaging `resolveInbound` returned `m.text ?? ''` and never read `m.media`). A photo, document, or WhatsApp voice note arrived as an empty string. This blocks every vertical whose first input is an image or voice note.
+
+**Breaking:**
+- `RunOptions.input: string` → **`UserInputContent`** (= the AI SDK `UserContent`: `string | Array<TextPart | ImagePart | FilePart>`). A plain string is still valid, so text-only callers compile unchanged — but anyone who *declared* `input: string` must widen it.
+- `ChannelPolicy.resolveInbound(m)` and `@kuralle-agents/messaging`'s `InboundResolverPlugin` now return `{ input: UserInputContent; selection? }`. Custom resolver/policy implementations must widen their return type.
+
+**What's new:**
+- **Multimodal threads straight to the model.** `openRun` builds `{ role: 'user', content }` from `UserInputContent` with no translation — Kuralle is AI-SDK-native (ADR 0005), so we adopt the AI SDK's own content type rather than inventing a media type.
+- **Web ingress** (`createKuralleChatRouter`): UIMessage `parts` → content — text → `TextPart`, `{type:'file', url, mediaType}` → `FilePart{ data: url }` (the ai-chatbot upload shape). Text-only input collapses back to a plain string (byte-identical text flows).
+- **Messaging ingress**: `createMessagingRouter` runs the new `attachInboundMedia(message, input, platform)` after the resolver chain — it downloads inbound media via `platform.downloadMedia(id)` (or passes a hosted `url` through), base64-encodes it, and attaches a `FilePart` + caption `TextPart`. Channel-agnostic; works with or without the engagement policy layer.
+- **Voice notes**: `HarnessConfig.transcriptionModel?: TranscriptionModel` (AI SDK). When set, inbound audio parts are transcribed to text before the turn (so voice works on text-only models); when unset, audio passes through to audio-capable models (e.g. Gemini). `data:`/`http(s)` audio sources are normalized for `transcribe`.
+- **New exports** — `@kuralle-agents/core`: `UserInputContent`, `userInputToText`, `hasMediaParts`, `transcribeAudioParts`. `@kuralle-agents/messaging`: `attachInboundMedia`.
+
+**Durability invariant:** `FilePart.data` flowing through the runtime must be JSON-serializable (base64 string / data URL / https URL), never a raw `Buffer` — `RunState.messages`, `session.messages`, and the pending-input buffer are all persisted through the `SessionStore`.
+
+**Not multimodal:** the legacy `/api/flow/*` string-only endpoints (`flowManager.process(input: string)`) degrade media to its text projection — a capability limit of that older subsystem, not the runtime path.
+
+See `MIGRATION.md` and `docs/adr/0009-multimodal-intake.md`.
+
 ## 0.7.2 — Wire provider prompt caching (was shipped-but-dead)
 
 Unified patch bump across the graph (0.7.1 → 0.7.2). `runtime/promptCache.ts` shipped full provider-prompt-cache support since 0.6.x but had **zero callers** and was **not exported** — every speaking-turn `streamText` ran with no `providerOptions`, so OpenAI `promptCacheKey` was never set and Anthropic `cache_control` was never applied. Found by the syrinx team's loop-back; verified (zero callers, not exported, no `providerOptions` on `TextDriver:77` / `extractionTurn:39`).

@@ -1,0 +1,182 @@
+---
+title: Multimodal Input
+description: Send images, documents, and voice notes — not just text — to a Kuralle agent, across web, messaging, and Cloudflare.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Plenty of real conversations don't start with text. A customer photographs a prescription,
+forwards a PDF invoice, or taps the mic and sends a voice note. Kuralle accepts all of it
+through the same `run()` call you already use for text — the user turn just carries
+*content parts* instead of (or alongside) a string.
+
+## The mental model
+
+A user turn is the AI SDK's own user-message content shape, exported as `UserInputContent`:
+
+```typescript
+type UserInputContent =
+  | string                                   // plain text (unchanged)
+  | Array<TextPart | FilePart | ImagePart>;  // multimodal
+```
+
+So everything you already write keeps working — a plain string is valid `UserInputContent`.
+To go multimodal, pass an array of parts:
+
+```typescript
+import { createRuntime } from '@kuralle-agents/core';
+
+runtime.run({
+  input: [
+    { type: 'text', text: 'What can you read on this prescription?' },
+    { type: 'file', mediaType: 'image/jpeg', data: 'https://blob.example.com/rx.jpg' },
+  ],
+});
+```
+
+A `FilePart` is `{ type: 'file', mediaType, data, filename? }`. `mediaType` is the MIME type
+(`image/jpeg`, `application/pdf`, `audio/ogg`, …). `data` is **what the model receives**, and
+it flows straight to the provider — Kuralle doesn't invent a media type, it uses the AI SDK's.
+
+<Aside type="caution" title="The one durability rule">
+  `FilePart.data` must be **JSON-serializable**: a base64 string, a `data:` URL, or an
+  `https://` URL — **never** a raw `Buffer`/`Uint8Array`. The runtime persists the user turn
+  through the `SessionStore` (memory/Redis/Postgres/DO SQLite), and a Buffer can't round-trip
+  through JSON. Front doors that download bytes (WhatsApp, below) base64-encode them for you.
+</Aside>
+
+## What the model needs
+
+Images and documents only "work" if the model can see them. Use a **vision-capable** model
+for images (`openai('gpt-4o')`, `google('gemini-2.0-flash')`, etc.). A text-only model will
+ignore image parts. Audio is its own case — see [Voice notes](#voice-notes) below.
+
+Nothing about flows, tools, routing, or persistence changes. The image rides in the user
+message; the rest of your agent behaves exactly as it does for text.
+
+## Web: `useChat` uploads
+
+This is the shape a Vercel AI SDK `useChat` client already produces: a message whose `parts`
+include a text part plus one `file` part per attachment (a blob/`data:` URL + `mediaType`).
+When you serve with `@kuralle-agents/hono-server`'s `createKuralleChatRouter`, the inbound
+`UIMessage` parts are mapped to `UserInputContent` **for you** — text-only input collapses
+back to a plain string, and file parts become `FilePart`s pointing at the upload URL.
+
+```tsx
+'use client';
+import { useChat } from '@ai-sdk/react';
+
+const { messages, sendMessage } = useChat({ api: '/api/chat/sse' });
+
+// a message with text + an uploaded image:
+sendMessage({
+  role: 'user',
+  parts: [
+    { type: 'text', text: 'Read this prescription' },
+    { type: 'file', url: blobUrl, mediaType: 'image/png', filename: 'rx.png' },
+  ],
+});
+```
+
+You upload the file wherever you like (e.g. Vercel Blob, S3, R2), pass its URL in the `file`
+part, and the agent receives it. No bridge, no custom parsing.
+
+## Messaging: WhatsApp & Instagram
+
+Inbound WhatsApp media arrives as a media *id*, not bytes — it has to be downloaded with the
+platform client. `createMessagingRouter` (the engagement front door) does this at the router
+level: after resolving the message it calls `attachInboundMedia`, which downloads the media
+via the platform client, **base64-encodes** it, and attaches a `FilePart` — with the caption
+as a leading text part. So "here's my prescription 📷 + can you fill it?" reaches the agent as
+one multimodal turn. You don't wire anything; mount the router and media flows through.
+
+```typescript
+// engagement() → createMessagingRouter already handles inbound media.
+// A WhatsApp image with a caption arrives at the runtime as:
+//   [ { type: 'text', text: '<caption>' },
+//     { type: 'file', mediaType: 'image/jpeg', data: '<base64>' } ]
+```
+
+See [Engagement & Messaging](/guides/engagement).
+
+## Cloudflare Workers
+
+`@kuralle-agents/cf-agent` maps the file parts of CF's chat `UIMessage`s into
+`UserInputContent` the same way — a `KuralleAgent` running on a Durable Object reads inbound
+images with no extra code. Everything in [Build an Agent → Cloudflare](/guides/build-an-agent#cloudflare-workers--durable-objects)
+applies unchanged; multimodal is automatic.
+
+## Voice notes
+
+A voice note is just an audio `FilePart` (`mediaType: 'audio/…'`). You have two paths,
+chosen by whether you configure a transcription model:
+
+| Setup | Behavior |
+|---|---|
+| `transcriptionModel` set on the runtime | inbound audio parts are **transcribed to text** before the turn — so voice works on **text-only** models |
+| no `transcriptionModel` | audio parts **pass through** to audio-capable models (e.g. Gemini), which accept them directly |
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { createRuntime } from '@kuralle-agents/core';
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'pharmacy',
+  transcriptionModel: openai.transcription('whisper-1'), // any AI SDK transcription model
+});
+```
+
+Transcription uses the AI SDK's `transcribe`, and the audio source is normalized for you —
+a `data:` URL is reduced to its base64 payload, an `http(s)` URL is fetched. The transcript
+replaces the audio part as a text part before the model turn; non-audio parts (images,
+documents) are never touched.
+
+## Working with content in your code
+
+Most of the time you don't need to inspect the parts — they ride into the model
+transparently. When you *do* (e.g. a flow node that branches on what the user typed), use
+the helpers exported from `@kuralle-agents/core`:
+
+```typescript
+import { userInputToText, hasMediaParts } from '@kuralle-agents/core';
+
+userInputToText(input); // text projection of the turn (drops non-text parts) — for
+                        // confirm-gate parsing, choice matching, logging
+hasMediaParts(input);   // true if the turn carries any file/image parts
+```
+
+`userInputToText` is what flow control uses internally so that a `decide`/confirm node can
+read the user's words even when the turn also carried an image.
+
+## Putting it together
+
+A pharmacy intake step, end to end: the customer sends an image, a vision model reads it, and
+a tool checks each medicine against inventory — the image is the *only* thing that changed
+versus a text agent.
+
+```typescript
+const agent = defineAgent({
+  id: 'pharmacy',
+  instructions:
+    'When the customer sends a prescription image, read each medicine and strength, then ' +
+    'call check_inventory for each and report what is in stock.',
+  model: openai('gpt-4o'),            // vision-capable
+  tools: { check_inventory: checkInventory },
+});
+
+runtime.run({
+  sessionId,
+  input: [
+    { type: 'text', text: 'Can you fill this?' },
+    { type: 'file', mediaType: 'image/jpeg', data: prescriptionUrl },
+  ],
+});
+```
+
+## Next steps
+
+- [Build an Agent](/guides/build-an-agent) — the full idea-to-production walkthrough.
+- [Engagement & Messaging](/guides/engagement) — WhatsApp/Instagram media ingress.
+- [Voice Agents](/guides/voice) — realtime (streaming) voice, distinct from voice-note transcription.
+- [Deployment](/guides/deployment) — serving the web and messaging front doors.
