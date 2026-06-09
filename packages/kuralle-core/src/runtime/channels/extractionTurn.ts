@@ -5,6 +5,7 @@ import type { RunContext } from '../../types/run-context.js';
 import type { ReplyNode } from '../../types/flow.js';
 import { buildToolSet } from '../../tools/effect/index.js';
 import { buildNodePrompt, composeSystem } from '../../flow/nodeBuilders.js';
+import { applyPromptCache } from '../promptCache.js';
 
 /**
  * Shared, NON-SPEAKING field extraction for `collect` nodes, used by every
@@ -36,13 +37,15 @@ export async function runSilentExtraction(
   const out: TurnResult = { text: '', toolResults: [] };
 
   for (let step = 0; step < maxSteps; step += 1) {
+    const cached = applyPromptCache(model, ctx.session.id, messages);
     const result = streamText({
       model,
       system,
-      messages,
+      messages: cached.messages,
       tools: aiTools,
       temperature: 0,
       abortSignal: ctx.abortSignal,
+      ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
     });
 
     for await (const part of result.fullStream) {

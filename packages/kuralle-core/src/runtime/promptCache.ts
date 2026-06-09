@@ -23,7 +23,7 @@
  * but extends caching across short user idle periods + cross-session
  * within an hour.
  */
-import type { ModelMessage } from 'ai';
+import type { JSONValue, ModelMessage } from 'ai';
 
 export type AnthropicCacheTtl = '5m' | '1h';
 
@@ -180,6 +180,39 @@ export function buildOpenAIResponsesProviderOptions(
     out.promptCacheKey = sessionId;
   }
   return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Single wiring point for provider prompt caching, called by the driver
+ * `streamText` sites. Gated by the conservative detectors so non-matching
+ * providers are untouched:
+ *   - Anthropic → applies `cache_control` breakpoints (caches the system+tools
+ *     prefix + recent history; ~75% input-cost + TTFT off multi-turn turns).
+ *   - OpenAI Responses → sets `promptCacheKey` (= sessionId, pins same-session
+ *     turns to one cache slot) + `truncation: 'auto'` overflow safety net.
+ * Returns the (possibly transformed) messages + an optional `providerOptions`
+ * bag ready to spread into `streamText`. Default-on: both are no-ops on
+ * providers that ignore the fields.
+ */
+export function applyPromptCache(
+  model: unknown,
+  sessionId: string,
+  messages: ModelMessage[],
+): { messages: ModelMessage[]; providerOptions?: Record<string, Record<string, JSONValue>> } {
+  const outMessages = isAnthropicLanguageModel(model)
+    ? applyAnthropicCacheControl(messages)
+    : messages;
+
+  if (isOpenAIResponsesModel(model)) {
+    const openai = buildOpenAIResponsesProviderOptions(
+      { useSessionAsPromptCacheKey: true, truncationFallback: 'auto' },
+      sessionId,
+    );
+    if (openai) {
+      return { messages: outMessages, providerOptions: { openai: openai as Record<string, JSONValue> } };
+    }
+  }
+  return { messages: outMessages };
 }
 
 function withProviderOptions(msg: ModelMessage, cacheControl: AnthropicCacheControl): ModelMessage {

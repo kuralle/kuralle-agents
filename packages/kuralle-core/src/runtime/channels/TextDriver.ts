@@ -16,6 +16,7 @@ import { speakWithHostControl } from './streaming/hostControlSpeak.js';
 import type { TokenSource } from './streaming/speakGated.js';
 import { resolveStreamMode } from './streaming/mode.js';
 import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
+import { applyPromptCache } from '../promptCache.js';
 import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
 import { resolveStructuredDecide } from '../../flow/choiceMatch.js';
 
@@ -74,12 +75,14 @@ export class TextDriver implements ChannelDriver {
     const source: TokenSource = {
       async *[Symbol.asyncIterator]() {
         for (let step = 0; step < maxSteps; step += 1) {
+          const cached = applyPromptCache(model, ctx.session.id, messages);
           const result = streamText({
             model,
             system,
-            messages,
+            messages: cached.messages,
             tools: aiTools,
             abortSignal: ctx.abortSignal,
+            ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
           });
 
           for await (const part of result.fullStream) {
