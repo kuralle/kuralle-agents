@@ -55,9 +55,20 @@ export interface NormalizedMessage {
     type: string;
     button_reply?: { id: string; title: string };
     list_reply?: { id: string; title: string; description?: string };
-    nfm_reply?: { name?: string; response_json: string };
+    nfm_reply?: { name?: string; response_json: string; body?: string };
   };
   button?: { text: string; payload: string };
+  /** Order placed from a catalog, single-, or multi-product message. */
+  order?: {
+    catalog_id: string;
+    text?: string;
+    product_items: Array<{
+      product_retailer_id: string;
+      quantity: number;
+      item_price: number;
+      currency: string;
+    }>;
+  };
   /** Quoted/replied-to message context. */
   context?: { message_id: string; from?: string };
   /** Reaction (only set for WhatsApp reaction messages before they're split out). */
@@ -151,6 +162,7 @@ interface RawWhatsAppMessage {
   contacts?: unknown[];
   interactive?: Record<string, unknown>;
   button?: Record<string, unknown>;
+  order?: Record<string, unknown>;
   context?: Record<string, unknown>;
   reaction?: { message_id?: string; emoji?: string };
   referral?: unknown;
@@ -304,6 +316,7 @@ function normalizeWhatsAppWebhook(payload: RawPayload): NormalizedWebhookEvents 
         if (msg.contacts) normalized.contacts = msg.contacts;
         if (msg.interactive) normalized.interactive = msg.interactive as NormalizedMessage['interactive'];
         if (msg.button) normalized.button = msg.button as NormalizedMessage['button'];
+        if (msg.order) normalized.order = msg.order as NormalizedMessage['order'];
         if (msg.context) normalized.context = msg.context as NormalizedMessage['context'];
         if (msg.referral) normalized.referral = msg.referral;
 

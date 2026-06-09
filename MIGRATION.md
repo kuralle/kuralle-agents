@@ -320,6 +320,76 @@ const agent = defineAgent({
 
 Codemod: replace `effectTools:` with `tools:` across agent configs; delete redundant agent-level `buildToolSet` lines.
 
+## Agentic harness completion (0.8.5)
+
+**Not breaking** — every 0.8.5 surface is additive. See
+`docs/adr/0010-agentic-harness-completion.md` and `docs/adr/0011-commerce-package.md`.
+
+Things to know when upgrading:
+
+- **New `HarnessConfig` fields** (all optional): `escalation` (handler +
+  summary for human handoffs), `compaction` (automatic history
+  summarization + context-overflow retry). Without them, behavior is
+  unchanged.
+- **New `RunOptions.wake`** — agent-initiated turns. `wake` and `input` are
+  mutually exclusive; passing both throws.
+- **New stream parts** your event consumers may want to handle: `escalation`,
+  `wake`, `context-compacted`, `compaction-skipped`,
+  `context-overflow-recovered`. Pre-turn guardrail blocks now emit
+  `safety-blocked` (previously only the text fallback was emitted). Exhaustive
+  `switch` statements over `HarnessStreamPart` need new cases.
+- **`@kuralle-agents/engagement`'s `Scheduler`/`SendJob` moved to core** and
+  are re-exported from engagement — existing imports keep working. `SendJob`
+  is now an alias of core's `ScheduledJob` (same shape).
+- **`TurnControl.escalate`** gained an optional `category` field;
+  `HostLoopResult.handoff` gained optional `category`. Constructing these
+  literals is unchanged.
+- **New packages/exports**: `@kuralle-agents/commerce`; WhatsApp commerce
+  messages in `@kuralle-agents/messaging-meta/whatsapp` (`sendProduct`,
+  `sendProductList`, `sendCatalog`, `sendAddressRequest`,
+  `parseInboundOrder`, `parseInboundAddress`); core builtin guards
+  (`createPromptInjectionGuard`, `createPiiInputGuard`/`OutputGuard`,
+  `createModerationGuard`, `createGroundingValidator`), memory
+  (`createFactMemoryService`), scheduling (`createInProcessScheduler`,
+  `createWakeJobRunner`, `createScheduleFollowupTool`), escalation types, and
+  simulation eval (`simulateConversation`, `createJudge`,
+  `runSimulationSuite`).
+
+## Multimodal intake (0.8.0)
+
+**Breaking type change:** the runtime accepts multimodal user input. `RunOptions.input` and the inbound resolvers widen from `string` to `UserInputContent` (the AI SDK `UserContent`: `string | Array<TextPart | ImagePart | FilePart>`). A plain string is still valid, so **text-only callers compile unchanged** — action is needed only where you *declared* a `string` type. See `docs/adr/0009-multimodal-intake.md`.
+
+| Surface | Before | After |
+|--------|--------|--------|
+| `RunOptions.input` | `string` | `UserInputContent` |
+| `ChannelPolicy.resolveInbound(m)` (engagement) | `{ input: string; selection? }` | `{ input: UserInputContent; selection? }` |
+| `InboundResolverPlugin.tryResolve` (messaging) | `{ input: string; … }` | `{ input: UserInputContent; … }` |
+
+**Action needed only if you:**
+- annotated a variable/param as `input: string` from `RunOptions` → widen to `UserInputContent` (import from `@kuralle-agents/core`), or read it as text via `userInputToText(input)`.
+- implemented a custom `ChannelPolicy` or `InboundResolverPlugin` → widen the return type. Returning a `string` still satisfies it (string ⊆ `UserInputContent`); no logic change is required for text-only resolvers.
+
+**To send multimodal input** (the AI SDK shape — same parts `useChat`/`convertToModelMessages` produce):
+
+```ts
+runtime.run({
+  sessionId,
+  input: [
+    { type: 'text', text: 'whats in this photo?' },
+    { type: 'file', mediaType: 'image/png', data: 'data:image/png;base64,…' }, // or an https URL, or base64
+  ],
+});
+```
+
+**Voice notes:** set `HarnessConfig.transcriptionModel` (any AI SDK transcription model) to transcribe inbound audio to text before the turn — required for text-only models; omit it to pass audio through to audio-capable models (e.g. Gemini).
+
+```ts
+import { openai } from '@ai-sdk/openai';
+createRuntime({ /* … */, transcriptionModel: openai.transcription('whisper-1') });
+```
+
+**Durability:** when you build `FilePart` content yourself, `data` must be a base64 string, `data:` URL, or `https` URL — never a raw `Buffer` (the user turn is persisted through the `SessionStore`).
+
 ## On-demand retrieval (0.7.1)
 
 **No type change, no rename.** `knowledge.autoRetrieve` stays a boolean; `true` (default) is unchanged. The only change is that `autoRetrieve: false` now means **on-demand**, not off. See `docs/adr/0008-declared-grounding-contract.md`.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
+import type { UserInputContent } from '@kuralle-agents/core';
 import { createKuralleChatRouter, createKuralleRouter } from '../src/index.ts';
 
 type StreamChunk = { type: string; [key: string]: unknown };
@@ -79,7 +80,7 @@ describe('native UIMessageStream default', () => {
   });
 
   it('concatenates all text parts from the last user message for runtime.run input', async () => {
-    let capturedInput: string | undefined;
+    let capturedInput: UserInputContent | undefined;
     const runtime = createMockRuntime(
       [
         { type: 'text-start', id: 't1' },

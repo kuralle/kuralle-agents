@@ -1,57 +1,14 @@
-/** A unit of deferred work (broadcast step / drip step). Shape is engagement-internal. */
-export interface SendJob {
-  kind: string;
-  payload: Record<string, unknown>;
-}
-
-export interface Scheduler {
-  enqueue(job: SendJob, opts?: { delayMs?: number }): Promise<string>;
-  cancel(jobId: string): Promise<void>;
-}
-
-export type InjectableTimer = {
-  set(fn: () => void, ms: number): unknown;
-  clear(handle: unknown): void;
-};
-
-const defaultTimer: InjectableTimer = {
-  set: (fn, ms) => setTimeout(fn, ms),
-  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-};
-
 /**
- * Default in-process scheduler (timer-based). For single-process/dev.
- * Production adapters (interface-compatible, not implemented here):
- *   - BullMQ (Redis-backed queue)
- *   - Google Cloud Tasks
- *   - cron / system scheduler
- * Inject a durable adapter for multi-process / serverless.
+ * The scheduler contract is owned by `@kuralle-agents/core` — one interface
+ * for engagement send-jobs and runtime wake turns (broadcasts, drips, and
+ * proactive agent-initiated messages share backends: in-process timers in
+ * dev, DO alarms on Cloudflare, any queue in between). Re-exported here so
+ * existing engagement consumers keep their import path.
  */
-export function createInProcessScheduler(opts: {
-  run: (job: SendJob) => void | Promise<void>;
-  timer?: InjectableTimer;
-}): Scheduler {
-  const timer = opts.timer ?? defaultTimer;
-  let nextJobId = 0;
-  const handles = new Map<string, unknown>();
+import type { ScheduledJob } from '@kuralle-agents/core';
 
-  return {
-    async enqueue(job, options) {
-      const jobId = String(++nextJobId);
-      const delayMs = options?.delayMs ?? 0;
-      const handle = timer.set(() => {
-        handles.delete(jobId);
-        void opts.run(job);
-      }, delayMs);
-      handles.set(jobId, handle);
-      return jobId;
-    },
+export { createInProcessScheduler } from '@kuralle-agents/core';
+export type { Scheduler, InjectableTimer } from '@kuralle-agents/core';
 
-    async cancel(jobId) {
-      const handle = handles.get(jobId);
-      if (handle === undefined) return;
-      timer.clear(handle);
-      handles.delete(jobId);
-    },
-  };
-}
+/** A unit of deferred engagement work (broadcast step / drip step). */
+export type SendJob = ScheduledJob;

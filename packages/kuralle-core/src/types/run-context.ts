@@ -101,6 +101,10 @@ export interface RunContext {
   signal(name: string, opts?: { deadline?: number; meta?: Record<string, unknown> }): Promise<unknown>;
   now(): Promise<number>;
   uuid(): Promise<string>;
+  /** Rebase durable effect callsites to 0. The runtime calls this at flow entry so
+   *  a flow's durable callsites are anchored to the flow — identical on fresh entry
+   *  (after an answering turn) and on resume (where that turn does not re-run). */
+  resetCallsites(): void;
 }
 
 export type ActionContext = Pick<

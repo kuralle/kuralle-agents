@@ -1,4 +1,5 @@
 import type { ModelMessage } from 'ai';
+import type { EscalationReason } from '../escalation/types.js';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { Flow } from '../types/flow.js';
 import type { ChannelDriver, TurnControl } from '../types/channel.js';
@@ -31,7 +32,7 @@ import { adaptHostSelect } from './hostClassifyAdapter.js';
 import type { selectHostTarget } from './select.js';
 
 export type HostLoopResult =
-  | { kind: 'handoff'; to: string; reason?: string }
+  | { kind: 'handoff'; to: string; reason?: string; category?: EscalationReason }
   | { kind: 'ended'; reason: string }
   | { kind: 'paused' }
   | { kind: 'turnComplete' };
@@ -124,6 +125,13 @@ async function runActiveFlow(
 ): Promise<HostLoopResult> {
   incrementTurnCount(run);
   assertWithinTurnLimit(run, ctx.limits);
+
+  // Anchor durable effect callsites to the flow. On a fresh entry the answering
+  // turn may have consumed callsites (enter_flow / tool calls); on resume that
+  // turn does not re-run. Rebasing here makes the flow's callsites (and any
+  // suspend/resume key) identical across both paths, so a resumed run does not
+  // re-suspend on a callsite mismatch.
+  ctx.resetCallsites();
 
   const result = await runFlow(flow, run, driver, ctx, agent);
 
@@ -290,7 +298,7 @@ async function executeHostControl(
 
   if (control.type === 'escalate') {
     ctx.emit({ type: 'handoff', targetAgent: 'human', reason: control.reason });
-    return { kind: 'handoff', to: 'human', reason: control.reason };
+    return { kind: 'handoff', to: 'human', reason: control.reason, category: control.category };
   }
 
   if (control.type === 'recover') {

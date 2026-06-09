@@ -50,6 +50,16 @@ export type {
   ReplyButton,
   CTAButtonMessage,
   FlowInteractiveInput,
+  ProductMessage,
+  ProductListMessage,
+  ProductSection,
+  CatalogMessage,
+  AddressMessage,
+  WhatsAppAddressValues,
+  WhatsAppSavedAddress,
+  WhatsAppOrderItem,
+  WhatsAppInboundOrder,
+  WhatsAppInboundAddress,
   LocationPayload,
   ContactPayload,
   BusinessProfile,
@@ -82,3 +92,11 @@ export { splitMessage } from './split.js';
 
 // ─── Flows ──────────────────────────────────────────────────────────────
 export { generateFlowToken, buildFlowInput } from './flows.js';
+
+// ─── Commerce ───────────────────────────────────────────────────────────
+export {
+  parseInboundOrder,
+  parseInboundAddress,
+  MAX_PRODUCT_LIST_SECTIONS,
+  MAX_PRODUCT_LIST_PRODUCTS,
+} from './commerce.js';

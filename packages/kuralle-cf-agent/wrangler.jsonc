@@ -4,7 +4,13 @@
   "compatibility_date": "2026-03-10",
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
-    "bindings": [{ "name": "TEST_MEMORY_DO", "class_name": "TestMemoryDO" }]
+    "bindings": [
+      { "name": "TEST_MEMORY_DO", "class_name": "TestMemoryDO" },
+      { "name": "TEST_WAKE_AGENT", "class_name": "TestWakeAgent" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TestMemoryDO"] }]
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["TestMemoryDO"] },
+    { "tag": "v2", "new_sqlite_classes": ["TestWakeAgent"] }
+  ]
 }

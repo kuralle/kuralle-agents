@@ -1,4 +1,4 @@
-import type { HarnessConfig, HarnessHooks, Session } from '@kuralle-agents/core';
+import type { HarnessConfig, HarnessHooks, Session, SessionDurableRuns } from '@kuralle-agents/core';
 
 /**
  * SQL executor type matching Cloudflare's Durable Object sql binding.
@@ -33,6 +33,13 @@ export interface OrchestrationState {
     timestamp: string;
   }>;
   state?: Record<string, unknown>;
+  /**
+   * Kuralle durable run journal (effect log + run state) for this session.
+   * `SessionRunStore` keeps the run on the Session object, so the bridge must
+   * persist + restore it here — otherwise durable tools and suspend/resume fail
+   * with "Run not found" on CF.
+   */
+  durableRuns?: SessionDurableRuns;
 }
 
 /**

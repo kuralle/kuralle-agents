@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pharmacy Rx Agent</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
+      code { background: #f3f3f3; padding: 0.1rem 0.3rem; border-radius: 4px; }
+      pre { background: #f3f3f3; padding: 0.75rem; border-radius: 6px; overflow:auto; }
+    </style>
+  </head>
+  <body>
+    <h1>💊 Pharmacy Rx Agent</h1>
+    <p>
+      A WhatsApp-style pharmacy ordering agent on Cloudflare Durable Objects. It reads a
+      prescription image, checks inventory, manages a persistent cart, and confirms the
+      order after a payment link is hit — demonstrating <strong>multimodal intake</strong>
+      and <strong>durable human-in-the-loop checkout</strong>.
+    </p>
+    <h2>Chat endpoint (CF Agents protocol)</h2>
+    <p>One Durable Object per thread (tenant). Connect a CF Agents client to:</p>
+    <pre>/agents/pharmacy-agent/&lt;thread-id&gt;</pre>
+    <p>
+      Send a user message whose <code>parts</code> include a <code>text</code> part and a
+      <code>file</code> part (the prescription image URL + <code>mediaType</code>).
+    </p>
+    <h2>Payment callback</h2>
+    <pre>GET /pay/&lt;token&gt;</pre>
+    <p>Hitting the link delivers the durable <code>payment</code> signal and resumes the order.</p>
+  </body>
+</html>

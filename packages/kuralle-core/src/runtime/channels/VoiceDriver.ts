@@ -87,6 +87,12 @@ export class VoiceDriver implements ChannelDriver {
     const preTurn = await applyPreTurnPolicies(ctx);
     if (!preTurn.proceed) {
       const blocked = preTurn.blockedMessage ?? 'Input blocked by guardrails';
+      ctx.emit({
+        type: 'safety-blocked',
+        moderator: preTurn.blockedBy ?? 'input-guardrails',
+        rationale: preTurn.blockedReason ?? 'input blocked',
+        userFacingMessage: blocked,
+      });
       const id = crypto.randomUUID();
       ctx.emit({ type: 'text-start', id });
       ctx.emit({ type: 'text-delta', id, delta: blocked });

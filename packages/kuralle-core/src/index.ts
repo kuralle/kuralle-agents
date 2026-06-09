@@ -32,6 +32,27 @@ export { buildMarkOutcomeTool, OUTCOMES_MARK_TOOL_NAME } from './outcomes/index.
 export { EvalRunner } from './eval/EvalRunner.js';
 export { scoreTurn, aggregateScores } from './eval/scoring.js';
 export type { EvalScenario, EvalTurn, ScenarioScore, TurnScore } from './eval/types.js';
+export {
+  simulateConversation,
+  createJudge,
+  runSimulationSuite,
+  DEFAULT_JUDGE_DIMENSIONS,
+} from './eval/simulation.js';
+export type {
+  SimulatedUserPersona,
+  SimulatedTranscriptTurn,
+  SimulationResult,
+  SimulationEnd,
+  SimulatableRuntime,
+  SimulateConversationOptions,
+  JudgeDimension,
+  JudgeVerdict,
+  CreateJudgeOptions,
+  ConversationJudge,
+  SimulationScenario,
+  SimulationSuiteResult,
+  RunSimulationSuiteOptions,
+} from './eval/simulation.js';
 export { SessionWorkingMemory } from './runtime/WorkingMemory.js';
 
 export type {
@@ -91,6 +112,27 @@ export { createObservabilityHooks } from './hooks/builtin/observability.js';
 export type { ObservabilityConfig } from './hooks/builtin/observability.js';
 export type { SessionTrace, TraceStreamEvent } from './types/telemetry.js';
 
+export { createPromptInjectionGuard } from './processors/builtin/promptInjectionGuard.js';
+export type { PromptInjectionGuardOptions } from './processors/builtin/promptInjectionGuard.js';
+export {
+  createPiiInputGuard,
+  createPiiOutputGuard,
+  redactPii,
+} from './processors/builtin/piiGuard.js';
+export type {
+  PiiDetector,
+  PiiGuardOptions,
+  PiiMatch,
+  PiiScanResult,
+} from './processors/builtin/piiGuard.js';
+export {
+  createModerationGuard,
+  createModerationOutputGuard,
+} from './processors/builtin/moderationGuard.js';
+export type { ModerationGuardOptions } from './processors/builtin/moderationGuard.js';
+export { createGroundingValidator } from './capabilities/validators/groundingValidator.js';
+export type { GroundingValidatorOptions } from './capabilities/validators/groundingValidator.js';
+
 export { ToolEnforcer, createToolEnforcer } from './guards/ToolEnforcer.js';
 export * as StopConditions from './guards/StopConditions.js';
 export * from './guards/rules.js';
@@ -120,6 +162,8 @@ export type {
 export { InMemoryMemoryService } from './memory/index.js';
 export { preloadMemoryContext } from './memory/index.js';
 export { extractMemories } from './memory/index.js';
+export { createFactMemoryService } from './memory/index.js';
+export type { FactMemoryServiceOptions } from './memory/index.js';
 
 export type {
   PersistentMemoryStore,
@@ -165,6 +209,18 @@ export {
 } from './runtime/ContextBudget.js';
 export type { ContextBudgetConfig } from './runtime/ContextBudget.js';
 export { TokenAccumulator } from './runtime/TokenAccumulator.js';
+export {
+  compactMessages,
+  estimateMessagesTokens,
+  DEFAULT_COMPACTION_TRIGGER_TOKENS,
+  DEFAULT_COMPACTION_KEEP_RECENT,
+} from './runtime/compaction.js';
+export type { CompactionConfig, CompactionResult } from './runtime/compaction.js';
+export {
+  isContextOverflowError,
+  recoverFromContextOverflow,
+} from './runtime/contextOverflow.js';
+export type { OverflowRecoveryResult } from './runtime/contextOverflow.js';
 export {
   applyPromptCache,
   applyAnthropicCacheControl,
@@ -236,7 +292,32 @@ export type {
   SourceRef,
 } from './capabilities/index.js';
 
-export type { EscalationOutcome, EscalationReason } from './escalation/types.js';
+export type {
+  EscalationOutcome,
+  EscalationReason,
+  EscalationRequest,
+  EscalationHandler,
+  EscalationConfig,
+} from './escalation/types.js';
+export { buildEscalationRequest, ensureSessionMetadata } from './escalation/escalation.js';
+
+export {
+  createInProcessScheduler,
+  createWakeJobRunner,
+  createScheduleFollowupTool,
+  wakeJob,
+  isWakeJob,
+  WAKE_JOB_KIND,
+} from './scheduler/index.js';
+export type {
+  Scheduler,
+  ScheduledJob,
+  InjectableTimer,
+  WakeOptions,
+  WakeJobPayload,
+  WakeDelivery,
+  WakeRunnable,
+} from './scheduler/index.js';
 
 export { filterAuditEntries } from './audit/index.js';
 export type {
@@ -314,13 +395,21 @@ export type {
   KuralleUIMessage,
 } from './ai-sdk/uiMessageStream.js';
 export type { ChoiceOption, ResolvedSelection } from './types/selection.js';
-export type { RunState, StepRecord } from './runtime/durable/types.js';
+export type {
+  RunState,
+  StepRecord,
+  SignalDelivery,
+  SessionDurableRuns,
+  PersistedRun,
+} from './runtime/durable/types.js';
+export { DURABLE_RUNS_KEY } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
 // Text is the primary channel. The realtime VoiceDriver is PAUSED and lives off
 // the headline API behind `@kuralle-agents/core/runtime` (see realtime-audio).
 export type { ChannelDriver, TextDriver } from './runtime/channels/index.js';
 export type { TurnResult } from './types/channel.js';
-export type { RunContext } from './types/run-context.js';
+export type { RunContext, ToolContext, ActionContext } from './types/run-context.js';
+export type { AnyTool } from './types/effectTool.js';
 export {
   createRuntime,
   Runtime,
@@ -328,3 +417,9 @@ export {
   type RunOptions,
 } from './runtime/Runtime.js';
 export type { RuntimeLike } from './runtime/RuntimeLike.js';
+export {
+  userInputToText,
+  hasMediaParts,
+  transcribeAudioParts,
+  type UserInputContent,
+} from './runtime/userInput.js';

@@ -1,7 +1,12 @@
-import type { Session, SessionStore } from '@kuralle-agents/core';
+import type { Session, SessionStore, SessionDurableRuns } from '@kuralle-agents/core';
+import { DURABLE_RUNS_KEY } from '@kuralle-agents/core';
 import { getToolName, isToolUIPart, type TextPart, type ToolCallPart, type UIMessage } from 'ai';
 import type { OrchestrationState, SqlExecutor } from './types.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
+
+/** The durable run journal is stashed on the Session under a well-known key by
+ *  `SessionRunStore`; the bridge persists/restores it via OrchestrationStore. */
+type SessionWithRuns = Session & { [DURABLE_RUNS_KEY]?: SessionDurableRuns };
 
 /**
  * Bridge SessionStore that splits concerns between CF and Kuralle.
@@ -44,7 +49,7 @@ export class BridgeSessionStore implements SessionStore {
     // Convert CF UIMessages to Kuralle ModelMessages
     const messages = convertUIMessagesToModelMessages(this.cfMessages);
 
-    return {
+    const session: SessionWithRuns = {
       id: key,
       conversationId: key,
       channelId: 'web',
@@ -60,6 +65,10 @@ export class BridgeSessionStore implements SessionStore {
       })),
       state: orchState?.state,
     };
+    // Restore the durable run journal so durable tools / suspend-resume can find
+    // the run (SessionRunStore reads it off the Session object).
+    session[DURABLE_RUNS_KEY] = orchState?.durableRuns ?? {};
+    return session;
   }
 
   /**
@@ -79,6 +88,7 @@ export class BridgeSessionStore implements SessionStore {
           : String(h.timestamp),
       })),
       state: session.state,
+      durableRuns: (session as SessionWithRuns)[DURABLE_RUNS_KEY],
     };
     await this.orchestration.save(session.id, state);
   }

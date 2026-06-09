@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pharmacy-rx-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PharmacyAgent",
+        "class_name": "PharmacyAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PharmacyAgent"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "PUBLIC_URL": "https://pharmacy-rx-agent.mithushancj.workers.dev"
+  }
+  // OPENAI_API_KEY is a secret — set with:  wrangler secret put OPENAI_API_KEY
+}

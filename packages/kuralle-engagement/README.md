@@ -96,6 +96,8 @@ import { whatsappPolicy, webPolicy, instagramPolicy } from '@kuralle-agents/enga
 - **`sessionConsentStore` / `consentGate`** — opt-in/opt-out and STOP handling (customer-keyed).
 - **`sessionOwnershipStore` / `ownershipGate`** — bot vs human thread ownership; human-owned inbound does not run flows.
 - **`createBroadcasts` / `createDrip`** — campaign ledger idempotency and drip schedules (see exports in `src/index.ts`).
+- **`createOwnershipEscalationHandler` / `resolveEscalation`** — the channel side of `HarnessConfig.escalation`: claim the thread for the human + notify on escalation; release + resume the bot (with the resolution in context) when the human is done.
+- The `Scheduler` contract is owned by `@kuralle-agents/core` (re-exported here) — drips, broadcasts, and runtime wake turns (`RunOptions.wake`) share backends: in-process timers in dev, Cloudflare DO alarms via `@kuralle-agents/cf-agent`.
 
 ## Example
 

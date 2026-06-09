@@ -1,5 +1,5 @@
 import type { InboundMessage, InteractiveMessage } from '@kuralle-agents/messaging';
-import type { ChoiceOption, ResolvedSelection } from '@kuralle-agents/core';
+import type { ChoiceOption, ResolvedSelection, UserInputContent } from '@kuralle-agents/core';
 import type { SmartSendStrategist } from './strategist.js';
 
 export type { SmartSendStrategist } from './strategist.js';
@@ -18,5 +18,5 @@ export interface ChannelPolicy {
   readonly closedWindow: ClosedWindowStrategy;
   readonly consentRequired: boolean;
   renderInteractive(options: ChoiceOption[], prompt: string): InteractiveMessage;
-  resolveInbound(m: InboundMessage): { input: string; selection?: ResolvedSelection };
+  resolveInbound(m: InboundMessage): { input: UserInputContent; selection?: ResolvedSelection };
 }

@@ -278,6 +278,170 @@ export interface FlowInteractiveInput {
 }
 
 // ====================================
+// COMMERCE MESSAGE TYPES
+// ====================================
+
+/**
+ * A single-product interactive message (`interactive.type: "product"`).
+ *
+ * Displays one product from your catalog with a product image, title,
+ * price, and a **View** button that opens the Product Detail Page.
+ */
+export interface ProductMessage {
+  /** Optional body text (max 1024 chars). */
+  body?: { text: string };
+  /** Optional footer text (max 60 chars). */
+  footer?: { text: string };
+  /** Meta product catalog ID. */
+  catalogId: string;
+  /** Product SKU (labeled **Content ID** in Commerce Manager). */
+  productRetailerId: string;
+}
+
+/**
+ * A multi-product interactive message (`interactive.type: "product_list"`).
+ *
+ * Displays up to 30 products from your catalog, organized into up to
+ * 10 sections. Header and body are required by the Cloud API.
+ */
+export interface ProductListMessage {
+  /** Required header (text only for product lists). */
+  header: { type: 'text'; text: string };
+  /** Body text (required, max 1024 chars). */
+  body: { text: string };
+  /** Optional footer text (max 60 chars). */
+  footer?: { text: string };
+  /** Meta product catalog ID. */
+  catalogId: string;
+  /** Product sections (max 10; max 30 products across all sections). */
+  sections: ProductSection[];
+}
+
+/** A section within a multi-product message. */
+export interface ProductSection {
+  /** Section title. */
+  title: string;
+  /** Product SKUs in this section (Content IDs in Commerce Manager). */
+  productRetailerIds: string[];
+}
+
+/**
+ * A catalog interactive message (`interactive.type: "catalog_message"`).
+ *
+ * Displays a product thumbnail header image, custom body text, and a
+ * **View catalog** button that opens your full catalog within WhatsApp.
+ */
+export interface CatalogMessage {
+  /** Body text (required, max 1024 chars). */
+  body: { text: string };
+  /** Optional footer text (max 60 chars). */
+  footer?: { text: string };
+  /**
+   * Optional product SKU whose image is used as the header thumbnail.
+   * When omitted, the first item in the catalog is used.
+   */
+  thumbnailProductRetailerId?: string;
+}
+
+/**
+ * Address field values used in address messages.
+ *
+ * Field names mirror the Cloud API wire format. Currently only available
+ * for India-based businesses and their India customers.
+ */
+export interface WhatsAppAddressValues {
+  /** Recipient name. */
+  name?: string;
+  /** Recipient phone number. */
+  phone_number?: string;
+  /** Pin code (India, max 6 chars). */
+  in_pin_code?: string;
+  /** Flat/house number. */
+  house_number?: string;
+  /** Floor number. */
+  floor_number?: string;
+  /** Tower number. */
+  tower_number?: string;
+  /** Building/apartment name. */
+  building_name?: string;
+  /** Street address. */
+  address?: string;
+  /** Landmark/area. */
+  landmark_area?: string;
+  /** City. */
+  city?: string;
+  /** State. */
+  state?: string;
+}
+
+/** A previously saved address offered to the user in an address message. */
+export interface WhatsAppSavedAddress {
+  /** Identifier returned as `saved_address_id` when the user selects it. */
+  id: string;
+  /** The saved address field values. */
+  value: WhatsAppAddressValues;
+}
+
+/**
+ * An address request interactive message (`interactive.type: "address_message"`).
+ *
+ * Country-gated: only available for India-based businesses and their
+ * India customers. The user's submission arrives as an inbound
+ * `interactive.type: "nfm_reply"` message — see {@link parseInboundAddress}.
+ */
+export interface AddressMessage {
+  /** Body text (required). */
+  body: { text: string };
+  /** ISO country code (required by the API, e.g. `"IN"`). */
+  country: string;
+  /** Optional prefilled address field values. */
+  values?: WhatsAppAddressValues;
+  /** Optional saved addresses the user can pick instead of typing. */
+  savedAddresses?: WhatsAppSavedAddress[];
+  /**
+   * Optional per-field validation errors. WhatsApp blocks submission
+   * until the flagged fields are corrected.
+   */
+  validationErrors?: Partial<Record<keyof WhatsAppAddressValues, string>>;
+}
+
+/** A line item in an inbound WhatsApp order (wire format). */
+export interface WhatsAppOrderItem {
+  /** Product SKU (Content ID in Commerce Manager). */
+  product_retailer_id: string;
+  /** Quantity ordered. */
+  quantity: number;
+  /** Unit price of the item. */
+  item_price: number;
+  /** Catalog currency code (e.g. `"USD"`). */
+  currency: string;
+}
+
+/**
+ * An inbound order placed by a user from a catalog, single-, or
+ * multi-product message (webhook message `type: "order"`).
+ */
+export interface WhatsAppInboundOrder {
+  /** Meta product catalog ID the order was placed against. */
+  catalog_id: string;
+  /** Text accompanying the order. */
+  text?: string;
+  /** Ordered line items. */
+  product_items: WhatsAppOrderItem[];
+}
+
+/**
+ * A parsed inbound address submission (the `nfm_reply.response_json`
+ * of an address message reply).
+ */
+export interface WhatsAppInboundAddress {
+  /** ID of the saved address the user selected, when applicable. */
+  saved_address_id?: string;
+  /** Address fields entered or confirmed by the user. */
+  values: WhatsAppAddressValues;
+}
+
+// ====================================
 // LOCATION & CONTACTS
 // ====================================
 

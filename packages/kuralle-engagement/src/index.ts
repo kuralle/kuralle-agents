@@ -35,6 +35,13 @@ export {
   ownershipGate,
   OWNERSHIP_WM_KEY,
 } from './ownership.js';
+export {
+  createOwnershipEscalationHandler,
+  resolveEscalation,
+  type EscalationBridgeOptions,
+  type EscalationResumable,
+  type ResolveEscalationOptions,
+} from './escalation.js';
 export { sessionConsentStore, consentGate, CONSENT_WM_KEY } from './consent.js';
 export {
   createInProcessScheduler,

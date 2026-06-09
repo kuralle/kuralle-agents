@@ -2,7 +2,7 @@ import { createUIMessageStreamResponse } from 'ai';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { Context, Handler } from 'hono';
-import { harnessToUIMessageStream } from '@kuralle-agents/core';
+import { harnessToUIMessageStream, userInputToText } from '@kuralle-agents/core';
 import type {
   ConversationOutcome,
   CsatRecord,
@@ -10,6 +10,7 @@ import type {
   RunOptions,
   RuntimeLike,
   Session,
+  UserInputContent,
 } from '@kuralle-agents/core';
 
 // PR-20 — re-export the OpenAI-compatible router. Lets consumers do:
@@ -176,19 +177,50 @@ const parseJsonBody = async <T>(c: Context): Promise<T | null> => {
 
 const wantsRawStreamFormat = (c: Context): boolean => c.req.query('format') === 'raw';
 
-const extractInputFromBody = (body: Record<string, unknown>): { input: string; sessionId?: string } => {
+/** A UIMessage part as sent by `useChat` (text or file). File parts carry a URL
+ *  (blob/data URL) + mediaType — the ai-chatbot multimodal shape. */
+interface UIMessagePartLike {
+  type: string;
+  text?: string;
+  url?: string;
+  mediaType?: string;
+  filename?: string;
+}
+
+/**
+ * Map a UIMessage's parts to runtime `UserInputContent`. Text-only input collapses
+ * to a plain string (byte-identical to the prior text-only behavior); when any file
+ * part is present, returns AI SDK multimodal content (text + file parts) so images,
+ * documents, and voice notes reach the model instead of being dropped.
+ */
+const partsToUserInput = (parts: UIMessagePartLike[]): string | UserInputContent => {
+  const content: Exclude<UserInputContent, string> = [];
+  for (const p of parts) {
+    if (p.type === 'text' && typeof p.text === 'string') {
+      content.push({ type: 'text', text: p.text });
+    } else if (p.type === 'file' && typeof p.url === 'string' && typeof p.mediaType === 'string') {
+      content.push({ type: 'file', data: p.url, mediaType: p.mediaType, filename: p.filename });
+    }
+  }
+  const hasFile = content.some((part) => part.type === 'file');
+  if (!hasFile) {
+    return content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+  }
+  return content;
+};
+
+const extractInputFromBody = (
+  body: Record<string, unknown>,
+): { input: string | UserInputContent; sessionId?: string } => {
   if (typeof body.message === 'string') {
     return { input: body.message, sessionId: body.sessionId as string | undefined };
   }
 
   if (Array.isArray(body.messages) && body.messages.length > 0) {
-    const messages = body.messages as Array<{ parts?: Array<{ type: string; text?: string }> }>;
+    const messages = body.messages as Array<{ parts?: UIMessagePartLike[] }>;
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.parts && Array.isArray(lastMessage.parts)) {
-      const input = lastMessage.parts
-        .filter((p) => p.type === 'text')
-        .map((p) => p.text ?? '')
-        .join('');
+      const input = partsToUserInput(lastMessage.parts);
       const sessionId =
         typeof body.sessionId === 'string'
           ? body.sessionId
@@ -933,7 +965,9 @@ export const createKuralleRouter = ({
       return c.json({ error: 'invalid body' }, 400);
     }
 
-    const { input, sessionId } = extractInputFromBody(body);
+    const { input: rawInput, sessionId } = extractInputFromBody(body);
+    // The legacy flow processor is string-only; media degrades to its text projection.
+    const input = userInputToText(rawInput);
 
     if (!input) {
       return c.json({ error: 'message required' }, 400);
@@ -969,7 +1003,9 @@ export const createKuralleRouter = ({
       return c.json({ error: 'invalid body' }, 400);
     }
 
-    const { input, sessionId: bodySessionId } = extractInputFromBody(body);
+    const { input: rawInput, sessionId: bodySessionId } = extractInputFromBody(body);
+    // The legacy flow processor is string-only; media degrades to its text projection.
+    const input = userInputToText(rawInput);
     if (!input) {
       return c.json({ error: 'message required' }, 400);
     }

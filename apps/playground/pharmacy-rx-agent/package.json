@@ -1,0 +1,29 @@
+{
+  "name": "pharmacy-rx-agent",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pharmacy Rx ordering agent on Cloudflare DO — multimodal intake (prescription image) + durable HITL checkout (payment link → resume).",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "smoke": "bun run smoke.ts"
+  },
+  "dependencies": {
+    "@kuralle-agents/cf-agent": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "@ai-sdk/openai": "latest",
+    "@cloudflare/ai-chat": "^0.8.4",
+    "agents": "^0.15.0",
+    "ai": "latest",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
+  }
+}

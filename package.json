@@ -17,7 +17,8 @@
     "apps/playground/_shared",
     "apps/playground/acme-support-agent",
     "apps/playground/langfuse-demo",
-    "apps/playground/gemini-voice-agent"
+    "apps/playground/gemini-voice-agent",
+    "apps/playground/pharmacy-rx-agent"
   ],
   "scripts": {
     "build": "bun run build:packages",

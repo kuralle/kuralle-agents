@@ -1,11 +1,11 @@
-import type { ResolvedSelection } from '@kuralle-agents/core';
+import type { ResolvedSelection, UserInputContent } from '@kuralle-agents/core';
 import type { InboundMessage } from '../types/messages.js';
 
 export interface InboundResolverPlugin {
   readonly name: string;
   tryResolve(
     m: InboundMessage,
-  ): Promise<{ input: string; selection?: ResolvedSelection } | undefined>;
+  ): Promise<{ input: UserInputContent; selection?: ResolvedSelection } | undefined>;
 }
 
 export class InteractiveResolver implements InboundResolverPlugin {
@@ -13,7 +13,7 @@ export class InteractiveResolver implements InboundResolverPlugin {
 
   async tryResolve(
     m: InboundMessage,
-  ): Promise<{ input: string; selection?: ResolvedSelection } | undefined> {
+  ): Promise<{ input: UserInputContent; selection?: ResolvedSelection } | undefined> {
     const interactiveId = m.interactive?.id;
     if (interactiveId) {
       return { input: interactiveId, selection: { id: interactiveId } };
@@ -36,7 +36,7 @@ export class TextResolver implements InboundResolverPlugin {
 
   async tryResolve(
     m: InboundMessage,
-  ): Promise<{ input: string; selection?: ResolvedSelection }> {
+  ): Promise<{ input: UserInputContent; selection?: ResolvedSelection }> {
     return { input: m.text ?? '', selection: undefined };
   }
 }
@@ -50,7 +50,7 @@ export class InboundResolverChain {
 
   async resolve(
     m: InboundMessage,
-  ): Promise<{ input: string; selection?: ResolvedSelection }> {
+  ): Promise<{ input: UserInputContent; selection?: ResolvedSelection }> {
     for (const plugin of this.plugins) {
       const result = await plugin.tryResolve(m);
       if (result !== undefined) return result;

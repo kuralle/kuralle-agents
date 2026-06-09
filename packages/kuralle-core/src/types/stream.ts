@@ -1,5 +1,6 @@
 import type { ConversationOutcome } from '../outcomes/types.js';
 import type { ChoiceOption } from './selection.js';
+import type { EscalationReason } from '../escalation/types.js';
 
 /**
  * Authoritative runtime stream union (`runFlow` / `Runtime` emit).
@@ -31,6 +32,36 @@ export type HarnessStreamPart =
       rationale: string;
       userFacingMessage: string;
       handlerOutcome?: 'queued' | 'connected' | 'failed';
+    }
+  | {
+      /** An agent-initiated (scheduled wake) turn — there is no new user message. */
+      type: 'wake';
+      reason: string;
+    }
+  | {
+      type: 'escalation';
+      reason: string;
+      category?: EscalationReason;
+      /** Result of the configured escalation handler. */
+      outcome: 'queued' | 'connected' | 'failed';
+      /** The LLM handoff brief included in the request, when generated. */
+      summary?: string;
+    }
+  | {
+      type: 'context-compacted';
+      /** Estimated history tokens before/after compaction. */
+      beforeTokens: number;
+      afterTokens: number;
+      /** Number of older messages folded into the summary. */
+      summarizedCount: number;
+    }
+  | { type: 'compaction-skipped'; reason: string }
+  | {
+      type: 'context-overflow-recovered';
+      /** Partial assistant/tool messages stripped from the failed turn. */
+      strippedCount: number;
+      /** Whether the forced post-recovery compaction actually compacted. */
+      compacted: boolean;
     }
   | { type: 'error'; error: string }
   | { type: 'custom'; name: string; data: unknown }

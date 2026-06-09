@@ -10,6 +10,7 @@ import {
   InboundResolverChain,
   defaultInboundChain,
 } from './input-resolver-chain.js';
+import { attachInboundMedia } from './inbound-media.js';
 import { StreamMapper } from './stream-mapper.js';
 import { OutboundPipeline } from './outbound-pipeline.js';
 import { windowGuard } from './middleware/window-guard.js';
@@ -124,7 +125,10 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
         return;
       }
 
-      const { input, selection } = await inboundChain.resolve(message);
+      const { input: resolvedInput, selection } = await inboundChain.resolve(message);
+      // Multimodal intake: download any inbound media and attach it as AI SDK file
+      // parts so photos / voice notes / documents reach the model (REQ multimodal).
+      const input = await attachInboundMedia(message, resolvedInput, platform);
 
       try {
         const handle = config.runtime.run({
