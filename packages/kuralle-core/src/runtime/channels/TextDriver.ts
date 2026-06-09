@@ -114,7 +114,11 @@ export class TextDriver implements ChannelDriver {
             const { result: toolResult, control, failed } = await executeModelToolCall(
               ctx,
               { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-              node.localTools,
+              {
+                ...ctx.globalTools,
+                ...(ctx.workingMemoryTools ?? {}),
+                ...node.localTools,
+              },
             );
             out.toolResults.push({
               name: call.toolName,

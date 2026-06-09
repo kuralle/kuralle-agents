@@ -18,8 +18,7 @@ import { TextDriver } from './channels/TextDriver.js';
 import { createRunContext } from './ctx.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
-import { createFsTool } from '../tools/fs/createFsTool.js';
-import { wireAgentSkills } from '../skills/wireAgentSkills.js';
+import { buildAgentToolSurface } from './buildAgentToolSurface.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
@@ -38,9 +37,7 @@ import {
   buildKnowledgeProvider,
   buildMemoryService,
   runMemoryIngest,
-  wireWorkingMemory,
 } from './grounding/index.js';
-import { resolveAgentWorkspace } from './resolveAgentWorkspace.js';
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { SessionMutex } from './SessionMutex.js';
 
@@ -125,47 +122,17 @@ export class Runtime {
       });
 
       const policies = resolveAgentPolicies(opened.agent);
-      const agentTools: Record<string, AnyTool> = {
-        ...(this.config.tools ?? {}),
-        ...(opened.agent.tools ?? {}),
-        // Global tools (ADR 0001) are model-visible in speaking turns via the
-        // drivers; register their executors here too so a model call can actually
-        // run them. Visibility stays gated (not exposed during collect extraction).
-        ...(opened.agent.globalTools ?? {}),
-      };
-
-      const resolvedWorkspace = resolveAgentWorkspace(opened.agent.workspace);
-      if (resolvedWorkspace) {
-        agentTools.workspace = createFsTool({
-          fs: resolvedWorkspace.fs,
-          readOnly: resolvedWorkspace.readOnly,
-        });
-      }
-
-      const wiredWorkingMemory = await wireWorkingMemory(
-        opened.agent,
-        opened.session,
-        this.config.defaultWorkingMemoryStore,
-      );
-      if (wiredWorkingMemory) {
-        agentTools.memory_block = wiredWorkingMemory.memoryBlockTool;
-      }
-
-      let skillPrompt: string | undefined;
-      let skillTools: Record<string, AnyTool> = {};
-      if (opened.agent.skills) {
-        const wired = await wireAgentSkills(opened.agent);
-        if (wired) {
-          skillTools = wired.tools;
-          Object.assign(agentTools, wired.tools);
-          skillPrompt = wired.promptSections.map((s) => s.content).join('\n\n');
-        }
-      }
-
-      const workspaceTool = agentTools.workspace;
+      const knowledgeProvider = this.config.knowledge
+        ? buildKnowledgeProvider(this.config.knowledge)
+        : undefined;
+      const openingSurface = await buildAgentToolSurface(opened.agent, opened.session, {
+        configTools: this.config.tools,
+        knowledgeProvider,
+        defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+      });
 
       const toolExecutor = new CoreToolExecutor({
-        tools: agentTools,
+        tools: openingSurface.executorTools,
         enforcer: policies.enforcer,
         agentId: opened.agent.id,
         onInterim: (message) => {
@@ -183,10 +150,6 @@ export class Runtime {
       if (!model) {
         throw new Error('Runtime requires agent.model or config.defaultModel');
       }
-
-      const knowledgeProvider = this.config.knowledge
-        ? buildKnowledgeProvider(this.config.knowledge)
-        : undefined;
 
       runCtx = await createRunContext({
         session: opened.session,
@@ -209,24 +172,16 @@ export class Runtime {
         memoryService: this.config.memoryService
           ? buildMemoryService(this.config.memoryService, opened.agent)
           : undefined,
-        fs: resolvedWorkspace?.fs,
+        fs: openingSurface.resolvedWorkspace?.fs,
       });
 
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
-      runCtx.globalTools = {
-        ...(opened.agent.globalTools ?? {}),
-        ...(workspaceTool && resolvedWorkspace?.readOnly !== false
-          ? { workspace: workspaceTool }
-          : {}),
-        ...skillTools,
-      };
+      runCtx.globalTools = openingSurface.globalTools;
       runCtx.outOfBandControl = opened.agent.experimental?.outOfBandControl ?? false;
-      runCtx.skillPrompt = skillPrompt;
-      runCtx.workingMemoryPrompt = wiredWorkingMemory?.promptSection;
-      runCtx.workingMemoryTools = wiredWorkingMemory
-        ? { memory_block: wiredWorkingMemory.memoryBlockTool }
-        : undefined;
+      runCtx.skillPrompt = openingSurface.skillPrompt;
+      runCtx.workingMemoryPrompt = openingSurface.workingMemoryPrompt;
+      runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
 
       await this.hooks?.onStart?.(runCtx);
 
@@ -276,20 +231,21 @@ export class Runtime {
 
             runCtx.runState.activeAgentId = loopResult.to;
             activeAgent = target;
+            const targetSurface = await buildAgentToolSurface(target, opened.session, {
+              configTools: this.config.tools,
+              knowledgeProvider,
+              defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+            });
             runCtx.autoRetrieve = knowledgeProvider
               ? buildAutoRetrieveProvider(knowledgeProvider, target)
               : undefined;
+            runCtx.globalTools = targetSurface.globalTools;
+            runCtx.skillPrompt = targetSurface.skillPrompt;
+            runCtx.workingMemoryPrompt = targetSurface.workingMemoryPrompt;
+            runCtx.workingMemoryTools = targetSurface.workingMemoryTools;
+            runCtx.fs = targetSurface.resolvedWorkspace?.fs;
             runCtx.memoryService = this.config.memoryService
               ? buildMemoryService(this.config.memoryService, target)
-              : undefined;
-            const targetWorkingMemory = await wireWorkingMemory(
-              target,
-              opened.session,
-              this.config.defaultWorkingMemoryStore,
-            );
-            runCtx.workingMemoryPrompt = targetWorkingMemory?.promptSection;
-            runCtx.workingMemoryTools = targetWorkingMemory
-              ? { memory_block: targetWorkingMemory.memoryBlockTool }
               : undefined;
             await runCtx.runStore.putRunState(runCtx.runState);
             continue;

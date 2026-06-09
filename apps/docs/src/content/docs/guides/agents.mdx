@@ -99,6 +99,37 @@ See [Routing & Handoffs](/guides/routing).
 
 `agents` registers sub-agents the runtime can activate during a handoff. `handoffs` declares which agent IDs this agent is allowed to transfer to. The combination enables tool-based handoffs where the agent explicitly decides when to transfer.
 
+### `knowledge` — who invokes retrieval
+
+When an agent declares `knowledge`, the runtime wires retrieval from `HarnessConfig.knowledge` (the shared `KnowledgeProvider`). The `knowledge.autoRetrieve` boolean declares **who invokes** that retrieval — the runtime, or the model:
+
+| `knowledge.autoRetrieve` | Behavior | When to use |
+|---|---|---|
+| `true` (default) | **Guaranteed** — pre-injects retrieved snippets into the system prompt before every answering turn (`## Retrieved Knowledge`). Always grounded; routing turns on fused host agents pay the retrieval cost. | Regulated, factual, or policy-heavy agents where every answer must be grounded. |
+| `false` | **On-demand** — skips pre-injection and wires a `knowledge_search` tool the model calls when it needs facts. Routing/dispatch turns pay **zero** retrieval tax; grounding is model-discretion. | Agents that route often and need fast dispatch, or where retrieval is only needed for some answers. |
+
+The pre-injection provider and the `knowledge_search` tool are mutually exclusive — the boolean picks the invoker, there is no separate mode to configure. To disable retrieval entirely, omit `knowledge`.
+
+```typescript
+// Guaranteed (default) — pre-inject every answering turn
+defineAgent({
+  id: 'policy-bot',
+  knowledge: { autoRetrieve: true }, // or omit — true is the default
+  // ...
+});
+
+// On-demand — retrieve only when the model answers; no routing-turn tax
+defineAgent({
+  id: 'triage-support',
+  knowledge: { autoRetrieve: false },
+  // ...
+});
+```
+
+<Aside type="note">
+  Per-node `grounding.knowledge.autoRetrieve: false` (on flow nodes) is a separate axis: it opts a specific node out of **guaranteed** pre-injection. It is a no-op when the agent is on-demand (nothing is pre-injected). See the [Flows guide](/guides/flows).
+</Aside>
+
 ## Example
 
 <Code code={defineAgentExample} lang="typescript" title="define-agent.ts" />

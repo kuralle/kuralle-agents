@@ -2,6 +2,7 @@ export {
   appendGatherBlocks,
   buildAutoRetrieveProvider,
   buildKnowledgeProvider,
+  buildKnowledgeTool,
 } from './knowledge.js';
 export {
   buildMemoryService,

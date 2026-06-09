@@ -287,7 +287,11 @@ export class VoiceDriver implements ChannelDriver {
           const { result: toolResult, control, failed } = await executeModelToolCall(
             ctx,
             { toolName: name, input: args, toolCallId: id },
-            localTools,
+            {
+              ...ctx.globalTools,
+              ...(ctx.workingMemoryTools ?? {}),
+              ...localTools,
+            },
           );
 
           out.toolResults.push({ name, args, result: toolResult, toolCallId: id });
