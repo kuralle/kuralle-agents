@@ -8,7 +8,7 @@ import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/
 import { buildToolSet } from '../../tools/effect/index.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
 import { executeModelToolCall, toolResultMessage } from './executeModelTool.js';
-import { consumePendingUserInput } from './inputBuffer.js';
+import { consumeAllPendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
 import { resolveMaxSteps } from '../policies/limits.js';
@@ -221,7 +221,7 @@ export class TextDriver implements ChannelDriver {
   }
 
   async awaitUser(ctx: RunContext): Promise<UserSignal> {
-    const input = consumePendingUserInput(ctx.session);
+    const input = consumeAllPendingUserInput(ctx.session) ?? '';
     return { type: 'message', input };
   }
 

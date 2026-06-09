@@ -41,5 +41,7 @@ export type {
   ResponseMapper,
   ErrorContext,
   MessagingRouterConfig,
+  InboundCoalescingConfig,
+  CoalescedInboundItem,
   StreamMapperOptions,
 } from './types/adapter.js';

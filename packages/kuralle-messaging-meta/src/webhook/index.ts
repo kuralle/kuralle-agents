@@ -13,4 +13,6 @@ export type {
   NormalizedMessage,
   NormalizedStatus,
   NormalizedReaction,
+  NormalizedWebhookError,
+  WhatsAppReferral,
 } from './normalizer.js';

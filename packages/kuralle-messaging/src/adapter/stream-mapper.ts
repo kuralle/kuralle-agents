@@ -4,6 +4,7 @@ import type { OutboundMeta, OutboundPayload, SendOutcome } from '../types/outbou
 import type { SendResult } from '../types/responses.js';
 import type { OutboundPipeline } from './outbound-pipeline.js';
 import type { WindowStore } from './window-store.js';
+import { renderChoices } from './render-choices.js';
 
 /** Default interval for sending typing indicators during streaming (ms). */
 const DEFAULT_TYPING_INTERVAL_MS = 5_000;
@@ -91,6 +92,7 @@ export class StreamMapper {
           threadId,
           textBuffer,
           meta,
+          parts,
         );
       }
     } finally {
@@ -140,7 +142,39 @@ export class StreamMapper {
     threadId: string,
     text: string,
     meta: OutboundMeta,
+    parts: HarnessStreamPart[],
   ): Promise<void> {
+    // A turn that ends with an `interactive` part (flow choices) renders as a
+    // native interactive message; its prompt IS the user-facing question, so
+    // accumulated text is sent first only when it adds something beyond it.
+    const interactivePart = [...parts]
+      .reverse()
+      .find(
+        (part): part is Extract<HarnessStreamPart, { type: 'interactive' }> =>
+          part.type === 'interactive',
+      );
+    if (interactivePart) {
+      const trimmed = text.trim();
+      if (trimmed.length > 0 && trimmed !== interactivePart.prompt.trim()) {
+        await pipeline.send({
+          threadId,
+          platform: platform.platform,
+          payload: { kind: 'text', text: platform.formatConverter.toPlatformFormat(trimmed) },
+          meta,
+        });
+      }
+      await pipeline.send({
+        threadId,
+        platform: platform.platform,
+        payload: {
+          kind: 'interactive',
+          interactive: renderChoices(interactivePart.options, interactivePart.prompt),
+        },
+        meta,
+      });
+      return;
+    }
+
     if (text.trim().length === 0) return;
 
     const formatted = platform.formatConverter.toPlatformFormat(text);

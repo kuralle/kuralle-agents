@@ -89,6 +89,22 @@ export class HttpClient {
     });
   }
 
+  /** Perform a DELETE request; optional query params and JSON body. */
+  async delete<T>(
+    endpoint: string,
+    opts?: { params?: Record<string, string>; body?: unknown },
+  ): Promise<T> {
+    const url = this.buildUrl(endpoint, opts?.params);
+    this.logger?.debug('[HttpClient] DELETE %s', url);
+    const headers = this.resolveHeaders();
+    const init: RequestInit = { method: 'DELETE', headers };
+    if (opts?.body !== undefined) {
+      (init.headers as Record<string, string>)['Content-Type'] = 'application/json';
+      init.body = JSON.stringify(opts.body);
+    }
+    return this.executeJson<T>(url, init);
+  }
+
   /** Perform a POST request with a multipart body. */
   async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {
     const url = this.buildUrl(endpoint);

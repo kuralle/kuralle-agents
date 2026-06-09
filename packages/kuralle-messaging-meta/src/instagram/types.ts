@@ -9,9 +9,9 @@
  *
  * Key differences from WhatsApp / Messenger:
  * - Base URL is `graph.instagram.com` (not `graph.facebook.com`).
- * - Only IMAGE attachments are supported (no video, audio, or file).
+ * - Media is sent by public URL (audio, image, video, file attachments).
  * - Message limit is 1000 bytes (UTF-8), not characters.
- * - Send response contains `message_id` only (no `recipient_id`).
+ * - Quick replies support text, user_phone_number, and user_email content types.
  * - Only `HUMAN_AGENT` message tag is supported (7-day window).
  * - Ice breakers replace persistent menus.
  */
@@ -77,13 +77,12 @@ export interface InstagramThreadId {
 
 /**
  * Raw response from the Instagram Messaging API messages endpoint.
- *
- * NOTE: Unlike Messenger, Instagram does NOT return `recipient_id`
- * in the send response.
  */
 export interface InstagramSendResponse {
   /** Platform-assigned message identifier. */
   message_id: string;
+  /** Recipient IGSID (returned by some API versions). */
+  recipient_id?: string;
 }
 
 // ====================================
@@ -93,16 +92,15 @@ export interface InstagramSendResponse {
 /**
  * A quick reply option for Instagram messages.
  *
- * Instagram only supports `content_type: "text"` quick replies.
  * Maximum 13 quick replies per message.
  */
 export interface InstagramQuickReply {
-  /** Must be `"text"`. Instagram only supports text quick replies. */
-  content_type: 'text';
-  /** Display text for the quick reply button (max 20 chars). */
-  title: string;
+  /** Quick reply content type. */
+  content_type: 'text' | 'user_phone_number' | 'user_email';
+  /** Display text for text quick replies (max 20 chars). */
+  title?: string;
   /** Payload string returned when the user taps this quick reply. */
-  payload: string;
+  payload?: string;
 }
 
 // ====================================

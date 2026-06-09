@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Session } from '@kuralle-agents/core';
-import type { MessagingRouterConfig, ErrorContext } from '../types.js';
+import { mergeUserInputContents } from '@kuralle-agents/core';
+import type { MessagingRouterConfig, ErrorContext, CoalescedInboundItem } from '../types.js';
 import type { InboundMessage } from '../types/messages.js';
 import type { OutboundMiddleware } from '../types/outbound.js';
 import { MessageDeduplicator } from '../shared/deduplicator.js';
@@ -11,6 +12,7 @@ import {
   defaultInboundChain,
 } from './input-resolver-chain.js';
 import { attachInboundMedia } from './inbound-media.js';
+import { createInputCoalescer } from './input-coalescer.js';
 import { StreamMapper } from './stream-mapper.js';
 import { OutboundPipeline } from './outbound-pipeline.js';
 import { windowGuard } from './middleware/window-guard.js';
@@ -105,6 +107,18 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
   const fallbackMessage =
     config.fallbackMessage ?? "Sorry, I'm having trouble right now. Please try again.";
 
+  const coalescing = config.inboundCoalescing;
+  const coalescer = coalescing
+    ? createInputCoalescer<CoalescedInboundItem>({
+        debounceMs: coalescing.debounceMs,
+        maxWaitMs: coalescing.maxWaitMs,
+        maxMessages: coalescing.maxMessages,
+        timer: coalescing.timer,
+        flushImmediately:
+          coalescing.flushImmediately ?? ((item) => item.selection !== undefined),
+      })
+    : undefined;
+
   for (const [name, platform] of Object.entries(config.platforms)) {
     const pipeline = new OutboundPipeline(buildOutboundChain(config.outbound), platform);
 
@@ -130,47 +144,68 @@ export function createMessagingRouter(config: MessagingRouterConfig): Hono {
       // parts so photos / voice notes / documents reach the model (REQ multimodal).
       const input = await attachInboundMedia(message, resolvedInput, platform);
 
-      try {
-        const handle = config.runtime.run({
-          input,
-          sessionId,
-          userId,
-          selection,
-        });
+      const runInbound = async (items: CoalescedInboundItem[]): Promise<void> => {
+        const mergedInput = mergeUserInputContents(items.map((i) => i.input)) ?? '';
+        const last = items[items.length - 1]!;
+        const { sessionId, userId } = last;
 
-        const parts = await streamMapper.mapStream(handle.events, platform, message.threadId, {
-          responseMapper: config.responseMapper,
-          pipeline,
-          windowStore,
-          sessionId,
-          userId,
-        });
-
-        if (
-          config.ownership &&
-          parts.some((p) => p.type === 'handoff' && p.targetAgent === 'human')
-        ) {
-          await config.ownership.claim(message.threadId, 'human');
-        }
-      } catch (error) {
         try {
-          const window = await windowStore.get(message.threadId);
-          await pipeline.send({
-            threadId: message.threadId,
-            platform: name,
-            payload: { kind: 'text', text: fallbackMessage },
-            meta: { window, parts: [], sessionId, userId },
+          const handle = config.runtime.run({
+            input: mergedInput,
+            sessionId,
+            userId,
+            selection: last.selection,
           });
-        } catch {
-          // Cannot even send fallback — nothing more we can do
-        }
 
-        const errorContext: ErrorContext = {
-          message,
-          platform: name,
-          error: error as Error,
-        };
-        config.onError?.(error as Error, errorContext);
+          const parts = await streamMapper.mapStream(handle.events, platform, message.threadId, {
+            responseMapper: config.responseMapper,
+            pipeline,
+            windowStore,
+            sessionId,
+            userId,
+          });
+
+          if (
+            config.ownership &&
+            parts.some((p) => p.type === 'handoff' && p.targetAgent === 'human')
+          ) {
+            await config.ownership.claim(message.threadId, 'human');
+          }
+        } catch (error) {
+          try {
+            const window = await windowStore.get(message.threadId);
+            await pipeline.send({
+              threadId: message.threadId,
+              platform: name,
+              payload: { kind: 'text', text: fallbackMessage },
+              meta: { window, parts: [], sessionId, userId },
+            });
+          } catch {
+            // Cannot even send fallback — nothing more we can do
+          }
+
+          const errorContext: ErrorContext = {
+            message: last.message,
+            platform: name,
+            error: error as Error,
+          };
+          config.onError?.(error as Error, errorContext);
+        }
+      };
+
+      const item: CoalescedInboundItem = {
+        input,
+        selection,
+        sessionId,
+        userId,
+        message,
+        platform: name,
+      };
+
+      if (coalescer) {
+        coalescer.push(message.threadId, item, runInbound);
+      } else {
+        await runInbound([item]);
       }
     });
 

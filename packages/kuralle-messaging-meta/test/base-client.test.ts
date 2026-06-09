@@ -78,7 +78,7 @@ class StubMetaClient extends BaseMetaClient<NormalizedMessage, Record<string, un
     return {
       messageId: status.id,
       recipientId: status.recipientId,
-      status: status.status,
+      status: status.status as StatusUpdate['status'],
       timestamp: new Date(Number(status.timestamp) * 1000),
       threadId: status.recipientId,
     };

@@ -12,11 +12,11 @@ npm install @kuralle-agents/messaging-meta @kuralle-agents/messaging
 
 Provides production-ready clients for Meta's three messaging platforms, built on a shared Graph API foundation with retry logic, rate limiting, and unified error handling.
 
-- **WhatsApp** — full API coverage: text (auto-split at 4096 chars), media, templates, interactive buttons, list messages, CTA buttons, WhatsApp Flows, reactions, locations, contacts, commerce (single/multi-product, catalog, and address messages, plus inbound order parsing).
-- **Messenger** — button templates, generic templates (carousel), quick replies, sender actions, user profile lookups.
-- **Instagram** — text (auto-split at 1000 bytes), quick replies, carousels, private replies to comments, ice breakers, message tags.
+- **WhatsApp** — full API coverage: text (auto-split at 4096 chars), media, templates, interactive buttons, list messages (max 10 rows total), CTA buttons, WhatsApp Flows, reactions, locations, contacts, typing indicators (via message id), commerce (single/multi-product, catalog, address messages, inbound order + product-inquiry parsing).
+- **Messenger** — button templates, generic templates (carousel), quick replies, sender actions (`mark_seen` via PSID), user profile lookups.
+- **Instagram** — text (auto-split at 1000 bytes), media by URL (audio/image/video/file), quick replies, carousels, private replies to comments, ice breakers, message tags, `mark_seen`.
 - **Main barrel** — `GraphAPIClient`, `BaseMetaClient`, `verifySignature`, `normalizeWebhook`, error classes.
-- **Shared Graph API** — `MetaErrorClassifier`, `SmartSplitter`, `TruncateSplitter`, `ByteLimitSplitter`, unicode utilities.
+- **Shared Graph API** — default `v24.0`, `MetaErrorClassifier`, `SmartSplitter`, `TruncateSplitter`, `ByteLimitSplitter`, unicode utilities.
 
 WhatsApp is available only via the `/whatsapp` subpath (see below).
 
@@ -71,7 +71,7 @@ const instagram = createInstagramClient({
 Share catalog products and receive orders without leaving WhatsApp:
 
 ```typescript
-import { parseInboundOrder } from '@kuralle-agents/messaging-meta/whatsapp';
+import { parseInboundOrder, parseProductInquiry } from '@kuralle-agents/messaging-meta/whatsapp';
 
 // Single product, multi-product (max 10 sections / 30 products), catalog, address request
 await whatsapp.sendProduct(to, { catalogId, productRetailerId: 'sku-1', body: { text: 'Check this out' } });
@@ -110,7 +110,7 @@ const events = normalizeWebhook(JSON.parse(rawBody));
 | Import path | Contents |
 |---|---|
 | `@kuralle-agents/messaging-meta` | `GraphAPIClient`, `BaseMetaClient`, errors, `verifySignature`, `normalizeWebhook`, `MessengerClient`, `InstagramClient` |
-| `@kuralle-agents/messaging-meta/whatsapp` | `WhatsAppClient`, `createWhatsAppClient`, templates, flows, commerce (`parseInboundOrder`, `parseInboundAddress`), format converter |
+| `@kuralle-agents/messaging-meta/whatsapp` | `WhatsAppClient`, `createWhatsAppClient`, templates, flows, commerce (`parseInboundOrder`, `parseInboundAddress`, `parseProductInquiry`), format converter |
 | `@kuralle-agents/messaging-meta/messenger` | `MessengerClient`, `createMessengerClient`, format converter |
 | `@kuralle-agents/messaging-meta/instagram` | `InstagramClient`, `createInstagramClient`, ice breakers, format converter |
 | `@kuralle-agents/messaging-meta/webhooks` | `verifySignature`, `normalizeWebhook` only |

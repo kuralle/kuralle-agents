@@ -27,6 +27,7 @@ One tagless primitive — `defineAgent` — derives behavior from the fields you
 - **`createFactMemoryService`** — cross-session fact memory (LLM merge-on-ingest) keyed by `userId` on any persistent block store.
 - **Built-in guardrails** — `createPromptInjectionGuard`, `createPiiInputGuard`/`OutputGuard`, `createModerationGuard`, `createGroundingValidator` (see `guides/GUARDRAILS.md`).
 - **Simulation eval** — `simulateConversation` + `createJudge` + `runSimulationSuite`: persona-driven simulated users scored by an LLM judge.
+- **Pending-input drain-and-merge** — `setPendingUserInput` / `consumeAllPendingUserInput`: mid-turn messages enqueue; the next `awaitUser` drains the FIFO into one merged turn (pair with `@kuralle-agents/messaging` `inboundCoalescing` for WhatsApp bursts).
 
 ## Usage
 
@@ -46,8 +47,7 @@ const agent = defineAgent({
   id: 'support',
   instructions: 'You are a helpful support agent.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ echo }),   // model-visible
-  tools: { echo },           // durable executor
+  tools: { echo },   // durable effect tools — model-visible AND executor-registered
 });
 
 const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });

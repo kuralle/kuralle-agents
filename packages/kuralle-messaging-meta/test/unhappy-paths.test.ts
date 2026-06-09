@@ -239,7 +239,7 @@ describe('normalizeWebhook — malformed payloads', () => {
     expect(result.messages[0].type).toBe('unknown');
   });
 
-  it('defaults status to "sent" for unknown status value', () => {
+  it('passes through unknown status values unchanged', () => {
     const payload = {
       object: 'whatsapp_business_account',
       entry: [
@@ -267,7 +267,7 @@ describe('normalizeWebhook — malformed payloads', () => {
     };
     const result = normalizeWebhook(payload);
     expect(result.statuses).toHaveLength(1);
-    expect(result.statuses[0].status).toBe('sent');
+    expect(result.statuses[0].status).toBe('unknown_value');
   });
 
   it('does not crash on Messenger event with no sender', () => {

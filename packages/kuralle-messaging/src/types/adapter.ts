@@ -5,7 +5,7 @@
  * router config, and stream mapper options.
  */
 
-import type { RuntimeLike, HarnessStreamPart } from '@kuralle-agents/core';
+import type { RuntimeLike, HarnessStreamPart, ResolvedSelection, UserInputContent, InjectableTimer } from '@kuralle-agents/core';
 import type { OutboundPipeline } from '../adapter/outbound-pipeline.js';
 import type { WindowStore } from '../adapter/window-store.js';
 import type { ConsentStore } from '../adapter/consent-store.js';
@@ -68,6 +68,35 @@ export interface MessagingRouterConfig {
   ownership?: OwnershipStore;
   /** When set, STOP inbound opts the customer out; outbound uses `consentGate` (REQ-11). */
   consent?: ConsentStore;
+  /**
+   * Per-thread inbound debounce/coalesce before `runtime.run`. Default off (each
+   * message is its own turn). See README for `debounceMs`, `maxWaitMs`, DO note.
+   */
+  inboundCoalescing?: InboundCoalescingConfig;
+}
+
+/** Sliding debounce + max-wait cap for burst WhatsApp text-ins. */
+export interface InboundCoalescingConfig {
+  /** Trailing debounce in ms; `0` disables coalescing (pass-through). Default 3000. */
+  debounceMs?: number;
+  /** Hard cap from first buffered message (ms). Default 10000. */
+  maxWaitMs?: number;
+  /** Flush when buffer reaches this count. Default 10. */
+  maxMessages?: number;
+  /** Immediate flush predicate; default: any resolved interactive selection. */
+  flushImmediately?: (item: CoalescedInboundItem) => boolean;
+  /** Injectable timer for deterministic tests. */
+  timer?: InjectableTimer;
+}
+
+/** One resolved inbound waiting in the coalescer or about to run. */
+export interface CoalescedInboundItem {
+  input: UserInputContent;
+  selection?: ResolvedSelection;
+  sessionId: string;
+  userId?: string;
+  message: InboundMessage;
+  platform: string;
 }
 
 /** Options for the stream mapper. */

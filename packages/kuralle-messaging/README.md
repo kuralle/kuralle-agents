@@ -19,6 +19,7 @@ Provides the `PlatformClient` interface that every messaging vendor package impl
 - **`MessageDeduplicator`** — LRU cache that prevents duplicate webhook processing.
 - **`WindowTracker`** / **`WindowStore`** — tracks 24-hour messaging windows per thread; used by `createMessagingRouter` to detect expired windows.
 - **`OutboundPipeline`** + **`windowGuard`** — window-safe outbound path (see below).
+- **`createInputCoalescer`** + **`inboundCoalescing`** — optional per-thread burst coalescing before `runtime.run` (WhatsApp text-ins). Default **off**; see [Inbound coalescing](#inbound-coalescing).
 
 ### Window-safe outbound
 
@@ -27,6 +28,31 @@ Every outbound send — default `StreamMapper` text replies, custom `responseMap
 `createMessagingRouter` accepts optional `windowStore` (default `InMemoryWindowStore`) and `outbound` (extra middleware installed **before** `windowGuard`). Custom `responseMapper` closures still return `Promise<SendResult>`; deferred sends resolve to a synthetic result with an empty `messageId` (not delivered).
 
 `WhatsAppClient.sendTextOrTemplate` is **deprecated** — it bypasses this pipeline. Use `OutboundPipeline` / the router instead.
+
+### Inbound coalescing
+
+WhatsApp users often send bursts of short messages (`hi` / `i want to order` / `the blue one`). Without coalescing, each webhook becomes its own serialized turn. Enable burst merging on the router:
+
+```typescript
+const router = createMessagingRouter({
+  runtime,
+  platforms: { whatsapp },
+  inboundCoalescing: {
+    debounceMs: 3000,   // trailing debounce; 0 = off (pass-through)
+    maxWaitMs: 10_000,  // hard cap from first buffered message
+    maxMessages: 10,    // flush when buffer is full
+  },
+});
+```
+
+Defaults when `inboundCoalescing` is set: `debounceMs` **3000**, `maxWaitMs` **10000**, `maxMessages` **10**. Interactive selections (button/list taps) flush immediately — they are complete by construction. Each flushed batch becomes **one** `runtime.run` with a merged `UserInputContent` parts array in arrival order (image-then-caption → `[FilePart, TextPart]`).
+
+Omit `inboundCoalescing` entirely for today's behavior (one message → one turn).
+
+**Durable Objects:** v1 keeps the coalescer buffer in-memory on the router instance. In a DO deployment the DO *is* the thread, so the timer lives with the conversation. Process eviction can lose at most one un-flushed buffer; upgrade to `storage.setAlarm` for eviction-proof debounce (not implemented in v1).
+
+Mid-turn messages queued while a turn is in flight are merged at admission in `@kuralle-agents/core` (`consumeAllPendingUserInput`) — pair both layers for burst UX on WhatsApp.
+
 - Error classes: `MessagingError`, `RateLimitError` (with `retryAfterMs`), `WindowClosedError` (with `suggestedTemplates`), `AuthenticationError`, `PermissionError`, `RecipientError`, `TemplateError`, `MediaError`, `WebhookVerificationError`.
 
 ## Usage
