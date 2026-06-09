@@ -13,6 +13,12 @@ Unified patch bump across the graph (0.7.1 → 0.7.2). `runtime/promptCache.ts` 
 
 Prompt assembly was already cache-friendly (static instructions first, volatile RAG/memory appended last), so this is a pure wiring fix. No API change, not breaking. Note: the separate Layer-2 *retrieval* cache is still unwired (see ADR 0008) — a distinct follow-up.
 
+**Validated live** (`packages/kuralle-e2e-tests/prompt-cache-validation.md`):
+- **OpenAI** — cache HIT confirmed through the shipped helper: turn 1 `cacheReadTokens=0`, turns 2–4 `=10240` (~99% of the prompt cached → ~half the input cost on repeat turns).
+- **Anthropic** — wired + unit-tested; not live-validated (no key in env).
+- **Gemini** — kuralle wires nothing (implicit caching is parameter-free), but implicit caching is best-effort and **did not fire** in a 4-turn live probe; *guaranteed* Gemini caching needs explicit `CachedContent`, which is **not** wired (open follow-up).
+- **Cloudflare AI Gateway** — the provider prompt cache rides through the gateway (request-body fields are forwarded); the gateway's own response cache is a separate, byte-identical, off-by-default layer.
+
 ## 0.7.1 — On-demand retrieval (declared grounding contract)
 
 Unified patch bump across the graph (0.7.0 → 0.7.1). No API removed, no type change, not breaking; the existing `knowledge.autoRetrieve` boolean now declares **who invokes retrieval** — the runtime or the model. See `docs/adr/0008-declared-grounding-contract.md`.
