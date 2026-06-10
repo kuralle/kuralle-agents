@@ -67,6 +67,28 @@ Paths pruned at tree-build time are invisible to `ls` and return `ENOENT` on `ca
 
 `KnowledgeFs.search()` implements the coarse pass. RFC-02 `createFsTool` detects the optional hook and greps only candidate slugs before running line-level regex — same model API, faster on large KBs.
 
+Pass a `keywordIndex` to make the coarse pass BM25-ranked (hits return in
+relevance order, not corpus order):
+
+```ts
+import { BM25Index, Fts5KeywordIndex } from '@kuralle-agents/rag';
+
+// In-memory: seeded from the store on every open()
+const workspace = await KnowledgeFs.open({ store, indexName: 'kb', keywordIndex: new BM25Index() });
+
+// Persistent (Durable Object SQLite / bun:sqlite): a pre-populated index is
+// detected (size > 0) and open() skips seeding — a hibernated DO wakes with
+// zero rebuild. The ingest path keeps it in sync (RagPipeline keywordIndex
+// option); call clear() on it to force a reseed on the next open().
+const workspace = await KnowledgeFs.open({
+  store,
+  indexName: 'kb',
+  keywordIndex: new Fts5KeywordIndex({ sql: createSqlExecutor(ctx.storage.sql) }),
+});
+```
+
+Without a `keywordIndex`, `search()` falls back to a linear regex scan.
+
 ## Workers
 
 `KnowledgeFs` adds no `node:*` imports. It runs anywhere the underlying `VectorStoreCore` runs (including Cloudflare Vectorize via `@kuralle-agents/vectorize-store`).

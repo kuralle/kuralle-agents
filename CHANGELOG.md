@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.10.0 — Retrieval hardening: embedder lock, incremental ingest, persistent keyword tier, multilingual keyword search
+
+Unified bump across the graph (0.9.0 → 0.10.0). Contains **breaking** `@kuralle-agents/rag` option renames (minor bump per repo convention). Grounded in a measured before/after benchmark plus live Cloudflare + Fly deployment verification (`packages/kuralle-rag/bench/results/vecgrep-gap-report.md`).
+
+**Embedder provider lock + incremental ingestion (`@kuralle-agents/rag`):**
+- New `IngestManifest` (`InMemoryIngestManifest`, `SqlIngestManifest` over a tagged-template `SqlExecutor` — Durable Object SQLite on CF, `bun:sqlite`/`better-sqlite3` on Node). With a manifest, `RagPipeline`:
+  - **locks the index to the embedding model that built it** (`Embedder.id` + dimension) — ingesting or querying with a different model, *even one with the same dimension*, throws instead of silently corrupting relevance (measured baseline: a same-dimension swap returned 0.00 overlap@5 vs truth with zero errors);
+  - **skips unchanged documents** via SHA-256 content hash — a stable corpus re-ingests with **zero embed calls** (was: full re-embed every time);
+  - **cleans up stale chunks** of changed documents from the vector store (admin stores) and keyword index.
+- `Embedder.id` identity added to the interface; `AiSdkEmbedder` derives `provider/modelId`.
+
+**Persistent keyword tier (`@kuralle-agents/rag`):**
+- New `KeywordIndex` contract + `Fts5KeywordIndex` — BM25 over SQLite FTS5. On Cloudflare, DO SQLite supports FTS5, so the keyword tier **survives hibernation with zero rebuild** (live-verified); pipeline restart recovery is ~4× faster than the in-memory reseed at 9K chunks.
+- `RagPipeline.keywordIndex` keeps the keyword tier in sync at ingest, and re-seeds an empty in-memory index from manifest-skipped docs by chunking alone (zero embeds) — without this, manifest-skip would silently degrade hybrid retrieval to vector-only after a restart.
+- **BREAKING:** `KnowledgeFsOptions.bm25` → `keywordIndex`; `FusionRetrieverOptions.bm25` → `keywordIndex` (both now accept any `KeywordIndex`). `BM25Index.size` now counts active documents (previously included removed/overwritten tombstones).
+
+**Multilingual keyword search (`@kuralle-agents/rag`):**
+- The shared keyword tokenizer keeps combining marks — Tamil/Sinhala/Hindi words are no longer split at vowel signs (both `BM25Index` and FTS5; previously every Indic-script keyword query missed). `Fts5KeywordIndex` default tokenizer is `unicode61 categories 'L* N* Co Mn Mc'`; new `tokenize` option (`'trigram'` for Chinese/Japanese/Thai substring matching). Tests in Tamil, Sinhala, German, Japanese, Chinese.
+
+**Relevance fixes (`@kuralle-agents/rag`):**
+- `KnowledgeFs.search()` now returns hits in BM25 rank order — previously results were filtered in corpus order and truncated, so top-ranked hits could be dropped (measured: exact-term grep tier went from 996 tokens/query at 80% hit rate to **126 tokens/query at 100%**).
+- A skip-only ingest no longer erases the manifest's recorded embedder identity (found by the live CF verification).
+
+**Tiered retrieval guidance (`@kuralle-agents/core`, `@kuralle-agents/tools`):**
+- `workspace` and vector-retrieval tool descriptions now order the tiers (`ls`/`find` → `grep` for exact terms → semantic search for conceptual questions); `RetrievalQualityChecker.assess()` reports `estimatedTokens` so retrieval token cost is a tracked quality dimension.
+
+**Workers AI embedding path (`@kuralle-agents/vectorize-store` docs):**
+- README pairs Vectorize with `workers-ai-provider.textEmbeddingModel` via the `env.AI` binding — live-measured **p50 128 ms / mean 149 ms** per query embedding in-worker (`@cf/baai/bge-m3`) vs p50 235 ms / mean 350 ms for OpenAI from a Fly datacenter.
+
+**Docs:** new "Knowledge & Retrieval" guide (`apps/docs`), `PRIMITIVES.md` gains `KeywordIndex`/`FusionRetriever`/manifest sections, `KNOWLEDGEFS.md` documents the persistent keyword tier.
+
+**Verification:** deterministic before/after benchmark (`bench/vecgrep-gap.bench.ts`) + live spike deployments on Cloudflare (Worker + DO SQLite) and Fly (Bun container), both torn down after capture; sources kept in `examples-deploy/kuralle-rag-smoke{,-fly}`. 93/93 rag tests; `typecheck:all` green.
+
 ## 0.9.0 — WhatsApp first-class: Meta API conformance, inbound coalescing, interactive-by-default
 
 Unified bump across the graph (0.8.5 → 0.9.0). Contains **breaking** `@kuralle-agents/messaging-meta` contract fixes (minor bump per repo convention). Grounded in a live conformance audit of every wire payload against developers.facebook.com (June 2026; 27 findings) plus an industry survey of burst-message handling (`research/inbound-coalescing-design.md`).
