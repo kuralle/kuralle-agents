@@ -248,8 +248,14 @@ export class RagPipeline implements Retriever {
     }
 
     if (this.manifest) {
+      // A skip-only ingest may not have embedded anything, leaving
+      // embedder.dimension undefined — preserve the recorded identity
+      // rather than erasing it.
       await this.manifest.save(this.indexName, {
-        embedder: { id: this.embedder.id, dimension: this.embedder.dimension },
+        embedder: {
+          id: this.embedder.id ?? data?.embedder?.id,
+          dimension: this.embedder.dimension ?? data?.embedder?.dimension,
+        },
         docs: docRecords,
       });
     }

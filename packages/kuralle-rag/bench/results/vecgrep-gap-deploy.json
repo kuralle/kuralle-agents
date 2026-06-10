@@ -1,0 +1,61 @@
+{
+  "date": "2026-06-10",
+  "cloudflare": {
+    "worker": "kuralle-rag-smoke (torn down after capture)",
+    "source": "examples-deploy/kuralle-rag-smoke",
+    "latency_workers_ai_bge_m3": {
+      "path": "AiSdkEmbedder + workers-ai-provider textEmbeddingModel, env.AI binding",
+      "dimension": 1024,
+      "samples": 16,
+      "p50Ms": 128,
+      "p95Ms": 268,
+      "meanMs": 149
+    },
+    "do_sqlite_fts5": {
+      "persistedAcrossCalls": true,
+      "english": "en",
+      "tamil": "ta",
+      "sinhala": "si",
+      "japaneseTrigram": "ja",
+      "chineseTrigram": "zh"
+    },
+    "do_pipeline": {
+      "manifest": "SqlIngestManifest on DO SQLite, persisted across calls",
+      "firstIngestTexts": 4,
+      "secondIngestTexts": 0,
+      "lockThrew": true,
+      "lockMessage": "index 'smoke-kb' was built with embedder 'workersai.embedding/@cf/baai/bge-m3' (dimension 1024) but this pipeline uses 'smoke/other-model'"
+    },
+    "defect_found_live": "skip-only ingest erased recorded embedder dimension in manifest — fixed (preserve prior identity), unit test added"
+  },
+  "fly": {
+    "app": "kuralle-rag-smoke @ sin, shared-cpu-1x 256MB, auto-stop (destroyed after capture)",
+    "source": "examples-deploy/kuralle-rag-smoke-fly",
+    "fts5_bun_sqlite": {
+      "persistedAcrossRequests": true,
+      "english": "en",
+      "tamil": "ta",
+      "sinhala": "si",
+      "japaneseTrigram": "ja",
+      "chineseTrigram": "zh"
+    },
+    "pipeline": {
+      "firstIngestTexts": 3,
+      "secondIngestTexts": 0,
+      "secondRequestFirstIngestTexts": 0,
+      "lockThrew": true
+    },
+    "latency_openai_from_dc": {
+      "model": "text-embedding-3-small",
+      "region": "sin",
+      "samples": 16,
+      "p50Ms": 235,
+      "p95Ms": 1889,
+      "meanMs": 350
+    }
+  },
+  "comparison": {
+    "query_embed_p50": { "workers_ai_in_network_ms": 128, "openai_from_fly_sin_ms": 235, "openai_from_dev_machine_ms": 297 },
+    "query_embed_mean": { "workers_ai_in_network_ms": 149, "openai_from_fly_sin_ms": 350, "openai_from_dev_machine_ms": 444 }
+  }
+}

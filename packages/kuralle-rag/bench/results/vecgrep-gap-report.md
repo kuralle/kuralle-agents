@@ -30,9 +30,24 @@
 3. **Manifest-skip × in-memory keyword index** (introduced by WP5, caught by bench): after a restart, skipped docs were never re-added → empty keyword tier, hybrid silently degraded to vector-only. `RagPipeline.ingest` now chunk-reseeds (zero embeds) when the keyword index is empty; a persistent FTS5 index skips even that.
 4. **Indic-script tokenization** (pre-existing): both `tokenizeKeywords` and FTS5 `unicode61` treated combining marks as separators, splitting Tamil/Sinhala/Hindi words at every vowel sign. Fixed: `\p{M}` kept in the shared tokenizer; FTS5 default is now `unicode61 categories 'L* N* Co Mn Mc'`. CJK/Thai supported via `tokenize: 'trigram'`. Tests cover Tamil, Sinhala, German, Japanese, Chinese.
 
+## Live deployment verification (2026-06-10, spike tests — torn down after capture)
+
+Raw JSON: `vecgrep-gap-deploy.json`. Sources: `examples-deploy/kuralle-rag-smoke` (CF Worker + DO) and `examples-deploy/kuralle-rag-smoke-fly` (Bun container, sin, shared-cpu-1x 256MB, auto-stop).
+
+| Claim | Live result |
+|---|---|
+| Workers AI embedding via the real kuralle path (`AiSdkEmbedder` + `workers-ai-provider`, `@cf/baai/bge-m3`, `env.AI`) | **p50 128 ms, mean 149 ms, p95 268 ms** (16 sequential embeds, dim 1024) |
+| Cloud-embed tax, server-side (OpenAI `text-embedding-3-small` from Fly `sin`) | **p50 235 ms, mean 350 ms** — Workers AI is ~1.8× faster p50, ~2.3× mean, with no provider key |
+| `Fts5KeywordIndex` on **real DO SQLite** | Works; **persisted across calls** (size=3 pre-existing on call 2, zero re-seed); English + Tamil + Sinhala + trigram Japanese/Chinese all return the right doc |
+| `Fts5KeywordIndex` on bun:sqlite in a deployed container (Fly) | Same — persisted across requests, all five languages green |
+| `SqlIngestManifest` on DO SQLite / container SQLite | Persisted; second ingest **0 texts embedded** on both platforms |
+| Provider lock live | Throws on both platforms: "index 'smoke-kb' was built with embedder 'workersai.embedding/@cf/baai/bge-m3' (dimension 1024) but this pipeline uses 'smoke/other-model'…" |
+
+**Defect found by the live run, fixed:** a skip-only ingest (nothing embedded → embedder dimension still unknown) overwrote the manifest's recorded embedder dimension with `undefined`. `RagPipeline` now preserves the previously recorded identity; unit test added; fix re-verified live on CF.
+
 ## Honest caveats
 
 - **`KnowledgeFs.open()` wake time is scan-dominated**: at 1,200–9,000 chunks the BM25 reseed rides the store scan and costs ~10 ms of CPU — FTS5 is *parity*, not a win, on that specific path. The FTS5 win is the **pipeline/FusionRetriever restart path** (no free text scan; 4× faster at 9k chunks and no reseed writes) and **correctness under manifest-skip**.
-- **Workers AI in-network latency is asserted, not measured** — this environment has no Cloudflare credentials. The cloud-side baseline (p50 297 ms/query) is measured; the comparison number needs a probe inside a deployed Worker.
 - WP3's effect on *model behavior* (choosing grep before semantic) is a prompt-level change; the bench measures the token economics of the tiers, not model tool choice. An eval scenario would close that loop.
 - Token counts use the ~chars/4 estimate, consistently on both sides.
+- The live Vectorize store was not exercised (the deploy smoke uses an in-memory store per request — vector-store adapters have their own contract tests). The Workers AI samples were timed *inside* the worker (`embedder.embed` only), so they measure worker→inference latency without client RTT; the Fly OpenAI samples were likewise timed in-process on the Fly machine.

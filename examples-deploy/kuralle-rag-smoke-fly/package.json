@@ -1,0 +1,9 @@
+{
+  "name": "kuralle-rag-smoke-fly",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bundle": "bun build src/server.ts --target=bun --outfile dist/server.js",
+    "deploy": "bun run bundle && fly deploy --ha=false"
+  }
+}

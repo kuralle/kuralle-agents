@@ -1,0 +1,13 @@
+{
+  "name": "kuralle-rag-smoke",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ai": "^6.0.0",
+    "workers-ai-provider": "^2.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
+    "wrangler": "^4.0.0"
+  }
+}
