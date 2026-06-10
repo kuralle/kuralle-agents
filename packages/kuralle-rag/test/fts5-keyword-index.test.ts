@@ -74,6 +74,46 @@ describe('test:fts5 KeywordIndex contract', () => {
     expect(() => fts5.search('col:refund -policy')).not.toThrow();
   });
 
+  it('matches space-delimited non-Latin scripts with the default tokenizer', () => {
+    const fts5 = new Fts5KeywordIndex({ sql: bunSqlExecutor(new Database(':memory:')) });
+    fts5.add([
+      { id: 'ta', text: 'பணத்தைத் திரும்பப் பெறுதல் கொள்கை முப்பது நாட்கள்' }, // Tamil: refund policy
+      { id: 'si', text: 'මුදල් ආපසු ගෙවීමේ ප්‍රතිපත්තිය දින තිහක්' }, // Sinhala: refund policy
+      { id: 'de', text: 'Rückerstattungsrichtlinie innerhalb von dreißig Tagen' },
+    ]);
+    expect(fts5.search('கொள்கை', 2)[0]?.id).toBe('ta');
+    expect(fts5.search('ප්‍රතිපත්තිය', 2)[0]?.id).toBe('si');
+    expect(fts5.search('Rückerstattungsrichtlinie', 2)[0]?.id).toBe('de');
+
+    // BM25Index shares the tokenizer — Indic scripts must work there too.
+    const bm25 = new BM25Index();
+    bm25.add([{ id: 'ta', text: 'பணத்தைத் திரும்பப் பெறுதல் கொள்கை முப்பது நாட்கள்' }]);
+    expect(bm25.search('கொள்கை', 1)[0]?.id).toBe('ta');
+  });
+
+  it('matches unsegmented languages (CJK) with the trigram tokenizer', () => {
+    const fts5 = new Fts5KeywordIndex({
+      sql: bunSqlExecutor(new Database(':memory:')),
+      tokenize: 'trigram',
+    });
+    fts5.add([
+      { id: 'ja', text: '返金ポリシーは配達後30日以内です' }, // Japanese: refund policy
+      { id: 'zh', text: '退款政策为送达后三十天内' }, // Chinese: refund policy
+    ]);
+    expect(fts5.search('ポリシー', 2)[0]?.id).toBe('ja');
+    expect(fts5.search('退款政策', 2)[0]?.id).toBe('zh');
+  });
+
+  it('rejects an unsafe tokenize spec', () => {
+    expect(
+      () =>
+        new Fts5KeywordIndex({
+          sql: bunSqlExecutor(new Database(':memory:')),
+          tokenize: "trigram'); DROP TABLE x; --",
+        }),
+    ).toThrow(/Invalid FTS5 tokenize spec/);
+  });
+
   it('persists: a new instance over the same database needs zero re-seeding', () => {
     const db = new Database(':memory:');
     const first = new Fts5KeywordIndex({ sql: bunSqlExecutor(db) });

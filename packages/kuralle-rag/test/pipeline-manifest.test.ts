@@ -100,6 +100,24 @@ describe('test:pipeline-manifest incremental ingest', () => {
     expect(embedder.textsEmbedded).toBe(fresh);
   });
 
+  it('re-seeds an empty keyword index from skipped docs without embedding (restart)', async () => {
+    const manifest = new InMemoryIngestManifest();
+    const store = new InMemoryVectorStore();
+    const first = makePipeline({ store, manifest, keywordIndex: new BM25Index() });
+    await first.pipeline.ingest(docs());
+
+    // Restart: fresh in-memory keyword index, same manifest/store. Without
+    // recovery, manifest-skip would leave it empty and hybrid retrieval
+    // would silently degrade to vector-only.
+    const freshKeyword = new BM25Index();
+    const second = makePipeline({ store, manifest, keywordIndex: freshKeyword });
+    await second.pipeline.ingest(docs());
+
+    expect(second.embedder.textsEmbedded).toBe(0); // chunk-only reseed
+    expect(freshKeyword.size).toBeGreaterThan(0);
+    expect(freshKeyword.search('refund', 1)[0]?.id).toContain('doc-a');
+  });
+
   it('persists across pipeline instances via SqlIngestManifest (restart simulation)', async () => {
     const db = new Database(':memory:');
     const sql = bunSqlExecutor(db);

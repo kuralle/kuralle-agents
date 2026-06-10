@@ -178,11 +178,15 @@ export class RagPipeline implements Retriever {
       this.lockChecked = true;
     }
     const docRecords: IngestManifestData['docs'] = { ...(data?.docs ?? {}) };
+    const skipped: Document[] = [];
 
     for (const doc of documents) {
       const hash = this.manifest ? await sha256Hex(doc.text) : '';
       const previous = this.manifest ? docRecords[doc.id] : undefined;
-      if (previous && previous.hash === hash) continue;
+      if (previous && previous.hash === hash) {
+        skipped.push(doc);
+        continue;
+      }
 
       const chunks = this.chunker.chunk(doc.text);
       if (chunks.length === 0) continue;
@@ -225,6 +229,21 @@ export class RagPipeline implements Retriever {
 
       if (this.manifest) {
         docRecords[doc.id] = { hash, chunkIds: [...newIds] };
+      }
+    }
+
+    // Restart recovery for a non-persistent keyword index: manifest-skip
+    // means skipped docs are never re-added, so after a process restart an
+    // in-memory BM25Index would come back empty and hybrid retrieval would
+    // silently degrade to vector-only. Re-seed by chunking alone — zero
+    // embed calls. A persistent index (Fts5KeywordIndex) is non-empty here
+    // and skips this entirely.
+    if (this.keywordIndex && this.keywordIndex.size === 0 && skipped.length > 0) {
+      for (const doc of skipped) {
+        const chunks = this.chunker.chunk(doc.text);
+        this.keywordIndex.add(
+          chunks.map(c => ({ id: `${doc.id}:${c.id}`, text: c.text })),
+        );
       }
     }
 

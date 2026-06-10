@@ -24,7 +24,18 @@ export interface Fts5KeywordIndexOptions {
   sql: SqlExecutor;
   /** FTS5 virtual table name. Default: 'kuralle_keyword_index'. */
   tableName?: string;
+  /**
+   * FTS5 tokenizer spec. Default: `unicode61 categories 'L* N* Co Mn Mc'`
+   * — unicode61 extended to keep combining marks as token characters, so
+   * Indic scripts (Tamil, Sinhala, Hindi, ...) are not split at vowel
+   * signs. Good for all space-delimited languages. For unsegmented
+   * languages (Chinese, Japanese, Thai) use 'trigram' (substring
+   * matching, query terms must be ≥3 chars).
+   */
+  tokenize?: string;
 }
+
+const DEFAULT_TOKENIZE = "unicode61 categories 'L* N* Co Mn Mc'";
 
 export class Fts5KeywordIndex implements KeywordIndex {
   private readonly sql: SqlExecutor;
@@ -33,10 +44,14 @@ export class Fts5KeywordIndex implements KeywordIndex {
   constructor(options: Fts5KeywordIndexOptions) {
     this.sql = options.sql;
     this.table = assertSqlIdentifier(options.tableName ?? 'kuralle_keyword_index');
+    const tokenize = options.tokenize ?? DEFAULT_TOKENIZE;
+    if (!/^[A-Za-z0-9_*' ]+$/.test(tokenize)) {
+      throw new Error(`Invalid FTS5 tokenize spec: '${tokenize}'`);
+    }
     execSql(
       this.sql,
       `CREATE VIRTUAL TABLE IF NOT EXISTS ${this.table} ` +
-        `USING fts5(doc_id UNINDEXED, content, tokenize = 'unicode61')`,
+        `USING fts5(doc_id UNINDEXED, content, tokenize = '${tokenize.replaceAll("'", "''")}')`,
     );
   }
 
