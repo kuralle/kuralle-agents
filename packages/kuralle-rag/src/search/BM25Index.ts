@@ -59,11 +59,15 @@ const STOP_WORDS = new Set([
 /**
  * Shared keyword tokenizer — exported so `Fts5KeywordIndex` queries are
  * tokenized identically to `BM25Index` for ranking parity.
+ *
+ * Keeps combining marks (`\p{M}`) as token characters — Indic scripts
+ * (Tamil, Sinhala, Hindi, ...) encode vowel signs as combining marks, and
+ * treating them as separators splits every word mid-syllable.
  */
 export function tokenizeKeywords(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     .filter(t => t.length >= 2 && !STOP_WORDS.has(t));
 }

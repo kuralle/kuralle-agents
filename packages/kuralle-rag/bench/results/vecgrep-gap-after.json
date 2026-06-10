@@ -1,0 +1,70 @@
+{
+  "mode": "after",
+  "date": "2026-06-10T09:00:07.871Z",
+  "phaseA": {
+    "chunksInStore": 1200,
+    "fresh": {
+      "textsEmbedded": 1200,
+      "ms": 57
+    },
+    "unchangedReingest": {
+      "textsEmbedded": 1200,
+      "ms": 60
+    }
+  },
+  "phaseA2": {
+    "unchangedReingestWithManifest": {
+      "textsEmbedded": 0,
+      "ms": 17
+    }
+  },
+  "phaseB3": {
+    "restartIngestBm25ReseedMs": 30,
+    "restartIngestFts5Ms": 10
+  },
+  "phaseB": {
+    "chunkEntries": 1200,
+    "bm25WakeMsMedian": 1.51,
+    "fts5WakeMsMedian": 2.77,
+    "runsMs": [
+      7.54,
+      1.51,
+      2.39,
+      18.43,
+      1.01,
+      0.97,
+      0.94
+    ],
+    "fts5RunsMs": [
+      2.15,
+      1.77,
+      2.77,
+      2.69,
+      3.53,
+      3.36,
+      4.15
+    ]
+  },
+  "phaseC": {
+    "queries": 5,
+    "semanticTier": {
+      "avgTokensPerQuery": 1241,
+      "exactTermHitRate": 0.8
+    },
+    "grepTier": {
+      "avgTokensPerQuery": 126,
+      "exactTermHitRate": 1
+    }
+  },
+  "phaseD": {
+    "queries": 20,
+    "avgOverlapAt5VsTruth": 0,
+    "errorsThrown": 0,
+    "silentCorruption": true
+  },
+  "phaseD2": {
+    "queries": 20,
+    "errorsThrownWithManifest": 20,
+    "silentCorruption": false
+  }
+}

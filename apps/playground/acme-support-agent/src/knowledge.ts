@@ -71,7 +71,7 @@ console.log(`[knowledge] Reranker: ${reranker ? 'Cohere v3.5' : 'disabled (no CO
 // ─── FusionRetriever: BM25 + Vector hybrid search ───────────────────────────
 
 const fusionRetriever = new FusionRetriever({
-  bm25,
+  keywordIndex: bm25,
   vectorStore,
   embedder: queryEmbedder,
   indexName: 'acme-kb',
