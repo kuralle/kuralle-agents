@@ -83,6 +83,7 @@ const sidebar = [
       { label: 'Routing & Handoffs', link: '/guides/routing' },
       { label: 'Sessions & State', link: '/guides/sessions' },
       { label: 'Memory', link: '/guides/memory' },
+      { label: 'Knowledge & Retrieval', link: '/guides/knowledge' },
       { label: 'Skills', link: '/guides/skills' },
       { label: 'Voice Agents', link: '/guides/voice' },
       { label: 'Engagement & Messaging', link: '/guides/engagement' },

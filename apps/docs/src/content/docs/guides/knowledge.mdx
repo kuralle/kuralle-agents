@@ -1,0 +1,141 @@
+---
+title: Knowledge & Retrieval
+description: Ground agents in your content with hybrid retrieval — vector search, a BM25 keyword tier, incremental ingestion, and a filesystem view of the knowledge base.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@kuralle-agents/rag` provides everything between a raw document and a grounded
+agent answer: chunkers, embedders, vector stores, retrievers, rerankers, and a
+pipeline that wires them together. This guide covers the retrieval
+architecture; the full type-level reference lives in the
+[`@kuralle-agents/rag` API docs](/api/rag/readme/) and the package's
+`guides/PRIMITIVES.md`.
+
+## The two retrieval tiers
+
+Production knowledge bases need two complementary tiers:
+
+- **Vector (semantic) tier** — embedding similarity. Right for conceptual,
+  paraphrased questions ("can I send it back if it broke?").
+- **Keyword (lexical) tier** — BM25-ranked exact-term matching. Right for
+  SKUs, order codes, names, and exact phrases, which embedding similarity
+  fuzzes over. It is also ~10× cheaper in returned tokens for exact-term
+  queries.
+
+`FusionRetriever` runs both in parallel and fuses the scores:
+
+```ts
+import { FusionRetriever, BM25Index } from '@kuralle-agents/rag';
+
+const retriever = new FusionRetriever({
+  keywordIndex: new BM25Index(),
+  vectorStore,
+  embedder,
+  indexName: 'docs',
+  bm25Weight: 0.3, // 70% vector, 30% keyword
+});
+```
+
+Attach any retriever to an agent with `createVectorRetrievalTool` from
+`@kuralle-agents/tools`. The tool descriptions ship with tier guidance — the
+model is steered to `grep`/`find` for exact terms before paying for semantic
+search.
+
+## The keyword tier: `KeywordIndex`
+
+Two implementations of the same contract:
+
+- **`BM25Index`** — in-memory, zero dependencies, runs everywhere. Rebuilt
+  per process.
+- **`Fts5KeywordIndex`** — persistent, over SQLite FTS5. On Cloudflare,
+  Durable Object SQLite supports FTS5, so the keyword tier **survives
+  hibernation with zero rebuild**; on Node/Bun, back it with `bun:sqlite` or
+  `better-sqlite3`.
+
+```ts
+import { Fts5KeywordIndex } from '@kuralle-agents/rag';
+import { createSqlExecutor } from '@kuralle-agents/cf-agent';
+
+const keywordIndex = new Fts5KeywordIndex({
+  sql: createSqlExecutor(ctx.storage.sql), // Durable Object SQLite
+});
+```
+
+<Aside type="tip" title="Multilingual">
+The default tokenizer keeps combining marks, so space-delimited scripts —
+including Tamil, Sinhala, and Hindi — match correctly. For unsegmented
+languages (Chinese, Japanese, Thai) pass `tokenize: 'trigram'` to
+`Fts5KeywordIndex` for substring matching. Cross-language *semantic* matching
+belongs to the vector tier — pair with a multilingual embedding model such as
+`@cf/baai/bge-m3`.
+</Aside>
+
+## Incremental ingestion and the embedder lock
+
+Give `RagPipeline` a persistent `IngestManifest` and ingestion becomes safe
+and incremental:
+
+```ts
+import { RagPipeline, SqlIngestManifest } from '@kuralle-agents/rag';
+
+const pipeline = new RagPipeline({
+  embedder,
+  vectorStore,
+  chunker,
+  indexName: 'docs',
+  manifest: new SqlIngestManifest({ sql }),
+  keywordIndex, // kept in sync at ingest
+});
+```
+
+- **Embedder lock** — the manifest records the model identity that built the
+  index. Ingesting or querying with a different model — *even one with the
+  same dimension* — throws instead of silently corrupting relevance.
+- **Hash-skip** — unchanged documents (SHA-256) are skipped: a stable corpus
+  re-ingests with **zero embed calls**.
+- **Stale-chunk cleanup** — changed documents have their old chunks removed
+  from the vector store and keyword index.
+
+<Aside type="caution">
+Mixing embedding models in one index is the silent killer of RAG relevance:
+two same-dimension models produce incompatible vector spaces, every query
+degrades to near-random, and nothing errors. Always configure a manifest in
+production.
+</Aside>
+
+## Cloudflare: Workers AI + Vectorize
+
+On Workers, pair Vectorize with **Workers AI embeddings** — the model runs
+inside Cloudflare's network (`env.AI` binding), with no provider key and no
+public-internet round trip per query (measured ~2× faster per query embedding
+than a cloud embedding API):
+
+```ts
+import { CloudflareVectorizeStore } from '@kuralle-agents/vectorize-store';
+import { AiSdkEmbedder } from '@kuralle-agents/rag';
+import { createWorkersAI } from 'workers-ai-provider';
+
+const workersai = createWorkersAI({ binding: env.AI });
+const embedder = new AiSdkEmbedder({
+  model: workersai.textEmbeddingModel('@cf/baai/bge-m3'),
+});
+const vectorStore = new CloudflareVectorizeStore({ index: env.VECTORIZE });
+```
+
+## KnowledgeFs: the knowledge base as a filesystem
+
+`KnowledgeFs` exposes an indexed knowledge base as a read-only `FileSystem`,
+so agents explore it with the same `workspace` tool verbs (`ls`, `cat`,
+`grep`, `find`) used for bundled docs — the cheap structural tier before any
+semantic search. `grep` is BM25-ranked when a `keywordIndex` is configured,
+and a pre-populated persistent index lets a hibernated Durable Object wake
+without reseeding. See the package's `guides/KNOWLEDGEFS.md` for the metadata
+contract and RBAC filters.
+
+## Quality tracking
+
+`RetrievalQualityChecker.assess()` buckets retrieval quality from the score
+distribution and reports `estimatedTokens` — the prompt-token cost of the
+result set — so a retriever that is "accurate" only by flooding the context
+window shows up in metrics.

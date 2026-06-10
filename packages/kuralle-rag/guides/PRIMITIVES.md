@@ -270,6 +270,27 @@ const results = await hybrid.retrieve('How do I cancel?');
 
 RRF does not require score normalization across retrievers, making it safe to combine retrievers with different scoring scales.
 
+### FusionRetriever
+
+Purpose-built keyword + vector hybrid: runs a BM25 keyword search and a vector
+similarity search in parallel, min-max normalizes both score sets, and fuses
+them with a configurable weight. Use this (rather than the generic
+`HybridRetriever`) when the keyword tier is a `KeywordIndex`.
+
+```ts
+import { FusionRetriever, BM25Index } from '@kuralle-agents/rag';
+
+const fusion = new FusionRetriever({
+  keywordIndex: new BM25Index(),   // any KeywordIndex (see below)
+  vectorStore,
+  embedder,
+  indexName: 'docs',
+  bm25Weight: 0.3,                 // 70% vector, 30% keyword (default)
+  topK: 10,
+  reranker,                        // optional post-fusion reranker
+});
+```
+
 ### Custom Retriever
 
 Implement the `Retriever` interface for any retrieval backend:
@@ -292,6 +313,57 @@ class ElasticsearchRetriever implements Retriever {
   }
 }
 ```
+
+---
+
+## KeywordIndex
+
+The keyword (lexical) tier of hybrid retrieval — BM25-ranked exact-term
+matching that catches SKUs, codes, names, and exact phrases vector similarity
+fuzzes over.
+
+```ts
+interface KeywordIndex {
+  readonly size: number;
+  add(documents: BM25Document[]): void;     // overwrite on same id
+  remove(id: string): boolean;
+  search(query: string, topK?: number): BM25SearchResult[];
+  clear(): void;
+}
+```
+
+### BM25Index
+
+In-memory Okapi BM25 inverted index. Zero dependencies, runs everywhere
+(including Workers), suitable up to ~100K documents. Rebuilt per process —
+pair it with `RagPipeline`'s `keywordIndex` option so restarts re-seed it
+automatically (chunk-only, zero embed calls).
+
+### Fts5KeywordIndex
+
+Persistent BM25 index over SQLite FTS5. On Cloudflare, Durable Object SQLite
+supports the FTS5 module, so the keyword tier survives hibernation with zero
+rebuild; on Node/Bun, back it with `bun:sqlite` or `better-sqlite3`.
+
+```ts
+import { Fts5KeywordIndex } from '@kuralle-agents/rag';
+import { createSqlExecutor } from '@kuralle-agents/cf-agent'; // DO SQLite
+
+const keywordIndex = new Fts5KeywordIndex({
+  sql: createSqlExecutor(ctx.storage.sql),
+  tableName: 'kb_keywords',        // default: 'kuralle_keyword_index'
+});
+```
+
+The `sql` parameter is a tagged-template `SqlExecutor` (re-declared
+structurally in this package), so any SQLite handle wraps in a few lines.
+
+**Multilingual:** the default tokenizer (`unicode61 categories 'L* N* Co Mn
+Mc'`) keeps combining marks, so space-delimited scripts — including Tamil,
+Sinhala, and Hindi — match correctly. For unsegmented languages (Chinese,
+Japanese, Thai) pass `tokenize: 'trigram'` (substring matching; query terms
+must be ≥3 characters). The in-memory `BM25Index` shares the same
+mark-preserving tokenizer but has no CJK segmentation.
 
 ---
 
@@ -417,6 +489,34 @@ const results = await pipeline.retrieve('search query', { topK: 5 });
 ```
 
 `ensureIndex()` is called automatically by `ingest()`. It creates the vector index if it doesn't exist, probing the embedder for dimension.
+
+### Incremental ingest + embedder lock (`manifest`)
+
+Pass a persistent `IngestManifest` and the pipeline:
+
+- **locks the index to the embedding model that built it** — ingesting or
+  querying with a different model (even one with the same dimension) throws
+  instead of silently corrupting relevance;
+- **skips unchanged documents** on re-ingest via SHA-256 content hash (a
+  stable corpus re-ingests with zero embed calls);
+- **cleans up stale chunks** of changed documents from the vector store and
+  keyword index.
+
+```ts
+import { RagPipeline, SqlIngestManifest, InMemoryIngestManifest } from '@kuralle-agents/rag';
+
+const pipeline = new RagPipeline({
+  embedder, vectorStore, chunker,
+  indexName: 'my-docs',
+  manifest: new SqlIngestManifest({ sql }),  // DO SQLite / bun:sqlite
+  keywordIndex,                              // optional KeywordIndex, kept in sync at ingest
+});
+```
+
+Use `InMemoryIngestManifest` for dev/tests. With a non-persistent keyword
+index (`BM25Index`), a restart would leave the keyword tier empty under
+manifest-skip — the pipeline detects this and re-seeds it by chunking alone
+(zero embed calls); a persistent `Fts5KeywordIndex` skips even that.
 
 ---
 
