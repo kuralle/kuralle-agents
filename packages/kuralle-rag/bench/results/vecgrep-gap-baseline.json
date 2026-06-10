@@ -1,0 +1,45 @@
+{
+  "mode": "baseline",
+  "date": "2026-06-10T07:35:35.079Z",
+  "phaseA": {
+    "chunksInStore": 1200,
+    "fresh": {
+      "textsEmbedded": 1200,
+      "ms": 69
+    },
+    "unchangedReingest": {
+      "textsEmbedded": 1200,
+      "ms": 55
+    }
+  },
+  "phaseB": {
+    "chunkEntries": 1200,
+    "bm25WakeMsMedian": 17.59,
+    "runsMs": [
+      24.12,
+      17.59,
+      20.01,
+      17.59,
+      17.07,
+      20.89,
+      17.01
+    ]
+  },
+  "phaseC": {
+    "queries": 5,
+    "semanticTier": {
+      "avgTokensPerQuery": 1241,
+      "exactTermHitRate": 0.8
+    },
+    "grepTier": {
+      "avgTokensPerQuery": 996,
+      "exactTermHitRate": 1
+    }
+  },
+  "phaseD": {
+    "queries": 20,
+    "avgOverlapAt5VsTruth": 0,
+    "errorsThrown": 0,
+    "silentCorruption": true
+  }
+}
