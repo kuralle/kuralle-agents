@@ -45,6 +45,12 @@ export class AiSdkEmbedder implements Embedder {
     return this.cachedDimension;
   }
 
+  /** Stable model identity (`provider/modelId`) for the ingest-manifest embedder lock. */
+  get id(): string {
+    if (typeof this.model === 'string') return this.model;
+    return `${this.model.provider}/${this.model.modelId}`;
+  }
+
   async embed(text: string): Promise<readonly number[]> {
     const result = await embed({
       model: this.model,

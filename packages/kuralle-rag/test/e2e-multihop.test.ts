@@ -129,7 +129,7 @@ describe('MultiHopRetriever', () => {
     fusionRetriever = new FusionRetriever({
       vectorStore,
       embedder,
-      bm25,
+      keywordIndex: bm25,
       indexName: 'acme-kb',
       bm25Weight: 0.3,
       vectorWeight: 0.7,
@@ -270,7 +270,7 @@ describe('MultiHopRetriever', () => {
     const failOnSecond = new FusionRetriever({
       vectorStore,
       embedder,
-      bm25,
+      keywordIndex: bm25,
       indexName: 'acme-kb',
       topK: 3,
     });

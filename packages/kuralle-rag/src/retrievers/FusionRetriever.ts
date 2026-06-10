@@ -7,15 +7,18 @@ import type {
   Embedder,
   VectorFilter,
 } from '../types.js';
-import type { BM25Index } from '../search/BM25Index.js';
+import type { KeywordIndex } from '../search/KeywordIndex.js';
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
 export interface FusionRetrieverOptions {
-  /** The BM25 index for keyword search. */
-  bm25: BM25Index;
+  /**
+   * The keyword index for the BM25 tier — in-memory `BM25Index` or
+   * persistent `Fts5KeywordIndex`.
+   */
+  keywordIndex: KeywordIndex;
   /** The vector store for semantic search. */
   vectorStore: VectorStoreCore;
   /** The embedder to convert query text to vectors. */
@@ -54,7 +57,7 @@ export interface FusionRetrieverOptions {
  * An optional reranker can refine results after fusion.
  */
 export class FusionRetriever implements Retriever {
-  private readonly bm25: BM25Index;
+  private readonly keywordIndex: KeywordIndex;
   private readonly vectorStore: VectorStoreCore;
   private readonly embedder: Embedder;
   private readonly indexName: string;
@@ -64,7 +67,7 @@ export class FusionRetriever implements Retriever {
   private readonly fetchK?: number;
 
   constructor(options: FusionRetrieverOptions) {
-    this.bm25 = options.bm25;
+    this.keywordIndex = options.keywordIndex;
     this.vectorStore = options.vectorStore;
     this.embedder = options.embedder;
     this.indexName = options.indexName;
@@ -87,7 +90,7 @@ export class FusionRetriever implements Retriever {
 
     // Run BM25 and vector search in parallel
     const [bm25Results, vectorResults] = await Promise.all([
-      Promise.resolve(this.bm25.search(query, fetchK)),
+      Promise.resolve(this.keywordIndex.search(query, fetchK)),
       this.vectorStore.query(this.indexName, {
         queryVector,
         topK: fetchK,

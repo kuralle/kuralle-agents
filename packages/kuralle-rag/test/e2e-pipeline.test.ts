@@ -166,7 +166,7 @@ describe('E2E Retrieval Pipeline', () => {
 
   test('Step 5: FusionRetriever combines BM25 + vector search', async () => {
     const fusionRetriever = new FusionRetriever({
-      bm25,
+      keywordIndex: bm25,
       vectorStore,
       embedder,
       indexName: 'test-kb',
@@ -185,7 +185,7 @@ describe('E2E Retrieval Pipeline', () => {
 
   test('Step 6: FusionRetriever with includeEmbeddings returns vectors', async () => {
     const fusionRetriever = new FusionRetriever({
-      bm25,
+      keywordIndex: bm25,
       vectorStore,
       embedder,
       indexName: 'test-kb',
@@ -208,7 +208,7 @@ describe('E2E Retrieval Pipeline', () => {
     const cache = new RetrievalCache({ similarityThreshold: 0.15 });
 
     const fusionRetriever = new FusionRetriever({
-      bm25,
+      keywordIndex: bm25,
       vectorStore,
       embedder,
       indexName: 'test-kb',
@@ -242,7 +242,7 @@ describe('E2E Retrieval Pipeline', () => {
     const turnCache = new TurnCache();
 
     const fusionRetriever = new FusionRetriever({
-      bm25,
+      keywordIndex: bm25,
       vectorStore,
       embedder,
       indexName: 'test-kb',
@@ -268,7 +268,7 @@ describe('E2E Retrieval Pipeline', () => {
     const cache = new RetrievalCache({ similarityThreshold: 0.7 });
 
     const fusionRetriever = new FusionRetriever({
-      bm25,
+      keywordIndex: bm25,
       vectorStore,
       embedder,
       indexName: 'test-kb',

@@ -142,7 +142,7 @@ describe.skipIf(!hasGoogle || !fixturesReady)('Real E2E Pipeline (LanceDB + Gemi
 
   test('Step 5: Hybrid search — "return and refund policy"', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e',
+      keywordIndex: bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e',
       topK: 5, bm25Weight: 0.3,
     });
 
@@ -157,7 +157,7 @@ describe.skipIf(!hasGoogle || !fixturesReady)('Real E2E Pipeline (LanceDB + Gemi
 
   test('Step 6: Hybrid search — PDF content about AI agents', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e', topK: 3,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e', topK: 3,
     });
 
     const results = await fusion.retrieve('agent capabilities and design patterns');
@@ -173,7 +173,7 @@ describe.skipIf(!hasGoogle || !fixturesReady)('Real E2E Pipeline (LanceDB + Gemi
     if (!hasCohere) { console.log('  ⚠ COHERE_API_KEY not set — skipping'); return; }
 
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e', topK: 10,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e', topK: 10,
     });
     const reranker = new CohereReranker({ topK: 3 });
 
@@ -191,7 +191,7 @@ describe.skipIf(!hasGoogle || !fixturesReady)('Real E2E Pipeline (LanceDB + Gemi
   test('Step 8: RetrievalCache — query-indexed dual cache', async () => {
     const cache = new RetrievalCache({ similarityThreshold: 0.80 });
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e', topK: 5,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder, indexName: 'real-e2e', topK: 5,
     });
 
     // Q1: cache miss → search → populate with query embedding

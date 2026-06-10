@@ -9,6 +9,12 @@ import type {
   Retriever,
 } from '../types.js';
 import { hasIndexAdmin } from '../types.js';
+import type { KeywordIndex } from '../search/KeywordIndex.js';
+import {
+  sha256Hex,
+  type IngestManifest,
+  type IngestManifestData,
+} from './IngestManifest.js';
 
 export interface RagPipelineOptions {
   /** Embedder for converting text to vectors. */
@@ -35,6 +41,24 @@ export interface RagPipelineOptions {
   metric?: 'cosine' | 'euclidean' | 'dotproduct';
   /** Batch size for embedMany calls. Default: 100. */
   batchSize?: number;
+  /**
+   * Persistent ingest manifest. When provided, the pipeline:
+   *   - locks the index to the embedder that built it ({@link Embedder.id}
+   *     + dimension) and throws on mismatch at ingest AND retrieve time —
+   *     a different same-dimension model silently corrupts relevance;
+   *   - skips unchanged documents on re-ingest (SHA-256 content hash);
+   *   - deletes stale chunks of changed documents (when the store
+   *     supports admin deletes).
+   * Without a manifest, every ingest re-embeds everything and no
+   * embedder lock is enforced (previous behavior).
+   */
+  manifest?: IngestManifest;
+  /**
+   * Keyword index kept in sync with ingestion (the keyword tier for
+   * `FusionRetriever`/`HybridRetriever`). Chunk ids match the vector
+   * entry ids (`${docId}:${chunkId}`).
+   */
+  keywordIndex?: KeywordIndex;
 }
 
 /**
@@ -53,6 +77,10 @@ export class RagPipeline implements Retriever {
   private readonly defaultTopK: number;
   private readonly metric: 'cosine' | 'euclidean' | 'dotproduct';
   private readonly batchSize: number;
+  private readonly manifest?: IngestManifest;
+  private readonly keywordIndex?: KeywordIndex;
+  private lockChecked = false;
+  private lockedDimension?: number;
 
   constructor(options: RagPipelineOptions) {
     this.embedder = options.embedder;
@@ -63,6 +91,8 @@ export class RagPipeline implements Retriever {
     this.defaultTopK = options.topK ?? 10;
     this.metric = options.metric ?? 'cosine';
     this.batchSize = options.batchSize ?? 100;
+    this.manifest = options.manifest;
+    this.keywordIndex = options.keywordIndex;
   }
 
   /**
@@ -97,12 +127,63 @@ export class RagPipeline implements Retriever {
   }
 
   /**
+   * Throw if the manifest records a different embedder than this
+   * pipeline's. Two models with the SAME dimension still produce
+   * incompatible vector spaces — without this check the mismatch is
+   * silent and every query degrades to near-random.
+   */
+  private assertEmbedderLock(data: IngestManifestData): void {
+    const locked = data.embedder;
+    if (!locked) return;
+    const mismatchedId =
+      locked.id !== undefined &&
+      this.embedder.id !== undefined &&
+      locked.id !== this.embedder.id;
+    const mismatchedDim =
+      locked.dimension !== undefined &&
+      this.embedder.dimension !== undefined &&
+      locked.dimension !== this.embedder.dimension;
+    if (mismatchedId || mismatchedDim) {
+      throw new Error(
+        `RagPipeline: index '${this.indexName}' was built with embedder ` +
+          `'${locked.id ?? 'unknown'}' (dimension ${locked.dimension ?? '?'}) but this ` +
+          `pipeline uses '${this.embedder.id ?? 'unknown'}' (dimension ` +
+          `${this.embedder.dimension ?? '?'}). Mixing embedding models silently corrupts ` +
+          `relevance. Either restore the original embedder, or re-index: clear the ` +
+          `index and its manifest entry, then ingest with the new model.`,
+      );
+    }
+  }
+
+  private async loadManifestData(): Promise<IngestManifestData | undefined> {
+    if (!this.manifest) return undefined;
+    return this.manifest.load(this.indexName);
+  }
+
+  /**
    * Ingest documents: chunk, embed, and store in the vector store.
+   *
+   * With a manifest configured, documents whose content hash is unchanged
+   * since the last ingest are skipped entirely (zero embed calls), and
+   * stale chunks of changed documents are removed from the vector store
+   * (admin stores) and the keyword index.
    */
   async ingest(documents: Document[]): Promise<void> {
     await this.ensureIndex();
 
+    const data = await this.loadManifestData();
+    if (data) {
+      this.assertEmbedderLock(data);
+      this.lockedDimension = data.embedder?.dimension;
+      this.lockChecked = true;
+    }
+    const docRecords: IngestManifestData['docs'] = { ...(data?.docs ?? {}) };
+
     for (const doc of documents) {
+      const hash = this.manifest ? await sha256Hex(doc.text) : '';
+      const previous = this.manifest ? docRecords[doc.id] : undefined;
+      if (previous && previous.hash === hash) continue;
+
       const chunks = this.chunker.chunk(doc.text);
       if (chunks.length === 0) continue;
 
@@ -129,6 +210,29 @@ export class RagPipeline implements Retriever {
       }));
 
       await this.vectorStore.upsert(this.indexName, entries);
+
+      const newIds = new Set(entries.map(e => e.id));
+      if (previous) {
+        const stale = previous.chunkIds.filter(id => !newIds.has(id));
+        if (stale.length > 0) {
+          if (hasIndexAdmin(this.vectorStore)) {
+            await this.vectorStore.deleteVectors(this.indexName, { ids: stale });
+          }
+          for (const id of stale) this.keywordIndex?.remove(id);
+        }
+      }
+      this.keywordIndex?.add(entries.map(e => ({ id: e.id, text: e.document })));
+
+      if (this.manifest) {
+        docRecords[doc.id] = { hash, chunkIds: [...newIds] };
+      }
+    }
+
+    if (this.manifest) {
+      await this.manifest.save(this.indexName, {
+        embedder: { id: this.embedder.id, dimension: this.embedder.dimension },
+        docs: docRecords,
+      });
     }
   }
 
@@ -140,9 +244,26 @@ export class RagPipeline implements Retriever {
     query: string,
     options?: RetrievalOptions,
   ): Promise<RetrievalResult[]> {
+    if (this.manifest && !this.lockChecked) {
+      const data = await this.loadManifestData();
+      if (data) {
+        this.assertEmbedderLock(data);
+        this.lockedDimension = data.embedder?.dimension;
+      }
+      this.lockChecked = true;
+    }
+
     const topK = options?.topK ?? this.defaultTopK;
     // Use pre-computed query embedding when available to avoid double-embed cost
     const queryVector = options?.queryEmbedding ?? await this.embedder.embed(query);
+    if (this.lockedDimension !== undefined && queryVector.length !== this.lockedDimension) {
+      throw new Error(
+        `RagPipeline: index '${this.indexName}' stores ${this.lockedDimension}-dimensional ` +
+          `vectors but the query embedding has ${queryVector.length} dimensions — the ` +
+          `embedding model differs from the one that built the index. Restore the ` +
+          `original embedder or re-index with the new model.`,
+      );
+    }
     const includeVectors = options?.includeEmbeddings ?? false;
 
     // Fetch more than topK if reranking, to give the reranker a wider pool

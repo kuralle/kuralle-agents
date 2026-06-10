@@ -86,8 +86,18 @@ export { CohereReranker } from './rerankers/index.js';
 export type { CohereRerankerOptions } from './rerankers/index.js';
 
 // Search
-export { BM25Index } from './search/index.js';
-export type { BM25Document, BM25SearchResult, BM25IndexOptions } from './search/index.js';
+export { BM25Index, Fts5KeywordIndex, tokenizeKeywords } from './search/index.js';
+export type {
+  BM25Document,
+  BM25SearchResult,
+  BM25IndexOptions,
+  KeywordIndex,
+  Fts5KeywordIndexOptions,
+} from './search/index.js';
+
+// SQL executor contract (shared by Fts5KeywordIndex and SqlIngestManifest)
+export { execSql, assertSqlIdentifier } from './sql.js';
+export type { SqlExecutor } from './sql.js';
 
 // Cache
 export { RetrievalCache } from './cache/index.js';
@@ -103,6 +113,17 @@ export type { KnowledgeCompilerConfig, CompilationResult } from './compiler/inde
 // Pipeline
 export { RagPipeline } from './pipeline/index.js';
 export type { RagPipelineOptions } from './pipeline/index.js';
+export {
+  InMemoryIngestManifest,
+  SqlIngestManifest,
+  sha256Hex,
+} from './pipeline/index.js';
+export type {
+  IngestManifest,
+  IngestManifestData,
+  IngestManifestDocEntry,
+  SqlIngestManifestOptions,
+} from './pipeline/index.js';
 export { RetrievalQualityChecker } from './pipeline/index.js';
 export type {
   RetrievalQualityCheckerOptions,

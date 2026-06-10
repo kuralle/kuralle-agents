@@ -7,7 +7,7 @@ import type {
   MkdirOptions,
   RmOptions,
 } from '@kuralle-agents/core';
-import type { BM25Index } from '../search/BM25Index.js';
+import type { KeywordIndex } from '../search/KeywordIndex.js';
 import type { VectorFilter, VectorStoreCore } from '../types.js';
 import type { KnowledgeAccessFilter } from './access.js';
 import { slugAllowed } from './access.js';
@@ -31,7 +31,17 @@ import {
 export interface KnowledgeFsOptions {
   store: VectorStoreCore;
   indexName: string;
-  bm25?: BM25Index;
+  /**
+   * Keyword index powering `search()` (the grep tier). Pass a fresh
+   * `BM25Index` (in-memory; seeded from the store on every `open()`) or a
+   * persistent `Fts5KeywordIndex` — a pre-populated persistent index is
+   * detected (`size > 0`) and `open()` skips seeding entirely, which is
+   * what makes a hibernated Durable Object wake with zero rebuild. A
+   * persistent index is kept in sync by the ingest path (e.g.
+   * `RagPipeline`'s `keywordIndex` option); call `clear()` on it to force
+   * a reseed on the next `open()`.
+   */
+  keywordIndex?: KeywordIndex;
   accessFilter?: KnowledgeAccessFilter;
   manifestKey?: string;
 }
@@ -91,7 +101,7 @@ const utf8 = new TextEncoder();
 export class KnowledgeFs implements FileSystem {
   private readonly store: VectorStoreCore;
   private readonly indexName: string;
-  private readonly bm25?: BM25Index;
+  private readonly keywordIndex?: KeywordIndex;
   private readonly accessFilter?: KnowledgeAccessFilter;
   private readonly manifestKey: string;
 
@@ -103,7 +113,7 @@ export class KnowledgeFs implements FileSystem {
   constructor(opts: KnowledgeFsOptions) {
     this.store = opts.store;
     this.indexName = opts.indexName;
-    this.bm25 = opts.bm25;
+    this.keywordIndex = opts.keywordIndex;
     this.accessFilter = opts.accessFilter;
     this.manifestKey = opts.manifestKey ?? PATH_TREE_MANIFEST_ID;
   }
@@ -145,8 +155,10 @@ export class KnowledgeFs implements FileSystem {
 
     this.tree = prunePathTree(buildPathTree(slugs), allow);
     this.chunksBySlug = groupChunksBySlug(chunkRecords);
-    if (this.bm25) {
-      this.bm25.add(
+    // A pre-populated persistent keyword index (e.g. Fts5KeywordIndex in
+    // DO SQLite surviving hibernation) is reused as-is — zero rebuild.
+    if (this.keywordIndex && this.keywordIndex.size === 0) {
+      this.keywordIndex.add(
         chunkRecords.map((r) => ({
           id: `${r.slug}#${r.chunkIndex}`,
           text: r.text,
@@ -196,17 +208,25 @@ export class KnowledgeFs implements FileSystem {
       pathUnderRoot(r.slug, root),
     );
 
-    if (this.bm25) {
-      const ranked = this.bm25.search(pattern, limit);
-      const candidateIds = new Set(ranked.map((hit) => hit.id));
-      return records
-        .filter((r) => candidateIds.has(`${r.slug}#${r.chunkIndex}`))
-        .slice(0, limit)
-        .map((r) => ({
-          slug: r.slug,
-          chunkIndex: r.chunkIndex,
-          text: r.text,
-        }));
+    if (this.keywordIndex) {
+      // Over-fetch so root filtering can't starve the limit, and return
+      // hits in BM25 rank order (not corpus order).
+      const ranked = this.keywordIndex.search(pattern, limit * 4);
+      const recordById = new Map(
+        records.map((r) => [`${r.slug}#${r.chunkIndex}`, r]),
+      );
+      const hits: KnowledgeSearchHit[] = [];
+      for (const hit of ranked) {
+        const record = recordById.get(hit.id);
+        if (!record) continue;
+        hits.push({
+          slug: record.slug,
+          chunkIndex: record.chunkIndex,
+          text: record.text,
+        });
+        if (hits.length >= limit) break;
+      }
+      return hits;
     }
 
     let re: RegExp;
