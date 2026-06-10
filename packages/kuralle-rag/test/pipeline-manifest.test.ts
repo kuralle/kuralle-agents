@@ -118,6 +118,32 @@ describe('test:pipeline-manifest incremental ingest', () => {
     expect(freshKeyword.search('refund', 1)[0]?.id).toContain('doc-a');
   });
 
+  it('preserves the recorded embedder identity through a skip-only ingest', async () => {
+    const manifest = new InMemoryIngestManifest();
+    const store = new InMemoryVectorStore();
+    const first = makePipeline({ store, manifest });
+    await first.pipeline.ingest(docs());
+    const recorded = (await manifest.load(INDEX))?.embedder;
+    expect(recorded?.dimension).toBe(256);
+
+    // Restart with a dimension-unknown embedder (caches on first embed,
+    // which never happens when everything is skipped).
+    const lazy = new HashEmbedder({ seed: 'model-a' });
+    const lazyNoDim: typeof lazy = Object.create(lazy, {
+      dimension: { value: undefined },
+      id: { value: lazy.id },
+    });
+    const second = new RagPipeline({
+      embedder: lazyNoDim,
+      vectorStore: store,
+      chunker: createMarkdownChunker(),
+      indexName: INDEX,
+      manifest,
+    });
+    await second.ingest(docs()); // all skipped — zero embeds
+    expect((await manifest.load(INDEX))?.embedder?.dimension).toBe(256); // not erased
+  });
+
   it('persists across pipeline instances via SqlIngestManifest (restart simulation)', async () => {
     const db = new Database(':memory:');
     const sql = bunSqlExecutor(db);
