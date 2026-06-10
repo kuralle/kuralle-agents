@@ -164,7 +164,11 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
   return defineTool({
     name: 'workspace',
     description:
-      'Explore and edit the agent workspace. Ops: ls, cat, grep, find, read, write, edit.',
+      'Explore and edit the agent workspace. Cheapest first: ls/find to locate files, ' +
+      'grep for exact terms, names, codes, or keywords (returns matching lines only), ' +
+      'cat/read for full file contents. Prefer grep over semantic knowledge search when ' +
+      'the user mentions an exact term or identifier — it is faster, cheaper, and exact. ' +
+      'Ops: ls, cat, grep, find, read, write, edit.',
     timeoutMs,
     input: workspaceInput,
     execute: async (args: WorkspaceInput) => {

@@ -21,6 +21,12 @@ export interface QualityCheckResult {
   avgScore: number;
   /** 0-1 estimate of how well results cover the query. */
   coverageEstimate: number;
+  /**
+   * Estimated prompt-token cost of the result set (~chars/4). Retrieval
+   * pays for itself in tokens — track this to catch a retriever that is
+   * "accurate" only by flooding the context window.
+   */
+  estimatedTokens: number;
   /** Whether the query was reformulated and re-retrieved. */
   reformulated: boolean;
   /** The reformulated query string, if reformulation occurred. */
@@ -76,12 +82,13 @@ export class RetrievalQualityChecker {
    */
   assess(results: RetrievalResult[]): Omit<QualityCheckResult, 'reformulated' | 'reformulatedQuery' | 'backgroundReformulation'> {
     if (results.length === 0) {
-      return { quality: 'low', topScore: 0, avgScore: 0, coverageEstimate: 0 };
+      return { quality: 'low', topScore: 0, avgScore: 0, coverageEstimate: 0, estimatedTokens: 0 };
     }
 
     const scores = results.map((r) => r.score ?? 0);
     const topScore = Math.max(...scores);
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const estimatedTokens = results.reduce((s, r) => s + Math.ceil(r.text.length / 4), 0);
 
     // Coverage: fraction of results above the medium threshold
     const aboveThreshold = scores.filter((s) => s >= this.mediumThreshold).length;
@@ -96,7 +103,7 @@ export class RetrievalQualityChecker {
       quality = 'low';
     }
 
-    return { quality, topScore, avgScore, coverageEstimate };
+    return { quality, topScore, avgScore, coverageEstimate, estimatedTokens };
   }
 
   /**
