@@ -102,9 +102,12 @@ export function createVectorRetrievalTool(options: VectorRetrievalToolOptions) {
 
   let toolDescription =
     options.description ??
-    'Search the knowledge base for relevant information. Use this when ' +
-    'you need to find specific facts, policies, or context to answer ' +
-    'the user\'s question accurately.';
+    'Semantically search the knowledge base for relevant information. Use this for ' +
+    'conceptual or paraphrased questions where you need facts, policies, or context ' +
+    'to answer accurately. If a workspace tool with grep/find is available and the ' +
+    'user mentioned an exact term, code, or identifier, prefer grep there first — ' +
+    'it is cheaper and exact; use this tool when the question needs meaning, not ' +
+    'exact matching.';
 
   if (enableAgenticFilters && filterableFields?.length) {
     const fieldDescriptions = filterableFields

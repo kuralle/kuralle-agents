@@ -22,7 +22,7 @@ Everything between a raw document and a grounded agent response: chunk documents
 - **Vector stores** — `InMemoryVectorStore`; adapters in sibling packages
 - **Retrievers** — `VectorRetriever`, `HybridRetriever`, `FusionRetriever`, `MultiHopRetriever`, `createLLMRetriever`
 - **Rerankers** — `LLMReranker`, `CohereReranker`
-- **Search** — `BM25Index` (keyword search for hybrid retrieval)
+- **Search** — `KeywordIndex` contract: `BM25Index` (in-memory) and `Fts5KeywordIndex` (persistent SQLite FTS5; survives DO hibernation)
 - **KnowledgeFs** — read-only `FileSystem` over a vector store (`@kuralle-agents/rag/fs`); see [guides/KNOWLEDGEFS.md](./guides/KNOWLEDGEFS.md)
 - **Pipeline** — `RagPipeline`, `RetrievalQualityChecker`
 - **Cache** — `RetrievalCache`, `TurnCache`, `PredictivePreFetcher`
@@ -58,18 +58,51 @@ const results = await retriever.retrieve('What is Kuralle?');
 
 ## Hybrid retrieval
 
-`HybridRetriever` combines vector and BM25 keyword search with configurable weight:
+`FusionRetriever` fuses a BM25 keyword tier with vector similarity (weighted,
+min-max normalized). The keyword tier is any `KeywordIndex`: the in-memory
+`BM25Index`, or the persistent `Fts5KeywordIndex` (SQLite FTS5 — on Cloudflare,
+Durable Object SQLite supports FTS5, so the keyword tier survives hibernation
+with zero rebuild):
 
 ```ts
-import { HybridRetriever, BM25Index } from '@kuralle-agents/rag';
+import { FusionRetriever, BM25Index, Fts5KeywordIndex } from '@kuralle-agents/rag';
 
-const bm25 = new BM25Index();
-// index documents into bm25...
+const keywordIndex = new BM25Index();           // in-memory
+// const keywordIndex = new Fts5KeywordIndex({  // persistent (DO SQLite / bun:sqlite)
+//   sql: createSqlExecutor(ctx.storage.sql),   // from @kuralle-agents/cf-agent
+// });
 
-const retriever = new HybridRetriever({
-  vectorRetriever,
-  keywordRetriever: bm25,
-  alpha: 0.7,   // 0 = keyword-only, 1 = vector-only
+const retriever = new FusionRetriever({
+  keywordIndex,
+  vectorStore,
+  embedder,
+  indexName: 'docs',
+  bm25Weight: 0.3, // 70% vector, 30% keyword
+});
+```
+
+`HybridRetriever` is the generic alternative: it fuses any set of `Retriever`s
+with reciprocal rank fusion (`sources: [{ retriever, weight }]`).
+
+## Incremental ingest + embedder lock
+
+Give `RagPipeline` a persistent `IngestManifest` and it (a) skips unchanged
+documents on re-ingest (SHA-256 content hash — zero embed calls for a stable
+corpus), (b) cleans up stale chunks of changed documents, and (c) **locks the
+index to the embedding model that built it**: ingesting or querying with a
+different model — even one with the same dimension — throws instead of
+silently corrupting relevance.
+
+```ts
+import { RagPipeline, SqlIngestManifest, InMemoryIngestManifest } from '@kuralle-agents/rag';
+
+const pipeline = new RagPipeline({
+  embedder,
+  vectorStore,
+  chunker,
+  indexName: 'docs',
+  manifest: new SqlIngestManifest({ sql }), // DO SQLite / bun:sqlite; InMemoryIngestManifest for dev
+  keywordIndex,                             // optional: kept in sync at ingest
 });
 ```
 
