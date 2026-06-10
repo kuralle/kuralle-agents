@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.9.0 (unreleased) — WhatsApp first-class: Meta API conformance, inbound coalescing, interactive-by-default
+## 0.9.0 — WhatsApp first-class: Meta API conformance, inbound coalescing, interactive-by-default
 
-Contains **breaking** `@kuralle-agents/messaging-meta` contract fixes (hence a minor bump per repo convention). Grounded in a live conformance audit of every wire payload against developers.facebook.com (June 2026; 27 findings) plus an industry survey of burst-message handling (`research/inbound-coalescing-design.md`).
+Unified bump across the graph (0.8.5 → 0.9.0). Contains **breaking** `@kuralle-agents/messaging-meta` contract fixes (minor bump per repo convention). Grounded in a live conformance audit of every wire payload against developers.facebook.com (June 2026; 27 findings) plus an industry survey of burst-message handling (`research/inbound-coalescing-design.md`).
 
 **Meta API conformance (`@kuralle-agents/messaging-meta` + `@kuralle-agents/http-client`):**
 - **Webhook reply `context` fixed** — real WhatsApp payloads send `{from, id}` (not `{message_id}`): reply correlation (`context.messageId`) was always `undefined`. Normalized properly + new `forwarded`/`frequently_forwarded`/`referred_product` (product-inquiry) fields with a typed `parseProductInquiry` accessor.
