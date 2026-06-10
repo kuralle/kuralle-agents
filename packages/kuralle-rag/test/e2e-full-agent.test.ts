@@ -156,7 +156,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
   test('Phase 2.1: Single-hop retrieval — "return policy"', async () => {
     // Query-time uses RETRIEVAL_QUERY embedder
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 5, bm25Weight: 0.3,
     });
 
@@ -171,7 +171,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
 
   test('Phase 2.2: Single-hop retrieval — "Widget X100 specs"', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 5, bm25Weight: 0.3,
     });
 
@@ -193,7 +193,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
 
   test('Phase 3.1: Multi-hop cross-document query — THE key test', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 5, bm25Weight: 0.3,
     });
 
@@ -245,7 +245,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
 
   test('Phase 3.2: Multi-hop — Pro Plan + Cloud Backup', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 5, bm25Weight: 0.3,
     });
 
@@ -280,7 +280,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
 
   test('Phase 3.3: Single-topic query bypasses decomposition', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 3, bm25Weight: 0.3,
     });
 
@@ -307,7 +307,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
 
   test('Phase 4.1: Quality check — high quality query', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 5, bm25Weight: 0.3,
     });
 
@@ -337,7 +337,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
 
   test('Phase 4.2: Quality check — off-topic query detects low quality', async () => {
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 3, bm25Weight: 0.3,
     });
 
@@ -425,7 +425,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
   test('Phase 5.1: Semantic cache with query-indexed embeddings', async () => {
     const cache = new RetrievalCache({ similarityThreshold: 0.80 });
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 5, bm25Weight: 0.3,
     });
 
@@ -500,7 +500,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
     const reranker = hasCohere ? new CohereReranker({ topK: 5 }) : undefined;
 
     const fusion = new FusionRetriever({
-      bm25, vectorStore: lanceStore, embedder: queryEmbedder,
+      keywordIndex: bm25, vectorStore: lanceStore, embedder: queryEmbedder,
       indexName: INDEX_NAME, topK: 10, bm25Weight: 0.3,
       reranker,
     });

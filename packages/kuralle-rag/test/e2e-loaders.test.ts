@@ -135,7 +135,7 @@ describe('Document Loaders E2E', () => {
     }
 
     // 4. FusionRetriever
-    const retriever = new FusionRetriever({ bm25, vectorStore, embedder, indexName: 'handbook', topK: 2 });
+    const retriever = new FusionRetriever({ keywordIndex: bm25, vectorStore, embedder, indexName: 'handbook', topK: 2 });
     const results = await retriever.retrieve('How many days of leave?');
     expect(results.length).toBeGreaterThan(0);
     // The top result should mention leave

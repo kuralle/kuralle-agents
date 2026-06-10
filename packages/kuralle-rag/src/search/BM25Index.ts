@@ -9,6 +9,8 @@
  * (2009): k1 = 1.2, b = 0.75.
  */
 
+import type { KeywordIndex } from './KeywordIndex.js';
+
 export interface BM25Document {
   /** Unique identifier for this document. */
   id: string;
@@ -54,13 +56,19 @@ const STOP_WORDS = new Set([
   'this', 'to', 'was', 'will', 'with',
 ]);
 
-function tokenize(text: string): string[] {
+/**
+ * Shared keyword tokenizer — exported so `Fts5KeywordIndex` queries are
+ * tokenized identically to `BM25Index` for ranking parity.
+ */
+export function tokenizeKeywords(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter(t => t.length >= 2 && !STOP_WORDS.has(t));
 }
+
+const tokenize = tokenizeKeywords;
 
 // ---------------------------------------------------------------------------
 // BM25Index
@@ -71,7 +79,7 @@ interface DocEntry {
   length: number;
 }
 
-export class BM25Index {
+export class BM25Index implements KeywordIndex {
   private readonly k1: number;
   private readonly b: number;
 
@@ -91,9 +99,9 @@ export class BM25Index {
     this.b = options?.b ?? 0.75;
   }
 
-  /** Number of documents in the index. */
+  /** Number of active (non-removed) documents in the index. */
   get size(): number {
-    return this.docs.length;
+    return this.idToOrdinal.size;
   }
 
   /**

@@ -160,6 +160,15 @@ export interface Embedder {
    * May be undefined if the dimension is not known until the first embed() call.
    */
   readonly dimension?: number;
+
+  /**
+   * Stable identity of the underlying embedding model, e.g.
+   * `"openai.embedding/text-embedding-3-small"`. Used by the ingest
+   * manifest to lock an index to the model that built it — two different
+   * models of the same dimension produce incompatible vector spaces, so a
+   * silent swap degrades every query without erroring.
+   */
+  readonly id?: string;
 }
 
 // -- VectorStore ------------------------------------------------------------
