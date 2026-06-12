@@ -15,6 +15,8 @@ import type { OutboundMiddleware } from './outbound.js';
 import type { InboundMessage, InteractiveMessage, MediaPayload, StatusUpdate } from './messages.js';
 import type { SendResult } from './responses.js';
 import type { PlatformClient, StatusHandler } from './client.js';
+import type { Clock, CoalesceScheduler } from '../inbound/types.js';
+import type { InboundLedger } from '../inbound/ledger.js';
 
 /**
  * Resolves an inbound message to a session identifier for the Kuralle runtime.
@@ -64,6 +66,12 @@ export interface MessagingRouterConfig {
   outbound?: OutboundMiddleware[];
   /** Pluggable window store; defaults to in-memory (fail-closed on miss). */
   windowStore?: WindowStore;
+  /** Pluggable inbound ledger; defaults to in-memory (single-process/dev). */
+  ledger?: InboundLedger;
+  /** Host scheduler port; Node defaults to an in-process no-op for M-01. */
+  scheduler?: CoalesceScheduler;
+  /** Injectable clock for deterministic pipeline tests. */
+  clock?: Clock;
   /** When set, human-owned threads skip `runtime.run` on inbound (REQ-21). */
   ownership?: OwnershipStore;
   /** When set, STOP inbound opts the customer out; outbound uses `consentGate` (REQ-11). */

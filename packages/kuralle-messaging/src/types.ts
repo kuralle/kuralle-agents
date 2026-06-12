@@ -45,3 +45,26 @@ export type {
   CoalescedInboundItem,
   StreamMapperOptions,
 } from './types/adapter.js';
+
+export type {
+  InboundEvent,
+  NormalizedWebhookError,
+  InboundRuntime,
+  TurnRunner,
+  TurnResult,
+  CoalesceScheduler,
+  Clock,
+  OutboundSender,
+  InboundOutcome,
+  InboundContext,
+  InboundNext,
+  InboundMiddleware,
+} from './inbound/types.js';
+
+export type {
+  ClaimResult,
+  ConversationKey,
+  ConvKeyStr,
+  InboundLedger,
+  SequencedInboundEvent,
+} from './inbound/ledger.js';

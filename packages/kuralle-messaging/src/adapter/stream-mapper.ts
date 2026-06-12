@@ -54,53 +54,63 @@ export class StreamMapper {
       typingActive = false;
       clearInterval(typingInterval);
 
-      const meta = await this.buildMeta(
-        options.windowStore,
-        threadId,
-        parts,
-        options.sessionId,
-        options.userId,
-      );
-
-      if (options.responseMapper) {
-        await options.responseMapper.mapResponse(parts, {
-          threadId,
-          platform: platform.platform,
-          sendText: (text) =>
-            this.sendFreeform(options.pipeline, platform, threadId, { kind: 'text', text }, meta),
-          sendInteractive: (msg) =>
-            this.sendFreeform(
-              options.pipeline,
-              platform,
-              threadId,
-              { kind: 'interactive', interactive: msg },
-              meta,
-            ),
-          sendMedia: (media) =>
-            this.sendFreeform(
-              options.pipeline,
-              platform,
-              threadId,
-              { kind: 'media', media },
-              meta,
-            ),
-        });
-      } else {
-        await this.defaultMapResponse(
-          options.pipeline,
-          platform,
-          threadId,
-          textBuffer,
-          meta,
-          parts,
-        );
-      }
+      await this.mapParts(parts, platform, threadId, options, textBuffer);
     } finally {
       typingActive = false;
       clearInterval(typingInterval);
     }
 
     return parts;
+  }
+
+  async mapParts(
+    parts: HarnessStreamPart[],
+    platform: PlatformClient,
+    threadId: string,
+    options: StreamMapperOptions,
+    textOverride?: string,
+  ): Promise<void> {
+    const text =
+      textOverride ??
+      parts
+        .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
+        .map((part) => part.delta)
+        .join('');
+    const meta = await this.buildMeta(
+      options.windowStore,
+      threadId,
+      parts,
+      options.sessionId,
+      options.userId,
+    );
+
+    if (options.responseMapper) {
+      await options.responseMapper.mapResponse(parts, {
+        threadId,
+        platform: platform.platform,
+        sendText: (message) =>
+          this.sendFreeform(options.pipeline, platform, threadId, { kind: 'text', text: message }, meta),
+        sendInteractive: (msg) =>
+          this.sendFreeform(
+            options.pipeline,
+            platform,
+            threadId,
+            { kind: 'interactive', interactive: msg },
+            meta,
+          ),
+        sendMedia: (media) =>
+          this.sendFreeform(
+            options.pipeline,
+            platform,
+            threadId,
+            { kind: 'media', media },
+            meta,
+          ),
+      });
+      return;
+    }
+
+    await this.defaultMapResponse(options.pipeline, platform, threadId, text, meta, parts);
   }
 
   private async buildMeta(

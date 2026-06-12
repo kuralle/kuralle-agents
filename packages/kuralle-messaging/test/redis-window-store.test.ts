@@ -36,8 +36,8 @@ describe('redis_window_store_only_extends', () => {
     const client = createFakeRedis();
     const store = createRedisWindowStore(client);
     const thread = 'thread-extend';
-    const laterInbound = new Date('2026-06-10T12:00:00Z');
-    const earlierInbound = new Date('2026-06-09T12:00:00Z');
+    const laterInbound = new Date(Date.now() + 60 * 60 * 1000);
+    const earlierInbound = new Date(laterInbound.getTime() - 24 * 60 * 60 * 1000);
 
     await store.recordInbound(thread, laterInbound);
     const afterLater = await store.get(thread);
