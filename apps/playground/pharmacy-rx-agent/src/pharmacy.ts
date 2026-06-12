@@ -33,6 +33,30 @@ function cartTotal(cart: CartLine[]): number {
   return Number(cart.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0).toFixed(2));
 }
 
+/** Cart is considered abandoned after this gap of inactivity (matches the WhatsApp 24h window). */
+const CART_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Cart lifecycle: if the customer returns after >24h with an unpaid cart, set
+ * those items aside (`abandonedCart`) and start them fresh — the agent then
+ * offers to resume or keep the fresh start. Returns the stashed items (if any)
+ * so the calling tool can signal `returnedAfterGap` to the model.
+ */
+function reconcileCart(state: FlowState, now: number): CartLine[] | null {
+  const cart = ensureCart(state);
+  const updatedAt = typeof state.cartUpdatedAt === 'number' ? (state.cartUpdatedAt as number) : undefined;
+  if (cart.length > 0 && updatedAt !== undefined && now - updatedAt > CART_TTL_MS) {
+    state.abandonedCart = cart;
+    state.cart = [];
+    return cart;
+  }
+  return null;
+}
+
+function summarizeCart(cart: CartLine[]): string {
+  return cart.map((l) => `${l.quantity}× ${l.name} ${l.strength}`).join(', ');
+}
+
 function emitText(emit: (part: HarnessStreamPart) => void, text: string): void {
   const id = crypto.randomUUID();
   emit({ type: 'text-start', id });
@@ -92,6 +116,8 @@ const addToCartTool = defineTool({
     if (found.stock <= 0) return { added: false as const, reason: 'out of stock' };
 
     const state = ctx!.runState.state as FlowState;
+    const now = Date.now();
+    const abandoned = reconcileCart(state, now); // stale cart from a previous visit → set aside
     const cart = ensureCart(state);
     const existing = cart.find((l) => l.id === found.id);
     if (existing) existing.quantity += quantity;
@@ -103,7 +129,13 @@ const addToCartTool = defineTool({
         quantity,
         unitPrice: found.price,
       });
-    return { added: true as const, cart, total: cartTotal(cart) };
+    state.cartUpdatedAt = now;
+    return {
+      added: true as const,
+      cart,
+      total: cartTotal(cart),
+      ...(abandoned ? { returnedAfterGap: { previousCart: summarizeCart(abandoned) } } : {}),
+    };
   },
 });
 
@@ -115,6 +147,7 @@ const removeFromCartTool = defineTool({
     const state = ctx!.runState.state as FlowState;
     const cart = ensureCart(state).filter((l) => l.id !== id);
     state.cart = cart;
+    state.cartUpdatedAt = Date.now();
     return { removed: true, cart, total: cartTotal(cart) };
   },
 });
@@ -124,8 +157,36 @@ const viewCartTool = defineTool({
   description: 'Return the current cart and its total.',
   input: z.object({}),
   execute: async (_args, ctx) => {
-    const cart = ensureCart(ctx!.runState.state as FlowState);
-    return { cart, total: cartTotal(cart) };
+    const state = ctx!.runState.state as FlowState;
+    const abandoned = reconcileCart(state, Date.now()); // expire a stale cart on return
+    const cart = ensureCart(state);
+    return {
+      cart,
+      total: cartTotal(cart),
+      ...(abandoned ? { returnedAfterGap: { previousCart: summarizeCart(abandoned) } } : {}),
+    };
+  },
+});
+
+const resumeCartTool = defineTool({
+  name: 'resume_cart',
+  description:
+    'Restore the items the customer had before they stepped away (call only after they confirm ' +
+    'they want to resume that earlier cart).',
+  input: z.object({}),
+  execute: async (_args, ctx) => {
+    const state = ctx!.runState.state as FlowState;
+    const previous = Array.isArray(state.abandonedCart) ? (state.abandonedCart as CartLine[]) : [];
+    if (previous.length === 0) return { resumed: false as const, reason: 'nothing to resume' };
+    const cart = ensureCart(state);
+    for (const line of previous) {
+      const existing = cart.find((l) => l.id === line.id);
+      if (existing) existing.quantity += line.quantity;
+      else cart.push(line);
+    }
+    state.abandonedCart = [];
+    state.cartUpdatedAt = Date.now();
+    return { resumed: true as const, cart, total: cartTotal(cart) };
   },
 });
 
@@ -168,6 +229,10 @@ const INSTRUCTIONS = [
   'confirmation is history. The cart for any new request starts EMPTY. When the customer messages again',
   '(even just "thanks"), greet them and help with their NEW request only; never re-add, re-quote, or',
   're-run items from a finished order unless they explicitly ask for them again.',
+  '',
+  'Returning customers: if a cart tool result includes "returnedAfterGap", the customer stepped away',
+  'for more than a day and their old unpaid cart was set aside. Greet them, say what was in it, and ask',
+  'whether to resume that cart (call resume_cart) or keep the fresh start — do not assume.',
 ].join('\n');
 
 export interface PharmacyAgentDeps {
@@ -193,6 +258,8 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
       );
       state.lastOrder = { orderNo, total, lines: cart };
       state.cart = [];
+      state.abandonedCart = [];
+      state.cartUpdatedAt = undefined;
       state.paymentLinkSent = false;
       return { end: 'ordered' };
     },
@@ -256,6 +323,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
     tools: {
       add_to_cart: addToCartTool,
       remove_from_cart: removeFromCartTool,
+      resume_cart: resumeCartTool,
     },
     flows: [checkoutFlow],
   });
