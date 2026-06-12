@@ -10,7 +10,6 @@ import {
   type AgentConfig,
 } from '@kuralle-agents/core';
 import { createPorulleClient, formatLkr } from './porulle.js';
-import { encodeCheckoutToken, PAYMENT_SIGNAL } from './token.js';
 
 // Live Porulle catalog (public endpoints — no key needed). Replaces inventory.ts.
 const catalog = createPorulleClient();
@@ -222,9 +221,11 @@ const INSTRUCTIONS = [
   'the cart from the conversation, and do not re-check or re-offer medicines the customer has not asked',
   'about in their current message.',
   '',
-  'Checkout: only when the customer explicitly says they want to pay for the current cart, ENTER the',
-  '"checkout" flow (do not just reply). It issues the payment link and confirms the order after payment.',
-  'Never claim payment is taken yourself.',
+  'Checkout: only when the customer explicitly says they want to pay, ENTER the "checkout" flow (do not',
+  'just reply). It returns a secure payment link — the customer pays via that link, then messages you.',
+  'When they say they have paid (or ask about their order), call check_payment: tell them the order is',
+  'confirmed ONLY if it returns paid:true; if paid:false, say payment is not received yet and to tap the',
+  'link. Never claim payment is taken yourself.',
   '',
   'A confirmed order is CLOSED — it has been paid and dispatched, and everything above that',
   'confirmation is history. The cart for any new request starts EMPTY. When the customer messages again',
@@ -238,34 +239,22 @@ const INSTRUCTIONS = [
 
 export interface PharmacyAgentDeps {
   model: LanguageModel;
-  durableObjectId: string;
-  baseUrl: string;
-  /** Path prefix for the payment callback link. Web DO uses `/pay/`; WhatsApp uses `/wa-pay/`. */
+  /** Porulle storefront key (kp_sf_…). Required for real checkout; omit to disable it. */
+  storefrontKey?: string;
+  // Legacy (unused since checkout moved to Porulle PayHere return-and-check):
+  durableObjectId?: string;
+  baseUrl?: string;
   payPath?: string;
 }
 
 export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
-  const { model, durableObjectId, baseUrl, payPath = '/pay/' } = deps;
+  const { model, storefrontKey } = deps;
+  // Keyed client for real cart/checkout against the live Porulle + PayHere backend.
+  const commerce = createPorulleClient({ apiKey: storefrontKey });
 
-  const orderComplete = action({
-    id: 'orderComplete',
-    run: async (state, ctx) => {
-      const cart = ensureCart(state);
-      const total = cartTotal(cart);
-      const orderNo = `RX-${(await ctx.uuid()).slice(0, 8).toUpperCase()}`;
-      emitText(
-        ctx.emit,
-        `✅ Payment received — order ${orderNo} (${formatLkr(total * 100)}) is confirmed and will be dispatched. Thank you!`,
-      );
-      state.lastOrder = { orderNo, total, lines: cart };
-      state.cart = [];
-      state.abandonedCart = [];
-      state.cartUpdatedAt = undefined;
-      state.paymentLinkSent = false;
-      return { end: 'ordered' };
-    },
-  });
-
+  // Checkout creates a real order + PayHere pay link, then ENDS (no durable
+  // suspend): PayHere notifies the backend, not us, so payment is confirmed by
+  // polling confirmPaid() via the check_payment tool when the customer returns.
   const checkout = action({
     id: 'checkout',
     run: async (state, ctx) => {
@@ -274,29 +263,53 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
         emitText(ctx.emit, 'Your cart is empty — add an item before checking out.');
         return { end: 'empty-cart' };
       }
-
-      // ctx.uuid() is a durable effect — called UNCONDITIONALLY so the callsite
-      // order is identical on the first pass and the post-payment replay (else the
-      // recorded signal step key would not match and the run would re-suspend).
-      const signalId = await ctx.uuid();
-      const token = encodeCheckoutToken({ doId: durableObjectId, signalId });
-      const link = `${baseUrl}${payPath}${token}`;
-
-      // Emit the link once; `paymentLinkSent` is persisted before the suspend, so
-      // the post-payment replay skips this (no double-send).
-      if (!state.paymentLinkSent) {
-        const total = cartTotal(cart);
-        const summary = cart.map((l) => `${l.quantity}× ${l.name} ${l.strength}`).join(', ');
+      if (!commerce.hasKey) {
+        emitText(ctx.emit, 'Sorry, checkout is temporarily unavailable. Please try again shortly.');
+        return { end: 'checkout-unavailable' };
+      }
+      try {
+        const order = await commerce.checkout(
+          cart.map((l) => ({ entityId: l.id, quantity: l.quantity })),
+        );
+        state.pendingOrderId = order.orderId;
+        state.pendingOrderNumber = order.orderNumber;
         emitText(
           ctx.emit,
-          `Your order: ${summary}. Total ${formatLkr(total * 100)}. Pay securely to confirm: ${link}`,
+          `Your order ${order.orderNumber}: ${summarizeCart(cart)}. Total ${formatLkr(order.grandTotal)}.\n` +
+            `Pay securely here: ${order.payUrl}\n` +
+            `Once you've paid, send me a message and I'll confirm your order.`,
         );
-        state.paymentLinkSent = true;
+        return { end: 'awaiting-payment' };
+      } catch {
+        emitText(ctx.emit, 'Something went wrong starting your payment. Please try again in a moment.');
+        return { end: 'checkout-error' };
       }
+    },
+  });
 
-      // Suspend until /pay delivers the durable `payment` signal.
-      await ctx.signal(PAYMENT_SIGNAL);
-      return orderComplete;
+  // Polled payment confirmation (PayHere → backend; we verify via the backend).
+  const checkPaymentTool = defineTool({
+    name: 'check_payment',
+    description:
+      'Check whether the customer has completed payment for their pending order. Call this when the ' +
+      'customer says they have paid, or asks about their order, after a payment link was sent.',
+    input: z.object({}),
+    execute: async (_args, ctx) => {
+      const state = ctx!.runState.state as FlowState;
+      const orderId = typeof state.pendingOrderId === 'string' ? state.pendingOrderId : undefined;
+      if (!orderId) return { paid: false as const, reason: 'no pending order' };
+      const paid = await commerce.confirmPaid(orderId);
+      if (!paid) return { paid: false as const, orderNumber: state.pendingOrderNumber };
+      const cart = ensureCart(state);
+      const orderNumber = (state.pendingOrderNumber as string) ?? orderId;
+      const result = { paid: true as const, orderNumber, total: formatLkr(cartTotal(cart) * 100) };
+      state.lastOrder = { orderNo: orderNumber, total: cartTotal(cart), lines: cart };
+      state.cart = [];
+      state.abandonedCart = [];
+      state.cartUpdatedAt = undefined;
+      state.pendingOrderId = undefined;
+      state.pendingOrderNumber = undefined;
+      return result;
     },
   });
 
@@ -306,7 +319,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
       'Take payment for the current cart and confirm the order. Enter this when the customer confirms they want to pay.',
     maxOscillations: 5,
     start: checkout,
-    nodes: [checkout, orderComplete],
+    nodes: [checkout],
   });
 
   return defineAgent({
@@ -325,6 +338,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
       add_to_cart: addToCartTool,
       remove_from_cart: removeFromCartTool,
       resume_cart: resumeCartTool,
+      check_payment: checkPaymentTool,
     },
     flows: [checkoutFlow],
   });
