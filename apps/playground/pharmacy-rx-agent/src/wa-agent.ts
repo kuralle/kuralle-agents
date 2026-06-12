@@ -27,7 +27,13 @@ import {
   type TurnResult,
 } from '@kuralle-agents/messaging';
 import { createDurableObjectInboundRuntime, createSqlExecutor } from '@kuralle-agents/cf-agent';
-import { buildPharmacyAgent } from './pharmacy.js';
+import {
+  buildPharmacyAgent,
+  isCheckoutIntent,
+  performCheckout,
+  finalizeConfirmedOrder,
+} from './pharmacy.js';
+import { createPorulleClient } from './porulle.js';
 import { SqlSessionStore } from './wa-session-store.js';
 import { PAYMENT_SIGNAL } from './token.js';
 import { recordThread, normalizeModelMessages, corsJson } from './admin.js';
@@ -233,9 +239,26 @@ function okSendResult(to: string): SendResult {
 export class PharmacyWaAgent extends DurableObject<WaEnv> {
   private readonly turnQueue = new TurnQueue();
 
+  private commerce() {
+    return createPorulleClient({
+      baseUrl: this.env.COMMERCE_API_URL,
+      apiKey: this.env.PORULLE_STOREFRONT_KEY,
+      agentCallbackSecret: this.env.AGENT_CALLBACK_SECRET,
+    });
+  }
+
+  private whatsappClient(): WhatsAppClient {
+    return createWhatsAppClient({
+      accessToken: this.env.WHATSAPP_ACCESS_TOKEN,
+      appSecret: this.env.WHATSAPP_APP_SECRET,
+      phoneNumberId: this.env.WHATSAPP_PHONE_NUMBER_ID,
+      verifyToken: this.env.WHATSAPP_VERIFY_TOKEN,
+    });
+  }
+
   private wire(key: ConversationKey) {
     const openai = createOpenAI({ apiKey: this.env.OPENAI_API_KEY });
-    const model = openai('gpt-4.1-mini'); // vision-capable: reads the prescription image
+    const model = openai('gpt-4o'); // vision + stronger instruction-following (resists history-anchored narration on checkout)
     const baseUrl = this.env.PUBLIC_URL ?? 'http://localhost:8787';
     const sessionId = conversationKeyToString(key);
 
@@ -309,8 +332,42 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
         lastRole: 'user',
         lastAt: Date.now(),
       });
+      // Deterministic checkout: a clear "checkout"/"pay" command must not depend on
+      // the LLM (which mimics history-polluted narration and never sends the link).
+      // Run it directly, bypassing the model turn.
+      if (isCheckoutIntent(inboundMessage.text)) {
+        const sessionId = conversationKeyToString(key);
+        const text = await performCheckout({
+          sessionStore: new SqlSessionStore(this.ctx.storage.sql),
+          sessionId,
+          commerce: this.commerce(),
+          durableObjectId: sessionId,
+          baseUrl: this.env.PUBLIC_URL ?? 'http://localhost:8787',
+          payPath: '/payhere-confirmed/',
+        });
+        await whatsapp.sendText(message.from, toWhatsAppText(text));
+        return new Response('ok');
+      }
       await inboundPipeline.ingest(key, messageEvent(inboundMessage), inboundRuntime);
       return new Response('ok');
+    }
+
+    // Deterministic payment confirmation (signed /payhere-confirmed → here). Gate
+    // on the md5sig-backed status, push "✅ confirmed", clear the cart. No flow.
+    if (request.method === 'POST' && url.pathname === '/wa-confirm') {
+      const body = (await request.json()) as { from: string; phoneNumberId?: string };
+      const key: ConversationKey = {
+        platform: 'whatsapp',
+        businessId: body.phoneNumberId ?? this.env.WHATSAPP_PHONE_NUMBER_ID,
+        threadId: body.from,
+      };
+      const { paid, text } = await finalizeConfirmedOrder({
+        sessionStore: new SqlSessionStore(this.ctx.storage.sql),
+        sessionId: conversationKeyToString(key),
+        commerce: this.commerce(),
+      });
+      if (paid && text) await this.whatsappClient().sendText(body.from, toWhatsAppText(text));
+      return new Response(paid ? 'ok' : 'pending', { status: paid ? 200 : 202 });
     }
 
     // Admin inbox: full message history for this user's conversation. Reached only

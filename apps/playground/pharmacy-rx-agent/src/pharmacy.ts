@@ -5,9 +5,12 @@ import {
   defineAgent,
   defineFlow,
   defineTool,
+  DURABLE_RUNS_KEY,
   type FlowState,
   type HarnessStreamPart,
   type AgentConfig,
+  type Session,
+  type SessionStore,
 } from '@kuralle-agents/core';
 import { createPorulleClient, formatLkr, type PorulleClient } from './porulle.js';
 import { encodeCheckoutToken, PAYMENT_SIGNAL } from './token.js';
@@ -296,14 +299,15 @@ const INSTRUCTIONS = [
   '',
   'Checkout has two DISTINCT steps — never confuse them:',
   '1) BEFORE any payment link exists in this chat: when the customer wants to pay or check out — including',
-  '   "yes"/"ok"/"sure" in reply to your own "ready to checkout?" — ENTER the "checkout" flow. Entering',
-  '   the flow IS what creates the order and sends the secure payment link. Do NOT call check_payment',
-  '   here, and do NOT just reply "starting checkout"/"sending the link" — that promises without doing.',
-  '2) AFTER you have already sent a payment link: only then, when the customer says they have paid (or',
-  '   asks about their order), call check_payment. Confirm the order ONLY if it returns paid:true; if',
-  '   paid:false, say payment is not received yet and to tap the link. Never claim payment yourself.',
-  'If the cart has items and the customer has already said they want to buy, enter the checkout flow',
-  'straight away — do not ask "ready to checkout?" again.',
+  '   "checkout", "i want to pay", or "yes"/"ok"/"sure" in reply to your own "ready to checkout?" — call',
+  '   the start_checkout tool. Calling it IS what creates the order and sends the secure payment link.',
+  '   Do NOT call check_payment here, and NEVER reply "starting checkout"/"sending the link shortly" in',
+  '   prose — a promise without calling start_checkout means the customer gets no link.',
+  '2) AFTER a payment link has been sent: only then, when the customer says they have paid (or asks about',
+  '   their order), call check_payment. Confirm the order ONLY if it returns paid:true; if paid:false,',
+  '   say payment is not received yet and to tap the link. Never claim payment yourself.',
+  'If the cart has items and the customer has already said they want to buy, call start_checkout straight',
+  'away — do not ask "ready to checkout?" again.',
   '',
   'A confirmed order is CLOSED — it has been paid and dispatched, and everything above that',
   'confirmation is history. The cart for any new request starts EMPTY. When the customer messages again',
@@ -314,6 +318,109 @@ const INSTRUCTIONS = [
   'for more than a day and their old unpaid cart was set aside. Greet them, say what was in it, and ask',
   'whether to resume that cart (call resume_cart) or keep the fresh start — do not assume.',
 ].join('\n');
+
+// ---------------------------------------------------------------------------
+// Deterministic checkout (channel-driven, no model).
+//
+// On a heavily history-polluted thread the LLM imitates past "payment link sent"
+// narration and refuses to call start_checkout / enter the flow — so checkout
+// silently never happens. A clear checkout command must NOT depend on the model:
+// the channel runs checkout itself (create order + send link), reading the cart
+// straight from the durable run state. Confirmation is the same signed
+// /payhere-confirmed push, finalized out-of-band here.
+// ---------------------------------------------------------------------------
+
+/** Unambiguous "take my money" commands that should checkout deterministically. */
+export function isCheckoutIntent(text: string | undefined): boolean {
+  if (!text) return false;
+  const t = text.trim().toLowerCase();
+  if (t === 'checkout' || t === 'check out' || t === 'pay' || t === 'pay now') return true;
+  return /\b(check\s?out|pay now|i (want|wanna|'?d like) to (pay|checkout|purchase|buy it)|proceed to (pay|checkout)|make (the )?payment|complete (my )?(order|purchase))\b/.test(
+    t,
+  );
+}
+
+// SessionRunStore persists each run as `durableRuns[runId] = { runState, steps }`,
+// where the cart lives at `runState.state.cart`. runId === sessionId (one run per
+// session). Read THROUGH that exact nesting or the cart reads back empty.
+function runStateOf(session: Session, sessionId: string): { state: FlowState } | undefined {
+  const runs = (session as Session & {
+    [DURABLE_RUNS_KEY]?: Record<string, { runState?: { state: FlowState } }>;
+  })[DURABLE_RUNS_KEY];
+  return runs?.[sessionId]?.runState;
+}
+
+export interface DeterministicCheckoutDeps {
+  sessionStore: SessionStore;
+  sessionId: string;
+  commerce: PorulleClient;
+  /** Encoded into the callback token so the confirm push routes back here. */
+  durableObjectId: string;
+  baseUrl: string;
+  payPath: string;
+}
+
+/**
+ * Create the order + return the message with the live PayHere link, reading the
+ * cart from the persisted run state. No flow, no model. Returns the text to send.
+ */
+export async function performCheckout(deps: DeterministicCheckoutDeps): Promise<string> {
+  const session = await deps.sessionStore.get(deps.sessionId);
+  const run = session ? runStateOf(session, deps.sessionId) : undefined;
+  const cart = (Array.isArray(run?.state.cart) ? (run!.state.cart as CartLine[]) : []).filter(
+    (l) => l.quantity > 0,
+  );
+  if (!session || !run || cart.length === 0) {
+    return 'Your cart is empty — add an item before checking out.';
+  }
+  if (!deps.commerce.hasKey) {
+    return 'Sorry, checkout is temporarily unavailable. Please try again shortly.';
+  }
+  try {
+    const order = await deps.commerce.checkout(
+      cart.map((l) => ({ entityId: l.id, quantity: l.quantity })),
+    );
+    run.state.pendingOrderId = order.orderId;
+    run.state.pendingOrderNumber = order.orderNumber;
+    const token = encodeCheckoutToken({ doId: deps.durableObjectId, signalId: order.orderId });
+    await deps.commerce.registerCallback(order.orderId, `${deps.baseUrl}${deps.payPath}${token}`);
+    await deps.sessionStore.save(session);
+    return (
+      `Your order ${order.orderNumber}: ${summarizeCart(cart)}. Total ${formatLkr(order.grandTotal)}.\n` +
+      `Pay securely here: ${order.payUrl}\n` +
+      `Once you've paid I'll confirm your order here automatically.`
+    );
+  } catch {
+    return 'Something went wrong starting your payment. Please try again in a moment.';
+  }
+}
+
+/**
+ * Out-of-band confirmation: gate on the md5sig-backed status, then clear the cart.
+ * Returns the message to push (empty when not actually paid → caller stays quiet).
+ */
+export async function finalizeConfirmedOrder(deps: {
+  sessionStore: SessionStore;
+  sessionId: string;
+  commerce: PorulleClient;
+}): Promise<{ paid: boolean; text: string }> {
+  const session = await deps.sessionStore.get(deps.sessionId);
+  const run = session ? runStateOf(session, deps.sessionId) : undefined;
+  const orderId = typeof run?.state.pendingOrderId === 'string' ? (run.state.pendingOrderId as string) : undefined;
+  if (!session || !run || !orderId) return { paid: false, text: '' };
+  if (!(await deps.commerce.confirmPaid(orderId))) return { paid: false, text: '' };
+  const cart = Array.isArray(run.state.cart) ? (run.state.cart as CartLine[]) : [];
+  const orderNumber = (run.state.pendingOrderNumber as string) ?? orderId;
+  run.state.lastOrder = { orderNo: orderNumber, total: cartTotal(cart), lines: cart };
+  run.state.cart = [];
+  run.state.abandonedCart = [];
+  run.state.cartUpdatedAt = undefined;
+  run.state.pendingOrderId = undefined;
+  run.state.pendingOrderNumber = undefined;
+  run.state.paymentLinkSent = false;
+  await deps.sessionStore.save(session);
+  return { paid: true, text: `✅ Payment received — order ${orderNumber} is confirmed and will be dispatched. Thank you!` };
+}
 
 export interface PharmacyAgentDeps {
   model: LanguageModel;
@@ -460,6 +567,22 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
     },
   });
 
+  // Checkout entry as a REGULAR tool. The model reliably calls domain tools
+  // (add_to_cart, set_item_quantity) but on a history-polluted thread it tends to
+  // narrate ("starting checkout…") instead of calling the generic enter_flow
+  // control — so checkout never starts. A tool result carrying `__enterFlow` is
+  // classified as a flow-entry by the runtime (classifyControl), so this enters
+  // the same durable checkout flow deterministically when the model calls it.
+  const startCheckoutTool = defineTool({
+    name: 'start_checkout',
+    description:
+      'Create the order and send the secure payment link. Call this AS SOON AS the customer wants to ' +
+      'pay or check out (e.g. "checkout", "i want to pay", or "yes" to your own "ready to checkout?"). ' +
+      'Never reply "starting checkout" in prose — calling this tool IS what sends the link.',
+    input: z.object({}),
+    execute: async () => ({ __enterFlow: true as const, flowName: 'checkout', reason: 'customer wants to pay' }),
+  });
+
   const checkoutFlow = defineFlow({
     name: 'checkout',
     description:
@@ -486,6 +609,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
       set_item_quantity: setItemQuantityTool,
       remove_from_cart: removeFromCartTool,
       resume_cart: resumeCartTool,
+      start_checkout: startCheckoutTool,
       check_payment: checkPaymentTool,
     },
     flows: [checkoutFlow],

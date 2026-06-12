@@ -55,7 +55,7 @@ interface Env {
 export class PharmacyAgent extends KuralleAgent<Env> {
   protected getAgents(): HarnessConfig['agents'] {
     const openai = createOpenAI({ apiKey: this.env.OPENAI_API_KEY });
-    const model = openai('gpt-4.1-mini'); // vision-capable: reads the prescription image
+    const model = openai('gpt-4o'); // vision + stronger instruction-following (resists history-anchored narration on checkout)
     const baseUrl = this.env.PUBLIC_URL ?? 'http://localhost:8787';
     return [
       buildPharmacyAgent({
@@ -203,11 +203,12 @@ export default {
       const [platform, phoneNumberId, from] = token.doId.split(':');
       let res: Response;
       if (platform === 'whatsapp' && phoneNumberId && from) {
+        // WhatsApp checkout is deterministic (no suspended flow) → finalize out-of-band.
         const stub = env.PharmacyWa.get(env.PharmacyWa.idFromName(`wa:${phoneNumberId}:${from}`));
-        res = await stub.fetch('https://do/wa-resume', {
+        res = await stub.fetch('https://do/wa-confirm', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ from, phoneNumberId, signalId: token.signalId }),
+          body: JSON.stringify({ from, phoneNumberId }),
         });
       } else {
         const stub = env.PharmacyAgent.get(env.PharmacyAgent.idFromString(token.doId));
