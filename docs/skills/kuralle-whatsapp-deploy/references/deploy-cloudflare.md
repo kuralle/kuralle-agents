@@ -1,43 +1,51 @@
 # Deploy a WhatsApp bot on Cloudflare Workers
 
-This is the path to recommend when the bot has a **durable, human-in-the-loop step** (payment link, approval, anything that suspends and resumes later) — Cloudflare Durable Objects give you per-user isolation and a free durable store with zero external database.
+Recommended when the bot has a **durable, human-in-the-loop step** (payment link, approval) — Durable Objects give per-user isolation and a free durable store with no external database. The DO runs the **shared `@kuralle-agents/messaging` inbound pipeline** and is **Cloudflare-native**: it adopts Cloudflare `agents`' own `TurnQueue` (serialization), `messageConcurrency` (merge/debounce), and `Agent.schedule()` alarms rather than hand-rolling them.
 
 ## The shape
 
-- A **Worker fetch handler** verifies the Meta webhook, normalizes it, and fans each inbound message out to a **per-user Durable Object** keyed by `idFromName('wa:' + from)`.
-- Each **Durable Object** holds that user's session in **DO SQLite** (a tiny JSON-blob `SessionStore`) and runs your agent through `createRuntime`. Inbound images are downloaded → `file` part for the vision model. Replies go back via `WhatsAppClient.sendText`.
-- A **`/wa-pay/<token>`** route resumes a suspended checkout by delivering the durable signal, then pushes the confirmation over WhatsApp.
+- A **Worker fetch handler** verifies the Meta webhook, normalizes it, and fans each message out to a **per-user Durable Object** keyed **tenant-scoped**: `idFromName('wa:{phoneNumberId}:{from}')` (so the same customer under two business numbers stays isolated).
+- Each **Durable Object** builds an `InboundRuntime` over DO-SQLite (`createDurableObjectInboundRuntime`) and runs the shared `createInboundPipeline([...])`. You get **dedup, ordering, window-guard, consent/STOP, coalescing, status/reaction/error handling for free** — the pipeline owns them.
+- **`/wa-pay/<token>`** appends a durable `signal` event → resumes the suspended checkout → pushes the confirmation over WhatsApp.
 
 ```
 POST /messaging/whatsapp/webhook
   → verifySignature → normalizeWebhook
-  → PharmacyWa.idFromName('wa:' + from).fetch('/whatsapp')
-      → SqlSessionStore (DO SQLite: cart + durable effect log)
-      → runtime.run(yourAgent)  →  WhatsAppClient.sendText
-  ↺ /wa-pay/<token> → same DO → runtime.run({ signalDelivery }) → "✅ done" via WhatsApp
+  → PharmacyWa.idFromName('wa:{phoneNumberId}:{from}').fetch('/whatsapp')
+      → createInboundPipeline([ claimAndAppend → statusReactionErrorPhase →
+          recordWindow → consentStop → resolveAndAttachMedia → runTurn ])
+        over createDurableObjectInboundRuntime (DO-SQLite ledger/stores +
+        CF TurnQueue + messageConcurrency debounce + Agent.schedule alarms)
+      → WhatsAppOutboundSender.send  (markdown → WhatsApp formatting)
+  ↺ /wa-pay/<token> → same DO → signal event → resume → "✅ confirmed" via WhatsApp
 ```
 
-## Why this is durable without a database
+## Why this is durable + production-safe without a database
 
-The runtime stores the run state **and** the exactly-once effect log inside the Session object (`session.durableRuns`, a plain JSON key). So persisting the Session persists everything needed for suspend/resume + idempotent retries. DO SQLite is that persistence. A re-clicked payment link is safe — the effect log dedupes it.
+- The runtime stores run state + the exactly-once effect log inside the Session (`session.durableRuns`), persisted by `SqlSessionStore` (DO SQLite). Suspend/resume + idempotent retries come for free.
+- The **`InboundLedger`** (DO-SQLite) gives **atomic claim** (`claimed | duplicate | in_progress`): a Meta at-least-once retry or a re-clicked `/wa-pay` is a no-op — exactly-once inbound.
+- **Cloudflare's `agents` primitives do the concurrency**: `TurnQueue` serializes turns per user; `messageConcurrency` (e.g. `{strategy:'debounce', debounceMs:50}`) merges a burst into one turn; `Agent.schedule()` backs any timed work. We do **not** ship a parallel scheduler — don't fight the platform.
 
 ## Files to copy (in `assets/templates/cloudflare/`)
 
 | File | What it is |
 |---|---|
-| `wa-session-store.ts` | `SqlSessionStore` — DO-SQLite `SessionStore` that JSON-serializes the Session and revives `Date` fields on read. **Reusable verbatim.** |
-| `wa-turn.ts` | Channel I/O: `buildWhatsAppInput` (image → `file` part), `runWhatsAppTurn`, `resumeWhatsAppPayment`. Pure functions → unit-testable with a fake client. |
-| `wa-agent.ts` | `PharmacyWaAgent` Durable Object: wires `createRuntime(yourAgent)` + `createWhatsAppClient` to the turn logic. **Rename + swap in your own agent.** |
-| `webhook-routes.snippet.ts` | The Worker fetch-handler routes (GET verify / POST inbound / `/wa-pay`). |
-| `wrangler.snippet.jsonc` | The DO binding + SQLite migration + the secrets list. |
+| `wa-agent.ts` | `PharmacyWaAgent` Durable Object: builds `createDurableObjectInboundRuntime` (DO-SQLite + CF `TurnQueue`/`messageConcurrency`) + runs `createInboundPipeline([...])`. Includes the `NormalizedMessage → InboundMessage` mapping and the `WhatsAppOutboundSender` (markdown→WhatsApp). **Rename + swap in your own agent.** |
+| `wa-session-store.ts` | `SqlSessionStore` — DO-SQLite `SessionStore` (durable cart + checkout effect log). **Reusable verbatim.** |
+| `webhook-routes.snippet.ts` | The Worker fetch-handler routes (GET verify / POST inbound tenant-scoped fan-out / `/wa-pay` resume). |
+| `wrangler.snippet.jsonc` | The `PharmacyWa` DO binding + SQLite migration + the secrets list. |
+
+> There is **no `wa-turn.ts`** anymore — the hand-rolled "download image → run → send" logic was replaced by the shared pipeline. If you see that file in an older copy, delete it.
 
 ## Adapt it to your agent
 
-1. Replace `buildPharmacyAgent(...)` in `wa-agent.ts` with your own `defineAgent`/builder. Keep the `createRuntime({ agents, defaultAgentId, sessionStore: new SqlSessionStore(this.ctx.storage.sql) })` shape.
-2. If your agent has a durable suspend step that an external link resumes (like checkout), keep `resumeWhatsAppPayment` + the `/wa-pay` route. If it doesn't, delete both — the inbound turn path is all you need.
-3. Rename the DO class consistently across `wa-agent.ts`, the `export { … }` in your entry, and `wrangler.jsonc`.
+1. In `wa-agent.ts`, replace `buildPharmacyAgent(...)` with your own `defineAgent`/builder; keep the `createRuntime(... sessionStore: new SqlSessionStore(this.ctx.storage.sql))` + `createDurableObjectInboundRuntime({...})` wiring.
+2. Keep the pipeline middleware list as-is unless you have a reason to change order (it encodes correctness: claim before run, consent before run, window-record before guard).
+3. If your agent has a durable suspend step resumed by an external link (checkout), keep the `/wa-resume` route + `signalEvent`. If not, drop them.
+4. Rename the DO class consistently across `wa-agent.ts`, the entry `export { … }`, and `wrangler.jsonc`.
+5. Tenant-scope your keys: the DO name and the `ConversationKey` use `platform + phoneNumberId + from`.
 
-`wa-turn.ts` deliberately depends only on a narrow `WhatsAppSender` interface (`sendText` + `downloadMedia`), so you can unit-test the whole turn — including image intake and resume — with a fake client and no live Meta. Do that; it's the cheapest confidence you'll get.
+`wa-agent.ts`'s outbound sender is the only WhatsApp-specific bit (markdown→`*bold*`); everything else is channel-agnostic pipeline. Unit-test the DO with the in-memory ledger/stores + a fake `OutboundSender` (see `apps/playground/pharmacy-rx-agent/src/wa.test.ts` for the adversarial suite: dup retry → one turn, two `/wa-pay` → one confirm, burst merge, eviction replay, tenant isolation).
 
 ## Deploy
 
@@ -57,11 +65,12 @@ curl "https://<worker>.workers.dev/messaging/whatsapp/webhook?hub.mode=subscribe
 # → ok
 ```
 
-Run wrangler from the worker directory (these CLIs error if run from inside a monorepo package root other than the app's own).
+Run wrangler from the worker directory.
 
 ## Gotchas specific to CF
 
-- **`ctx.waitUntil` for the turn, 200 immediately.** Running the model inside the webhook request risks Meta's retry timeout → duplicate messages. The snippet returns 200 fast and runs the turn in the background.
-- **`new_sqlite_classes` (not `new_classes`).** The session store needs SQLite-backed DOs. Bump the migration `tag` if you already have migrations.
+- **`ctx.waitUntil` for the turn, 200 immediately.** Running the model inside the webhook request risks Meta's retry timeout → duplicate deliveries. The DO's `InboundLedger.claim` also dedupes retries, but acking fast is still correct.
+- **`new_sqlite_classes` (not `new_classes`).** The DO needs SQLite for the session store + ledger. Bump the migration `tag` if you already have migrations.
 - **The DO class must be exported from the Worker's entry module**, or wrangler can't bind it.
-- **Static assets** (a web chat UI, privacy page, icon) can live in `public/` alongside this — CF serves them and the Worker handles the dynamic routes.
+- **Depend on `agents/chat`** — `TurnQueue`/`messageConcurrency` come from Cloudflare's `agents` package (already a dep of `@kuralle-agents/cf-agent`).
+- **Static assets** (web chat UI, privacy page, icon) live in `public/` alongside this — CF serves them; the Worker handles the dynamic routes. The **web chat ingress (`routeAgentRequest`/`AIChatAgent`) is a separate channel** and is not routed through this pipeline.
