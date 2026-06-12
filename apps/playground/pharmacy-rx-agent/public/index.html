@@ -2,31 +2,492 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pharmacy Rx Agent</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>💊 Pharmacy Rx Agent</title>
     <style>
-      body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
-      code { background: #f3f3f3; padding: 0.1rem 0.3rem; border-radius: 4px; }
-      pre { background: #f3f3f3; padding: 0.75rem; border-radius: 6px; overflow:auto; }
+      :root {
+        --bg: #0b141a;
+        --panel: #111b21;
+        --header: #1f2c33;
+        --bubble-in: #1f2c33;
+        --bubble-out: #005c4b;
+        --accent: #00a884;
+        --text: #e9edef;
+        --muted: #8696a0;
+        --link: #53bdeb;
+        --danger: #f15c6d;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        justify-content: center;
+      }
+      .app {
+        width: 100%;
+        max-width: 720px;
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        background: var(--panel);
+        position: relative;
+      }
+      header.bar {
+        background: var(--header);
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid #000;
+        flex: none;
+      }
+      header.bar .avatar {
+        width: 40px; height: 40px; border-radius: 50%;
+        background: var(--accent); display: grid; place-items: center; font-size: 20px; flex: none;
+      }
+      header.bar .meta { flex: 1; min-width: 0; }
+      header.bar .title { font-weight: 600; font-size: 16px; line-height: 1.2; }
+      header.bar .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+      header.bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+      header.bar .dot.online { background: var(--accent); }
+      header.bar .dot.connecting { background: #e0a800; }
+      header.bar .dot.offline { background: var(--danger); }
+      header.bar button.icon {
+        background: transparent; border: none; color: var(--muted); cursor: pointer;
+        font-size: 13px; padding: 8px 10px; border-radius: 8px;
+      }
+      header.bar button.icon:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+      .messages {
+        flex: 1; overflow-y: auto; padding: 16px 14px 8px;
+        display: flex; flex-direction: column; gap: 8px;
+        background-image: linear-gradient(rgba(11,20,26,0.96), rgba(11,20,26,0.96));
+      }
+      .empty {
+        margin: auto; text-align: center; color: var(--muted); max-width: 420px; padding: 24px;
+      }
+      .empty h2 { color: var(--text); font-size: 18px; margin: 0 0 8px; }
+      .empty p { font-size: 14px; line-height: 1.5; margin: 6px 0; }
+      .empty .chip {
+        display: inline-block; background: var(--bubble-in); color: var(--text);
+        padding: 6px 10px; border-radius: 14px; font-size: 13px; margin: 4px; cursor: pointer;
+      }
+      .empty .chip:hover { background: #2a3942; }
+
+      .row { display: flex; }
+      .row.out { justify-content: flex-end; }
+      .bubble {
+        max-width: 80%; padding: 7px 10px 8px; border-radius: 10px;
+        font-size: 14.5px; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap;
+        box-shadow: 0 1px 0.5px rgba(0,0,0,0.2); position: relative;
+      }
+      .row.in .bubble { background: var(--bubble-in); border-top-left-radius: 2px; }
+      .row.out .bubble { background: var(--bubble-out); border-top-right-radius: 2px; }
+      .bubble a { color: var(--link); text-decoration: none; }
+      .bubble a:hover { text-decoration: underline; }
+      .bubble strong { font-weight: 700; }
+      .bubble img.shot {
+        display: block; max-width: 220px; max-height: 220px; border-radius: 8px; margin: 2px 0 6px;
+      }
+      .bubble .time { font-size: 10.5px; color: var(--muted); float: right; margin: 6px 0 -4px 8px; }
+      .row.out .bubble .time { color: rgba(233,237,239,0.6); }
+
+      .pay-btn {
+        display: inline-block; margin-top: 6px; background: var(--accent); color: #04221c !important;
+        font-weight: 700; padding: 8px 14px; border-radius: 18px; text-decoration: none !important; font-size: 13.5px;
+      }
+      .pay-btn:hover { filter: brightness(1.05); }
+
+      .typing { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+      .typing span {
+        width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+        animation: blink 1.3s infinite both;
+      }
+      .typing span:nth-child(2) { animation-delay: .2s; }
+      .typing span:nth-child(3) { animation-delay: .4s; }
+      @keyframes blink { 0%,80%,100% { opacity: .3; } 40% { opacity: 1; } }
+      .tool-chip { font-size: 12.5px; color: var(--muted); font-style: italic; }
+
+      .composer {
+        flex: none; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+        background: var(--header); display: flex; align-items: flex-end; gap: 8px;
+      }
+      .composer .attachments { display: flex; gap: 6px; flex-wrap: wrap; }
+      .thumbs { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 6px 6px; }
+      .thumb { position: relative; }
+      .thumb img { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; }
+      .thumb button {
+        position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%;
+        border: none; background: #000; color: #fff; font-size: 12px; cursor: pointer; line-height: 1;
+      }
+      .composer .input-wrap { flex: 1; display: flex; flex-direction: column; }
+      .composer textarea {
+        width: 100%; resize: none; border: none; outline: none; border-radius: 18px;
+        background: var(--panel); color: var(--text); padding: 11px 14px; font-size: 15px;
+        font-family: inherit; max-height: 120px; line-height: 1.3;
+      }
+      .composer button.act {
+        flex: none; width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+        background: var(--accent); color: #04221c; font-size: 20px; display: grid; place-items: center;
+      }
+      .composer button.act:disabled { opacity: .5; cursor: default; }
+      .composer label.attach {
+        flex: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer;
+        background: var(--panel); color: var(--muted); font-size: 20px; display: grid; place-items: center;
+      }
+      .composer label.attach:hover { color: var(--text); }
+      input[type=file] { display: none; }
+      .banner {
+        background: #3a2a00; color: #ffd479; font-size: 12.5px; padding: 6px 14px; text-align: center;
+      }
     </style>
   </head>
   <body>
-    <h1>💊 Pharmacy Rx Agent</h1>
-    <p>
-      A WhatsApp-style pharmacy ordering agent on Cloudflare Durable Objects. It reads a
-      prescription image, checks inventory, manages a persistent cart, and confirms the
-      order after a payment link is hit — demonstrating <strong>multimodal intake</strong>
-      and <strong>durable human-in-the-loop checkout</strong>.
-    </p>
-    <h2>Chat endpoint (CF Agents protocol)</h2>
-    <p>One Durable Object per thread (tenant). Connect a CF Agents client to:</p>
-    <pre>/agents/pharmacy-agent/&lt;thread-id&gt;</pre>
-    <p>
-      Send a user message whose <code>parts</code> include a <code>text</code> part and a
-      <code>file</code> part (the prescription image URL + <code>mediaType</code>).
-    </p>
-    <h2>Payment callback</h2>
-    <pre>GET /pay/&lt;token&gt;</pre>
-    <p>Hitting the link delivers the durable <code>payment</code> signal and resumes the order.</p>
+    <div class="app">
+      <header class="bar">
+        <div class="avatar">💊</div>
+        <div class="meta">
+          <div class="title">Pharmacy Rx Agent</div>
+          <div class="status"><span id="dot" class="dot connecting"></span><span id="statusText">connecting…</span></div>
+        </div>
+        <button class="icon" id="newChat" title="Start a new conversation">＋ New chat</button>
+      </header>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="thumbs" id="thumbs"></div>
+      <div class="composer">
+        <label class="attach" title="Attach prescription image">📎
+          <input type="file" id="file" accept="image/*" multiple />
+        </label>
+        <div class="input-wrap">
+          <textarea id="input" rows="1" placeholder="Message — or attach a prescription photo"></textarea>
+        </div>
+        <button class="act" id="send" title="Send">➤</button>
+      </div>
+    </div>
+
+    <script>
+      // ---------------------------------------------------------------------
+      // Config + thread identity (one Durable Object per thread).
+      // ---------------------------------------------------------------------
+      const AGENT = "pharmacy-agent";
+      const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+
+      function getThread() {
+        let t = localStorage.getItem("rx-thread");
+        if (!t) { t = uid(); localStorage.setItem("rx-thread", t); }
+        return t;
+      }
+      let thread = getThread();
+      const httpBase = () => `${location.origin}/agents/${AGENT}/${thread}`;
+      const wsUrl = () => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/agents/${AGENT}/${thread}`;
+
+      // ---------------------------------------------------------------------
+      // DOM refs
+      // ---------------------------------------------------------------------
+      const $messages = document.getElementById("messages");
+      const $input = document.getElementById("input");
+      const $send = document.getElementById("send");
+      const $file = document.getElementById("file");
+      const $thumbs = document.getElementById("thumbs");
+      const $dot = document.getElementById("dot");
+      const $statusText = document.getElementById("statusText");
+      const $newChat = document.getElementById("newChat");
+
+      // ---------------------------------------------------------------------
+      // State. `messages` is the authoritative transcript (from get-messages /
+      // cf_agent_chat_messages broadcasts). `live` is the in-progress streamed
+      // assistant turn, overlaid on top until it is persisted server-side.
+      // ---------------------------------------------------------------------
+      let messages = [];
+      let live = null; // { text, tool } | null
+      let pending = []; // attached images (data URLs) staged for the next send
+      let sending = false;
+      let ws = null;
+      let reconnectTimer = null;
+
+      // ---------------------------------------------------------------------
+      // Rendering
+      // ---------------------------------------------------------------------
+      function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
+
+      // Minimal, safe markdown: escape first, then bold + autolink. Payment
+      // links (.../pay/<token>) render as a prominent "Pay securely" button.
+      function renderText(raw) {
+        let s = escapeHtml(raw);
+        s = s.replace(/^\s{0,3}#{1,6}\s+(.*)$/gm, "<strong>$1</strong>");
+        s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        s = s.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
+          if (/\/pay\//.test(url)) return `<a class="pay-btn" href="${url}" target="_blank" rel="noopener">💳 Pay securely</a>`;
+          return `<a href="${url}" target="_blank" rel="noopener">${url}</a>`;
+        });
+        return s;
+      }
+
+      function textOf(msg) {
+        return (msg.parts || []).filter((p) => p.type === "text" && p.text).map((p) => p.text).join("");
+      }
+      function imagesOf(msg) {
+        return (msg.parts || []).filter((p) => p.type === "file" && p.url && String(p.mediaType || "").startsWith("image"))
+          .map((p) => p.url);
+      }
+
+      function bubbleHtml(msg) {
+        const out = msg.role === "user";
+        const imgs = imagesOf(msg).map((u) => `<img class="shot" src="${u}" alt="attachment" />`).join("");
+        const txt = textOf(msg);
+        const body = imgs + (txt ? renderText(txt) : "");
+        if (!body) return "";
+        return `<div class="row ${out ? "out" : "in"}"><div class="bubble">${body}</div></div>`;
+      }
+
+      function render() {
+        // Empty state
+        if (messages.length === 0 && !live) {
+          $messages.innerHTML = `
+            <div class="empty">
+              <h2>👋 Welcome to the Pharmacy</h2>
+              <p>Snap or attach your <strong>prescription photo</strong> and I'll read it, check stock, and build your cart — then send a secure payment link.</p>
+              <p style="margin-top:14px">Try:</p>
+              <div>
+                <span class="chip" data-q="Do you have Amoxicillin 500mg in stock?">Amoxicillin 500mg?</span>
+                <span class="chip" data-q="What do you sell?">What do you sell?</span>
+              </div>
+            </div>`;
+          $messages.querySelectorAll(".chip").forEach((c) =>
+            c.addEventListener("click", () => { $input.value = c.dataset.q; sendMessage(); })
+          );
+          return;
+        }
+        let html = "";
+        for (const m of messages) {
+          if (m.role !== "user" && m.role !== "assistant") continue;
+          html += bubbleHtml(m);
+        }
+        if (live) {
+          const inner = live.text
+            ? renderText(live.text)
+            : `<span class="tool-chip">${live.tool || "Thinking"}</span> <span class="typing"><span></span><span></span><span></span></span>`;
+          html += `<div class="row in"><div class="bubble">${inner}</div></div>`;
+        }
+        $messages.innerHTML = html;
+        $messages.scrollTop = $messages.scrollHeight;
+      }
+
+      function renderThumbs() {
+        $thumbs.innerHTML = pending
+          .map((u, i) => `<div class="thumb"><img src="${u}" /><button data-i="${i}" title="Remove">✕</button></div>`)
+          .join("");
+        $thumbs.querySelectorAll("button").forEach((b) =>
+          b.addEventListener("click", () => { pending.splice(Number(b.dataset.i), 1); renderThumbs(); })
+        );
+      }
+
+      function setStatus(state, text) {
+        $dot.className = "dot " + state;
+        $statusText.textContent = text;
+      }
+
+      // ---------------------------------------------------------------------
+      // History (authoritative fetch) — used on load and to reconcile after a
+      // turn completes. The DO does not replay history over WS on connect.
+      // ---------------------------------------------------------------------
+      async function loadHistory() {
+        try {
+          const r = await fetch(`${httpBase()}/get-messages`);
+          if (r.ok) { messages = await r.json(); render(); }
+        } catch (e) { /* offline — keep what we have */ }
+      }
+
+      // ---------------------------------------------------------------------
+      // Image staging — downscale client-side to keep payloads (and DO storage)
+      // small while staying readable for vision.
+      // ---------------------------------------------------------------------
+      function stageFile(file) {
+        if (!file.type.startsWith("image/")) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const max = 1024;
+            let { width, height } = img;
+            if (width > max || height > max) {
+              const r = Math.min(max / width, max / height);
+              width = Math.round(width * r); height = Math.round(height * r);
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width; canvas.height = height;
+            canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+            pending.push(canvas.toDataURL("image/jpeg", 0.82));
+            renderThumbs();
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      // ---------------------------------------------------------------------
+      // WebSocket lifecycle (one socket per thread).
+      // ---------------------------------------------------------------------
+      function connect() {
+        clearTimeout(reconnectTimer);
+        setStatus("connecting", "connecting…");
+        ws = new WebSocket(wsUrl());
+
+        ws.addEventListener("open", () => setStatus("online", "online"));
+
+        ws.addEventListener("close", () => {
+          setStatus("offline", "reconnecting…");
+          reconnectTimer = setTimeout(connect, 1500);
+        });
+
+        ws.addEventListener("error", () => { /* close handler will reconnect */ });
+
+        ws.addEventListener("message", (ev) => {
+          let f;
+          try { f = JSON.parse(String(ev.data)); } catch { return; }
+
+          // Authoritative full message list — broadcast to OTHER connections
+          // (e.g. when a /pay link resumes a suspended checkout). Reconcile.
+          if (f.type === "cf_agent_chat_messages" && Array.isArray(f.messages)) {
+            messages = f.messages;
+            if (!sending) live = null;
+            render();
+            return;
+          }
+
+          if (f.type !== "cf_agent_use_chat_response") return;
+
+          if (typeof f.body === "string" && f.body) {
+            let c;
+            try { c = JSON.parse(f.body); } catch { c = null; }
+            if (c) {
+              if (c.type === "text-delta" && typeof c.delta === "string") {
+                if (!live) live = { text: "", tool: null };
+                live.text += c.delta;
+                render();
+              } else if (c.type === "text-start") {
+                if (!live) live = { text: "", tool: null };
+              } else if (c.type === "tool-input-available") {
+                if (!live) live = { text: "", tool: null };
+                live.tool = toolLabel(c.toolName);
+                render();
+              } else if (c.type === "error" || c.type === "error-text") {
+                if (!live) live = { text: "", tool: null };
+                live.text += "\n⚠️ " + (c.errorText || c.error || "Something went wrong.");
+                render();
+              }
+            }
+          }
+
+          if (f.done) finishTurn();
+        });
+      }
+
+      function toolLabel(name) {
+        return ({
+          check_inventory: "Checking inventory",
+          add_to_cart: "Adding to cart",
+          remove_from_cart: "Updating cart",
+          view_cart: "Reviewing your cart",
+        })[name] || "Working";
+      }
+
+      async function finishTurn() {
+        sending = false;
+        $send.disabled = false;
+        const streamed = live && live.text ? live.text : "";
+        // Reconcile to authoritative state. If the assistant message isn't
+        // persisted yet, keep the streamed text as a provisional bubble.
+        try {
+          const r = await fetch(`${httpBase()}/get-messages`);
+          if (r.ok) {
+            const fresh = await r.json();
+            const last = fresh[fresh.length - 1];
+            if (last && last.role === "assistant") {
+              messages = fresh;
+              live = null;
+            } else if (streamed) {
+              messages = fresh.concat([{ id: "live-" + uid(), role: "assistant", parts: [{ type: "text", text: streamed }] }]);
+              live = null;
+            } else {
+              messages = fresh; live = null;
+            }
+          } else { live = null; }
+        } catch { live = null; }
+        render();
+      }
+
+      // ---------------------------------------------------------------------
+      // Sending
+      // ---------------------------------------------------------------------
+      function sendMessage() {
+        const text = $input.value.trim();
+        if (sending) return;
+        if (!text && pending.length === 0) return;
+        if (!ws || ws.readyState !== WebSocket.OPEN) { connect(); return; }
+
+        const parts = [];
+        if (text) parts.push({ type: "text", text });
+        for (const url of pending) parts.push({ type: "file", url, mediaType: "image/jpeg", filename: "rx.jpg" });
+
+        const userMessage = { id: uid(), role: "user", parts };
+        messages.push(userMessage);
+        live = { text: "", tool: null };
+        sending = true;
+        $send.disabled = true;
+        render();
+
+        const requestId = uid();
+        ws.send(JSON.stringify({
+          type: "cf_agent_use_chat_request",
+          id: requestId,
+          init: {
+            method: "POST",
+            body: JSON.stringify({ id: requestId, messages: messages, trigger: "submit-message" }),
+          },
+        }));
+
+        $input.value = "";
+        $input.style.height = "auto";
+        pending = [];
+        renderThumbs();
+      }
+
+      // ---------------------------------------------------------------------
+      // Wire up UI
+      // ---------------------------------------------------------------------
+      $send.addEventListener("click", sendMessage);
+      $input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+      });
+      $input.addEventListener("input", () => {
+        $input.style.height = "auto";
+        $input.style.height = Math.min($input.scrollHeight, 120) + "px";
+      });
+      $file.addEventListener("change", () => {
+        for (const f of $file.files) stageFile(f);
+        $file.value = "";
+      });
+      $newChat.addEventListener("click", () => {
+        thread = uid();
+        localStorage.setItem("rx-thread", thread);
+        messages = []; live = null; pending = [];
+        renderThumbs(); render();
+        if (ws) { try { ws.close(); } catch {} }
+        connect();
+      });
+
+      // Boot
+      render();
+      loadHistory();
+      connect();
+    </script>
   </body>
 </html>
