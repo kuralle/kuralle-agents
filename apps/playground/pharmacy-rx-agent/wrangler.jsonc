@@ -12,6 +12,10 @@
       {
         "name": "PharmacyAgent",
         "class_name": "PharmacyAgent"
+      },
+      {
+        "name": "PharmacyWa",
+        "class_name": "PharmacyWaAgent"
       }
     ]
   },
@@ -19,6 +23,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["PharmacyAgent"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["PharmacyWaAgent"]
     }
   ],
   "observability": {
@@ -27,5 +35,8 @@
   "vars": {
     "PUBLIC_URL": "https://pharmacy-rx-agent.mithushancj.workers.dev"
   }
-  // OPENAI_API_KEY is a secret — set with:  wrangler secret put OPENAI_API_KEY
+  // Secrets (set with `wrangler secret put <NAME>`):
+  //   OPENAI_API_KEY
+  //   WHATSAPP_ACCESS_TOKEN  WHATSAPP_APP_SECRET
+  //   WHATSAPP_PHONE_NUMBER_ID  WHATSAPP_VERIFY_TOKEN
 }

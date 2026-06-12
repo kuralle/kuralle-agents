@@ -1,0 +1,18 @@
+{
+  // Add the per-WhatsApp-user Durable Object binding + its SQLite migration.
+  // Merge these into your existing wrangler.jsonc (keep any other DOs/bindings).
+  "durable_objects": {
+    "bindings": [
+      { "name": "PharmacyWa", "class_name": "PharmacyWaAgent" }
+    ]
+  },
+  "migrations": [
+    // bump the tag if you already have migrations
+    { "tag": "v2", "new_sqlite_classes": ["PharmacyWaAgent"] }
+  ]
+  // Secrets (NOT vars) — set with `wrangler secret put <NAME>`:
+  //   OPENAI_API_KEY
+  //   WHATSAPP_ACCESS_TOKEN  WHATSAPP_APP_SECRET
+  //   WHATSAPP_PHONE_NUMBER_ID  WHATSAPP_VERIFY_TOKEN
+  // Optionally set PUBLIC_URL in "vars" so payment links are absolute.
+}
