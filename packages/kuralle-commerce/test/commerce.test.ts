@@ -168,10 +168,9 @@ describe('create_order idempotency', () => {
     const itemsA = [
       { productId: 'p1', title: 'x', unitPrice: { amount: 1, currency: 'LKR' }, quantity: 1 },
     ];
-    expect(orderContentKey('s1', itemsA)).not.toBe(orderContentKey('s2', itemsA));
-    expect(orderContentKey('s1', itemsA)).not.toBe(
-      orderContentKey('s1', [{ ...itemsA[0]!, quantity: 2 }]),
-    );
+    const keyS1 = await orderContentKey('s1', itemsA);
+    expect(keyS1).not.toBe(await orderContentKey('s2', itemsA));
+    expect(keyS1).not.toBe(await orderContentKey('s1', [{ ...itemsA[0]!, quantity: 2 }]));
   });
 
   it('refuses an empty cart with a structured error', async () => {
