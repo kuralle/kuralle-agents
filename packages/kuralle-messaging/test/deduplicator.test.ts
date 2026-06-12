@@ -1,98 +1,73 @@
-import { describe, it, expect } from 'bun:test';
-import { MessageDeduplicator } from '../src/shared/deduplicator.js';
+import { describe, expect, it } from 'bun:test';
+import { InMemoryInboundLedger, type ConversationKey } from '../src/inbound/ledger.js';
+import type { InboundEvent } from '../src/inbound/types.js';
 
-describe('MessageDeduplicator', () => {
-  it('returns false (not duplicate) for the first call with a given ID', () => {
-    const dedup = new MessageDeduplicator();
-    expect(dedup.isDuplicate('msg-1')).toBe(false);
+const key: ConversationKey = {
+  platform: 'whatsapp',
+  businessId: 'phone-1',
+  threadId: 'user-1',
+};
+
+function message(id: string, ts = 1): InboundEvent {
+  return {
+    kind: 'message',
+    id,
+    ts,
+    data: {
+      id,
+      platform: 'whatsapp',
+      threadId: 'whatsapp:phone-1:user-1',
+      customerId: 'user-1',
+      from: { id: 'user-1' },
+      timestamp: new Date(ts),
+      type: 'text',
+      text: id,
+    },
+  };
+}
+
+describe('InMemoryInboundLedger', () => {
+  it('claims a new event and reports in_progress until complete', async () => {
+    const ledger = new InMemoryInboundLedger();
+
+    expect(await ledger.claim(key, 'msg-1')).toBe('claimed');
+    expect(await ledger.claim(key, 'msg-1')).toBe('in_progress');
+
+    await ledger.complete(key, 'msg-1');
+    expect(await ledger.claim(key, 'msg-1')).toBe('duplicate');
   });
 
-  it('returns true (duplicate) for a second call with the same ID', () => {
-    const dedup = new MessageDeduplicator();
-    dedup.isDuplicate('msg-1');
-    expect(dedup.isDuplicate('msg-1')).toBe(true);
+  it('isolates claims by platform/business/thread key', async () => {
+    const ledger = new InMemoryInboundLedger();
+    const otherPhone = { ...key, businessId: 'phone-2' };
+
+    expect(await ledger.claim(key, 'same-message-id')).toBe('claimed');
+    expect(await ledger.claim(otherPhone, 'same-message-id')).toBe('claimed');
   });
 
-  it('returns false for different IDs', () => {
-    const dedup = new MessageDeduplicator();
-    dedup.isDuplicate('msg-1');
-    expect(dedup.isDuplicate('msg-2')).toBe(false);
-    expect(dedup.isDuplicate('msg-3')).toBe(false);
+  it('appends ordered unprocessed events and advances the cursor with CAS', async () => {
+    const ledger = new InMemoryInboundLedger();
+
+    await ledger.append(key, message('early', 10));
+    await ledger.append(key, message('late', 20));
+
+    expect((await ledger.readUnprocessed(key)).map((event) => event.id)).toEqual([
+      'early',
+      'late',
+    ]);
+    expect(await ledger.commitCursor(key, 1, 1)).toBe(false);
+    expect(await ledger.commitCursor(key, 1, 0)).toBe(true);
+    expect((await ledger.readUnprocessed(key)).map((event) => event.id)).toEqual(['late']);
   });
 
-  it('treats expired entries as new (not duplicate)', async () => {
-    const dedup = new MessageDeduplicator(100, 50); // 50ms TTL
-    dedup.isDuplicate('msg-1');
-    expect(dedup.isDuplicate('msg-1')).toBe(true);
+  it('prunes events below the committed cursor after ttl', async () => {
+    const ledger = new InMemoryInboundLedger();
 
-    // Wait for the entry to expire
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    await ledger.append(key, message('a', 1));
+    await ledger.append(key, message('b', 2));
+    expect(await ledger.commitCursor(key, 1, 0)).toBe(true);
 
-    // After expiry, should be treated as new
-    expect(dedup.isDuplicate('msg-1')).toBe(false);
-  });
-
-  it('evicts oldest entries when maxSize is exceeded', () => {
-    const dedup = new MessageDeduplicator(3, 300_000);
-
-    dedup.isDuplicate('msg-1');
-    dedup.isDuplicate('msg-2');
-    dedup.isDuplicate('msg-3');
-    expect(dedup.size).toBe(3);
-
-    // Adding a 4th message should evict the oldest (msg-1)
-    dedup.isDuplicate('msg-4');
-    expect(dedup.size).toBeLessThanOrEqual(3);
-
-    // msg-1 should have been evicted, so it is no longer a duplicate
-    expect(dedup.isDuplicate('msg-1')).toBe(false);
-  });
-
-  it('size property reflects the current count', () => {
-    const dedup = new MessageDeduplicator();
-    expect(dedup.size).toBe(0);
-
-    dedup.isDuplicate('a');
-    expect(dedup.size).toBe(1);
-
-    dedup.isDuplicate('b');
-    expect(dedup.size).toBe(2);
-
-    // Duplicate check should not increase size
-    dedup.isDuplicate('a');
-    expect(dedup.size).toBe(2);
-  });
-
-  it('clear() empties the cache', () => {
-    const dedup = new MessageDeduplicator();
-    dedup.isDuplicate('msg-1');
-    dedup.isDuplicate('msg-2');
-    expect(dedup.size).toBe(2);
-
-    dedup.clear();
-    expect(dedup.size).toBe(0);
-
-    // Previously seen IDs should no longer be duplicates
-    expect(dedup.isDuplicate('msg-1')).toBe(false);
-  });
-
-  it('evicts expired entries before oldest during capacity eviction', async () => {
-    const dedup = new MessageDeduplicator(3, 50); // 50ms TTL, maxSize 3
-
-    dedup.isDuplicate('old-1');
-    dedup.isDuplicate('old-2');
-
-    // Wait for first two to expire
-    await new Promise((resolve) => setTimeout(resolve, 60));
-
-    dedup.isDuplicate('new-1');
-    expect(dedup.size).toBe(3); // old-1, old-2 still in map, new-1 added
-
-    // Adding another should evict the expired entries first
-    dedup.isDuplicate('new-2');
-
-    // Expired entries should be gone
-    expect(dedup.isDuplicate('old-1')).toBe(false);
-    expect(dedup.isDuplicate('old-2')).toBe(false);
+    expect(await ledger.prune(key, -1)).toBe(1);
+    expect((await ledger.readUnprocessed(key)).map((event) => event.id)).toEqual(['b']);
   });
 });

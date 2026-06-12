@@ -16,7 +16,7 @@ Provides the `PlatformClient` interface that every messaging vendor package impl
 - **`PlatformClient`** — interface that normalizes sending, receiving, media, webhooks, and format conversion across vendors. Implement this to add any messaging platform.
 - **`SessionResolver`** — maps inbound messages to Kuralle session IDs. Default: `{platform}:{threadId}`. Swap in `ThreadIdResolver`, `PhoneLookupResolver`, or a custom `SessionResolverChain`.
 - **`StreamMapper`** — consumes `AsyncIterable<HarnessStreamPart>`, sends typing indicators during streaming, delegates final output to a `ResponseMapper`.
-- **`MessageDeduplicator`** — LRU cache that prevents duplicate webhook processing.
+- **`InboundLedger`** — async claim/append/complete ledger for tenant-scoped inbound idempotency and ordering.
 - **`WindowTracker`** / **`WindowStore`** — tracks 24-hour messaging windows per thread; used by `createMessagingRouter` to detect expired windows.
 - **`OutboundPipeline`** + **`windowGuard`** — window-safe outbound path (see below).
 - **`createInputCoalescer`** + **`inboundCoalescing`** — optional per-thread burst coalescing before `runtime.run` (WhatsApp text-ins). Default **off**; see [Inbound coalescing](#inbound-coalescing).

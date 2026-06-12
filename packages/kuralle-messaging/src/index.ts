@@ -34,6 +34,16 @@ export type {
   ErrorContext,
   StreamMapperOptions,
   HealthCheckResult,
+  InboundEvent,
+  InboundRuntime,
+  InboundOutcome,
+  InboundMiddleware,
+  InboundContext,
+  TurnRunner,
+  TurnResult,
+  OutboundSender,
+  CoalesceScheduler,
+  Clock,
 } from './types.js';
 
 // ====================================
@@ -81,11 +91,40 @@ export { redisSetSucceeded } from './adapter/redis-client.js';
 export { createRedisWindowStore } from './adapter/redis-window-store.js';
 export type { OwnershipStore, ConversationOwner } from './adapter/ownership-store.js';
 export type { ConsentStore } from './adapter/consent-store.js';
+export {
+  InMemoryInboundLedger,
+  conversationKeyToString,
+  eventSeq,
+} from './inbound/ledger.js';
+export type {
+  ClaimResult,
+  ConversationKey,
+  ConvKeyStr,
+  InboundLedger,
+  SequencedInboundEvent,
+} from './inbound/ledger.js';
+export {
+  createInboundPipeline,
+  claimAndAppend,
+  statusReactionErrorPhase,
+  recordWindow,
+  consentStop,
+  ownershipGate,
+  resolveAndAttachMedia,
+  coalesceMessages,
+  runTurn,
+} from './inbound/pipeline.js';
+export type { CoalescedPipelineItem } from './inbound/pipeline.js';
+export {
+  PlatformMediaResolver,
+  noopCoalesceScheduler,
+  systemClock,
+} from './inbound/ports.js';
+export type { MediaResolver } from './inbound/ports.js';
 
 // ====================================
 // Shared
 // ====================================
-export { MessageDeduplicator } from './shared/deduplicator.js';
 export { passthroughFormatter } from './shared/format-base.js';
 export type { MessageFormatter } from './shared/format-base.js';
 export { MediaCache } from './shared/media-cache.js';

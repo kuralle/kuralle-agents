@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { MessageDeduplicator } from '../src/shared/deduplicator.js';
+import { InMemoryInboundLedger, type ConversationKey } from '../src/inbound/ledger.js';
+import type { InboundEvent } from '../src/inbound/types.js';
 import { WindowTracker } from '../src/adapter/window-tracker.js';
 import { defaultSessionResolver } from '../src/adapter/session-resolver.js';
 import { StreamMapper } from '../src/adapter/stream-mapper.js';
@@ -137,65 +138,56 @@ async function openWindowMapperOptions(
 }
 
 // ===========================================================================
-// Deduplicator edge cases
+// InboundLedger edge cases
 // ===========================================================================
 
-describe('MessageDeduplicator — unhappy paths', () => {
-  it('handles empty string ID', () => {
-    const dedup = new MessageDeduplicator();
-    expect(dedup.isDuplicate('')).toBe(false);
-    expect(dedup.isDuplicate('')).toBe(true);
-    expect(dedup.size).toBe(1);
+describe('InMemoryInboundLedger — unhappy paths', () => {
+  const key: ConversationKey = {
+    platform: 'whatsapp',
+    businessId: 'phone-1',
+    threadId: 'thread-1',
+  };
+
+  function event(id: string, ts = 1): InboundEvent {
+    return { kind: 'error', id, ts, data: { message: id } };
+  }
+
+  it('handles empty string event IDs', async () => {
+    const ledger = new InMemoryInboundLedger();
+    expect(await ledger.claim(key, '')).toBe('claimed');
+    expect(await ledger.claim(key, '')).toBe('in_progress');
+    await ledger.complete(key, '');
+    expect(await ledger.claim(key, '')).toBe('duplicate');
   });
 
-  it('handles very long string ID (10 000 chars)', () => {
-    const dedup = new MessageDeduplicator();
+  it('handles very long event IDs', async () => {
+    const ledger = new InMemoryInboundLedger();
     const longId = 'x'.repeat(10_000);
-    expect(dedup.isDuplicate(longId)).toBe(false);
-    expect(dedup.isDuplicate(longId)).toBe(true);
+    expect(await ledger.claim(key, longId)).toBe('claimed');
+    expect(await ledger.claim(key, longId)).toBe('in_progress');
   });
 
-  it('handles 100 rapid concurrent calls with the same ID', () => {
-    const dedup = new MessageDeduplicator();
-    const results: boolean[] = [];
-    for (let i = 0; i < 100; i++) {
-      results.push(dedup.isDuplicate('rapid-id'));
-    }
-    // First call is not a duplicate, all subsequent are duplicates
-    expect(results[0]).toBe(false);
-    expect(results.slice(1).every((r) => r === true)).toBe(true);
-    expect(dedup.size).toBe(1);
+  it('handles 100 concurrent claims with the same ID atomically', async () => {
+    const ledger = new InMemoryInboundLedger();
+    const results = await Promise.all(
+      Array.from({ length: 100 }, () => ledger.claim(key, 'rapid-id')),
+    );
+    expect(results.filter((result) => result === 'claimed')).toHaveLength(1);
+    expect(results.filter((result) => result === 'in_progress')).toHaveLength(99);
   });
 
-  it('maxSize of 1 — only tracks the last message', () => {
-    const dedup = new MessageDeduplicator(1, 300_000);
-    dedup.isDuplicate('a');
-    expect(dedup.isDuplicate('a')).toBe(true);
-
-    // Adding a second evicts the first
-    dedup.isDuplicate('b');
-    // 'a' was evicted, so it is treated as new
-    expect(dedup.isDuplicate('a')).toBe(false);
-    // But inserting 'a' just evicted 'b', so 'b' is also new
-    expect(dedup.isDuplicate('b')).toBe(false);
+  it('append is idempotent for the same event id', async () => {
+    const ledger = new InMemoryInboundLedger();
+    expect(await ledger.append(key, event('same'))).toEqual({ seq: 1 });
+    expect(await ledger.append(key, event('same'))).toEqual({ seq: 1 });
+    expect(await ledger.readUnprocessed(key)).toHaveLength(1);
   });
 
-  it('ttlMs of 0 — everything is immediately expired', () => {
-    const dedup = new MessageDeduplicator(100, 0);
-    dedup.isDuplicate('msg-1');
-    // With ttlMs=0, the entry is considered expired on the very next call
-    // because Date.now() - timestamp >= 0 is always true
-    expect(dedup.isDuplicate('msg-1')).toBe(false); // treated as new
-  });
-
-  it('maxSize of 0 — does not throw, still records entries', () => {
-    // With maxSize 0, every insertion triggers eviction of size - 0 + 1 = 1 entries,
-    // but the entry is still set after eviction
-    expect(() => {
-      const dedup = new MessageDeduplicator(0, 300_000);
-      dedup.isDuplicate('a');
-      dedup.isDuplicate('b');
-    }).not.toThrow();
+  it('tenant-scoped keys isolate identical event IDs', async () => {
+    const ledger = new InMemoryInboundLedger();
+    const other = { ...key, businessId: 'phone-2' };
+    expect(await ledger.claim(key, 'same')).toBe('claimed');
+    expect(await ledger.claim(other, 'same')).toBe('claimed');
   });
 });
 
