@@ -10,6 +10,7 @@ import {
   type AgentConfig,
 } from '@kuralle-agents/core';
 import { createPorulleClient, formatLkr, type PorulleClient } from './porulle.js';
+import { encodeCheckoutToken, PAYMENT_SIGNAL } from './token.js';
 
 // ---------------------------------------------------------------------------
 // Cart (persisted in flow/session state → DO SQLite via BridgeSessionStore)
@@ -322,24 +323,69 @@ export interface PharmacyAgentDeps {
   commerceBaseUrl?: string;
   /** Inject a commerce client (tests); defaults to a live keyed client. */
   commerce?: PorulleClient;
-  // Legacy (unused since checkout moved to Porulle PayHere return-and-check):
+  /** Shared secret to register the deterministic confirm-callback with the backend. */
+  agentCallbackSecret?: string;
+  /** This run's DO/thread id — encoded into the callback token so the confirm routes back. */
   durableObjectId?: string;
+  /** Agent's public base URL (where the backend POSTs the confirm callback). */
   baseUrl?: string;
+  /** Path of the confirm-callback receiver (default `/payhere-confirmed/`). */
   payPath?: string;
 }
 
 export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
   const { model, storefrontKey } = deps;
+  const durableObjectId = deps.durableObjectId ?? 'local';
+  const baseUrl = (deps.baseUrl ?? 'http://localhost:8787').replace(/\/+$/, '');
+  const payPath = deps.payPath ?? '/payhere-confirmed/';
   // One env-configured client for catalog + cart/checkout against the live Porulle backend.
   const commerce =
-    deps.commerce ?? createPorulleClient({ baseUrl: deps.commerceBaseUrl, apiKey: storefrontKey });
+    deps.commerce ??
+    createPorulleClient({
+      baseUrl: deps.commerceBaseUrl,
+      apiKey: storefrontKey,
+      agentCallbackSecret: deps.agentCallbackSecret,
+    });
   const checkInventoryTool = makeCheckInventoryTool(commerce);
   const addToCartTool = makeAddToCartTool(commerce);
   const setItemQuantityTool = makeSetItemQuantityTool(commerce);
 
-  // Checkout creates a real order + PayHere pay link, then ENDS (no durable
-  // suspend): PayHere notifies the backend, not us, so payment is confirmed by
-  // polling confirmPaid() via the check_payment tool when the customer returns.
+  // Confirmation node — runs when the durable `payment` signal is delivered (by
+  // the backend's signed /payhere-confirmed callback). Gates on the md5sig-backed
+  // order status so a forged signal can never flip an order to paid.
+  const orderComplete = action({
+    id: 'orderComplete',
+    run: async (state, ctx) => {
+      const orderId = typeof state.pendingOrderId === 'string' ? state.pendingOrderId : undefined;
+      const cart = ensureCart(state);
+      const paid = orderId ? await commerce.confirmPaid(orderId) : false;
+      if (!paid) {
+        emitText(
+          ctx.emit,
+          "I haven't received your payment yet — tap the link to complete it and I'll confirm here.",
+        );
+        return { end: 'not-paid' };
+      }
+      const orderNumber = (state.pendingOrderNumber as string) ?? orderId!;
+      emitText(
+        ctx.emit,
+        `✅ Payment received — order ${orderNumber} is confirmed and will be dispatched. Thank you!`,
+      );
+      state.lastOrder = { orderNo: orderNumber, total: cartTotal(cart), lines: cart };
+      state.cart = [];
+      state.abandonedCart = [];
+      state.cartUpdatedAt = undefined;
+      state.pendingOrderId = undefined;
+      state.pendingOrderNumber = undefined;
+      state.paymentLinkSent = false;
+      return { end: 'ordered' };
+    },
+  });
+
+  // Checkout creates a real Porulle order + PayHere link, registers the confirm
+  // callback, then SUSPENDS on the durable `payment` signal. PayHere notifies the
+  // backend, which POSTs the signed /payhere-confirmed callback → the signal is
+  // delivered → orderComplete runs. Deterministic: no LLM polling in the loop.
   const checkout = action({
     id: 'checkout',
     run: async (state, ctx) => {
@@ -352,23 +398,39 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
         emitText(ctx.emit, 'Sorry, checkout is temporarily unavailable. Please try again shortly.');
         return { end: 'checkout-unavailable' };
       }
-      try {
-        const order = await commerce.checkout(
-          cart.map((l) => ({ entityId: l.id, quantity: l.quantity })),
-        );
-        state.pendingOrderId = order.orderId;
-        state.pendingOrderNumber = order.orderNumber;
-        emitText(
-          ctx.emit,
-          `Your order ${order.orderNumber}: ${summarizeCart(cart)}. Total ${formatLkr(order.grandTotal)}.\n` +
-            `Pay securely here: ${order.payUrl}\n` +
-            `Once you've paid, send me a message and I'll confirm your order.`,
-        );
-        return { end: 'awaiting-payment' };
-      } catch {
-        emitText(ctx.emit, 'Something went wrong starting your payment. Please try again in a moment.');
-        return { end: 'checkout-error' };
+      // ctx.uuid() is a durable effect — call UNCONDITIONALLY so the callsite order
+      // matches on the post-payment replay (else the signal step key won't match).
+      const signalId = await ctx.uuid();
+
+      // Create the order + emit the link only once; the flag is persisted before
+      // the suspend, so the post-payment replay skips it (no second order, no
+      // double-send). commerce.checkout / registerCallback are non-durable side
+      // effects, so this guard is what keeps them exactly-once.
+      if (!state.paymentLinkSent) {
+        try {
+          const order = await commerce.checkout(
+            cart.map((l) => ({ entityId: l.id, quantity: l.quantity })),
+          );
+          state.pendingOrderId = order.orderId;
+          state.pendingOrderNumber = order.orderNumber;
+          const token = encodeCheckoutToken({ doId: durableObjectId, signalId });
+          await commerce.registerCallback(order.orderId, `${baseUrl}${payPath}${token}`);
+          emitText(
+            ctx.emit,
+            `Your order ${order.orderNumber}: ${summarizeCart(cart)}. Total ${formatLkr(order.grandTotal)}.\n` +
+              `Pay securely here: ${order.payUrl}\n` +
+              `Once you've paid I'll confirm your order here automatically.`,
+          );
+          state.paymentLinkSent = true;
+        } catch {
+          emitText(ctx.emit, 'Something went wrong starting your payment. Please try again in a moment.');
+          return { end: 'checkout-error' };
+        }
       }
+
+      // Suspend until the signed /payhere-confirmed callback delivers the signal.
+      await ctx.signal(PAYMENT_SIGNAL);
+      return orderComplete;
     },
   });
 
@@ -404,7 +466,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
       'Take payment for the current cart and confirm the order. Enter this when the customer confirms they want to pay.',
     maxOscillations: 5,
     start: checkout,
-    nodes: [checkout],
+    nodes: [checkout, orderComplete],
   });
 
   return defineAgent({

@@ -36,3 +36,32 @@ export function decodeCheckoutToken(raw: string): CheckoutToken | null {
 
 /** The durable signal name the checkout action waits on. */
 export const PAYMENT_SIGNAL = 'payment';
+
+/** Header the backend sends its HMAC-SHA256 signature in (mirrors the adapter). */
+export const AGENT_CALLBACK_SIGNATURE_HEADER = 'x-porulle-signature';
+
+/**
+ * Verify the backend's signed confirm-callback. HMAC-SHA256 over the raw body,
+ * keyed by the shared secret — must match `signAgentCallback` in the commerce
+ * adapter. Web Crypto so it runs on workerd.
+ */
+export async function verifyCallbackSignature(
+  rawBody: string,
+  signature: string,
+  secret: string,
+): Promise<boolean> {
+  if (!signature || !secret) return false;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody));
+  const expected = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
+}

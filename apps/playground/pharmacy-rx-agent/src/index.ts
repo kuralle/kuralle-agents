@@ -6,7 +6,12 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { routeAgentRequest } from 'agents';
 import { verifySignature, normalizeWebhook } from '@kuralle-agents/messaging-meta/webhooks';
 import { buildPharmacyAgent } from './pharmacy.js';
-import { decodeCheckoutToken, PAYMENT_SIGNAL } from './token.js';
+import {
+  decodeCheckoutToken,
+  PAYMENT_SIGNAL,
+  AGENT_CALLBACK_SIGNATURE_HEADER,
+  verifyCallbackSignature,
+} from './token.js';
 
 export { PharmacyWaAgent } from './wa-agent.js';
 
@@ -26,6 +31,8 @@ interface Env {
   PORULLE_STOREFRONT_KEY?: string;
   /** Commerce API base URL (custom domain). */
   COMMERCE_API_URL?: string;
+  /** Shared secret for the deterministic PayHere confirm-callback (signs/verifies). */
+  AGENT_CALLBACK_SECRET?: string;
 }
 
 /**
@@ -43,8 +50,10 @@ export class PharmacyAgent extends KuralleAgent<Env> {
         model,
         durableObjectId: this.getDurableObjectId(),
         baseUrl,
+        payPath: '/payhere-confirmed/',
         storefrontKey: this.env.PORULLE_STOREFRONT_KEY,
         commerceBaseUrl: this.env.COMMERCE_API_URL,
+        agentCallbackSecret: this.env.AGENT_CALLBACK_SECRET,
       }),
     ];
   }
@@ -102,6 +111,40 @@ export default {
         );
       }
       return new Response('OK', { status: 200 });
+    }
+
+    // Deterministic payment confirmation from the commerce backend. PayHere
+    // notifies the backend, which (once md5sig-verified) POSTs a signed callback
+    // here. We verify the HMAC, decode the token to the exact DO + signal, and
+    // deliver the durable `payment` signal — resuming the suspended checkout so
+    // it confirms WITHOUT any LLM poll. Idempotent: the effect log dedupes.
+    if (url.pathname.startsWith('/payhere-confirmed/') && request.method === 'POST') {
+      const rawBody = await request.text();
+      const signature = request.headers.get(AGENT_CALLBACK_SIGNATURE_HEADER) ?? '';
+      const ok = await verifyCallbackSignature(rawBody, signature, env.AGENT_CALLBACK_SECRET ?? '');
+      if (!ok) return new Response('Unauthorized', { status: 401 });
+
+      const token = decodeCheckoutToken(url.pathname.slice('/payhere-confirmed/'.length));
+      if (!token) return new Response('Bad token', { status: 400 });
+
+      const [platform, phoneNumberId, from] = token.doId.split(':');
+      let res: Response;
+      if (platform === 'whatsapp' && phoneNumberId && from) {
+        const stub = env.PharmacyWa.get(env.PharmacyWa.idFromName(`wa:${phoneNumberId}:${from}`));
+        res = await stub.fetch('https://do/wa-resume', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ from, phoneNumberId, signalId: token.signalId }),
+        });
+      } else {
+        const stub = env.PharmacyAgent.get(env.PharmacyAgent.idFromString(token.doId));
+        res = await stub.fetch('https://do/resume', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ signalId: token.signalId, name: PAYMENT_SIGNAL, payload: { paid: true } }),
+        });
+      }
+      return new Response(res.ok ? 'ok' : 'resume-failed', { status: res.ok ? 200 : 502 });
     }
 
     // WhatsApp payment callback. Routes to the same per-user DO (by name) and

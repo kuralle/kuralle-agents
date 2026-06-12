@@ -38,6 +38,13 @@ export interface PorulleClient {
   checkout(lines: Array<{ entityId: string; quantity: number }>): Promise<CheckoutResult>;
   /** md5sig-verified payment gate — only true once PayHere actually confirmed. */
   confirmPaid(orderId: string): Promise<boolean>;
+  /**
+   * Register the per-order callback URL the backend POSTs (signed) when PayHere
+   * confirms payment — the agent's deterministic resume trigger. Best-effort:
+   * returns false on failure (the suspended run still resumes via a poll/manual
+   * fallback). No-op + false when no callback secret is configured.
+   */
+  registerCallback(orderId: string, callbackUrl: string): Promise<boolean>;
   readonly hasKey: boolean;
 }
 
@@ -47,6 +54,8 @@ export interface PorulleClientConfig {
   apiKey?: string;
   /** Shipping address sent at checkout (demo default if omitted). */
   shippingAddress?: { line1: string; city: string; postalCode: string; country: string };
+  /** Shared secret to authenticate callback registration with the backend. */
+  agentCallbackSecret?: string;
 }
 
 const DEMO_ADDRESS = { line1: 'N/A', city: 'Colombo', postalCode: '00100', country: 'LK' };
@@ -55,6 +64,7 @@ export function createPorulleClient(config: PorulleClientConfig = {}): PorulleCl
   const baseUrl = (config.baseUrl ?? COMMERCE_API_URL).replace(/\/+$/, '');
   const apiKey = config.apiKey?.trim() || undefined;
   const shippingAddress = config.shippingAddress ?? DEMO_ADDRESS;
+  const agentCallbackSecret = config.agentCallbackSecret?.trim() || undefined;
 
   const authHeaders = (): Record<string, string> => {
     if (!apiKey) throw new Error('porulle_no_storefront_key');
@@ -122,6 +132,20 @@ export function createPorulleClient(config: PorulleClientConfig = {}): PorulleCl
       try {
         const { paid } = await getJson<{ paid: boolean }>(`/payhere/order-status/${orderId}`);
         return paid === true;
+      } catch {
+        return false;
+      }
+    },
+
+    async registerCallback(orderId, callbackUrl) {
+      if (!agentCallbackSecret) return false;
+      try {
+        const res = await fetch(`${baseUrl}/agent/orders/${orderId}/callback`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-agent-secret': agentCallbackSecret },
+          body: JSON.stringify({ url: callbackUrl }),
+        });
+        return res.ok;
       } catch {
         return false;
       }

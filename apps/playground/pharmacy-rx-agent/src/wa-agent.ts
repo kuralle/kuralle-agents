@@ -40,6 +40,7 @@ export interface WaEnv {
   WHATSAPP_VERIFY_TOKEN: string;
   PORULLE_STOREFRONT_KEY?: string;
   COMMERCE_API_URL?: string;
+  AGENT_CALLBACK_SECRET?: string;
 }
 
 type WhatsAppClient = ReturnType<typeof createWhatsAppClient>;
@@ -241,9 +242,10 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
           model,
           durableObjectId: sessionId,
           baseUrl,
-          payPath: '/wa-pay/',
+          payPath: '/payhere-confirmed/',
           storefrontKey: this.env.PORULLE_STOREFRONT_KEY,
           commerceBaseUrl: this.env.COMMERCE_API_URL,
+          agentCallbackSecret: this.env.AGENT_CALLBACK_SECRET,
         }),
       ],
       defaultAgentId: 'pharmacy',
