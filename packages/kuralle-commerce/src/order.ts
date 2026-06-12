@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { defineTool } from '@kuralle-agents/core';
 import type { AnyTool, ToolContext } from '@kuralle-agents/core';
@@ -40,12 +39,15 @@ export function createInMemoryOrderLedger(): OrderLedger {
   };
 }
 
-export function orderContentKey(sessionId: string, items: CartItem[]): string {
+export async function orderContentKey(sessionId: string, items: CartItem[]): Promise<string> {
   const lines = items
     .map((item) => `${item.productId}x${item.quantity}@${item.unitPrice.amount}${item.unitPrice.currency}`)
     .sort()
     .join('|');
-  return createHash('sha256').update(`${sessionId}::${lines}`).digest('hex').slice(0, 32);
+  // Web Crypto (global) — works on workerd without nodejs_compat, unlike node:crypto.
+  const data = new TextEncoder().encode(`${sessionId}::${lines}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
 }
 
 export interface SubmitOrderArgs {
@@ -84,7 +86,7 @@ export function createOrderTool(options: CreateOrderToolOptions): AnyTool {
       throw new Error('cart_empty');
     }
     const sessionId = ctx.session.id;
-    const contentKey = orderContentKey(sessionId, cart.items);
+    const contentKey = await orderContentKey(sessionId, cart.items);
 
     const existing = await ledger.get(contentKey);
     if (existing) {
