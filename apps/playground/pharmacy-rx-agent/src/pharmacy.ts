@@ -9,8 +9,11 @@ import {
   type HarnessStreamPart,
   type AgentConfig,
 } from '@kuralle-agents/core';
-import { matchInventory, INVENTORY } from './inventory.js';
+import { createPorulleClient, formatLkr } from './porulle.js';
 import { encodeCheckoutToken, PAYMENT_SIGNAL } from './token.js';
+
+// Live Porulle catalog (public endpoints — no key needed). Replaces inventory.ts.
+const catalog = createPorulleClient();
 
 // ---------------------------------------------------------------------------
 // Cart (persisted in flow/session state → DO SQLite via BridgeSessionStore)
@@ -79,41 +82,39 @@ const checkInventoryTool = defineTool({
     strength: z.string().optional().describe('Strength as written, e.g. "500mg"'),
   }),
   execute: async ({ name, strength }) => {
-    const m = matchInventory(name, strength);
+    const query = [name, strength].filter(Boolean).join(' ').trim();
+    const results = await catalog.searchCatalog(query, 6);
+    const matched = results.find((p) => p.inStock) ?? results[0] ?? null;
+    const toItem = (p: (typeof results)[number]) => ({
+      id: p.id, // live catalog id — pass this to add_to_cart
+      name: p.title,
+      stock: p.stock,
+      inStock: p.inStock,
+      unitPrice: formatLkr(p.priceAmount),
+    });
     return {
       requested: { name, strength },
-      inStock: m.inStock,
-      item: m.matched
-        ? {
-            id: m.matched.id,
-            name: m.matched.name,
-            strength: m.matched.strength,
-            stock: m.matched.stock,
-            unitPrice: m.matched.price,
-            rxRequired: m.matched.rxRequired,
-          }
-        : null,
-      alternatives: m.alternatives.map((a) => ({
-        id: a.id,
-        name: a.name,
-        strength: a.strength,
-        unitPrice: a.price,
-      })),
+      inStock: matched?.inStock ?? false,
+      item: matched ? toItem(matched) : null,
+      alternatives: results
+        .filter((p) => p.id !== matched?.id && p.inStock)
+        .slice(0, 2)
+        .map(toItem),
     };
   },
 });
 
 const addToCartTool = defineTool({
   name: 'add_to_cart',
-  description: 'Add an in-stock medicine to the cart by its inventory id.',
+  description: 'Add an in-stock medicine to the cart by its catalog id (from check_inventory).',
   input: z.object({
-    id: z.string().describe('Inventory id from check_inventory (e.g. "amoxicillin-500")'),
+    id: z.string().describe('Catalog id from check_inventory (a uuid)'),
     quantity: z.number().int().positive().default(1),
   }),
   execute: async ({ id, quantity }, ctx) => {
-    const found = INVENTORY.find((it) => it.id === id) ?? null;
+    const found = await catalog.getProduct(id);
     if (!found) return { added: false as const, reason: 'unknown item id' };
-    if (found.stock <= 0) return { added: false as const, reason: 'out of stock' };
+    if (!found.inStock || found.stock <= 0) return { added: false as const, reason: 'out of stock' };
 
     const state = ctx!.runState.state as FlowState;
     const now = Date.now();
@@ -124,16 +125,16 @@ const addToCartTool = defineTool({
     else
       cart.push({
         id: found.id,
-        name: found.name,
-        strength: found.strength,
+        name: found.title,
+        strength: '',
         quantity,
-        unitPrice: found.price,
+        unitPrice: found.priceAmount / 100, // store LKR rupees for display
       });
     state.cartUpdatedAt = now;
     return {
       added: true as const,
       cart,
-      total: cartTotal(cart),
+      total: formatLkr(cartTotal(cart) * 100),
       ...(abandoned ? { returnedAfterGap: { previousCart: summarizeCart(abandoned) } } : {}),
     };
   },
@@ -148,7 +149,7 @@ const removeFromCartTool = defineTool({
     const cart = ensureCart(state).filter((l) => l.id !== id);
     state.cart = cart;
     state.cartUpdatedAt = Date.now();
-    return { removed: true, cart, total: cartTotal(cart) };
+    return { removed: true, cart, total: formatLkr(cartTotal(cart) * 100) };
   },
 });
 
@@ -162,7 +163,7 @@ const viewCartTool = defineTool({
     const cart = ensureCart(state);
     return {
       cart,
-      total: cartTotal(cart),
+      total: formatLkr(cartTotal(cart) * 100),
       ...(abandoned ? { returnedAfterGap: { previousCart: summarizeCart(abandoned) } } : {}),
     };
   },
@@ -186,7 +187,7 @@ const resumeCartTool = defineTool({
     }
     state.abandonedCart = [];
     state.cartUpdatedAt = Date.now();
-    return { resumed: true as const, cart, total: cartTotal(cart) };
+    return { resumed: true as const, cart, total: formatLkr(cartTotal(cart) * 100) };
   },
 });
 
@@ -254,7 +255,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
       const orderNo = `RX-${(await ctx.uuid()).slice(0, 8).toUpperCase()}`;
       emitText(
         ctx.emit,
-        `✅ Payment received — order ${orderNo} ($${total}) is confirmed and will be dispatched. Thank you!`,
+        `✅ Payment received — order ${orderNo} (${formatLkr(total * 100)}) is confirmed and will be dispatched. Thank you!`,
       );
       state.lastOrder = { orderNo, total, lines: cart };
       state.cart = [];
@@ -288,7 +289,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
         const summary = cart.map((l) => `${l.quantity}× ${l.name} ${l.strength}`).join(', ');
         emitText(
           ctx.emit,
-          `Your order: ${summary}. Total $${total}. Pay securely to confirm: ${link}`,
+          `Your order: ${summary}. Total ${formatLkr(total * 100)}. Pay securely to confirm: ${link}`,
         );
         state.paymentLinkSent = true;
       }
