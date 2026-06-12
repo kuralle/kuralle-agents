@@ -30,6 +30,7 @@ import { createDurableObjectInboundRuntime, createSqlExecutor } from '@kuralle-a
 import { buildPharmacyAgent } from './pharmacy.js';
 import { SqlSessionStore } from './wa-session-store.js';
 import { PAYMENT_SIGNAL } from './token.js';
+import { recordThread, normalizeModelMessages, corsJson } from './admin.js';
 
 export interface WaEnv {
   OPENAI_API_KEY: string;
@@ -41,6 +42,8 @@ export interface WaEnv {
   PORULLE_STOREFRONT_KEY?: string;
   COMMERCE_API_URL?: string;
   AGENT_CALLBACK_SECRET?: string;
+  /** Singleton registry DO indexing conversations for the admin inbox. */
+  ConversationRegistry: DurableObjectNamespace;
 }
 
 type WhatsAppClient = ReturnType<typeof createWhatsAppClient>;
@@ -297,7 +300,24 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
       // thinks. Fire-and-forget: best-effort UX, never blocks or breaks the turn.
       if (message.id) void whatsapp.markAsRead(message.id, { typing: true }).catch(() => {});
       await inboundPipeline.ingest(key, messageEvent(inboundMessage), inboundRuntime);
+      // Index this conversation for the admin inbox (best-effort).
+      void recordThread(this.env.ConversationRegistry, {
+        id: `wa:${message.phoneNumberId}:${message.from}`,
+        channel: 'whatsapp',
+        customer: message.contactName || message.from,
+        lastText: inboundMessage.text || '(media)',
+        lastRole: 'user',
+        lastAt: Date.now(),
+      });
       return new Response('ok');
+    }
+
+    // Admin inbox: full message history for this user's conversation. Reached only
+    // via the worker's authenticated /admin route (internal stub fetch).
+    if (request.method === 'GET' && url.pathname === '/admin/messages') {
+      const sessions = await new SqlSessionStore(this.ctx.storage.sql).list();
+      const messages = sessions[0]?.messages ?? [];
+      return corsJson({ data: normalizeModelMessages(messages) });
     }
 
     if (request.method === 'POST' && url.pathname === '/wa-resume') {
