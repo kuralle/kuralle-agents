@@ -9,7 +9,7 @@ import {
   type HarnessStreamPart,
   type AgentConfig,
 } from '@kuralle-agents/core';
-import { createPorulleClient, formatLkr } from './porulle.js';
+import { createPorulleClient, formatLkr, type PorulleClient } from './porulle.js';
 
 // Live Porulle catalog (public endpoints — no key needed). Replaces inventory.ts.
 const catalog = createPorulleClient();
@@ -241,6 +241,8 @@ export interface PharmacyAgentDeps {
   model: LanguageModel;
   /** Porulle storefront key (kp_sf_…). Required for real checkout; omit to disable it. */
   storefrontKey?: string;
+  /** Inject a commerce client (tests); defaults to a live keyed client. */
+  commerce?: PorulleClient;
   // Legacy (unused since checkout moved to Porulle PayHere return-and-check):
   durableObjectId?: string;
   baseUrl?: string;
@@ -250,7 +252,7 @@ export interface PharmacyAgentDeps {
 export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
   const { model, storefrontKey } = deps;
   // Keyed client for real cart/checkout against the live Porulle + PayHere backend.
-  const commerce = createPorulleClient({ apiKey: storefrontKey });
+  const commerce = deps.commerce ?? createPorulleClient({ apiKey: storefrontKey });
 
   // Checkout creates a real order + PayHere pay link, then ENDS (no durable
   // suspend): PayHere notifies the backend, not us, so payment is confirmed by
