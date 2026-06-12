@@ -7,7 +7,9 @@
  *
  * Money from the API is integer minor units of LKR (4500 = LKR 45.00).
  */
-export const COMMERCE_API_URL = 'https://kualle-porulle-commerce-api.mithushancj.workers.dev';
+// Custom domain (under the PayHere-registered apex) — required: the domain-bound
+// merchant secret only authorizes hosted checkout served from here.
+export const COMMERCE_API_URL = 'https://checkoutpay.mithushancj.com';
 
 export interface CatalogProduct {
   id: string;
