@@ -280,7 +280,7 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
       runTurn(),
     ]);
 
-    return { inboundPipeline, inboundRuntime };
+    return { inboundPipeline, inboundRuntime, whatsapp };
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -290,7 +290,10 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
       const { message } = (await request.json()) as { from: string; message: NormalizedMessage };
       const inboundMessage = toInboundMessage(message);
       const key = conversationKeyFromMessage(message);
-      const { inboundPipeline, inboundRuntime } = this.wire(key);
+      const { inboundPipeline, inboundRuntime, whatsapp } = this.wire(key);
+      // Mark the inbound message read + show a typing indicator while the model
+      // thinks. Fire-and-forget: best-effort UX, never blocks or breaks the turn.
+      if (message.id) void whatsapp.markAsRead(message.id, { typing: true }).catch(() => {});
       await inboundPipeline.ingest(key, messageEvent(inboundMessage), inboundRuntime);
       return new Response('ok');
     }
