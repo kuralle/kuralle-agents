@@ -31,12 +31,28 @@ export { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
 export { createSqlExecutor } from './sqlExecutor.js';
 export { createSSEResponse } from './StreamAdapter.js';
 export { lastUserInputFromMessages } from './cfMessageInput.js';
+export {
+  AgentScheduleCoalesceScheduler,
+  QueuedTurnRunner,
+  RuntimeTurnRunner,
+  SqlConsentStore,
+  SqlInboundLedger,
+  SqlOwnershipStore,
+  SqlWindowStore,
+  createDurableObjectInboundRuntime,
+  eventSeqFromSql,
+} from './inbound-runtime.js';
 
 export type {
   StreamAdapterConfig,
   OrchestrationState,
   SqlExecutor,
 } from './types.js';
+
+export type {
+  DurableObjectInboundRuntimeOptions,
+  ScheduleHost,
+} from './inbound-runtime.js';
 
 export { DEFAULT_STREAM_CONFIG } from './types.js';
 

@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/messaging": "workspace:*",
     "@kuralle-agents/realtime-audio": "workspace:*",
     "@cloudflare/ai-chat": "^0.8.4",
     "ai": "^6.0.90"
