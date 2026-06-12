@@ -25,9 +25,9 @@ See [`WBS.md`](./WBS.md) for the full plan and current status.
 - `src/pharmacy.ts` — flow (`assist → checkout → orderComplete`), cart, and global tools. Reused as-is by both channels.
 - `src/inventory.ts` — demo inventory + matcher.
 - `src/token.ts` — checkout-token codec (demo-grade base64url; sign it in prod).
-- `src/wa-agent.ts` — `PharmacyWaAgent`: one Durable Object per WhatsApp user; runs the same agent over DO SQLite.
-- `src/wa-turn.ts` — channel I/O: inbound image → `file` part, run turn, send reply; payment resume.
+- `src/wa-agent.ts` — `PharmacyWaAgent`: one Durable Object per WhatsApp user (tenant-scoped `wa:{phoneNumberId}:{from}`). Runs the shared `@kuralle-agents/messaging` inbound pipeline via `createDurableObjectInboundRuntime` (DO-SQLite ledger/stores + Cloudflare `agents` `TurnQueue`/`messageConcurrency`/`schedule`). Includes the `NormalizedMessage→InboundMessage` map + WhatsApp outbound formatter.
 - `src/wa-session-store.ts` — DO-SQLite `SessionStore` (durable cart + checkout effect log).
+  (The old hand-rolled `wa-turn.ts` is gone — dedup/coalescing/window/consent/turn now live in the shared pipeline.)
 - `tools/live-chat.ts` — WS harness to drive a live chat turn.
 
 ## Deploy

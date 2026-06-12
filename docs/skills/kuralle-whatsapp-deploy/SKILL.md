@@ -25,6 +25,8 @@ Two truths that shape every decision below:
 1. **Inbound images "just work."** `createMessagingRouter` (and the CF wiring here) downloads any inbound photo from Meta's CDN and attaches it as an AI-SDK `file` part — so a vision model reads a prescription/receipt/whatever with zero extra code.
 2. **WhatsApp can't edit messages**, so the SDK buffers a turn and sends ONE final message. Streaming is invisible to the user; that's expected.
 
+3. **One pipeline, both topologies.** The inbound flow (claim/dedup → window → consent/STOP → media → coalesce → run → send, + status/reaction/error) lives once in `@kuralle-agents/messaging` (`createInboundPipeline`). The **stateless Node** server (`createMessagingRouter`) and the **Cloudflare Durable Object** both run it — so the DO gets dedup, coalescing, consent, window-guard and ordering for free. On CF it's **platform-native**: the DO adopts Cloudflare `agents`' own `TurnQueue` / `messageConcurrency` / `Agent.schedule()` rather than hand-rolling. Exactly-once inbound comes from a durable `InboundLedger` (atomic claim); a Meta retry or re-clicked pay link is a no-op.
+
 For the SDK details (routing, the 24-hour window, templates, interactive buttons, media), lean on the **`kuralle-messaging`** skill. This skill is about everything *around* the code: accounts, hosting, going live.
 
 ## Step 0 — What you need before touching code
