@@ -53,7 +53,7 @@ function reconcileCart(state: FlowState, now: number): CartLine[] | null {
 }
 
 function summarizeCart(cart: CartLine[]): string {
-  return cart.map((l) => `${l.quantity}× ${l.name} ${l.strength}`).join(', ');
+  return cart.map((l) => [`${l.quantity}×`, l.name, l.strength].filter(Boolean).join(' ')).join(', ');
 }
 
 function emitText(emit: (part: HarnessStreamPart) => void, text: string): void {
@@ -105,15 +105,24 @@ const makeCheckInventoryTool = (commerce: PorulleClient) =>
 const makeAddToCartTool = (commerce: PorulleClient) =>
   defineTool({
   name: 'add_to_cart',
-  description: 'Add an in-stock medicine to the cart by its catalog id (from check_inventory).',
+  description:
+    'Add an in-stock medicine to the cart by name + strength (e.g. "Amoxicillin 500mg"). ' +
+    'You do NOT need an id — the tool resolves the product from the live catalog.',
   input: z.object({
-    id: z.string().describe('Catalog id from check_inventory (a uuid)'),
+    item: z.string().describe('Medicine name + strength, e.g. "Amoxicillin 500mg" (a catalog id also works)'),
     quantity: z.number().int().positive().default(1),
   }),
-  execute: async ({ id, quantity }, ctx) => {
-    const found = await commerce.getProduct(id);
-    if (!found) return { added: false as const, reason: 'unknown item id' };
-    if (!found.inStock || found.stock <= 0) return { added: false as const, reason: 'out of stock' };
+  execute: async ({ item, quantity }, ctx) => {
+    // Resolve by id if it looks like one, else search the catalog by name —
+    // so the model can add by name and never has to copy a UUID across turns.
+    let found = await commerce.getProduct(item);
+    if (!found) {
+      const results = await commerce.searchCatalog(item, 5);
+      found = results.find((p) => p.inStock) ?? results[0] ?? null;
+    }
+    if (!found) return { added: false as const, reason: `no catalog match for "${item}"` };
+    if (!found.inStock || found.stock <= 0)
+      return { added: false as const, reason: `${found.title} is out of stock` };
 
     const state = ctx!.runState.state as FlowState;
     const now = Date.now();
@@ -207,9 +216,10 @@ const INSTRUCTIONS = [
   'Out of stock: mention it once and offer at most ONE alternative. If the customer is not interested,',
   'let it go — do not keep proposing more options or pushing a sale.',
   '',
-  'Do not narrate your actions. Never say "I will now add this to your cart" or "I will generate a',
-  'payment link" — just call the tool; the customer sees the result. Do not restate the whole cart after',
-  'every change unless asked.',
+  'Do not narrate your actions or think out loud. NEVER say things like "I will now add this", "let me',
+  'check", "just a moment", "one moment please", "I need to check the product details" — just call the',
+  'tool silently and reply with the RESULT in one short sentence. Add items by name (e.g. add_to_cart',
+  '"Amoxicillin 500mg") — you never need an id. Do not restate the whole cart after every change.',
   '',
   'Add ONLY the exact medicines the customer names in their CURRENT message. Never add an item just',
   'because it appeared earlier in the chat or in a previous order — that is not part of this request.',
