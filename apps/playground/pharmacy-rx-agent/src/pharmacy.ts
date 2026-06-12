@@ -56,6 +56,19 @@ function summarizeCart(cart: CartLine[]): string {
   return cart.map((l) => [`${l.quantity}×`, l.name, l.strength].filter(Boolean).join(' ')).join(', ');
 }
 
+/**
+ * Typo-tolerant catalog search. The backend search is exact-substring, so a
+ * misspelling returns nothing — we retry on the first word's prefix, which still
+ * substring-matches when the START is right (covers most typos, e.g.
+ * "amoxicilin"→"amoxi"→"Amoxicillin"). The LLM also normalizes names upstream.
+ */
+async function searchFlexible(commerce: PorulleClient, query: string, limit = 6) {
+  const exact = await commerce.searchCatalog(query, limit);
+  if (exact.length > 0) return exact;
+  const head = query.trim().split(/\s+/)[0] ?? '';
+  return head.length >= 4 ? commerce.searchCatalog(head.slice(0, 5), limit) : exact;
+}
+
 function emitText(emit: (part: HarnessStreamPart) => void, text: string): void {
   const id = crypto.randomUUID();
   emit({ type: 'text-start', id });
@@ -81,7 +94,7 @@ const makeCheckInventoryTool = (commerce: PorulleClient) =>
   }),
   execute: async ({ name, strength }) => {
     const query = [name, strength].filter(Boolean).join(' ').trim();
-    const results = await commerce.searchCatalog(query, 6);
+    const results = await searchFlexible(commerce, query, 6);
     const matched = results.find((p) => p.inStock) ?? results[0] ?? null;
     const toItem = (p: (typeof results)[number]) => ({
       id: p.id, // live catalog id — pass this to add_to_cart
@@ -117,7 +130,7 @@ const makeAddToCartTool = (commerce: PorulleClient) =>
     // so the model can add by name and never has to copy a UUID across turns.
     let found = await commerce.getProduct(item);
     if (!found) {
-      const results = await commerce.searchCatalog(item, 5);
+      const results = await searchFlexible(commerce, item, 5);
       found = results.find((p) => p.inStock) ?? results[0] ?? null;
     }
     if (!found) return { added: false as const, reason: `no catalog match for "${item}"` };
@@ -147,6 +160,44 @@ const makeAddToCartTool = (commerce: PorulleClient) =>
     };
   },
 });
+
+// Set the EXACT quantity of a cart item in one call — so a correction like
+// "only 20" never becomes a remove-then-re-add flail across multiple tool calls.
+const makeSetItemQuantityTool = (commerce: PorulleClient) =>
+  defineTool({
+    name: 'set_item_quantity',
+    description:
+      'Set the exact quantity of a medicine in the cart. Use this whenever the customer corrects an ' +
+      'amount ("only 20", "make it 2", "change to 10"). Quantity 0 removes the item.',
+    input: z.object({
+      item: z.string().describe('Medicine name, e.g. "Paracetamol 500mg"'),
+      quantity: z.number().int().min(0).describe('The final quantity (0 to remove)'),
+    }),
+    execute: async ({ item, quantity }, ctx) => {
+      const state = ctx!.runState.state as FlowState;
+      const cart = ensureCart(state);
+      const q = item.toLowerCase().trim();
+      let line = cart.find(
+        (l) => l.name.toLowerCase().includes(q) || q.includes(l.name.toLowerCase()),
+      );
+      if (!line && quantity > 0) {
+        let found = await commerce.getProduct(item);
+        if (!found) {
+          const results = await searchFlexible(commerce, item, 5);
+          found = results.find((p) => p.inStock) ?? results[0] ?? null;
+        }
+        if (!found) return { updated: false as const, reason: `no catalog match for "${item}"` };
+        line = { id: found.id, name: found.title, strength: '', quantity: 0, unitPrice: found.priceAmount / 100 };
+        cart.push(line);
+      }
+      if (!line) return { updated: false as const, reason: `"${item}" is not in the cart` };
+      if (quantity <= 0) state.cart = cart.filter((l) => l !== line);
+      else line.quantity = quantity;
+      state.cartUpdatedAt = Date.now();
+      const current = ensureCart(state);
+      return { updated: true as const, cart: current, total: formatLkr(cartTotal(current) * 100) };
+    },
+  });
 
 const removeFromCartTool = defineTool({
   name: 'remove_from_cart',
@@ -213,6 +264,11 @@ const INSTRUCTIONS = [
   'strength. Call check_inventory for each, then tell the customer briefly what is available and the',
   'price. Say simply "in stock" or "out of stock" — never mention internal stock counts or inventory ids.',
   '',
+  'Spelling: customers and prescription photos often misspell medicine names. SILENTLY correct obvious',
+  'typos to the proper medicine name before calling check_inventory (e.g. "amoxicilin"→"Amoxicillin",',
+  '"paracetomol"→"Paracetamol", "metformine"→"Metformin"). If a search still finds nothing, suggest the',
+  'closest medicine you do stock and ask the customer to confirm — never just say "not found".',
+  '',
   'Out of stock: mention it once and offer at most ONE alternative. If the customer is not interested,',
   'let it go — do not keep proposing more options or pushing a sale.',
   '',
@@ -220,6 +276,12 @@ const INSTRUCTIONS = [
   'check", "just a moment", "one moment please", "I need to check the product details" — just call the',
   'tool silently and reply with the RESULT in one short sentence. Add items by name (e.g. add_to_cart',
   '"Amoxicillin 500mg") — you never need an id. Do not restate the whole cart after every change.',
+  '',
+  'ONE reply per turn: do all the tool calls you need FIRST (silently), THEN send a single short',
+  'message with the final result. Never send a play-by-play of each step in the same reply.',
+  '',
+  'Changing a quantity: when the customer corrects an amount ("only 20", "make it 2", "change to 10"),',
+  'call set_item_quantity with the FINAL number (0 to remove). Never remove-and-re-add to fix a quantity.',
   '',
   'Add ONLY the exact medicines the customer names in their CURRENT message. Never add an item just',
   'because it appeared earlier in the chat or in a previous order — that is not part of this request.',
@@ -268,6 +330,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
     deps.commerce ?? createPorulleClient({ baseUrl: deps.commerceBaseUrl, apiKey: storefrontKey });
   const checkInventoryTool = makeCheckInventoryTool(commerce);
   const addToCartTool = makeAddToCartTool(commerce);
+  const setItemQuantityTool = makeSetItemQuantityTool(commerce);
 
   // Checkout creates a real order + PayHere pay link, then ENDS (no durable
   // suspend): PayHere notifies the backend, not us, so payment is confirmed by
@@ -353,6 +416,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
     // `tools` are still model-callable in answering turns, just not mid-flow.
     tools: {
       add_to_cart: addToCartTool,
+      set_item_quantity: setItemQuantityTool,
       remove_from_cart: removeFromCartTool,
       resume_cart: resumeCartTool,
       check_payment: checkPaymentTool,
