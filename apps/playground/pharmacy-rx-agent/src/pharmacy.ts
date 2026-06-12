@@ -11,9 +11,6 @@ import {
 } from '@kuralle-agents/core';
 import { createPorulleClient, formatLkr, type PorulleClient } from './porulle.js';
 
-// Live Porulle catalog (public endpoints — no key needed). Replaces inventory.ts.
-const catalog = createPorulleClient();
-
 // ---------------------------------------------------------------------------
 // Cart (persisted in flow/session state → DO SQLite via BridgeSessionStore)
 // ---------------------------------------------------------------------------
@@ -71,7 +68,9 @@ function emitText(emit: (part: HarnessStreamPart) => void, text: string): void {
 // These mutate the persisted cart in run state.
 // ---------------------------------------------------------------------------
 
-const checkInventoryTool = defineTool({
+// Catalog tools are factories over the (env-configured) commerce client.
+const makeCheckInventoryTool = (commerce: PorulleClient) =>
+  defineTool({
   name: 'check_inventory',
   description:
     'Check whether a prescribed medicine (name + optional strength) is in stock. ' +
@@ -82,7 +81,7 @@ const checkInventoryTool = defineTool({
   }),
   execute: async ({ name, strength }) => {
     const query = [name, strength].filter(Boolean).join(' ').trim();
-    const results = await catalog.searchCatalog(query, 6);
+    const results = await commerce.searchCatalog(query, 6);
     const matched = results.find((p) => p.inStock) ?? results[0] ?? null;
     const toItem = (p: (typeof results)[number]) => ({
       id: p.id, // live catalog id — pass this to add_to_cart
@@ -101,9 +100,10 @@ const checkInventoryTool = defineTool({
         .map(toItem),
     };
   },
-});
+  });
 
-const addToCartTool = defineTool({
+const makeAddToCartTool = (commerce: PorulleClient) =>
+  defineTool({
   name: 'add_to_cart',
   description: 'Add an in-stock medicine to the cart by its catalog id (from check_inventory).',
   input: z.object({
@@ -111,7 +111,7 @@ const addToCartTool = defineTool({
     quantity: z.number().int().positive().default(1),
   }),
   execute: async ({ id, quantity }, ctx) => {
-    const found = await catalog.getProduct(id);
+    const found = await commerce.getProduct(id);
     if (!found) return { added: false as const, reason: 'unknown item id' };
     if (!found.inStock || found.stock <= 0) return { added: false as const, reason: 'out of stock' };
 
@@ -241,6 +241,8 @@ export interface PharmacyAgentDeps {
   model: LanguageModel;
   /** Porulle storefront key (kp_sf_…). Required for real checkout; omit to disable it. */
   storefrontKey?: string;
+  /** Commerce API base URL (env-configured). Defaults to COMMERCE_API_URL in porulle.ts. */
+  commerceBaseUrl?: string;
   /** Inject a commerce client (tests); defaults to a live keyed client. */
   commerce?: PorulleClient;
   // Legacy (unused since checkout moved to Porulle PayHere return-and-check):
@@ -251,8 +253,11 @@ export interface PharmacyAgentDeps {
 
 export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
   const { model, storefrontKey } = deps;
-  // Keyed client for real cart/checkout against the live Porulle + PayHere backend.
-  const commerce = deps.commerce ?? createPorulleClient({ apiKey: storefrontKey });
+  // One env-configured client for catalog + cart/checkout against the live Porulle backend.
+  const commerce =
+    deps.commerce ?? createPorulleClient({ baseUrl: deps.commerceBaseUrl, apiKey: storefrontKey });
+  const checkInventoryTool = makeCheckInventoryTool(commerce);
+  const addToCartTool = makeAddToCartTool(commerce);
 
   // Checkout creates a real order + PayHere pay link, then ENDS (no durable
   // suspend): PayHere notifies the backend, not us, so payment is confirmed by

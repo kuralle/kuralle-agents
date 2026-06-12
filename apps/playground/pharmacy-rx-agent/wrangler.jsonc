@@ -33,7 +33,8 @@
     "enabled": true
   },
   "vars": {
-    "PUBLIC_URL": "https://pharmacy-rx-agent.mithushancj.workers.dev"
+    "PUBLIC_URL": "https://pharmacy-rx-agent.mithushancj.workers.dev",
+    "COMMERCE_API_URL": "https://checkoutpay.mithushancj.com"
   }
   // Secrets (set with `wrangler secret put <NAME>`):
   //   OPENAI_API_KEY
