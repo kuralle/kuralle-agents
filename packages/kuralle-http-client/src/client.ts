@@ -68,7 +68,10 @@ export class HttpClient {
     this.retryQueue = new RetryQueue(config.retry);
     this.rateLimiter = new RateLimiter(config.rateLimiter, config.usageHeaderParser);
     this.logger = config.logger;
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    // Bind to the global scope: on workerd (Cloudflare Workers) the native
+    // `fetch` throws "Illegal invocation" if called as a method (`this.fetchImpl(...)`)
+    // because its receiver is no longer the global object.
+    this.fetchImpl = config.fetchImpl ?? fetch.bind(globalThis);
   }
 
   /** Perform a GET request and parse the JSON response. */
