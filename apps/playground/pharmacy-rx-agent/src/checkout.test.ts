@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { LanguageModel } from 'ai';
-import { buildPharmacyAgent } from './pharmacy.js';
+import { DURABLE_RUNS_KEY, type Session, type SessionStore } from '@kuralle-agents/core';
+import {
+  buildPharmacyAgent,
+  isCheckoutIntent,
+  performCheckout,
+  finalizeConfirmedOrder,
+} from './pharmacy.js';
 import type { PorulleClient } from './porulle.js';
 
 // Inject a fake commerce client so the return-and-check (check_payment) logic is
@@ -158,5 +164,76 @@ describe('checkout flow — durable suspend + deterministic confirm', () => {
     expect(textOf(parts)).not.toContain('✅');
     expect((state.cart as unknown[]).length).toBe(1);
     expect(state.pendingOrderId).toBe('o1');
+  });
+});
+
+describe('deterministic checkout (model-independent)', () => {
+  test('isCheckoutIntent recognizes clear pay/checkout commands only', () => {
+    for (const t of ['checkout', 'Checkout', 'pay now', 'i want to pay', "i'd like to checkout", 'proceed to pay', 'complete my order'])
+      expect(isCheckoutIntent(t)).toBe(true);
+    for (const t of ['hi', 'add 2 paracetamol', 'do you have metformin?', 'thanks', undefined])
+      expect(isCheckoutIntent(t)).toBe(false);
+  });
+
+  const SID = 'whatsapp:PID:9477';
+  function storeWith(cart: unknown[]): { store: SessionStore; saved: () => Session | null } {
+    let session: Session = {
+      id: SID, conversationId: SID, channelId: 'whatsapp', createdAt: new Date(), updatedAt: new Date(),
+      messages: [], workingMemory: {}, currentAgent: 'pharmacy', agentStates: {}, handoffHistory: [],
+      [DURABLE_RUNS_KEY]: { [SID]: { runState: { runId: SID, state: { cart } }, steps: [] } },
+    } as unknown as Session;
+    return {
+      store: {
+        get: async () => session,
+        save: async (s: Session) => { session = s; },
+        delete: async () => {},
+        list: async () => [session],
+      },
+      saved: () => session,
+    };
+  }
+  const commerceFake = (paid: boolean): PorulleClient => ({
+    hasKey: true, searchCatalog: async () => [], getProduct: async () => null,
+    checkout: async () => ({ orderId: 'o9', orderNumber: 'ORD-9', status: 'pending', grandTotal: 10000, currency: 'LKR', payUrl: 'https://checkoutpay/payhere/checkout/o9' }),
+    confirmPaid: async () => paid, registerCallback: async () => true,
+  });
+
+  test('performCheckout creates the order + returns the link from cart in run state', async () => {
+    const { store } = storeWith([{ id: 'o9', name: 'Paracetamol 500mg', strength: '', quantity: 20, unitPrice: 5 }]);
+    const text = await performCheckout({ sessionStore: store, sessionId: SID, commerce: commerceFake(false), durableObjectId: SID, baseUrl: 'https://agent', payPath: '/payhere-confirmed/' });
+    expect(text).toContain('ORD-9');
+    expect(text).toContain('https://checkoutpay/payhere/checkout/o9');
+  });
+
+  test('performCheckout on an empty cart asks to add an item', async () => {
+    const { store } = storeWith([]);
+    const text = await performCheckout({ sessionStore: store, sessionId: SID, commerce: commerceFake(false), durableObjectId: SID, baseUrl: 'https://agent', payPath: '/payhere-confirmed/' });
+    expect(text.toLowerCase()).toContain('cart is empty');
+  });
+
+  const stateOf = (s: Session | null): { cart: unknown[]; pendingOrderId?: string } =>
+    (s as unknown as Record<string, Record<string, { runState: { state: { cart: unknown[]; pendingOrderId?: string } } }>>)[
+      DURABLE_RUNS_KEY as unknown as string
+    ][SID].runState.state;
+
+  test('finalizeConfirmedOrder confirms + clears cart only when paid', async () => {
+    const cart = [{ id: 'o9', name: 'Paracetamol 500mg', strength: '', quantity: 20, unitPrice: 5 }];
+    const { store, saved } = storeWith(cart);
+    stateOf(saved()).pendingOrderId = 'o9';
+
+    const ok = await finalizeConfirmedOrder({ sessionStore: store, sessionId: SID, commerce: commerceFake(true) });
+    expect(ok.paid).toBe(true);
+    expect(ok.text).toContain('✅');
+    expect(stateOf(saved()).cart.length).toBe(0);
+    expect(stateOf(saved()).pendingOrderId).toBeUndefined();
+  });
+
+  test('finalizeConfirmedOrder stays silent when not actually paid (forgery gate)', async () => {
+    const { store, saved } = storeWith([{ id: 'o9', name: 'Paracetamol 500mg', strength: '', quantity: 20, unitPrice: 5 }]);
+    stateOf(saved()).pendingOrderId = 'o9';
+    const ok = await finalizeConfirmedOrder({ sessionStore: store, sessionId: SID, commerce: commerceFake(false) });
+    expect(ok.paid).toBe(false);
+    expect(ok.text).toBe('');
+    expect(stateOf(saved()).cart.length).toBe(1); // cart untouched
   });
 });
