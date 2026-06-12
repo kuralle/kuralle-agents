@@ -24,6 +24,8 @@ interface Env {
   WHATSAPP_VERIFY_TOKEN: string;
   /** Porulle storefront key for live commerce checkout. */
   PORULLE_STOREFRONT_KEY?: string;
+  /** Commerce API base URL (custom domain). */
+  COMMERCE_API_URL?: string;
 }
 
 /**
@@ -42,6 +44,7 @@ export class PharmacyAgent extends KuralleAgent<Env> {
         durableObjectId: this.getDurableObjectId(),
         baseUrl,
         storefrontKey: this.env.PORULLE_STOREFRONT_KEY,
+        commerceBaseUrl: this.env.COMMERCE_API_URL,
       }),
     ];
   }
