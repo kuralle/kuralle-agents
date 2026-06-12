@@ -299,8 +299,8 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
       // Mark the inbound message read + show a typing indicator while the model
       // thinks. Fire-and-forget: best-effort UX, never blocks or breaks the turn.
       if (message.id) void whatsapp.markAsRead(message.id, { typing: true }).catch(() => {});
-      await inboundPipeline.ingest(key, messageEvent(inboundMessage), inboundRuntime);
-      // Index this conversation for the admin inbox (best-effort).
+      // Index this conversation for the admin inbox BEFORE running the turn, so a
+      // chat still shows up even if the outbound Meta send later fails.
       void recordThread(this.env.ConversationRegistry, {
         id: `wa:${message.phoneNumberId}:${message.from}`,
         channel: 'whatsapp',
@@ -309,6 +309,7 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
         lastRole: 'user',
         lastAt: Date.now(),
       });
+      await inboundPipeline.ingest(key, messageEvent(inboundMessage), inboundRuntime);
       return new Response('ok');
     }
 
