@@ -16,6 +16,10 @@
       {
         "name": "PharmacyWa",
         "class_name": "PharmacyWaAgent"
+      },
+      {
+        "name": "ConversationRegistry",
+        "class_name": "ConversationRegistry"
       }
     ]
   },
@@ -27,6 +31,10 @@
     {
       "tag": "v2",
       "new_sqlite_classes": ["PharmacyWaAgent"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["ConversationRegistry"]
     }
   ],
   "observability": {
@@ -40,4 +48,6 @@
   //   OPENAI_API_KEY
   //   WHATSAPP_ACCESS_TOKEN  WHATSAPP_APP_SECRET
   //   WHATSAPP_PHONE_NUMBER_ID  WHATSAPP_VERIFY_TOKEN
+  //   AGENT_CALLBACK_SECRET  (shared with commerce backend)
+  //   ADMIN_TOKEN            (dashboard inbox read token)
 }

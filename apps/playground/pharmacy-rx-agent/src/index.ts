@@ -12,8 +12,16 @@ import {
   AGENT_CALLBACK_SIGNATURE_HEADER,
   verifyCallbackSignature,
 } from './token.js';
+import {
+  recordThread,
+  normalizeUiMessages,
+  corsJson,
+  corsPreflight,
+  type ThreadSummary,
+} from './admin.js';
 
 export { PharmacyWaAgent } from './wa-agent.js';
+export { ConversationRegistry } from './registry-do.js';
 
 interface Env {
   OPENAI_API_KEY: string;
@@ -33,6 +41,10 @@ interface Env {
   COMMERCE_API_URL?: string;
   /** Shared secret for the deterministic PayHere confirm-callback (signs/verifies). */
   AGENT_CALLBACK_SECRET?: string;
+  /** Singleton registry DO indexing conversations for the admin inbox. */
+  ConversationRegistry: DurableObjectNamespace;
+  /** Bearer-style token the dashboard sends to read the admin inbox. */
+  ADMIN_TOKEN?: string;
 }
 
 /**
@@ -61,6 +73,39 @@ export class PharmacyAgent extends KuralleAgent<Env> {
   protected getDefaultAgentId(): string {
     return 'pharmacy';
   }
+
+  // Index this web conversation for the admin inbox after each turn (best-effort).
+  override async onChatMessage(
+    onFinish: Parameters<KuralleAgent<Env>['onChatMessage']>[0],
+    options?: Parameters<KuralleAgent<Env>['onChatMessage']>[1],
+  ): Promise<Response> {
+    const res = await super.onChatMessage(onFinish, options);
+    const last = [...this.messages].reverse().find((m) => m.role === 'user');
+    const text = (last?.parts ?? [])
+      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map((p) => p.text)
+      .join('')
+      .trim();
+    const id = this.getDurableObjectId();
+    void recordThread(this.env.ConversationRegistry, {
+      id,
+      channel: 'web',
+      customer: `web · ${id.slice(0, 8)}`,
+      lastText: text || '(message)',
+      lastRole: 'user',
+      lastAt: Date.now(),
+    });
+    return res;
+  }
+
+  // Admin inbox: full history for this web thread (worker-authed; internal fetch).
+  override async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (request.method === 'GET' && url.pathname === '/admin/messages') {
+      return corsJson({ data: normalizeUiMessages(this.messages) });
+    }
+    return super.fetch(request);
+  }
 }
 
 function payPage(ok: boolean): string {
@@ -75,6 +120,34 @@ function payPage(ok: boolean): string {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    // ── Admin inbox API (read-only) ─────────────────────────────────────────
+    // Lets the commerce dashboard list conversations + read a thread's history.
+    // Token-gated; CORS-enabled for the dashboard origin. NOTE (demo): the token
+    // ships in the dashboard SPA, so anyone with the bundle can read — a real
+    // deploy needs proper admin auth (login/session), not a baked-in token.
+    if (url.pathname.startsWith('/admin/')) {
+      if (request.method === 'OPTIONS') return corsPreflight();
+      if (!env.ADMIN_TOKEN || request.headers.get('x-admin-token') !== env.ADMIN_TOKEN) {
+        return corsJson({ error: 'unauthorized' }, 401);
+      }
+      if (request.method === 'GET' && url.pathname === '/admin/threads') {
+        const reg = env.ConversationRegistry.get(env.ConversationRegistry.idFromName('global'));
+        const res = await reg.fetch('https://do/list');
+        const { data } = (await res.json()) as { data: ThreadSummary[] };
+        return corsJson({ data });
+      }
+      const m = url.pathname.match(/^\/admin\/threads\/([^/]+)\/messages$/);
+      if (request.method === 'GET' && m) {
+        const id = decodeURIComponent(m[1]!);
+        const stub = id.startsWith('wa:')
+          ? env.PharmacyWa.get(env.PharmacyWa.idFromName(id))
+          : env.PharmacyAgent.get(env.PharmacyAgent.idFromString(id));
+        const res = await stub.fetch('https://do/admin/messages');
+        return corsJson(await res.json());
+      }
+      return corsJson({ error: 'not found' }, 404);
+    }
 
     // ── WhatsApp channel ────────────────────────────────────────────────────
     // Meta webhook verification handshake (GET hub.challenge).
