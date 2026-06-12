@@ -38,6 +38,7 @@ export interface WaEnv {
   WHATSAPP_APP_SECRET: string;
   WHATSAPP_PHONE_NUMBER_ID: string;
   WHATSAPP_VERIFY_TOKEN: string;
+  PORULLE_STOREFRONT_KEY?: string;
 }
 
 type WhatsAppClient = ReturnType<typeof createWhatsAppClient>;
@@ -234,7 +235,15 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
     const sessionId = conversationKeyToString(key);
 
     const runtime = createRuntime({
-      agents: [buildPharmacyAgent({ model, durableObjectId: sessionId, baseUrl, payPath: '/wa-pay/' })],
+      agents: [
+        buildPharmacyAgent({
+          model,
+          durableObjectId: sessionId,
+          baseUrl,
+          payPath: '/wa-pay/',
+          storefrontKey: this.env.PORULLE_STOREFRONT_KEY,
+        }),
+      ],
       defaultAgentId: 'pharmacy',
       sessionStore: new SqlSessionStore(this.ctx.storage.sql),
     });
