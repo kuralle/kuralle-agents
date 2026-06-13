@@ -1,14 +1,15 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { KuralleAgent } from '@kuralle-agents/cf-agent';
+import { KuralleAgent, BridgeSessionStore } from '@kuralle-agents/cf-agent';
 import type { HarnessConfig } from '@kuralle-agents/cf-agent';
 import { createOpenAI } from '@ai-sdk/openai';
 import { routeAgentRequest } from 'agents';
+import type { UIMessage } from 'ai';
 import { verifySignature, normalizeWebhook } from '@kuralle-agents/messaging-meta/webhooks';
-import { buildPharmacyAgent } from './pharmacy.js';
+import { buildPharmacyAgent, finalizeConfirmedOrder } from './pharmacy.js';
+import { createPorulleClient } from './porulle.js';
 import {
   decodeCheckoutToken,
-  PAYMENT_SIGNAL,
   AGENT_CALLBACK_SIGNATURE_HEADER,
   verifyCallbackSignature,
 } from './token.js';
@@ -98,23 +99,41 @@ export class PharmacyAgent extends KuralleAgent<Env> {
     return res;
   }
 
-  // Admin inbox: full history for this web thread (worker-authed; internal fetch).
   override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Admin inbox: full history for this web thread (worker-authed; internal fetch).
     if (request.method === 'GET' && url.pathname === '/admin/messages') {
       return corsJson({ data: normalizeUiMessages(this.messages) });
     }
+    // Deterministic payment confirmation (signed /payhere-confirmed → here). Runs
+    // OUT OF BAND (no chat turn): gate on the md5sig-backed status, clear the cart,
+    // and broadcast "✅ confirmed" to the live web client via persistMessages.
+    if (request.method === 'POST' && url.pathname === '/finalize-payment') {
+      const sessionId = this.getDurableObjectId();
+      const store = new BridgeSessionStore({
+        sqlExecutor: this.getSqlExecutor(),
+        cfMessages: this.messages,
+        sessionId,
+        defaultAgentId: 'pharmacy',
+      });
+      const commerce = createPorulleClient({
+        baseUrl: this.env.COMMERCE_API_URL,
+        apiKey: this.env.PORULLE_STOREFRONT_KEY,
+        agentCallbackSecret: this.env.AGENT_CALLBACK_SECRET,
+      });
+      const { paid, text } = await finalizeConfirmedOrder({ sessionStore: store, sessionId, commerce });
+      if (paid && text) {
+        const assistantMessage: UIMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          parts: [{ type: 'text', text }],
+        };
+        await this.persistMessages([...this.messages, assistantMessage]);
+      }
+      return new Response(paid ? 'ok' : 'pending', { status: paid ? 200 : 202 });
+    }
     return super.fetch(request);
   }
-}
-
-function payPage(ok: boolean): string {
-  const msg = ok
-    ? '✅ Payment received. Your order is confirmed — return to the chat to see the confirmation.'
-    : '⚠️ We could not confirm this payment link. It may have already been used or expired.';
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Payment</title><style>body{font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem;text-align:center}</style>
-</head><body><h2>Pharmacy Rx</h2><p>${msg}</p></body></html>`;
 }
 
 export default {
@@ -211,66 +230,11 @@ export default {
           body: JSON.stringify({ from, phoneNumberId }),
         });
       } else {
+        // Web checkout is also deterministic (no suspended flow) → finalize out-of-band.
         const stub = env.PharmacyAgent.get(env.PharmacyAgent.idFromString(token.doId));
-        res = await stub.fetch('https://do/resume', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ signalId: token.signalId, name: PAYMENT_SIGNAL, payload: { paid: true } }),
-        });
+        res = await stub.fetch('https://do/finalize-payment', { method: 'POST' });
       }
-      return new Response(res.ok ? 'ok' : 'resume-failed', { status: res.ok ? 200 : 502 });
-    }
-
-    // WhatsApp payment callback. Routes to the same per-user DO (by name) and
-    // resumes the suspended checkout, which pushes "✅ order confirmed" over
-    // WhatsApp. Idempotent: the durable effect log dedupes a re-clicked link.
-    if (url.pathname.startsWith('/wa-pay/')) {
-      const token = decodeCheckoutToken(url.pathname.slice('/wa-pay/'.length));
-      if (!token) {
-        return new Response(payPage(false), { status: 400, headers: { 'content-type': 'text/html' } });
-      }
-      const [platform, phoneNumberId, from] = token.doId.split(':');
-      const waFrom = platform === 'whatsapp' && phoneNumberId && from ? from : token.doId;
-      const waPhoneNumberId = platform === 'whatsapp' && phoneNumberId && from
-        ? phoneNumberId
-        : env.WHATSAPP_PHONE_NUMBER_ID;
-      const stub = env.PharmacyWa.get(env.PharmacyWa.idFromName(`wa:${waPhoneNumberId}:${waFrom}`));
-      const res = await stub.fetch('https://do/wa-resume', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ from: waFrom, phoneNumberId: waPhoneNumberId, signalId: token.signalId }),
-      });
-      return new Response(payPage(res.ok), {
-        status: res.ok ? 200 : 502,
-        headers: { 'content-type': 'text/html' },
-      });
-    }
-
-    // Payment callback. Hitting this link delivers the durable `payment` signal to
-    // the exact DO that minted it, resuming the suspended order → "order completed".
-    // Idempotent: the durable effect log dedupes a re-clicked link.
-    if (url.pathname.startsWith('/pay/')) {
-      const token = decodeCheckoutToken(url.pathname.slice('/pay/'.length));
-      if (!token) {
-        return new Response(payPage(false), {
-          status: 400,
-          headers: { 'content-type': 'text/html' },
-        });
-      }
-      const stub = env.PharmacyAgent.get(env.PharmacyAgent.idFromString(token.doId));
-      const res = await stub.fetch('https://do/resume', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          signalId: token.signalId,
-          name: PAYMENT_SIGNAL,
-          payload: { paid: true },
-        }),
-      });
-      return new Response(payPage(res.ok), {
-        status: res.ok ? 200 : 502,
-        headers: { 'content-type': 'text/html' },
-      });
+      return new Response(res.ok ? 'ok' : 'confirm-failed', { status: res.ok ? 200 : 502 });
     }
 
     return (

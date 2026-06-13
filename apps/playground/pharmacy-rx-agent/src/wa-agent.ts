@@ -35,7 +35,6 @@ import {
 } from './pharmacy.js';
 import { createPorulleClient } from './porulle.js';
 import { SqlSessionStore } from './wa-session-store.js';
-import { PAYMENT_SIGNAL } from './token.js';
 import { recordThread, normalizeModelMessages, corsJson } from './admin.js';
 
 export interface WaEnv {
@@ -218,15 +217,6 @@ function messageEvent(message: InboundMessage): InboundEvent {
   };
 }
 
-function signalEvent(signalId: string, now: number): InboundEvent {
-  return {
-    kind: 'signal',
-    id: `signal:${signalId}`,
-    ts: now,
-    data: { name: PAYMENT_SIGNAL, signalId, payload: { paid: true } },
-  };
-}
-
 function okSendResult(to: string): SendResult {
   return { messageId: '', threadId: to, timestamp: new Date() };
 }
@@ -376,18 +366,6 @@ export class PharmacyWaAgent extends DurableObject<WaEnv> {
       const sessions = await new SqlSessionStore(this.ctx.storage.sql).list();
       const messages = sessions[0]?.messages ?? [];
       return corsJson({ data: normalizeModelMessages(messages) });
-    }
-
-    if (request.method === 'POST' && url.pathname === '/wa-resume') {
-      const body = (await request.json()) as { from: string; phoneNumberId?: string; signalId: string };
-      const key = {
-        platform: 'whatsapp',
-        businessId: body.phoneNumberId ?? this.env.WHATSAPP_PHONE_NUMBER_ID,
-        threadId: body.from,
-      };
-      const { inboundPipeline, inboundRuntime } = this.wire(key);
-      await inboundPipeline.ingest(key, signalEvent(body.signalId, inboundRuntime.clock.now()), inboundRuntime);
-      return new Response('ok');
     }
 
     return new Response('not found', { status: 404 });

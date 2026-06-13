@@ -111,6 +111,15 @@ export abstract class KuralleAgent<
   }
 
   /**
+   * The DO's SQL executor, for subclasses that need to read/write Kuralle session
+   * state out-of-band (e.g. a payment-confirmation webhook handler that runs
+   * outside a chat turn). Pair with `BridgeSessionStore` + `getDurableObjectId()`.
+   */
+  protected getSqlExecutor(): SqlExecutor {
+    return this.getSql();
+  }
+
+  /**
    * Get the Durable Object ID as the session identifier.
    */
   private getSessionId(): string {
