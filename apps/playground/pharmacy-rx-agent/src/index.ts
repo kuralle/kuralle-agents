@@ -56,7 +56,7 @@ interface Env {
 export class PharmacyAgent extends KuralleAgent<Env> {
   protected getAgents(): HarnessConfig['agents'] {
     const openai = createOpenAI({ apiKey: this.env.OPENAI_API_KEY });
-    const model = openai('gpt-4o'); // vision + stronger instruction-following (resists history-anchored narration on checkout)
+    const model = openai('gpt-4.1-mini'); // vision-capable; checkout is deterministic now, so the cheaper model is sufficient
     const baseUrl = this.env.PUBLIC_URL ?? 'http://localhost:8787';
     return [
       buildPharmacyAgent({
