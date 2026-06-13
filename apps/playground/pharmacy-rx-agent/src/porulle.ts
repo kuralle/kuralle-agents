@@ -71,10 +71,31 @@ export function createPorulleClient(config: PorulleClientConfig = {}): PorulleCl
     return { authorization: `Bearer ${apiKey}` };
   };
 
+  // The commerce backend (Neon via Hyperdrive) can be slow under load — checkout
+  // has been observed taking >15s — so each request gets a generous timeout
+  // rather than the platform default: slow-but-valid calls still complete, and a
+  // genuinely hung request fails cleanly instead of stalling the whole turn.
+  const REQUEST_TIMEOUT_MS = 30_000;
+
   async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(`${baseUrl}${path}`, init);
-    if (!res.ok) throw new Error(`porulle ${init?.method ?? 'GET'} ${path} -> ${res.status}`);
-    return (await res.json()) as T;
+    // Retry on 429 (the backend rate-limits /api/checkout): all customers share
+    // the agent's single IP, so a burst can transiently 429. Short backoffs absorb
+    // it without surfacing "something went wrong" to the customer.
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const res = await fetch(`${baseUrl}${path}`, { ...init, signal: controller.signal });
+        if (res.status === 429 && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+          continue;
+        }
+        if (!res.ok) throw new Error(`porulle ${init?.method ?? 'GET'} ${path} -> ${res.status}`);
+        return (await res.json()) as T;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
   }
 
   return {
