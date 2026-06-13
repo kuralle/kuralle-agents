@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import type { LanguageModel } from 'ai';
 import {
-  action,
   defineAgent,
-  defineFlow,
   defineTool,
   DURABLE_RUNS_KEY,
   type FlowState,
@@ -12,8 +10,8 @@ import {
   type Session,
   type SessionStore,
 } from '@kuralle-agents/core';
-import { createPorulleClient, formatLkr, type PorulleClient } from './porulle.js';
-import { encodeCheckoutToken, PAYMENT_SIGNAL } from './token.js';
+import { createPorulleClient, formatLkr, type CheckoutResult, type PorulleClient } from './porulle.js';
+import { encodeCheckoutToken } from './token.js';
 
 // ---------------------------------------------------------------------------
 // Cart (persisted in flow/session state → DO SQLite via BridgeSessionStore)
@@ -297,17 +295,15 @@ const INSTRUCTIONS = [
   'the cart from the conversation, and do not re-check or re-offer medicines the customer has not asked',
   'about in their current message.',
   '',
-  'Checkout has two DISTINCT steps — never confuse them:',
-  '1) BEFORE any payment link exists in this chat: when the customer wants to pay or check out — including',
-  '   "checkout", "i want to pay", or "yes"/"ok"/"sure" in reply to your own "ready to checkout?" — call',
-  '   the start_checkout tool. Calling it IS what creates the order and sends the secure payment link.',
-  '   Do NOT call check_payment here, and NEVER reply "starting checkout"/"sending the link shortly" in',
-  '   prose — a promise without calling start_checkout means the customer gets no link.',
-  '2) AFTER a payment link has been sent: only then, when the customer says they have paid (or asks about',
-  '   their order), call check_payment. Confirm the order ONLY if it returns paid:true; if paid:false,',
-  '   say payment is not received yet and to tap the link. Never claim payment yourself.',
-  'If the cart has items and the customer has already said they want to buy, call start_checkout straight',
-  'away — do not ask "ready to checkout?" again.',
+  'Checkout: when the customer wants to pay or check out — including "checkout", "i want to pay", or',
+  '"yes"/"ok"/"sure" in reply to your own "ready to checkout?" — call the start_checkout tool. Calling it',
+  'IS what creates the order and sends the secure payment link. NEVER reply "starting checkout"/"sending',
+  'the link shortly" in prose — a promise without calling start_checkout means the customer gets no link.',
+  'Say nothing after calling it; the link is delivered automatically.',
+  '',
+  'After payment: confirmation is AUTOMATIC — once the customer pays, the order is confirmed and the',
+  'cart cleared without you doing anything. If they ask whether their payment went through, tell them it',
+  'confirms automatically the moment payment completes; never claim payment yourself.',
   '',
   'A confirmed order is CLOSED — it has been paid and dispatched, and everything above that',
   'confirmation is history. The cart for any new request starts EMPTY. When the customer messages again',
@@ -350,49 +346,80 @@ function runStateOf(session: Session, sessionId: string): { state: FlowState } |
   return runs?.[sessionId]?.runState;
 }
 
-export interface DeterministicCheckoutDeps {
-  sessionStore: SessionStore;
-  sessionId: string;
-  commerce: PorulleClient;
+export interface CheckoutTarget {
   /** Encoded into the callback token so the confirm push routes back here. */
   durableObjectId: string;
   baseUrl: string;
   payPath: string;
 }
 
+/** The single confirm-link message — one source of truth for both checkout paths. */
+function checkoutMessage(order: CheckoutResult, cart: CartLine[]): string {
+  return (
+    `Your order ${order.orderNumber}: ${summarizeCart(cart)}. Total ${formatLkr(order.grandTotal)}.\n` +
+    `Pay securely here: ${order.payUrl}\n` +
+    `Once you've paid I'll confirm your order here automatically.`
+  );
+}
+
 /**
- * Create the order + return the message with the live PayHere link, reading the
- * cart from the persisted run state. No flow, no model. Returns the text to send.
+ * Checkout CORE (no model, no flow): create the real order, register the signed
+ * confirm-callback, stamp the pending-order onto `state`, return the link message.
+ * Shared by both entry points — the deterministic channel guard (`performCheckout`,
+ * cart from the persisted session) and the `start_checkout` tool (cart from the
+ * live run state). The caller persists `state`.
+ */
+async function prepareCheckout(
+  commerce: PorulleClient,
+  state: FlowState,
+  target: CheckoutTarget,
+): Promise<string> {
+  const cart = ensureCart(state).filter((l) => l.quantity > 0);
+  if (cart.length === 0) return 'Your cart is empty — add an item before checking out.';
+  if (!commerce.hasKey) return 'Sorry, checkout is temporarily unavailable. Please try again shortly.';
+  try {
+    const order = await commerce.checkout(cart.map((l) => ({ entityId: l.id, quantity: l.quantity })));
+    state.pendingOrderId = order.orderId;
+    state.pendingOrderNumber = order.orderNumber;
+    const token = encodeCheckoutToken({ doId: target.durableObjectId, signalId: order.orderId });
+    await commerce.registerCallback(order.orderId, `${target.baseUrl}${target.payPath}${token}`);
+    return checkoutMessage(order, cart);
+  } catch {
+    return 'Something went wrong starting your payment. Please try again in a moment.';
+  }
+}
+
+export interface DeterministicCheckoutDeps extends CheckoutTarget {
+  sessionStore: SessionStore;
+  sessionId: string;
+  commerce: PorulleClient;
+}
+
+/**
+ * Deterministic channel entry: read the cart from the persisted run state, run the
+ * checkout core, persist. No flow, no model. Returns the text to send.
  */
 export async function performCheckout(deps: DeterministicCheckoutDeps): Promise<string> {
   const session = await deps.sessionStore.get(deps.sessionId);
   const run = session ? runStateOf(session, deps.sessionId) : undefined;
-  const cart = (Array.isArray(run?.state.cart) ? (run!.state.cart as CartLine[]) : []).filter(
-    (l) => l.quantity > 0,
-  );
-  if (!session || !run || cart.length === 0) {
-    return 'Your cart is empty — add an item before checking out.';
-  }
-  if (!deps.commerce.hasKey) {
-    return 'Sorry, checkout is temporarily unavailable. Please try again shortly.';
-  }
-  try {
-    const order = await deps.commerce.checkout(
-      cart.map((l) => ({ entityId: l.id, quantity: l.quantity })),
-    );
-    run.state.pendingOrderId = order.orderId;
-    run.state.pendingOrderNumber = order.orderNumber;
-    const token = encodeCheckoutToken({ doId: deps.durableObjectId, signalId: order.orderId });
-    await deps.commerce.registerCallback(order.orderId, `${deps.baseUrl}${deps.payPath}${token}`);
-    await deps.sessionStore.save(session);
-    return (
-      `Your order ${order.orderNumber}: ${summarizeCart(cart)}. Total ${formatLkr(order.grandTotal)}.\n` +
-      `Pay securely here: ${order.payUrl}\n` +
-      `Once you've paid I'll confirm your order here automatically.`
-    );
-  } catch {
-    return 'Something went wrong starting your payment. Please try again in a moment.';
-  }
+  if (!session || !run) return 'Your cart is empty — add an item before checking out.';
+  const message = await prepareCheckout(deps.commerce, run.state, deps);
+  await deps.sessionStore.save(session);
+  return message;
+}
+
+/** Record the completed order, clear the cart, and return the ✅ confirmation text. */
+function confirmAndClear(state: FlowState, orderId: string): string {
+  const cart = ensureCart(state);
+  const orderNumber = (state.pendingOrderNumber as string) ?? orderId;
+  state.lastOrder = { orderNo: orderNumber, total: cartTotal(cart), lines: cart };
+  state.cart = [];
+  state.abandonedCart = [];
+  state.cartUpdatedAt = undefined;
+  state.pendingOrderId = undefined;
+  state.pendingOrderNumber = undefined;
+  state.paymentLinkSent = false;
+  return `✅ Payment received — order ${orderNumber} is confirmed and will be dispatched. Thank you!`;
 }
 
 /**
@@ -409,17 +436,9 @@ export async function finalizeConfirmedOrder(deps: {
   const orderId = typeof run?.state.pendingOrderId === 'string' ? (run.state.pendingOrderId as string) : undefined;
   if (!session || !run || !orderId) return { paid: false, text: '' };
   if (!(await deps.commerce.confirmPaid(orderId))) return { paid: false, text: '' };
-  const cart = Array.isArray(run.state.cart) ? (run.state.cart as CartLine[]) : [];
-  const orderNumber = (run.state.pendingOrderNumber as string) ?? orderId;
-  run.state.lastOrder = { orderNo: orderNumber, total: cartTotal(cart), lines: cart };
-  run.state.cart = [];
-  run.state.abandonedCart = [];
-  run.state.cartUpdatedAt = undefined;
-  run.state.pendingOrderId = undefined;
-  run.state.pendingOrderNumber = undefined;
-  run.state.paymentLinkSent = false;
+  const text = confirmAndClear(run.state, orderId);
   await deps.sessionStore.save(session);
-  return { paid: true, text: `✅ Payment received — order ${orderNumber} is confirmed and will be dispatched. Thank you!` };
+  return { paid: true, text };
 }
 
 export interface PharmacyAgentDeps {
@@ -457,139 +476,26 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
   const addToCartTool = makeAddToCartTool(commerce);
   const setItemQuantityTool = makeSetItemQuantityTool(commerce);
 
-  // Confirmation node — runs when the durable `payment` signal is delivered (by
-  // the backend's signed /payhere-confirmed callback). Gates on the md5sig-backed
-  // order status so a forged signal can never flip an order to paid.
-  const orderComplete = action({
-    id: 'orderComplete',
-    run: async (state, ctx) => {
-      const orderId = typeof state.pendingOrderId === 'string' ? state.pendingOrderId : undefined;
-      const cart = ensureCart(state);
-      const paid = orderId ? await commerce.confirmPaid(orderId) : false;
-      if (!paid) {
-        emitText(
-          ctx.emit,
-          "I haven't received your payment yet — tap the link to complete it and I'll confirm here.",
-        );
-        return { end: 'not-paid' };
-      }
-      const orderNumber = (state.pendingOrderNumber as string) ?? orderId!;
-      emitText(
-        ctx.emit,
-        `✅ Payment received — order ${orderNumber} is confirmed and will be dispatched. Thank you!`,
-      );
-      state.lastOrder = { orderNo: orderNumber, total: cartTotal(cart), lines: cart };
-      state.cart = [];
-      state.abandonedCart = [];
-      state.cartUpdatedAt = undefined;
-      state.pendingOrderId = undefined;
-      state.pendingOrderNumber = undefined;
-      state.paymentLinkSent = false;
-      return { end: 'ordered' };
-    },
-  });
-
-  // Checkout creates a real Porulle order + PayHere link, registers the confirm
-  // callback, then SUSPENDS on the durable `payment` signal. PayHere notifies the
-  // backend, which POSTs the signed /payhere-confirmed callback → the signal is
-  // delivered → orderComplete runs. Deterministic: no LLM polling in the loop.
-  const checkout = action({
-    id: 'checkout',
-    run: async (state, ctx) => {
-      const cart = ensureCart(state);
-      if (cart.length === 0) {
-        emitText(ctx.emit, 'Your cart is empty — add an item before checking out.');
-        return { end: 'empty-cart' };
-      }
-      if (!commerce.hasKey) {
-        emitText(ctx.emit, 'Sorry, checkout is temporarily unavailable. Please try again shortly.');
-        return { end: 'checkout-unavailable' };
-      }
-      // ctx.uuid() is a durable effect — call UNCONDITIONALLY so the callsite order
-      // matches on the post-payment replay (else the signal step key won't match).
-      const signalId = await ctx.uuid();
-
-      // Create the order + emit the link only once; the flag is persisted before
-      // the suspend, so the post-payment replay skips it (no second order, no
-      // double-send). commerce.checkout / registerCallback are non-durable side
-      // effects, so this guard is what keeps them exactly-once.
-      if (!state.paymentLinkSent) {
-        try {
-          const order = await commerce.checkout(
-            cart.map((l) => ({ entityId: l.id, quantity: l.quantity })),
-          );
-          state.pendingOrderId = order.orderId;
-          state.pendingOrderNumber = order.orderNumber;
-          const token = encodeCheckoutToken({ doId: durableObjectId, signalId });
-          await commerce.registerCallback(order.orderId, `${baseUrl}${payPath}${token}`);
-          emitText(
-            ctx.emit,
-            `Your order ${order.orderNumber}: ${summarizeCart(cart)}. Total ${formatLkr(order.grandTotal)}.\n` +
-              `Pay securely here: ${order.payUrl}\n` +
-              `Once you've paid I'll confirm your order here automatically.`,
-          );
-          state.paymentLinkSent = true;
-        } catch {
-          emitText(ctx.emit, 'Something went wrong starting your payment. Please try again in a moment.');
-          return { end: 'checkout-error' };
-        }
-      }
-
-      // Suspend until the signed /payhere-confirmed callback delivers the signal.
-      await ctx.signal(PAYMENT_SIGNAL);
-      return orderComplete;
-    },
-  });
-
-  // Polled payment confirmation (PayHere → backend; we verify via the backend).
-  const checkPaymentTool = defineTool({
-    name: 'check_payment',
-    description:
-      'Check whether the customer has completed payment for their pending order. Call this when the ' +
-      'customer says they have paid, or asks about their order, after a payment link was sent.',
-    input: z.object({}),
-    execute: async (_args, ctx) => {
-      const state = ctx!.runState.state as FlowState;
-      const orderId = typeof state.pendingOrderId === 'string' ? state.pendingOrderId : undefined;
-      if (!orderId) return { paid: false as const, reason: 'no pending order' };
-      const paid = await commerce.confirmPaid(orderId);
-      if (!paid) return { paid: false as const, orderNumber: state.pendingOrderNumber };
-      const cart = ensureCart(state);
-      const orderNumber = (state.pendingOrderNumber as string) ?? orderId;
-      const result = { paid: true as const, orderNumber, total: formatLkr(cartTotal(cart) * 100) };
-      state.lastOrder = { orderNo: orderNumber, total: cartTotal(cart), lines: cart };
-      state.cart = [];
-      state.abandonedCart = [];
-      state.cartUpdatedAt = undefined;
-      state.pendingOrderId = undefined;
-      state.pendingOrderNumber = undefined;
-      return result;
-    },
-  });
-
-  // Checkout entry as a REGULAR tool. The model reliably calls domain tools
-  // (add_to_cart, set_item_quantity) but on a history-polluted thread it tends to
-  // narrate ("starting checkout…") instead of calling the generic enter_flow
-  // control — so checkout never starts. A tool result carrying `__enterFlow` is
-  // classified as a flow-entry by the runtime (classifyControl), so this enters
-  // the same durable checkout flow deterministically when the model calls it.
+  // start_checkout — the LLM-callable checkout. Runs the checkout CORE inline
+  // (create order + register the signed confirm-callback + emit the PayHere link)
+  // from the live run-state cart. No flow, no suspend. Confirmation arrives
+  // out-of-band via the /payhere-confirmed callback (finalizeConfirmedOrder). A
+  // clear "checkout" command is handled deterministically by the channel guard
+  // (performCheckout) which calls the SAME core, so checkout never depends on the
+  // model deciding to call this — this is just the conversational entry point.
   const startCheckoutTool = defineTool({
     name: 'start_checkout',
     description:
       'Create the order and send the secure payment link. Call this AS SOON AS the customer wants to ' +
-      'pay or check out (e.g. "checkout", "i want to pay", or "yes" to your own "ready to checkout?"). ' +
-      'Never reply "starting checkout" in prose — calling this tool IS what sends the link.',
+      'pay or check out. NEVER reply "starting checkout"/"sending the link" in prose — calling this tool ' +
+      'IS what sends the link. Say nothing after calling it; the link is delivered automatically.',
     input: z.object({}),
-    execute: async () => ({ __enterFlow: true as const, flowName: 'checkout', reason: 'customer wants to pay' }),
-  });
-
-  const checkoutFlow = defineFlow({
-    name: 'checkout',
-    description:
-      'Take payment for the current cart and confirm the order. Enter this when the customer confirms they want to pay.',
-    maxOscillations: 5,
-    start: checkout,
-    nodes: [checkout, orderComplete],
+    execute: async (_args, ctx) => {
+      const state = ctx!.runState.state as FlowState;
+      const message = await prepareCheckout(commerce, state, { durableObjectId, baseUrl, payPath });
+      emitText(ctx!.emit, message);
+      return { sent: true as const };
+    },
   });
 
   return defineAgent({
@@ -597,21 +503,18 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
     name: 'Pharmacy Rx Agent',
     instructions: INSTRUCTIONS,
     model,
-    // Read-only lookups may be globally visible (incl. mid-flow Q&A)…
+    // Read-only lookups are globally visible.
     globalTools: {
       check_inventory: checkInventoryTool,
       view_cart: viewCartTool,
     },
-    // …but mutating tools stay out of globalTools (ADR 0001 allow-list rule):
-    // `tools` are still model-callable in answering turns, just not mid-flow.
+    // Mutating tools stay out of globalTools (ADR 0001 allow-list rule).
     tools: {
       add_to_cart: addToCartTool,
       set_item_quantity: setItemQuantityTool,
       remove_from_cart: removeFromCartTool,
       resume_cart: resumeCartTool,
       start_checkout: startCheckoutTool,
-      check_payment: checkPaymentTool,
     },
-    flows: [checkoutFlow],
   });
 }
