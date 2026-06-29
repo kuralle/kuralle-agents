@@ -108,6 +108,7 @@
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
+    "typecheck:audit": "tsc --noEmit -p tsconfig.audit.json",
     "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",

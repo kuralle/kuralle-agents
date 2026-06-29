@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "rootDir": ".",
+    "types": ["node", "bun-types"]
+  },
+  "include": ["src/**/*.ts", "test/audit-validation/2-flat-sessions.test.ts"],
+  "exclude": ["node_modules", "dist"]
+}
