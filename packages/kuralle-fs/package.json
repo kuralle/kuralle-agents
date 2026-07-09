@@ -9,6 +9,7 @@
   "version": "0.11.0",
   "description": "Portable filesystem primitive for Kuralle agents",
   "type": "module",
+  "sideEffects": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

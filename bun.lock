@@ -81,6 +81,26 @@
         "@types/bun": "latest",
       },
     },
+    "apps/playground/fs-demo-cf": {
+      "name": "fs-demo-cf",
+      "dependencies": {
+        "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/fs": "workspace:*",
+        "zod": "^4.0.0",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20250214.0",
+        "wrangler": "^4.0.0",
+      },
+    },
+    "apps/playground/fs-demo-vercel": {
+      "name": "fs-demo-vercel",
+      "dependencies": {
+        "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/fs": "workspace:*",
+        "zod": "^4.0.0",
+      },
+    },
     "apps/playground/gemini-voice-agent": {
       "name": "gemini-voice-agent",
       "dependencies": {
@@ -2322,6 +2342,10 @@
     "fresh": ["fresh@2.0.0", "", {}, "sha512-Rx/WycZ60HOaqLKAi6cHRKKI7zxWbJ31MhntmtwMoaTeF7XFH9hhBp8vITaMidfljRQ6eYWCKkaTK+ykVJHP2A=="],
 
     "fs-constants": ["fs-constants@1.0.0", "", {}, "sha512-y6OAwoSIf7FyjMIv94u+b5rdheZEjzR63GTyZJm5qh4Bi+2YgwLCcI/fPFZkL5PSixOt6ZNKm+w+Hfp/Bciwow=="],
+
+    "fs-demo-cf": ["fs-demo-cf@workspace:apps/playground/fs-demo-cf"],
+
+    "fs-demo-vercel": ["fs-demo-vercel@workspace:apps/playground/fs-demo-vercel"],
 
     "fs-extra": ["fs-extra@7.0.1", "", { "dependencies": { "graceful-fs": "^4.1.2", "jsonfile": "^4.0.0", "universalify": "^0.1.0" } }, "sha512-YJDaCJZEnBmcbw13fvdAM9AwNOJwOzrE4pqMqBq5nFiEqXUqHwlK4B+3pUw6JNvfSPtX05xFHtYy/1ni01eGCw=="],
 

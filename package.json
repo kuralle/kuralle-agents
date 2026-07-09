@@ -18,7 +18,9 @@
     "apps/playground/acme-support-agent",
     "apps/playground/langfuse-demo",
     "apps/playground/gemini-voice-agent",
-    "apps/playground/pharmacy-rx-agent"
+    "apps/playground/pharmacy-rx-agent",
+    "apps/playground/fs-demo-cf",
+    "apps/playground/fs-demo-vercel"
   ],
   "scripts": {
     "build": "bun run build:packages",
