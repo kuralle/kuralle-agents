@@ -28,7 +28,7 @@ bun run build
 bun run build:packages
 
 # A single package
-cd packages/kuralle-core && npm run build
+cd packages/core && npm run build
 ```
 
 **Rebuild before E2E testing.** Workspace packages import from `dist/` (compiled output), not source. After editing a package's `src/`, rebuild it before running E2E tests or packages that depend on it. Stale dist is a common source of false negatives.
@@ -47,23 +47,23 @@ Two modes: offline (no API keys, <1s) and live (real Gemini, 30-60s per turn).
 
 **Offline — FakeRealtimeAudioClient (CI-safe, deterministic):**
 ```bash
-bun test packages/kuralle-e2e-tests/tests/fake-client.test.ts
+bun test packages/e2e-tests/tests/fake-client.test.ts
 ```
 
 **Live API — real Gemini audio (needs `GOOGLE_GENERATIVE_AI_API_KEY`):**
 ```bash
-npx tsx packages/kuralle-e2e-tests/tests/livekit-model-ws-bridge.ts    # single-turn
-npx tsx packages/kuralle-e2e-tests/tests/bridge-adapter-debug.ts        # multi-turn
-npx tsx packages/kuralle-e2e-tests/tests/head-to-head-benchmark.ts      # 3-path benchmark
+npx tsx packages/e2e-tests/tests/livekit-model-ws-bridge.ts    # single-turn
+npx tsx packages/e2e-tests/tests/bridge-adapter-debug.ts        # multi-turn
+npx tsx packages/e2e-tests/tests/head-to-head-benchmark.ts      # 3-path benchmark
 ```
 
 **AgentSession + Kuralle (needs `DEEPGRAM_API_KEY` + `GOOGLE_GENERATIVE_AI_API_KEY`):**
 ```bash
-npx tsx packages/kuralle-e2e-tests/tests/agentsession-kuralle-direct-e2e.ts
-npx tsx packages/kuralle-e2e-tests/tests/agentsession-kuralle-e2e.ts
+npx tsx packages/e2e-tests/tests/agentsession-kuralle-direct-e2e.ts
+npx tsx packages/e2e-tests/tests/agentsession-kuralle-e2e.ts
 ```
 
-See `packages/kuralle-e2e-tests/README.md` for the full test catalog.
+See `packages/e2e-tests/README.md` for the full test catalog.
 
 ---
 
@@ -71,7 +71,7 @@ See `packages/kuralle-e2e-tests/README.md` for the full test catalog.
 
 ```bash
 # Core examples
-cd packages/kuralle-core
+cd packages/core
 npx tsx examples/agents/form-filler.ts
 npx tsx examples/agents/basic-chat.ts
 npx tsx examples/flows/patient-intake.ts
@@ -94,9 +94,9 @@ npx tsx examples/flows/patient-intake.ts
 ## Adding a feature
 
 1. Start in `@kuralle-agents/core` for primitives or runtime changes.
-2. Update types in `packages/kuralle-core/src/types/`.
+2. Update types in `packages/core/src/types/`.
 3. Update `Runtime`, `FlowManager`, or drivers as needed.
-4. Add an example in `packages/kuralle-core/examples/`.
+4. Add an example in `packages/core/examples/`.
 5. If config-driven, update `@kuralle-agents/config` loader (`runtimeLoader.ts`).
 6. Update `docs/skills/` and any relevant guides.
 7. Rebuild the package and run examples to verify.
@@ -106,7 +106,7 @@ npx tsx examples/flows/patient-intake.ts
 ## Builder CLI
 
 ```bash
-cd packages/kuralle-builder
+cd packages/builder
 npm run build
 
 # Build a pack from an .kuralle folder
@@ -117,7 +117,7 @@ node dist/cli.js build-pack starters/basic ./my-agent
 node dist/cli.js build-pack starters/support ./my-support --runtime cf
 ```
 
-Full guide: `packages/kuralle-builder/guide/README.md`
+Full guide: `packages/builder/guide/README.md`
 
 ---
 
@@ -130,7 +130,7 @@ kuralle list agents|flows|tools|skills
 kuralle copy <starter>
 ```
 
-Full guide: `packages/kuralle-config/guide/README.md`
+Full guide: `packages/config/guide/README.md`
 
 ---
 

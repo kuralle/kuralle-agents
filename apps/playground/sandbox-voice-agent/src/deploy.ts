@@ -378,7 +378,7 @@ async function verifyAudioRoundTrip(
   toolResults: string[];
 }> {
   const fixtureNames = options.fixtureNames?.length ? options.fixtureNames : ['bench_hello.pcm'];
-  const fixtures = fixtureNames.map((name) => readFileSync(join(repoRoot, 'packages/kuralle-e2e-tests/fixtures', name)));
+  const fixtures = fixtureNames.map((name) => readFileSync(join(repoRoot, 'packages/e2e-tests/fixtures', name)));
   const silence = Buffer.alloc(960);
   const expectedTurns = options.requireTurnComplete ? fixtures.length : 1;
   const minTurnCompletes = options.minTurnCompletes ?? expectedTurns;

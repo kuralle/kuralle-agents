@@ -18,11 +18,11 @@ This directory contains working examples for each transport type with a simple c
 
 **All packages must be built first:**
 ```bash
-cd packages/kuralle-livekit-plugin-transport-http && bun run build
-cd packages/kuralle-livekit-plugin-transport-ws && bun run build
-cd packages/kuralle-livekit-plugin-transport-twilio && bun run build
-cd packages/kuralle-livekit-plugin-transport-sip && bun run build
-cd packages/kuralle-livekit-plugin && bun run build
+cd packages/livekit-plugin-transport-http && bun run build
+cd packages/livekit-plugin-transport-ws && bun run build
+cd packages/livekit-plugin-transport-twilio && bun run build
+cd packages/livekit-plugin-transport-sip && bun run build
+cd packages/livekit-plugin && bun run build
 ```
 
 Or build all from root:

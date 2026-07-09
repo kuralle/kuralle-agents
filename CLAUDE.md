@@ -71,12 +71,12 @@ pnpm release             # version + build + publish (all packages version toget
 
 **Stale dist gotcha:** workspace packages import from each other's `dist/` (compiled), not `src/`. After editing a package's `src/`, rebuild it before running anything that depends on it — stale dist is a common "my fix didn't take" false negative.
 
-**Voice / E2E tests** (offline fake-client + live API modes): see `packages/kuralle-e2e-tests/README.md` and the `@kuralle-agents/realtime-audio` test suite.
+**Voice / E2E tests** (offline fake-client + live API modes): see `packages/e2e-tests/README.md` and the `@kuralle-agents/realtime-audio` test suite.
 
 ## Adding a feature
-1. Start in `@kuralle-agents/core` for primitives or runtime changes; update types under `packages/kuralle-core/src/types/`.
+1. Start in `@kuralle-agents/core` for primitives or runtime changes; update types under `packages/core/src/types/`.
 2. Update the runtime / flow execution paths; keep streaming semantics stable (`text-delta`, tool events, `done`).
-3. Add a runnable example under `packages/kuralle-core/examples/` — and **run it** (live smoke), not just typecheck it (see Gotchas).
+3. Add a runnable example under `packages/core/examples/` — and **run it** (live smoke), not just typecheck it (see Gotchas).
 4. Update the docs (`apps/docs/`, package READMEs, `docs/skills/`) — in the same change.
 
 ## Gotchas & disciplines (learned the hard way)

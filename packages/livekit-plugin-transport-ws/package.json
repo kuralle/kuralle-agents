@@ -1,0 +1,64 @@
+{
+  "name": "@kuralle-agents/livekit-plugin-transport-ws",
+  "version": "0.12.0",
+  "description": "WebSocket transport adapter for LiveKit Agents. Run voice and text agents over plain WebSocket without a LiveKit server.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "preexample": "tsc",
+    "example:basic": "tsx examples/basic_ws_agent.ts",
+    "example:text": "tsx examples/text_only_ws_agent.ts",
+    "test": "bun test test",
+    "test:e2e:ws-native": "npx tsx test/e2e/ws-native-e2e.ts",
+    "test:e2e:ws-cascaded": "npx tsx test/e2e/ws-cascaded-e2e.ts",
+    "test:e2e:ws-native:debug": "NODE_DEBUG=* npx tsx test/e2e/ws-native-e2e.ts",
+    "test:e2e:ws-cascaded:debug": "NODE_DEBUG=* npx tsx test/e2e/ws-cascaded-e2e.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "@kuralle-agents/livekit-plugin": "workspace:*",
+    "@kuralle-agents/transport-base": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "@livekit/agents": ">=1.0.0",
+    "@livekit/agents-plugin-google": "^1.2.6",
+    "@livekit/rtc-node": ">=0.12.0"
+  },
+  "peerDependenciesMeta": {
+    "@livekit/agents-plugin-google": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@livekit/rtc-node": ">=0.12.0",
+    "typescript": "^5.5.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "ai": "^6.0.0",
+    "zod": "^4.0.0",
+    "@google/genai": "1.43.0",
+    "@kuralle-agents/realtime-audio": "workspace:*",
+    "@livekit/agents-plugin-silero": "^1.0.48"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuralle/kuralle-agents.git",
+    "directory": "packages/livekit-plugin-transport-ws"
+  }
+}

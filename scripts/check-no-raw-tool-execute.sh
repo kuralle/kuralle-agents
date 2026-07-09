@@ -16,7 +16,7 @@ report() {
   fi
 }
 
-CORE_SRC="$ROOT/packages/kuralle-core/src"
+CORE_SRC="$ROOT/packages/core/src"
 
 # Host reply must strip execute before the model sees tools.
 agentreply_hits="$(grep -n 'tools: agent\.tools' "$CORE_SRC/runtime/agentReply.ts" 2>/dev/null \

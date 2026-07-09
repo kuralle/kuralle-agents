@@ -27,7 +27,7 @@ Map to AI SDK native parts wherever the SDK has a primitive; use typed `data-kur
 
 ### 2. `HarnessStreamPart` → UIMessage mapping (as-built)
 
-Adapter: `packages/kuralle-core/src/ai-sdk/uiMessageStream.ts`.
+Adapter: `packages/core/src/ai-sdk/uiMessageStream.ts`.
 
 | HarnessStreamPart | UIMessage output | Persist? |
 |---|---|---|

@@ -121,8 +121,8 @@ Ordered by dependency. C1/C4 are leaf (no cross-deps); C2→C3 serial; C5 depend
 
 ## 5. Validation contract
 
-- `cd packages/kuralle-fs && bun test test/*.test.ts && vitest run --config vitest.config.ts` (adds shell + skill-store + caps tests; workers pool for CF).
-- `cd packages/kuralle-core && bun test` (shell tool + workspace resolution + audit harness F1–F9 still green — no regression).
+- `cd packages/fs && bun test test/*.test.ts && vitest run --config vitest.config.ts` (adds shell + skill-store + caps tests; workers pool for CF).
+- `cd packages/core && bun test` (shell tool + workspace resolution + audit harness F1–F9 still green — no regression).
 - `bun run build` (topological; **rebuild `@kuralle-agents/core` before fs** — stale-dist gotcha) then `bun run typecheck`.
 - **Live smoke (C6):** run `examples/workspace-skills-shell.ts` against a real model; observe (1) skill metadata in prompt, (2) `load_skill` tool call returning a body read from the fs, (3) a `bash` call executing in `just-bash` and returning real stdout. "Untested example = broken example" — do not mark C6 done on typecheck alone.
 

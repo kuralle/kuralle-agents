@@ -1,7 +1,7 @@
 # kuralle-core — Complete Teardown (2026-07)
 
-**Branch:** `test/core-audit-validation` · **Companion harness:** `packages/kuralle-core/test/audit-validation/` (F1–F9, all reproduce: `bun test test/audit-validation` → 20 pass)
-**Method:** adversarial source read of the runtime loop (done in-session, first-hand), four parallel subsystem audits (sessions/durability, memory/compaction, flow/prompts, streaming/routing/voice), and three retrieval-led peer-harness studies (Pipecat + pipecat-flows + LiveKit Agents; OpenAI Agents SDK + LangGraph; Rasa CALM + Parlant + Mastra) via DeepWiki/official docs. Docs and comments were deliberately not trusted; every load-bearing claim below is `file:line`-verified, and the highest-severity delegated claims were re-verified first-hand. Paths are relative to `packages/kuralle-core/src/` unless noted.
+**Branch:** `test/core-audit-validation` · **Companion harness:** `packages/core/test/audit-validation/` (F1–F9, all reproduce: `bun test test/audit-validation` → 20 pass)
+**Method:** adversarial source read of the runtime loop (done in-session, first-hand), four parallel subsystem audits (sessions/durability, memory/compaction, flow/prompts, streaming/routing/voice), and three retrieval-led peer-harness studies (Pipecat + pipecat-flows + LiveKit Agents; OpenAI Agents SDK + LangGraph; Rasa CALM + Parlant + Mastra) via DeepWiki/official docs. Docs and comments were deliberately not trusted; every load-bearing claim below is `file:line`-verified, and the highest-severity delegated claims were re-verified first-hand. Paths are relative to `packages/core/src/` unless noted.
 
 ---
 

@@ -31,8 +31,8 @@ import {
   SqlInboundLedger,
   SqlOwnershipStore,
   SqlWindowStore,
-} from '../../../../packages/kuralle-cf-agent/src/inbound-runtime.js';
-import type { SqlExecutor } from '../../../../packages/kuralle-cf-agent/src/types.js';
+} from '../../../../packages/cf-agent/src/inbound-runtime.js';
+import type { SqlExecutor } from '../../../../packages/cf-agent/src/types.js';
 import { SqlSessionStore } from './wa-session-store.js';
 import { encodeCheckoutToken, decodeCheckoutToken } from './token.js';
 

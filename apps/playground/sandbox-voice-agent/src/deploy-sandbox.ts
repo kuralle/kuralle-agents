@@ -216,7 +216,7 @@ server.listen(PORT, '0.0.0.0', () => {
 
     if (httpOk && wsOk) {
       console.log(`\n  To test in browser, open:`);
-      console.log(`  packages/kuralle-e2e-tests/try-voice-agent/index.html`);
+      console.log(`  packages/e2e-tests/try-voice-agent/index.html`);
       console.log(`  and change the server URL to: ${wsUrl}`);
     }
 

@@ -41,8 +41,8 @@ rg -n "<topic>" node_modules/@kuralle-agents/tools/guides/
 
 Fallback (monorepo):
 
-- Examples: `packages/kuralle-core/examples/`
-- Tests: `packages/kuralle-core/test/`
+- Examples: `packages/core/examples/`
+- Tests: `packages/core/test/`
 
 ## Package structure (where to edit)
 
@@ -50,26 +50,26 @@ Fallback (monorepo):
 
 | Package | Path | What it contains |
 |---------|------|------------------|
-| `@kuralle-agents/core` | `packages/kuralle-core/` | Types, `Runtime`, `hostLoop`, `runFlow`, drivers, effect tools |
-| `@kuralle-agents/tools` | `packages/kuralle-tools/` | CAG tools |
-| `@kuralle-agents/rag` | `packages/kuralle-rag/` | RAG primitives |
+| `@kuralle-agents/core` | `packages/core/` | Types, `Runtime`, `hostLoop`, `runFlow`, drivers, effect tools |
+| `@kuralle-agents/tools` | `packages/tools/` | CAG tools |
+| `@kuralle-agents/rag` | `packages/rag/` | RAG primitives |
 
 ### Adapters & Stores
 
 | Package | Path |
 |---------|------|
-| `@kuralle-agents/hono-server` | `packages/kuralle-hono-server/` |
-| `@kuralle-agents/cf-agent` | `packages/kuralle-cf-agent/` |
-| `@kuralle-agents/redis-store` | `packages/kuralle-redis-store/` |
-| `@kuralle-agents/postgres-store` | `packages/kuralle-postgres-store/` |
-| `@kuralle-agents/livekit-plugin` | `packages/kuralle-livekit-plugin/` |
+| `@kuralle-agents/hono-server` | `packages/hono-server/` |
+| `@kuralle-agents/cf-agent` | `packages/cf-agent/` |
+| `@kuralle-agents/redis-store` | `packages/redis-store/` |
+| `@kuralle-agents/postgres-store` | `packages/postgres-store/` |
+| `@kuralle-agents/livekit-plugin` | `packages/livekit-plugin/` |
 
 ## Key directories by concern
 
 ### Agent authoring surface
 
 ```
-packages/kuralle-core/src/
+packages/core/src/
 ├── types/agentConfig.ts      # AgentConfig, defineAgent
 ├── types/flow.ts             # Flow, FlowNode, Transition, node helpers
 ├── types/route.ts            # Route, RoutingPolicy
@@ -81,7 +81,7 @@ packages/kuralle-core/src/
 ### Flow execution
 
 ```
-packages/kuralle-core/src/
+packages/core/src/
 ├── flow/runFlow.ts           # Imperative flow loop
 ├── flow/reduceTransition.ts  # Transition → events + state update
 ├── flow/nodeBuilders.ts      # Node prompt/tool assembly
@@ -91,7 +91,7 @@ packages/kuralle-core/src/
 ### Runtime & durability
 
 ```
-packages/kuralle-core/src/
+packages/core/src/
 ├── runtime/Runtime.ts        # createRuntime, HarnessConfig, RunOptions
 ├── runtime/openRun.ts        # Session + RunState load, replay entry
 ├── runtime/closeRun.ts       # Persist, memory, outcome
@@ -103,7 +103,7 @@ packages/kuralle-core/src/
 ### Tools (effect path)
 
 ```
-packages/kuralle-core/src/
+packages/core/src/
 ├── tools/effect/defineTool.ts
 ├── tools/effect/ToolExecutor.ts
 └── tools/effect/schema.ts
@@ -119,7 +119,7 @@ packages/kuralle-core/src/
 ### 2. Update types first
 
 ```
-packages/kuralle-core/src/types/
+packages/core/src/types/
 ```
 
 - [ ] Extend `AgentConfig`, `FlowNode`, `HarnessConfig`, etc.
@@ -134,8 +134,8 @@ packages/kuralle-core/src/types/
 ### 4. Add or update examples
 
 ```
-packages/kuralle-core/examples/agents/
-packages/kuralle-core/examples/flows/
+packages/core/examples/agents/
+packages/core/examples/flows/
 ```
 
 - [ ] Minimal working example
@@ -144,7 +144,7 @@ packages/kuralle-core/examples/flows/
 ### 5. Test
 
 ```bash
-cd packages/kuralle-core
+cd packages/core
 bun test test/core-agent/
 bun test test/core-flow/
 npx tsx examples/agents/form-filler.ts
@@ -207,7 +207,7 @@ Side effects go through `ctx.*` and the effect log. Do not add ad-hoc session mu
 ### Testing
 
 - Every feature needs an example that runs
-- Do not break existing examples in `packages/kuralle-core/examples/`
+- Do not break existing examples in `packages/core/examples/`
 
 ## Version bumping
 
@@ -235,12 +235,12 @@ All packages version together via changesets (`pnpm changeset` → `pnpm release
 ### Add a session store backend
 
 1. Implement `SessionStore` from core
-2. New package `packages/kuralle-<store>-store/`
+2. New package `packages/<store>-store/`
 3. Example + README
 
 ### Add an HTTP adapter
 
-1. Mirror `packages/kuralle-hono-server` routes
+1. Mirror `packages/hono-server` routes
 2. Wire `runtime.run()` → `TurnHandle.toUIMessageStreamResponse()` (web default) or `toResponseStream('sse')` for raw JSON-SSE
 3. Example server
 
@@ -248,15 +248,15 @@ All packages version together via changesets (`pnpm changeset` → `pnpm release
 
 ```bash
 # Types
-cd packages/kuralle-core && npx tsc --noEmit
+cd packages/core && npx tsc --noEmit
 
 # Minimal example
-cd packages/kuralle-core/examples/agents
+cd packages/core/examples/agents
 npx tsx form-filler.ts
 
 # Unit tests
-bun test packages/kuralle-core/test/core-flow/
-bun test packages/kuralle-core/test/core-agent/
+bun test packages/core/test/core-flow/
+bun test packages/core/test/core-agent/
 ```
 
 ## When to ask for review

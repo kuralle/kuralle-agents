@@ -15,7 +15,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 TSC=./node_modules/.bin/tsc
-[ -x "$TSC" ] || TSC=packages/kuralle-core/node_modules/.bin/tsc
+[ -x "$TSC" ] || TSC=packages/core/node_modules/.bin/tsc
 
 # Standalone-app configs to skip (independent dep trees, not framework surface).
 SKIP_RE='apps/docs'

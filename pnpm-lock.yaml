@@ -38,7 +38,7 @@ importers:
         version: 10.0.1(eslint@10.4.1(jiti@2.7.0))
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:packages/kuralle-core
+        version: link:packages/core
       '@livekit/agents':
         specifier: ^1.0.48
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -86,7 +86,7 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-analytics-sdk:
+  packages/analytics-sdk:
     dependencies:
       zod:
         specifier: ^4.0.0
@@ -102,17 +102,17 @@ importers:
         specifier: ^19.0.0
         version: 19.0.1
 
-  packages/kuralle-cf-agent:
+  packages/cf-agent:
     dependencies:
       '@cloudflare/ai-chat':
         specifier: ^0.1.8
         version: 0.1.9(@ai-sdk/react@3.0.160(react@19.2.5)(zod@4.4.3))(agents@0.11.5)(ai@6.0.193(zod@4.4.3))(react@19.2.5)(zod@4.4.3)
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@kuralle-agents/realtime-audio':
         specifier: workspace:*
-        version: link:../kuralle-realtime-audio
+        version: link:../realtime-audio
       ai:
         specifier: 6.0.193
         version: 6.0.193(zod@4.4.3)
@@ -125,7 +125,7 @@ importers:
         version: 0.12.21(@cloudflare/workers-types@4.20260412.1)(@vitest/runner@3.2.6)(@vitest/snapshot@3.2.6)(vitest@3.2.6(@types/node@25.6.0)(lightningcss@1.32.0))
       '@kuralle-agents/voice-protocol':
         specifier: workspace:*
-        version: link:../kuralle-voice-protocol
+        version: link:../voice-protocol
       agents:
         specifier: ^0.11.5
         version: 0.11.5(@babel/core@7.29.0)(@babel/runtime@7.29.2)(@cloudflare/ai-chat@0.1.9)(@cloudflare/workers-types@4.20260412.1)(ai@6.0.193(zod@4.4.3))(react@19.2.5)(rolldown@1.0.0-rc.17)(zod@4.4.3)
@@ -136,7 +136,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.6(@types/node@25.6.0)(lightningcss@1.32.0)
 
-  packages/kuralle-core:
+  packages/core:
     dependencies:
       chrono-node:
         specifier: ^2.6.0
@@ -150,7 +150,7 @@ importers:
         version: 0.12.21(@cloudflare/workers-types@4.20260412.1)(@vitest/runner@3.2.6)(@vitest/snapshot@3.2.6)(vitest@3.2.6(@types/node@20.19.39)(lightningcss@1.32.0))
       '@kuralle-agents/realtime-audio':
         specifier: workspace:*
-        version: link:../kuralle-realtime-audio
+        version: link:../realtime-audio
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -173,7 +173,7 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-e2e-tests:
+  packages/e2e-tests:
     dependencies:
       '@ai-sdk/google':
         specifier: ^2.0.0
@@ -183,19 +183,19 @@ importers:
         version: 1.43.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))
       '@kuralle-agents/analytics-sdk':
         specifier: workspace:*
-        version: link:../kuralle-analytics-sdk
+        version: link:../analytics-sdk
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@kuralle-agents/eval':
         specifier: workspace:*
-        version: link:../kuralle-eval
+        version: link:../eval
       '@kuralle-agents/livekit-plugin':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin
+        version: link:../livekit-plugin
       '@kuralle-agents/livekit-plugin-transport-ws':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin-transport-ws
+        version: link:../livekit-plugin-transport-ws
       '@livekit/agents':
         specifier: '>=1.0.0'
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -231,17 +231,17 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-engagement:
+  packages/engagement:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@kuralle-agents/messaging':
         specifier: workspace:*
-        version: link:../kuralle-messaging
+        version: link:../messaging
       '@kuralle-agents/messaging-meta':
         specifier: workspace:*
-        version: link:../kuralle-messaging-meta
+        version: link:../messaging-meta
       ai:
         specifier: 6.0.193
         version: 6.0.193(zod@4.4.3)
@@ -256,7 +256,7 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
-  packages/kuralle-eval:
+  packages/eval:
     devDependencies:
       '@types/node':
         specifier: ^20.11.0
@@ -265,11 +265,11 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-fs:
+  packages/fs:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.12.7
@@ -290,11 +290,11 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-hono-server:
+  packages/hono-server:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       ai:
         specifier: 6.0.193
         version: 6.0.193(zod@4.4.3)
@@ -333,7 +333,7 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-http-client:
+  packages/http-client:
     devDependencies:
       '@types/node':
         specifier: ^22.13.4
@@ -342,11 +342,11 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
-  packages/kuralle-lancedb-store:
+  packages/lancedb-store:
     devDependencies:
       '@kuralle-agents/rag':
         specifier: workspace:*
-        version: link:../kuralle-rag
+        version: link:../rag
       '@lancedb/lancedb':
         specifier: ^0.13.0
         version: 0.13.0(apache-arrow@17.0.0)
@@ -357,7 +357,7 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-livekit-plugin:
+  packages/livekit-plugin:
     dependencies:
       '@aws-sdk/client-s3':
         specifier: 3.1000.0
@@ -370,7 +370,7 @@ importers:
         version: 1.43.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@livekit/agents':
         specifier: '>=1.0.0'
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -380,7 +380,7 @@ importers:
     devDependencies:
       '@kuralle-agents/livekit-plugin-transport-ws':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin-transport-ws
+        version: link:../livekit-plugin-transport-ws
       '@types/node':
         specifier: ^25.3.2
         version: 25.6.0
@@ -394,14 +394,14 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-livekit-plugin-transport-http:
+  packages/livekit-plugin-transport-http:
     dependencies:
       '@kuralle-agents/livekit-plugin':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin
+        version: link:../livekit-plugin
       '@kuralle-agents/transport-base':
         specifier: workspace:*
-        version: link:../kuralle-transport-base
+        version: link:../transport-base
       '@livekit/agents':
         specifier: '>=1.0.0'
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -416,7 +416,7 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
-  packages/kuralle-livekit-plugin-transport-sip:
+  packages/livekit-plugin-transport-sip:
     dependencies:
       '@livekit/agents':
         specifier: '>=1.0.0'
@@ -430,16 +430,16 @@ importers:
     devDependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@kuralle-agents/livekit-plugin':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin
+        version: link:../livekit-plugin
       '@kuralle-agents/realtime-audio':
         specifier: workspace:*
-        version: link:../kuralle-realtime-audio
+        version: link:../realtime-audio
       '@kuralle-agents/transport-base':
         specifier: workspace:*
-        version: link:../kuralle-transport-base
+        version: link:../transport-base
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.17
@@ -447,14 +447,14 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
-  packages/kuralle-livekit-plugin-transport-smartpbx:
+  packages/livekit-plugin-transport-smartpbx:
     dependencies:
       '@kuralle-agents/livekit-plugin':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin
+        version: link:../livekit-plugin
       '@kuralle-agents/transport-base':
         specifier: workspace:*
-        version: link:../kuralle-transport-base
+        version: link:../transport-base
       '@livekit/agents':
         specifier: '>=1.0.0'
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -463,14 +463,14 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
-  packages/kuralle-livekit-plugin-transport-twilio:
+  packages/livekit-plugin-transport-twilio:
     dependencies:
       '@kuralle-agents/livekit-plugin':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin
+        version: link:../livekit-plugin
       '@kuralle-agents/transport-base':
         specifier: workspace:*
-        version: link:../kuralle-transport-base
+        version: link:../transport-base
       '@livekit/agents':
         specifier: '>=1.0.0'
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -488,17 +488,17 @@ importers:
         specifier: ^8.18.0
         version: 8.20.0
 
-  packages/kuralle-livekit-plugin-transport-ws:
+  packages/livekit-plugin-transport-ws:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@kuralle-agents/livekit-plugin':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin
+        version: link:../livekit-plugin
       '@kuralle-agents/transport-base':
         specifier: workspace:*
-        version: link:../kuralle-transport-base
+        version: link:../transport-base
       '@livekit/agents':
         specifier: '>=1.0.0'
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -514,7 +514,7 @@ importers:
         version: 1.43.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))
       '@kuralle-agents/realtime-audio':
         specifier: workspace:*
-        version: link:../kuralle-realtime-audio
+        version: link:../realtime-audio
       '@livekit/agents-plugin-silero':
         specifier: ^1.0.48
         version: 1.2.6(@livekit/agents@1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3))(@livekit/rtc-node@0.13.25)
@@ -537,11 +537,11 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-messaging:
+  packages/messaging:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       hono:
         specifier: 4.12.12
         version: 4.12.12
@@ -553,14 +553,14 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
-  packages/kuralle-messaging-meta:
+  packages/messaging-meta:
     dependencies:
       '@kuralle-agents/http-client':
         specifier: workspace:*
-        version: link:../kuralle-http-client
+        version: link:../http-client
       '@kuralle-agents/messaging':
         specifier: workspace:*
-        version: link:../kuralle-messaging
+        version: link:../messaging
     devDependencies:
       '@ai-sdk/google':
         specifier: ^3.0.52
@@ -576,13 +576,13 @@ importers:
         version: 1.19.13(hono@4.12.12)
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@kuralle-agents/engagement':
         specifier: workspace:*
-        version: link:../kuralle-engagement
+        version: link:../engagement
       '@kuralle-agents/hono-server':
         specifier: workspace:*
-        version: link:../kuralle-hono-server
+        version: link:../hono-server
       '@types/node':
         specifier: ^22.13.4
         version: 22.19.17
@@ -602,15 +602,15 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-postgres-store:
+  packages/postgres-store:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
     devDependencies:
       '@kuralle-agents/rag':
         specifier: workspace:*
-        version: link:../kuralle-rag
+        version: link:../rag
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -624,15 +624,15 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-rag:
+  packages/rag:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
     devDependencies:
       '@kuralle-agents/fs':
         specifier: workspace:*
-        version: link:../kuralle-fs
+        version: link:../fs
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -649,11 +649,11 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-rag-loaders:
+  packages/rag-loaders:
     devDependencies:
       '@kuralle-agents/rag':
         specifier: workspace:*
-        version: link:../kuralle-rag
+        version: link:../rag
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -673,21 +673,21 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-realtime-audio:
+  packages/realtime-audio:
     dependencies:
       '@google/genai':
         specifier: ^1.0.0
         version: 1.43.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))
       '@kuralle-agents/voice-protocol':
         specifier: workspace:*
-        version: link:../kuralle-voice-protocol
+        version: link:../voice-protocol
       ws:
         specifier: ^8.19.0
         version: 8.20.0
     devDependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -707,18 +707,18 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-redis-store:
+  packages/redis-store:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
     devDependencies:
       '@ai-sdk/openai':
         specifier: ^3.0.0
         version: 3.0.67(zod@4.4.3)
       '@kuralle-agents/rag':
         specifier: workspace:*
-        version: link:../kuralle-rag
+        version: link:../rag
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -741,18 +741,18 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-skills:
+  packages/skills:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.12.7
         version: 0.12.21(@cloudflare/workers-types@4.20260412.1)(@vitest/runner@3.2.6)(@vitest/snapshot@3.2.6)(vitest@3.2.6(@types/node@20.19.39)(lightningcss@1.32.0))
       '@kuralle-agents/fs':
         specifier: workspace:*
-        version: link:../kuralle-fs
+        version: link:../fs
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -769,14 +769,14 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-tools:
+  packages/tools:
     dependencies:
       '@kuralle-agents/core':
         specifier: workspace:*
-        version: link:../kuralle-core
+        version: link:../core
       '@kuralle-agents/rag':
         specifier: workspace:*
-        version: link:../kuralle-rag
+        version: link:../rag
     devDependencies:
       '@types/node':
         specifier: ^20.11.0
@@ -791,11 +791,11 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-transport-base:
+  packages/transport-base:
     dependencies:
       '@kuralle-agents/livekit-plugin':
         specifier: workspace:*
-        version: link:../kuralle-livekit-plugin
+        version: link:../livekit-plugin
       '@livekit/agents':
         specifier: '>=1.0.0'
         version: 1.2.6(@livekit/rtc-node@0.13.25)(typescript@5.9.3)(zod@4.4.3)
@@ -813,11 +813,11 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
-  packages/kuralle-upstash-store:
+  packages/upstash-store:
     devDependencies:
       '@kuralle-agents/rag':
         specifier: workspace:*
-        version: link:../kuralle-rag
+        version: link:../rag
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -825,11 +825,11 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-vectorize-store:
+  packages/vectorize-store:
     devDependencies:
       '@kuralle-agents/rag':
         specifier: workspace:*
-        version: link:../kuralle-rag
+        version: link:../rag
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.39
@@ -837,7 +837,7 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/kuralle-voice-protocol:
+  packages/voice-protocol:
     devDependencies:
       '@types/node':
         specifier: ^20.11.0
@@ -849,7 +849,7 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
-  packages/kuralle-widget:
+  packages/widget:
     dependencies:
       nanoid:
         specifier: ^5.0.9
@@ -871,7 +871,7 @@ importers:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@25.6.0)(lightningcss@1.32.0)
 
-  packages/kuralle-ws-bench:
+  packages/ws-bench:
     dependencies:
       '@sockudo/ws':
         specifier: 1.6.10

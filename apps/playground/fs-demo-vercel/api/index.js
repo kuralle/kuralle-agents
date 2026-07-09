@@ -1,4 +1,4 @@
-// ../../../packages/kuralle-fs/dist/encoding.js
+// ../../../packages/fs/dist/encoding.js
 var textEncoder = new TextEncoder();
 var textDecoder = new TextDecoder();
 function toBuffer(content, encoding) {
@@ -71,7 +71,7 @@ function getEncoding(options) {
   return options.encoding ?? void 0;
 }
 
-// ../../../packages/kuralle-fs/dist/path-utils.js
+// ../../../packages/fs/dist/path-utils.js
 var MAX_SYMLINK_DEPTH = 40;
 var DEFAULT_DIR_MODE = 493;
 var DEFAULT_FILE_MODE = 420;
@@ -165,7 +165,7 @@ function sortPaths(paths) {
   return [...paths].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
 }
 
-// ../../../packages/kuralle-fs/dist/in-memory-fs.js
+// ../../../packages/fs/dist/in-memory-fs.js
 var utf8 = new TextEncoder();
 function split(normalized) {
   return normalized === "/" ? [] : normalized.slice(1).split("/");
@@ -666,7 +666,7 @@ var InMemoryFs = class {
   }
 };
 
-// ../../../packages/kuralle-fs/dist/okf.js
+// ../../../packages/fs/dist/okf.js
 var RESERVED = /* @__PURE__ */ new Set(["index.md", "log.md"]);
 var FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)([\s\S]*)$/;
 var LINK_RE = /\[[^\]]*\]\(([^)]+)\)/g;
@@ -789,7 +789,7 @@ function scalar(v) {
   return t;
 }
 
-// ../../../packages/kuralle-fs/dist/sql/sql-fs.js
+// ../../../packages/fs/dist/sql/sql-fs.js
 var DEFAULT_INLINE_THRESHOLD = 15e5;
 var VALID_NAMESPACE = /^[a-z][a-z0-9_]*$/i;
 var TEXT_ENCODER = new TextEncoder();
@@ -1457,7 +1457,7 @@ var SqlFileSystem = class {
   }
 };
 
-// ../../../packages/kuralle-fs/dist/sql/factory.js
+// ../../../packages/fs/dist/sql/factory.js
 function isSqlStorage(src) {
   return typeof src === "object" && src !== null && "databaseSize" in src;
 }
@@ -1490,7 +1490,7 @@ function sqlFileSystem(source, options) {
   return new SqlFileSystem({ backend: toSqlBackend(source), ...options });
 }
 
-// ../../../packages/kuralle-fs/dist/sql/libsql-http.js
+// ../../../packages/fs/dist/sql/libsql-http.js
 function toCell(v) {
   if (v === null || v === void 0)
     return { type: "null" };

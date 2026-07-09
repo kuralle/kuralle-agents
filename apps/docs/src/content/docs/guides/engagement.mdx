@@ -86,9 +86,9 @@ const triage = withChoices(
 
 ## Examples
 
-- **Deep, end-to-end bots** — `packages/kuralle-engagement/examples/` (booking, pharmacy, clothing): free-form extraction, template-based closed-window sends, and mixed conversations across WhatsApp / web / Instagram. See [`AUTHORING.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/kuralle-engagement/examples/AUTHORING.md) for the API + patterns.
-- **Multi-platform server** — `packages/kuralle-messaging-meta/examples/multi-platform/` (WhatsApp + Instagram webhooks + web SSE, one shared flow; offline-friendly).
-- **Deployable WhatsApp server** — `packages/kuralle-messaging-meta/examples/whatsapp-server/`: a self-hostable bot wiring `engagement()` + `createMessagingRouter` to a real WhatsApp Cloud API number (bring your own token, no Embedded Signup). Boots on Bun or Node, optional Redis `WindowStore` via `REDIS_URL`. See [Deployment](/guides/deployment/).
+- **Deep, end-to-end bots** — `packages/engagement/examples/` (booking, pharmacy, clothing): free-form extraction, template-based closed-window sends, and mixed conversations across WhatsApp / web / Instagram. See [`AUTHORING.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/engagement/examples/AUTHORING.md) for the API + patterns.
+- **Multi-platform server** — `packages/messaging-meta/examples/multi-platform/` (WhatsApp + Instagram webhooks + web SSE, one shared flow; offline-friendly).
+- **Deployable WhatsApp server** — `packages/messaging-meta/examples/whatsapp-server/`: a self-hostable bot wiring `engagement()` + `createMessagingRouter` to a real WhatsApp Cloud API number (bring your own token, no Embedded Signup). Boots on Bun or Node, optional Redis `WindowStore` via `REDIS_URL`. See [Deployment](/guides/deployment/).
 
 ## Dev loop — simulate before you deploy
 
@@ -100,4 +100,4 @@ const triage = withChoices(
 npm install @kuralle-agents/engagement @kuralle-agents/messaging @kuralle-agents/messaging-meta @kuralle-agents/core ai zod
 ```
 
-Package README: [`packages/kuralle-engagement/README.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/kuralle-engagement/README.md).
+Package README: [`packages/engagement/README.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/engagement/README.md).

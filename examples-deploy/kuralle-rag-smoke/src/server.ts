@@ -14,14 +14,14 @@
  */
 import { DurableObject } from 'cloudflare:workers';
 import { createWorkersAI } from 'workers-ai-provider';
-import { AiSdkEmbedder } from '../../../packages/kuralle-rag/dist/embedders/AiSdkEmbedder.js';
-import { RagPipeline } from '../../../packages/kuralle-rag/dist/pipeline/RagPipeline.js';
-import { SqlIngestManifest } from '../../../packages/kuralle-rag/dist/pipeline/IngestManifest.js';
-import { InMemoryVectorStore } from '../../../packages/kuralle-rag/dist/vectorStores/InMemoryVectorStore.js';
-import { createMarkdownChunker } from '../../../packages/kuralle-rag/dist/chunkers.js';
-import { Fts5KeywordIndex } from '../../../packages/kuralle-rag/dist/search/Fts5KeywordIndex.js';
-import { createSqlExecutor } from '../../../packages/kuralle-cf-agent/dist/sqlExecutor.js';
-import type { Embedder } from '../../../packages/kuralle-rag/dist/types.js';
+import { AiSdkEmbedder } from '../../../packages/rag/dist/embedders/AiSdkEmbedder.js';
+import { RagPipeline } from '../../../packages/rag/dist/pipeline/RagPipeline.js';
+import { SqlIngestManifest } from '../../../packages/rag/dist/pipeline/IngestManifest.js';
+import { InMemoryVectorStore } from '../../../packages/rag/dist/vectorStores/InMemoryVectorStore.js';
+import { createMarkdownChunker } from '../../../packages/rag/dist/chunkers.js';
+import { Fts5KeywordIndex } from '../../../packages/rag/dist/search/Fts5KeywordIndex.js';
+import { createSqlExecutor } from '../../../packages/cf-agent/dist/sqlExecutor.js';
+import type { Embedder } from '../../../packages/rag/dist/types.js';
 
 interface Env {
   AI: Ai;

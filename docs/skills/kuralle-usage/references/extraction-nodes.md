@@ -121,7 +121,7 @@ See `docs/skills/kuralle-voice-agents/rules/extraction-model-required.md` for wh
 ## Run the demo
 
 ```bash
-cd packages/kuralle-core
+cd packages/core
 npx tsx examples/flows/extraction-node-demo.ts
 # Requires OPENAI_API_KEY
 ```

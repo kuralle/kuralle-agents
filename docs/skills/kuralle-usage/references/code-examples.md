@@ -63,5 +63,5 @@ Look at these for complete patterns:
 ## Fast grep
 
 ```bash
-rg -n "new Runtime|flow agent|routing agent" packages/kuralle-core/examples
+rg -n "new Runtime|flow agent|routing agent" packages/core/examples
 ```

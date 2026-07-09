@@ -1,6 +1,6 @@
 # Deploy a WhatsApp bot on Fly.io (Node/Bun server)
 
-This is the framework's paved path: a plain Hono server using `createMessagingRouter`. It's the simplest mental model — one process, one webhook route — and it's the same code that runs on any Node 18+/Bun host. The canonical reference lives in the repo at `packages/kuralle-messaging-meta/examples/whatsapp-server/`; read it, it's deployable as-is.
+This is the framework's paved path: a plain Hono server using `createMessagingRouter`. It's the simplest mental model — one process, one webhook route — and it's the same code that runs on any Node 18+/Bun host. The canonical reference lives in the repo at `packages/messaging-meta/examples/whatsapp-server/`; read it, it's deployable as-is.
 
 > **Fly = spike test, not production HA.** Keep it to one small auto-stopping machine. Never provision Fly Managed Postgres — if you need durable state, point the session store at an external Redis/Postgres you own.
 

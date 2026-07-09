@@ -96,7 +96,7 @@
 
 ## Proof Points
 - One tagless primitive (`defineAgent`) derives flow/triage/composition behavior from the fields you set — fewer concepts than peers.
-- Real example: a form-filler flow replaces a ~584-line v1 state machine with ~60 lines (`packages/kuralle-core/examples/agents/form-filler.ts`).
+- Real example: a form-filler flow replaces a ~584-line v1 state machine with ~60 lines (`packages/core/examples/agents/form-filler.ts`).
 - Durable effect log → exactly-once tool execution across retries.
 - 24 packages, one version line; text and voice share the same runtime and agent config.
 > Use concrete, verifiable numbers only. If a metric isn't in the repo, don't invent it.

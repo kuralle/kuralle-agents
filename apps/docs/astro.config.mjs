@@ -22,30 +22,30 @@ const typeDocConfig = {
 const plugins = [
   coreTypeDoc({
     sidebar: { label: '@kuralle-agents/core' },
-    entryPoints: ['../../packages/kuralle-core/src/index.ts'],
+    entryPoints: ['../../packages/core/src/index.ts'],
     output: 'api/core',
-    tsconfig: '../../packages/kuralle-core/tsconfig.json',
+    tsconfig: '../../packages/core/tsconfig.json',
     typeDoc: typeDocConfig,
   }),
   honoTypeDoc({
     sidebar: { label: '@kuralle-agents/hono-server' },
-    entryPoints: ['../../packages/kuralle-hono-server/src/index.ts'],
+    entryPoints: ['../../packages/hono-server/src/index.ts'],
     output: 'api/hono-server',
-    tsconfig: '../../packages/kuralle-hono-server/tsconfig.json',
+    tsconfig: '../../packages/hono-server/tsconfig.json',
     typeDoc: typeDocConfig,
   }),
   toolsTypeDoc({
     sidebar: { label: '@kuralle-agents/tools' },
-    entryPoints: ['../../packages/kuralle-tools/src/index.ts'],
+    entryPoints: ['../../packages/tools/src/index.ts'],
     output: 'api/tools',
-    tsconfig: '../../packages/kuralle-tools/tsconfig.json',
+    tsconfig: '../../packages/tools/tsconfig.json',
     typeDoc: typeDocConfig,
   }),
   ragTypeDoc({
     sidebar: { label: '@kuralle-agents/rag' },
-    entryPoints: ['../../packages/kuralle-rag/src/index.ts'],
+    entryPoints: ['../../packages/rag/src/index.ts'],
     output: 'api/rag',
-    tsconfig: '../../packages/kuralle-rag/tsconfig.json',
+    tsconfig: '../../packages/rag/tsconfig.json',
     typeDoc: typeDocConfig,
   }),
   starlightLlmsTxt({

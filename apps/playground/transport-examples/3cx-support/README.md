@@ -187,7 +187,7 @@ To enable outbound calls from the agent:
 
 - **3CX SIP Trunk Guide**: https://www.3cx.com/docs/sip-trunk-configuration/
 - **Main Documentation**: `../../../docs/3CX_INTEGRATION_SIMPLIFIED.md`
-- **SIP Transport Package**: `../../../packages/kuralle-livekit-plugin-transport-sip/`
+- **SIP Transport Package**: `../../../packages/livekit-plugin-transport-sip/`
 
 ## Support
 

@@ -94,7 +94,7 @@ expect(trace.binaryChunks.length).toBeGreaterThan(0); // audio came back
 
 Each live turn takes 20-30 seconds. Run with:
 ```bash
-npx tsx packages/kuralle-e2e-tests/tests/agentsession-realtime-authority-gemini-e2e.ts
+npx tsx packages/e2e-tests/tests/agentsession-realtime-authority-gemini-e2e.ts
 ```
 
 ## Audio fixture pacing — critical detail
@@ -128,19 +128,19 @@ client.close();
 
 Run offline SIP E2E tests (no API keys):
 ```bash
-bun test packages/kuralle-e2e-tests/tests/sip-voice-agent-e2e.test.ts
+bun test packages/e2e-tests/tests/sip-voice-agent-e2e.test.ts
 ```
 
 Run live SIP tests:
 ```bash
 # Gemini
-bun run packages/kuralle-e2e-tests/tests/sip-realtime-authority-e2e.ts
+bun run packages/e2e-tests/tests/sip-realtime-authority-e2e.ts
 
 # OpenAI
-PROVIDER=openai bun run packages/kuralle-e2e-tests/tests/sip-realtime-authority-e2e.ts
+PROVIDER=openai bun run packages/e2e-tests/tests/sip-realtime-authority-e2e.ts
 
 # xAI
-PROVIDER=xai bun run packages/kuralle-e2e-tests/tests/sip-realtime-authority-e2e.ts
+PROVIDER=xai bun run packages/e2e-tests/tests/sip-realtime-authority-e2e.ts
 ```
 
 ## Existing E2E test catalog

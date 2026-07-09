@@ -41,8 +41,8 @@ Use **local, version-matched docs** first:
 
 Fallback (monorepo only):
 
-- Examples: `packages/kuralle-core/examples/`
-- Guides: `packages/kuralle-tools/guides/`
+- Examples: `packages/core/examples/`
+- Guides: `packages/tools/guides/`
 
 ## Navigation
 

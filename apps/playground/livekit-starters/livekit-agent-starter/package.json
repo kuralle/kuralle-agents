@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare:plugin": "bun run --cwd ../../../../packages/kuralle-livekit-plugin build",
+    "prepare:plugin": "bun run --cwd ../../../../packages/livekit-plugin build",
     "prepare": "bun run prepare:plugin",
     "build": "bun run prepare && vite build",
     "clean": "rm -rf dist",

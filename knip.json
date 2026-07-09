@@ -27,7 +27,7 @@
       ],
       "project": ["**/*.{ts,tsx,mjs,js}"]
     },
-    "packages/kuralle-cf-agent/examples/*": {
+    "packages/cf-agent/examples/*": {
       "entry": ["src/**/*.{ts,tsx}", "*.config.{ts,js,mjs}"],
       "project": ["**/*.{ts,tsx}"]
     },

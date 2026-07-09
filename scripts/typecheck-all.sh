@@ -12,7 +12,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 TSC=./node_modules/.bin/tsc
-[ -x "$TSC" ] || TSC=packages/kuralle-core/node_modules/.bin/tsc
+[ -x "$TSC" ] || TSC=packages/core/node_modules/.bin/tsc
 
 fail=0
 run() { # <label> <tsconfig path>
@@ -31,7 +31,7 @@ run() { # <label> <tsconfig path>
 }
 
 echo "== core examples =="
-run "kuralle-core/examples" "packages/kuralle-core/tsconfig.examples.json"
+run "core/examples" "packages/core/tsconfig.examples.json"
 
 echo ""
 [ "$fail" -eq 0 ] && echo "✓ typecheck: all green" || echo "✗ typecheck: failures above"

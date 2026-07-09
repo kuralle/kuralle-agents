@@ -14,7 +14,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 TSC=./node_modules/.bin/tsc
-[ -x "$TSC" ] || TSC=packages/kuralle-core/node_modules/.bin/tsc
+[ -x "$TSC" ] || TSC=packages/core/node_modules/.bin/tsc
 
 CFGS=$(find apps/playground -name "tsconfig*.json" \
     -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.next/*" 2>/dev/null \

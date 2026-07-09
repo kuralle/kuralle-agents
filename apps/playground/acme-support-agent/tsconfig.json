@@ -12,10 +12,10 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@kuralle-agents/core": ["../../../packages/kuralle-core/src/index.ts"],
-      "@kuralle-agents/hono-server": ["../../../packages/kuralle-hono-server/src/index.ts"],
-      "@kuralle-agents/rag": ["../../../packages/kuralle-rag/src/index.ts"],
-      "@kuralle-agents/lancedb-store": ["../../../packages/kuralle-lancedb-store/src/index.ts"]
+      "@kuralle-agents/core": ["../../../packages/core/src/index.ts"],
+      "@kuralle-agents/hono-server": ["../../../packages/hono-server/src/index.ts"],
+      "@kuralle-agents/rag": ["../../../packages/rag/src/index.ts"],
+      "@kuralle-agents/lancedb-store": ["../../../packages/lancedb-store/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "smoke.ts", "../_shared/runtime/**/*.ts"],

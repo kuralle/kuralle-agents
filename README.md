@@ -20,7 +20,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 
 ## Why Kuralle
 
-**Procedures belong in flows, not prompts.** The form-filler example in `packages/kuralle-core/examples/agents/form-filler.ts` replaces a 584-line v1 state machine with ~60 lines.
+**Procedures belong in flows, not prompts.** The form-filler example in `packages/core/examples/agents/form-filler.ts` replaces a 584-line v1 state machine with ~60 lines.
 
 **One agent config, text and voice.** The same `defineAgent` runs over chat text and over provider-native realtime voice. You don't maintain two stacks.
 
@@ -84,7 +84,7 @@ Run it:
 OPENAI_API_KEY=sk-... npx tsx agent.ts
 ```
 
-More examples: `packages/kuralle-core/examples/agents/` — form-filler, transfer-agent, basic-chat, sales-with-leads.
+More examples: `packages/core/examples/agents/` — form-filler, transfer-agent, basic-chat, sales-with-leads.
 
 ## Text and voice, one agent
 

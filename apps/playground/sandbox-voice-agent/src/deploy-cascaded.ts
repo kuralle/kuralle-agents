@@ -251,7 +251,7 @@ async function main() {
           return;
         }
         turnAudio = 0;
-        const pcm = readFileSync(join(repoRoot, 'packages/kuralle-e2e-tests/fixtures', pcmFiles[i]));
+        const pcm = readFileSync(join(repoRoot, 'packages/e2e-tests/fixtures', pcmFiles[i]));
         console.log(`\n--- Turn ${i + 1} ---`);
         for (let o = 0; o + 960 <= pcm.length; o += 960) {
           ws.send(pcm.subarray(o, o + 960));

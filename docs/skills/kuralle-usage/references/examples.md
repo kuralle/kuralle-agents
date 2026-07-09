@@ -8,13 +8,13 @@
 
 ## CAG examples
 
-- `packages/kuralle-tools/examples/cag-support-agent`
+- `packages/tools/examples/cag-support-agent`
 
 ## Auto-retrieve examples
 
-- `packages/kuralle-tools/examples/auto-retrieve-runtime`
-- `packages/kuralle-tools/examples/auto-retrieve-triage`
+- `packages/tools/examples/auto-retrieve-runtime`
+- `packages/tools/examples/auto-retrieve-triage`
 
 ## Enterprise support
 
-- `packages/kuralle-tools/examples/enterprise-support-agent`
+- `packages/tools/examples/enterprise-support-agent`

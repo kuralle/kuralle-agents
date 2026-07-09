@@ -2,7 +2,7 @@
 
 ## 0.10.0 — Retrieval hardening: embedder lock, incremental ingest, persistent keyword tier, multilingual keyword search
 
-Unified bump across the graph (0.9.0 → 0.10.0). Contains **breaking** `@kuralle-agents/rag` option renames (minor bump per repo convention). Grounded in a measured before/after benchmark plus live Cloudflare + Fly deployment verification (`packages/kuralle-rag/bench/results/vecgrep-gap-report.md`).
+Unified bump across the graph (0.9.0 → 0.10.0). Contains **breaking** `@kuralle-agents/rag` option renames (minor bump per repo convention). Grounded in a measured before/after benchmark plus live Cloudflare + Fly deployment verification (`packages/rag/bench/results/vecgrep-gap-report.md`).
 
 **Embedder provider lock + incremental ingestion (`@kuralle-agents/rag`):**
 - New `IngestManifest` (`InMemoryIngestManifest`, `SqlIngestManifest` over a tagged-template `SqlExecutor` — Durable Object SQLite on CF, `bun:sqlite`/`better-sqlite3` on Node). With a manifest, `RagPipeline`:
@@ -132,7 +132,7 @@ Unified patch bump across the graph (0.7.1 → 0.7.2). `runtime/promptCache.ts` 
 
 Prompt assembly was already cache-friendly (static instructions first, volatile RAG/memory appended last), so this is a pure wiring fix. No API change, not breaking. Note: the separate Layer-2 *retrieval* cache is still unwired (see ADR 0008) — a distinct follow-up.
 
-**Validated live** (`packages/kuralle-e2e-tests/prompt-cache-validation.md`):
+**Validated live** (`packages/e2e-tests/prompt-cache-validation.md`):
 - **OpenAI** — cache HIT confirmed through the shipped helper: turn 1 `cacheReadTokens=0`, turns 2–4 `=10240` (~99% of the prompt cached → ~half the input cost on repeat turns).
 - **Anthropic** — wired + unit-tested; not live-validated (no key in env).
 - **Gemini** — kuralle wires nothing (implicit caching is parameter-free), but implicit caching is best-effort and **did not fire** in a 4-turn live probe; *guaranteed* Gemini caching needs explicit `CachedContent`, which is **not** wired (open follow-up).

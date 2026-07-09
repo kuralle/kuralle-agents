@@ -11,13 +11,13 @@
  *                   (the cloud-embed tax measured server-side).
  */
 import { Database } from 'bun:sqlite';
-import { RagPipeline } from '../../../packages/kuralle-rag/dist/pipeline/RagPipeline.js';
-import { SqlIngestManifest } from '../../../packages/kuralle-rag/dist/pipeline/IngestManifest.js';
-import { InMemoryVectorStore } from '../../../packages/kuralle-rag/dist/vectorStores/InMemoryVectorStore.js';
-import { createMarkdownChunker } from '../../../packages/kuralle-rag/dist/chunkers.js';
-import { Fts5KeywordIndex } from '../../../packages/kuralle-rag/dist/search/Fts5KeywordIndex.js';
-import type { SqlExecutor } from '../../../packages/kuralle-rag/dist/sql.js';
-import type { Embedder } from '../../../packages/kuralle-rag/dist/types.js';
+import { RagPipeline } from '../../../packages/rag/dist/pipeline/RagPipeline.js';
+import { SqlIngestManifest } from '../../../packages/rag/dist/pipeline/IngestManifest.js';
+import { InMemoryVectorStore } from '../../../packages/rag/dist/vectorStores/InMemoryVectorStore.js';
+import { createMarkdownChunker } from '../../../packages/rag/dist/chunkers.js';
+import { Fts5KeywordIndex } from '../../../packages/rag/dist/search/Fts5KeywordIndex.js';
+import type { SqlExecutor } from '../../../packages/rag/dist/sql.js';
+import type { Embedder } from '../../../packages/rag/dist/types.js';
 
 const DB_PATH = '/tmp/kuralle-rag-smoke.sqlite';
 

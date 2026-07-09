@@ -70,8 +70,8 @@ Schema (adapted from CF `filesystem.ts`): table `<ns>_files(path PK, parent_path
 | **P4** | Persistent-workspace example (live) + docs | `examples/persistent-workspace.ts`, README, ADR-0013 | live smoke: write a file + a skill via one `SqlFileSystem`, construct a **second** `SqlFileSystem` over the **same** backend (simulating restart), read them back — proves persistence; ADR documents the primitive + ghost-writes fix | P1,P2,P3 |
 
 ## 5. Validation
-- `cd packages/kuralle-fs && bun test ./test && vitest run --config vitest.config.ts` — SqlFileSystem passes the shared conformance suite; workers-vitest green on DO SQLite.
-- `cd packages/kuralle-core && bun test ./test` — no regression (core `FileSystem` interface unchanged).
+- `cd packages/fs && bun test ./test && vitest run --config vitest.config.ts` — SqlFileSystem passes the shared conformance suite; workers-vitest green on DO SQLite.
+- `cd packages/core && bun test ./test` — no regression (core `FileSystem` interface unchanged).
 - Live: `persistent-workspace.ts` proves a file/skill written by one `SqlFileSystem` is read by a second one over the same store (restart survival) — the ghost-writes fix, observed.
 
 ## 6. Portability contract

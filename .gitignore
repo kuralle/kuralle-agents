@@ -16,8 +16,8 @@ opencode/
 
 **/.wrangler/
 wrangler.log
-packages/kuralle-builder/build-output*
-packages/kuralle-builder/deploy-*
+packages/builder/build-output*
+packages/builder/deploy-*
 
 
 CODEX_IMPLEMENTATION_PROMPT.md

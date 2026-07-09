@@ -31,7 +31,7 @@ The script:
 2. Creates a runtime sandbox from the snapshot.
 3. Starts `server.mjs` with detached object-form `runCommand`.
 4. Polls the sandbox server's own health endpoint at `/__kuralle_health` and requires a per-run readiness token, so the sandbox proxy's default `200` response is ignored.
-5. Runs an automated audio self-test with `packages/kuralle-e2e-tests/fixtures/bench_hello.pcm`.
+5. Runs an automated audio self-test with `packages/e2e-tests/fixtures/bench_hello.pcm`.
 6. Prints the browser `wss://` URL.
 7. Stops the sandbox after a browser session ends, Ctrl+C, or 10 minutes.
 
@@ -64,7 +64,7 @@ The `tools` scenario runs a single agent with `check_weather` and `get_time` too
 Open:
 
 ```text
-../../../packages/kuralle-e2e-tests/try-voice-agent/index.html
+../../../packages/e2e-tests/try-voice-agent/index.html
 ```
 
 Paste the printed `wss://...vercel.run` URL, click Connect, unmute the mic, and speak. The server stops after the WebSocket session closes.
