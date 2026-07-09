@@ -103,6 +103,23 @@ const agent = defineAgent({
 
 `defineSkill({ name, description, instructions, resources })` builds an inline skill without a filesystem.
 
+## Open Knowledge Format (OKF)
+
+An [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) bundle is *just markdown + YAML frontmatter + files* — knowledge concepts (tables, metrics, runbooks) that cross-link into a graph. Because it's a directory of files, a kuralle `workspace` **is** an OKF consumption agent with no adapter: the agent navigates `index.md` → concept → bundle-relative links via `ls`/`read`/`grep`.
+
+```ts
+import { okfBundleToFs, listOkfConcepts, createFsTool, defineAgent } from '@kuralle-agents/fs'; // createFsTool/defineAgent from core
+
+const fs = okfBundleToFs({
+  '/index.md': '# Sales\n* [Orders](/tables/orders.md)',
+  '/tables/orders.md': '---\ntype: BigQuery Table\ntitle: Orders\n---\n# Schema\n...',
+});
+const concepts = await listOkfConcepts(fs); // [{ id, type, title, links, ... }]
+const agent = defineAgent({ id: 'analyst', model, workspace: fs, tools: { workspace: createFsTool({ fs }) } });
+```
+
+`parseOkfConcept`, `listOkfConcepts`, and `okfBundleToFs` implement the permissive OKF consumption model (spec §9): only `type` is required, unknown fields/broken links are tolerated. See `examples/okf-knowledge-agent.ts` (live navigation) and `examples/okf-benchmark.ts` (progressive-disclosure vs whole-dump).
+
 ## Shell (`@kuralle-agents/fs/shell`, `/node`, `/cloudflare`)
 
 A workspace can carry a `Shell` alongside its `FileSystem`; the runtime then exposes a durable `bash` tool. Three backends mirror flue's model:
@@ -127,6 +144,7 @@ fs and shell tools are **non-replayed** (`replay: false`): they always execute f
 - `CompositeFileSystem` — path-routed mount table over multiple `FileSystem` backends
 - `createFsTool` — durable, capped, read-only-by-default workspace tool factory
 - `fsSkillStore`, `defineSkill`, `parseSkillFrontmatter` — SKILL.md skills on a filesystem
+- `okfBundleToFs`, `listOkfConcepts`, `parseOkfConcept` — Open Knowledge Format (OKF v0.1) bundles
 - `virtualShell` / `bashShell` (`/shell`), `nodeShell` (`/node`), `cloudflareShell` (`/cloudflare`) — `Shell` backends
 - `path-utils`, `encoding` — portable helpers (no Node built-ins)
 
@@ -137,6 +155,9 @@ bun packages/kuralle-fs/examples/kb-agent.ts
 bun packages/kuralle-fs/examples/skills-on-fs.ts   # deterministic, no key
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/composite-workspace.ts
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/workspace-skills-shell.ts  # live: model uses bash + a fs skill
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/okf-knowledge-agent.ts     # live: agent navigates an OKF bundle
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/okf-benchmark.ts           # benchmark: progressive vs whole-dump
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/skill-latency-spike.ts     # benchmark: with vs without skills
 ```
 
 ## License

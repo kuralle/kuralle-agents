@@ -98,6 +98,16 @@ describe('test:fs-tool', () => {
     expect(content.endsWith('line-2000')).toBe(true);
   });
 
+  it('read with offset=0/limit=0 returns full content (models default numeric args to 0)', async () => {
+    const fs = new InMemoryFs({ '/f.txt': 'a\nb\nc' });
+    const zeros = await run(fs, { op: 'read', path: '/f.txt', offset: 0, limit: 0 });
+    expect(zeros).toMatchObject({ op: 'read', ok: true, content: 'a\nb\nc' });
+    expect((zeros as { truncated?: boolean }).truncated).toBeUndefined();
+    // offset 1 is also "from the start"
+    const one = await run(fs, { op: 'read', path: '/f.txt', offset: 1 });
+    expect((one as { content: string }).content).toBe('a\nb\nc');
+  });
+
   it('read with offset and limit returns the requested window', async () => {
     const fs = new InMemoryFs({
       '/window.txt': 'one\ntwo\nthree\nfour\nfive',

@@ -15,17 +15,17 @@ export function applyReadWindow(
   let truncated = false;
   const notes: string[] = [];
 
+  // `offset` is a 1-indexed start line. 0, 1, and undefined all mean "from the
+  // start" — models routinely fill an optional numeric arg with 0, and that must
+  // not silently empty the read.
   if (offset !== undefined && offset > 1) {
     lines = lines.slice(offset - 1);
     truncated = true;
-  } else if (offset === 1) {
-    lines = lines.slice(0);
-  } else if (offset !== undefined && offset <= 0) {
-    lines = [];
-    truncated = true;
   }
 
-  if (limit !== undefined && limit >= 0 && lines.length > limit) {
+  // `limit` caps the returned line count only when positive. 0 and undefined
+  // both mean "no explicit limit" (still bounded by MAX_READ_LINES below).
+  if (limit !== undefined && limit > 0 && lines.length > limit) {
     lines = lines.slice(0, limit);
     truncated = true;
   }
