@@ -112,6 +112,12 @@ a recoverable exit-124 result on timeout rather than throwing. `virtualShell` ru
 **not** on the root export (it isn't workerd-clean); the Cloudflare-edge shell is `cloudflareShell`.
 </Aside>
 
+<Aside type="tip">
+`just-bash` is an **optional peer dependency** — it is not installed by default. Only `virtualShell`
+needs it: `npm install just-bash`. The filesystem, skills, OKF, and persistence never pull it, so an
+fs-only install (and any Cloudflare Worker) stays lean.
+</Aside>
+
 ## Open Knowledge Format (OKF)
 
 An [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) bundle is *just
@@ -141,14 +147,14 @@ tool journal agree across process boundaries — use `SqlFileSystem`, a drop-in 
 SQL handle (+ optional blob store for large files). Pass the handle your platform gives you:
 
 ```typescript
-// Cloudflare — Durable Object SQLite or D1 (Workers-clean, no adapter)
-import { sqlFileSystem, r2BlobStore } from '@kuralle-agents/fs';
-const fs = sqlFileSystem(this.ctx.storage.sql, { blobs: r2BlobStore(env.BUCKET) });
-// or:  sqlFileSystem(env.DB)   // D1
-
 // Node — built-in node:sqlite (Node >= 22.5)
 import { nodeSqlFileSystem } from '@kuralle-agents/fs/node';
 const fs = nodeSqlFileSystem('/data/agent.db');
+
+// Serverless / edge (Vercel) — hosted SQLite (Turso / libSQL) over a zero-dependency
+// fetch-only backend: no @libsql/client, no native binary, no bundler banner.
+import { sqlFileSystem, libsqlHttpBackend } from '@kuralle-agents/fs';
+const fs = sqlFileSystem(libsqlHttpBackend({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN }));
 
 // Bun / anything — wrap the SQLite handle in a 3-line SqlBackend
 import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
@@ -172,11 +178,47 @@ const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkill
 | Cloudflare (DO) | `sqlFileSystem(ctx.storage.sql)` | Durable Object SQLite (+ R2 for large files) |
 | Cloudflare (D1) | `sqlFileSystem(env.DB)` | D1 |
 | Node | `nodeSqlFileSystem(path)` | `node:sqlite` file |
+| Serverless / edge (Vercel) | `sqlFileSystem(libsqlHttpBackend({url,authToken}))` | Turso / libSQL over `fetch` (zero-dep) |
 | Bun / custom | `sqlFileSystem(backend)` | any `SqlBackend` |
+
+Nothing is enforced — a workspace is opt-in, and the backend is entirely yours: in-memory, on-disk
+SQLite, DO SQLite, D1, hosted libSQL, or any `SqlBackend`. `@kuralle-agents/fs` has no `@libsql/client`
+dependency; the fetch-only `libsqlHttpBackend` needs only `fetch`.
 
 `SqlFileSystem` is a verified drop-in for `InMemoryFs` (identical behavior and error codes) and runs
 on real Cloudflare workerd over a Durable Object's `ctx.storage.sql`. Files above `inlineThreshold`
 (default 1.5MB) spill to the `BlobStore` (R2); everything else stores inline.
+
+### On Cloudflare: a persistent workspace inside a cf-agent
+
+`@kuralle-agents/cf-agent`'s `KuralleAgent` extends Cloudflare's `AIChatAgent` — it *is* a CF Agents
+Durable Object, not a custom one. Give the agent a `SqlFileSystem` over its own `ctx.storage.sql`
+in `getAgents()`, and its files persist in the same DO across turns and restarts:
+
+```typescript
+import { KuralleAgent } from '@kuralle-agents/cf-agent';
+import { sqlFileSystem, createFsTool } from '@kuralle-agents/fs';
+import { defineAgent } from '@kuralle-agents/core';
+
+export class WorkspaceAgent extends KuralleAgent<Env> {
+  protected getAgents() {
+    const fs = sqlFileSystem(this.ctx.storage.sql); // persistent, on this agent's DO SQLite
+    return [
+      defineAgent({
+        id: 'workspace-agent',
+        model,
+        instructions: 'You have a persistent workspace. Use the workspace tool to read/write files.',
+        workspace: { fs, readOnly: false },
+        tools: { workspace: createFsTool({ fs, readOnly: false }) },
+      }),
+    ];
+  }
+  protected getDefaultAgentId() { return 'workspace-agent'; }
+}
+```
+
+See the live demo in `apps/playground/fs-demo-cf` (deployed to Cloudflare Workers). For large files,
+pass `{ blobs: r2BlobStore(env.BUCKET) }`; for D1 instead of DO SQLite, `sqlFileSystem(env.DB)`.
 
 ## Composite workspaces
 

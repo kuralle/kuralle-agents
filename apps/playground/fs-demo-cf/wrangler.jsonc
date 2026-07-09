@@ -5,8 +5,11 @@
   "compatibility_date": "2026-04-01",
   "compatibility_flags": ["nodejs_compat"],
   "durable_objects": {
-    "bindings": [{ "name": "WORKSPACE", "class_name": "WorkspaceDO" }]
+    "bindings": [{ "name": "WorkspaceAgent", "class_name": "WorkspaceAgent" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["WorkspaceDO"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["WorkspaceDO"] },
+    { "tag": "v2", "deleted_classes": ["WorkspaceDO"], "new_sqlite_classes": ["WorkspaceAgent"] }
+  ],
   "observability": { "enabled": true }
 }

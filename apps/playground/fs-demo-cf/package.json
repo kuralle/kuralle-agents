@@ -7,8 +7,12 @@
     "dev": "wrangler dev"
   },
   "dependencies": {
+    "@kuralle-agents/cf-agent": "workspace:*",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/fs": "workspace:*",
+    "@ai-sdk/openai": "3.0.70",
+    "agents": "^0.15.0",
+    "ai": "6.0.193",
     "zod": "^4.0.0"
   },
   "devDependencies": {
