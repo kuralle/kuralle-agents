@@ -89,6 +89,26 @@ concern (extra tokens + a tool round-trip), never a correctness one.
 You can also load skills from `SKILL.md` folders or a custom `SkillStore` instead of inline
 `defineSkill` objects — see the `@kuralle-agents/skills` README for store backends.
 
+## Skills on a filesystem
+
+`defineSkill` builds skills in code. You can also keep them as `SKILL.md` folders on a
+[workspace filesystem](/guides/workspace/#skills-on-the-filesystem) — the same
+[agentskills.io](https://agentskills.io) layout Claude and other agents use — and load them with
+`fsSkillStore`:
+
+```typescript
+import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';
+
+const fs = new InMemoryFs({
+  '/skills/refunds/SKILL.md': '---\nname: refunds\ndescription: Handle refunds.\n---\n\n# Refunds\n...',
+});
+const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkillStore(fs) });
+```
+
+`fsSkillStore` implements the same store interface as an array of `defineSkill` objects, so
+progressive disclosure works identically. On a persistent
+[`SqlFileSystem`](/guides/workspace/#persistence--pick-a-backend-by-platform), skills survive restarts.
+
 ## Where it runs
 
 Skills are pure data + two tools, so they run identically on Node and Cloudflare Workers. The
