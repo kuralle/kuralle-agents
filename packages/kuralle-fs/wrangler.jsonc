@@ -1,4 +1,10 @@
 {
+  "name": "kuralle-fs-tests",
+  "main": "vitest/sql-do-worker.ts",
   "compatibility_date": "2026-03-10",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "SQL_FS_DO", "class_name": "SqlFsDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SqlFsDO"] }]
 }

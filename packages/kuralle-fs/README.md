@@ -103,6 +103,33 @@ const agent = defineAgent({
 
 `defineSkill({ name, description, instructions, resources })` builds an inline skill without a filesystem.
 
+## Persistent workspaces (`SqlFileSystem`, platform-chosen)
+
+`InMemoryFs` is ephemeral. For a workspace that survives restarts — so agent files, skills, and the durable tool journal agree across process boundaries — use `SqlFileSystem`, a drop-in `FileSystem` over any SQL handle (+ optional blob store for large files). Pick the backend your platform gives you:
+
+```ts
+// Cloudflare (Durable Object SQLite or D1) — Workers-clean, no adapter
+import { sqlFileSystem, r2BlobStore } from '@kuralle-agents/fs';
+const fs = sqlFileSystem(this.ctx.storage.sql, { blobs: r2BlobStore(env.BUCKET) });
+// or:  sqlFileSystem(env.DB)   // D1
+
+// Node (built-in node:sqlite, Node >= 22.5)
+import { nodeSqlFileSystem } from '@kuralle-agents/fs/node';
+const fs = nodeSqlFileSystem('/data/agent.db');
+
+// Bun / anything — wrap the SQLite handle in a 3-line SqlBackend
+import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
+import { Database } from 'bun:sqlite';
+const db = new Database('/data/agent.db');
+const backend: SqlBackend = { query: (s, ...p) => db.query(s).all(...p) as never, run: (s, ...p) => { db.query(s).run(...p); } };
+const fs = sqlFileSystem(backend);
+
+// then, exactly as with InMemoryFs:
+const agent = defineAgent({ id: 'a', model, workspace: fs, skills: fsSkillStore(fs) });
+```
+
+`SqlFileSystem` is a proven drop-in for `InMemoryFs` (same behavior + error codes, verified by a shared conformance suite) and is verified on real Cloudflare workerd over a Durable Object's `ctx.storage.sql`. Large files (≥ `inlineThreshold`, default 1.5MB) spill to the `BlobStore` (R2); everything else stores inline. See `examples/persistent-workspace.ts` and ADR-0013.
+
 ## Open Knowledge Format (OKF)
 
 An [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) bundle is *just markdown + YAML frontmatter + files* — knowledge concepts (tables, metrics, runbooks) that cross-link into a graph. Because it's a directory of files, a kuralle `workspace` **is** an OKF consumption agent with no adapter: the agent navigates `index.md` → concept → bundle-relative links via `ls`/`read`/`grep`.
@@ -143,6 +170,7 @@ fs and shell tools are **non-replayed** (`replay: false`): they always execute f
 - `InMemoryFs` — in-memory tree, seed with `new InMemoryFs({ '/path': 'content' })`
 - `CompositeFileSystem` — path-routed mount table over multiple `FileSystem` backends
 - `createFsTool` — durable, capped, read-only-by-default workspace tool factory
+- `SqlFileSystem`, `sqlFileSystem` (DO SQLite / D1 auto-detect), `r2BlobStore`, `nodeSqlFileSystem` (`/node`) — persistent, platform-chosen backends
 - `fsSkillStore`, `defineSkill`, `parseSkillFrontmatter` — SKILL.md skills on a filesystem
 - `okfBundleToFs`, `listOkfConcepts`, `parseOkfConcept` — Open Knowledge Format (OKF v0.1) bundles
 - `virtualShell` / `bashShell` (`/shell`), `nodeShell` (`/node`), `cloudflareShell` (`/cloudflare`) — `Shell` backends
@@ -158,6 +186,7 @@ KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/workspace-skill
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/okf-knowledge-agent.ts     # live: agent navigates an OKF bundle
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/okf-benchmark.ts           # benchmark: progressive vs whole-dump
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/skill-latency-spike.ts     # benchmark: with vs without skills
+bun packages/kuralle-fs/examples/persistent-workspace.ts   # SqlFileSystem: file+skill survive a restart
 ```
 
 ## License
