@@ -78,19 +78,65 @@ Writable workspaces are not auto-exposed in `globalTools` (ADR 0006); register t
 
 Mark a mount read-only with a `readOnly: true` property on the backend instance (e.g. `KnowledgeFs`). `CompositeFileSystem.readOnly` is `true` only when every mount is read-only.
 
+The `workspace` tool caps its output (read ≤2000 lines / 50KB with `offset`/`limit`, grep ≤200 hits, lines ≤500 chars) and marks truncation with `truncated: true`. `edit` throws on an ambiguous match — pass `replaceAll: true` for multi-match replaces.
+
+## Skills (SKILL.md folders on the filesystem)
+
+Skills live on any `FileSystem` as `SKILL.md` folders following the [agentskills.io](https://agentskills.io) spec. `fsSkillStore` discovers them and implements the core `SkillStoreLike`, so it drops straight into `AgentConfig.skills` — progressive disclosure (metadata in the prompt, body + `references/` loaded on demand) is handled by the runtime.
+
+```ts
+import { InMemoryFs, fsSkillStore, defineSkill } from '@kuralle-agents/fs';
+
+const fs = new InMemoryFs({
+  '/skills/refunds/SKILL.md': '---\nname: refunds\ndescription: Handle refunds.\n---\n\n# Refunds\n...',
+  '/skills/refunds/references/policy.md': '# Policy\n30-day window.',
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'Load a skill when it fits the task.',
+  workspace: fs,
+  skills: fsSkillStore(fs), // gives the agent load_skill + read_skill_resource
+});
+```
+
+`defineSkill({ name, description, instructions, resources })` builds an inline skill without a filesystem.
+
+## Shell (`@kuralle-agents/fs/shell`, `/node`, `/cloudflare`)
+
+A workspace can carry a `Shell` alongside its `FileSystem`; the runtime then exposes a durable `bash` tool. Three backends mirror flue's model:
+
+```ts
+import { virtualShell } from '@kuralle-agents/fs/shell'; // just-bash over an in-memory fs — Node / CF container
+import { nodeShell } from '@kuralle-agents/fs/node';     // real host shell (env-allowlisted, tree-kill)
+import { cloudflareShell } from '@kuralle-agents/fs/cloudflare'; // wraps a @cloudflare/sandbox DO stub
+
+const { fs, shell } = virtualShell({ initialFiles: { '/data.txt': 'hi' } });
+const agent = defineAgent({ id: 'coder', model, workspace: { fs, shell, readOnly: false } });
+```
+
+The `bash` tool is registered into the **executor** surface only — a shell is never auto-exposed to the model; opt in per node or via `agent.tools`. Portability note: `virtualShell` pulls `just-bash` and is **not** on the root export (its `turndown` transitive is not workerd-clean); the root `@kuralle-agents/fs` stays Workers-clean, and the Cloudflare-edge shell is `cloudflareShell` (a Sandbox Durable Object), not `virtualShell`.
+
+fs and shell tools are **non-replayed** (`replay: false`): they always execute fresh rather than return a stale durable-journal result — at-least-once, always-fresh (see ADR-0012).
+
 ## API
 
 - `FileSystem` — async POSIX-ish interface (types live in `@kuralle-agents/core`, re-exported here)
 - `InMemoryFs` — in-memory tree, seed with `new InMemoryFs({ '/path': 'content' })`
 - `CompositeFileSystem` — path-routed mount table over multiple `FileSystem` backends
-- `createFsTool` — durable workspace tool factory
+- `createFsTool` — durable, capped, read-only-by-default workspace tool factory
+- `fsSkillStore`, `defineSkill`, `parseSkillFrontmatter` — SKILL.md skills on a filesystem
+- `virtualShell` / `bashShell` (`/shell`), `nodeShell` (`/node`), `cloudflareShell` (`/cloudflare`) — `Shell` backends
 - `path-utils`, `encoding` — portable helpers (no Node built-ins)
 
 ## Examples
 
 ```bash
 bun packages/kuralle-fs/examples/kb-agent.ts
+bun packages/kuralle-fs/examples/skills-on-fs.ts   # deterministic, no key
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/composite-workspace.ts
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/workspace-skills-shell.ts  # live: model uses bash + a fs skill
 ```
 
 ## License

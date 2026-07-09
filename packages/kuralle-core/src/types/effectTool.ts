@@ -11,6 +11,8 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   interim?: string;
   interimAfterMs?: number;
   timeoutMs?: number;
+  /** When false, the durable journal always re-executes this tool instead of returning a cached step result — for observation/mutation tools (fs, shell) whose result must be fresh. Default true. */
+  replay?: boolean;
   execute: (
     args: TInput,
     ctx?: ToolContext,

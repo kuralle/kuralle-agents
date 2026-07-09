@@ -27,6 +27,7 @@ export function defineTool<
   /** @deprecated Use `interimAfterMs`. */
   estimatedDurationMs?: number;
   timeoutMs?: number;
+  replay?: boolean;
   execute: (
     args: InferToolInput<S>,
     ctx?: ToolContext,
@@ -42,6 +43,7 @@ export function defineTool<
     interim: config.interim ?? config.filler,
     interimAfterMs: config.interimAfterMs ?? config.estimatedDurationMs,
     timeoutMs: config.timeoutMs,
+    replay: config.replay,
     execute: config.execute,
   } as Tool<InferToolInput<S>, R>;
 }

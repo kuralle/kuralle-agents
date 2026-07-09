@@ -6,6 +6,6 @@
     "rootDir": ".",
     "types": ["node", "bun-types"]
   },
-  "include": ["src/**/*.ts", "test/audit-validation/2-flat-sessions.test.ts"],
+  "include": ["src/**/*.ts", "test/audit-validation/*.test.ts", "test/core-durable/helpers.ts"],
   "exclude": ["node_modules", "dist"]
 }

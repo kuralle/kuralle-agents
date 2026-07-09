@@ -3,6 +3,7 @@ import type { Session } from '../types/session.js';
 import type { AnyTool } from '../types/effectTool.js';
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { createFsTool } from '../tools/fs/createFsTool.js';
+import { createShellTool } from '../tools/fs/createShellTool.js';
 import { wireAgentSkills } from '../skills/wireAgentSkills.js';
 import type { KnowledgeProvider } from './KnowledgeProvider.js';
 import { buildKnowledgeTool, wireWorkingMemory } from './grounding/index.js';
@@ -45,6 +46,10 @@ export async function buildAgentToolSurface(
       readOnly: resolvedWorkspace.readOnly,
     });
     executorTools.workspace = workspaceTool;
+  }
+
+  if (resolvedWorkspace?.shell) {
+    executorTools.bash = createShellTool({ shell: resolvedWorkspace.shell });
   }
 
   const wiredWorkingMemory = await wireWorkingMemory(

@@ -8,9 +8,12 @@ import type { RefinementCapability } from '../capabilities/RefinementCapability.
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
+import type { Shell } from './shell.js';
 import type { SkillSource } from './skills.js';
 
-export type AgentWorkspaceConfig = FileSystem | { fs: FileSystem; readOnly?: boolean };
+export type AgentWorkspaceConfig =
+  | FileSystem
+  | { fs: FileSystem; shell?: Shell; readOnly?: boolean };
 
 export type Instructions =
   | string

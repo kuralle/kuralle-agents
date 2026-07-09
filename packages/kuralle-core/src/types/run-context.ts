@@ -114,7 +114,7 @@ export type ActionContext = Pick<
 
 export type ToolContext = Pick<
   RunContext,
-  'session' | 'runState' | 'tool' | 'now' | 'uuid' | 'emit' | 'fs'
+  'session' | 'runState' | 'tool' | 'now' | 'uuid' | 'emit' | 'fs' | 'abortSignal'
 >;
 
 export type { ModelMessage };

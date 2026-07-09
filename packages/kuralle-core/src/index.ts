@@ -354,6 +354,9 @@ export { defineTool } from './types/effectTool.js';
 export { fsErrorCode } from './types/filesystem.js';
 export { createFsTool } from './tools/fs/createFsTool.js';
 export type { CreateFsToolOptions, GrepHit } from './tools/fs/createFsTool.js';
+export { createShellTool } from './tools/fs/createShellTool.js';
+export type { CreateShellToolOptions } from './tools/fs/createShellTool.js';
+export type { Shell, ShellResult, ShellExecOptions } from './types/shell.js';
 export {
   SkillsCapability,
   wireAgentSkills,

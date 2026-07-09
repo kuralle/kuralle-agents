@@ -218,7 +218,7 @@ function makeCtx(deps: CtxDeps): RunContext {
       }
       const callsite = consumeCallsite();
       const key = toolEffectKey(deps.runState.runId, callsite, name, args);
-      return replayOrExecute(key, 'tool', name, () =>
+      const executeTool = () =>
         deps.toolExecutor.execute({
           name,
           args,
@@ -227,8 +227,33 @@ function makeCtx(deps: CtxDeps): RunContext {
           abortSignal: deps.bargeIn ?? deps.abortSignal,
           def: options?.def,
           toolCtx: options?.toolCtx,
-        }),
-      );
+        });
+
+      if (def?.replay === false) {
+        const auditKey = `${key}:${steps.length}`;
+        try {
+          const result = await executeTool();
+          await appendLiveStep(auditKey, 'tool', name, result);
+          return result;
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          const startedAt = Date.now();
+          const record: StepRecord = {
+            index: steps.length,
+            key: auditKey,
+            kind: 'tool',
+            name,
+            error: { name: err.name, message: err.message },
+            startedAt,
+            finishedAt: startedAt,
+          };
+          await deps.runStore.appendStep(deps.runState.runId, record);
+          steps.push(record);
+          throw err;
+        }
+      }
+
+      return replayOrExecute(key, 'tool', name, executeTool);
     },
     approve: async (req) => {
       return pauseEffect(APPROVAL_SIGNAL, { approval: req }) as Promise<{

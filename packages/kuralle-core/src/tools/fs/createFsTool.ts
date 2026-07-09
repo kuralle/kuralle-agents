@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineTool } from '../effect/defineTool.js';
 import type { AnyTool } from '../../types/effectTool.js';
 import { fsErrorCode, type FileSystem } from '../../types/filesystem.js';
+import { applyReadWindow, capGrepHits, capList } from './caps.js';
 
 export interface CreateFsToolOptions {
   fs: FileSystem;
@@ -40,6 +41,9 @@ const workspaceInput = z.object({
   content: z.string().optional(),
   find: z.string().optional(),
   replace: z.string().optional(),
+  offset: z.number().optional(),
+  limit: z.number().optional(),
+  replaceAll: z.boolean().optional(),
 });
 
 type WorkspaceInput = z.infer<typeof workspaceInput>;
@@ -67,6 +71,33 @@ function eroFs(path: string): Error {
 
 function assertWritable(readOnly: boolean, path: string): void {
   if (readOnly) throw eroFs(path);
+}
+
+const GREP_FLAG_ORDER = ['g', 'i', 'm', 's'] as const;
+
+function parseGrepFlags(flags?: string): string | undefined {
+  if (!flags) return undefined;
+  const allowed = new Set<string>(GREP_FLAG_ORDER);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const ch of flags) {
+    if (allowed.has(ch) && !seen.has(ch)) {
+      seen.add(ch);
+      out.push(ch);
+    }
+  }
+  return out.length > 0 ? out.join('') : undefined;
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+  if (needle.length === 0) return 0;
+  let count = 0;
+  let pos = 0;
+  while ((pos = haystack.indexOf(needle, pos)) !== -1) {
+    count++;
+    pos += needle.length;
+  }
+  return count;
 }
 
 async function listFiles(fs: FileSystem, root: string): Promise<string[]> {
@@ -104,7 +135,7 @@ async function grepFiles(
 ): Promise<GrepHit[]> {
   let re: RegExp;
   try {
-    re = new RegExp(pattern, flags?.includes('i') ? 'i' : undefined);
+    re = new RegExp(pattern, parseGrepFlags(flags));
   } catch {
     throw new Error(`EINVAL: invalid grep pattern '${pattern}'`);
   }
@@ -124,6 +155,7 @@ async function grepFiles(
       }
       const lines = content.split('\n');
       for (let i = 0; i < lines.length; i++) {
+        re.lastIndex = 0;
         if (re.test(lines[i]!)) {
           hits.push({ path: filePath, line: i + 1, text: lines[i]! });
         }
@@ -144,6 +176,7 @@ async function grepFiles(
     }
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
+      re.lastIndex = 0;
       if (re.test(lines[i]!)) {
         hits.push({ path: filePath, line: i + 1, text: lines[i]! });
       }
@@ -175,19 +208,30 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
       switch (args.op) {
         case 'ls': {
           const path = normalizeFsPath(args.path);
-          const entries = await fs.readdirWithFileTypes(path);
+          const rawEntries = await fs.readdirWithFileTypes(path);
+          const { entries, truncated } = capList(rawEntries);
           return {
             op: args.op,
             ok: true as const,
             path,
             entries,
+            ...(truncated ? { truncated: true as const } : {}),
           };
         }
         case 'cat':
         case 'read': {
           const path = requireField(args, 'path', args.op);
-          const content = await fs.readFile(path);
-          return { op: args.op, ok: true as const, path, content };
+          const raw = await fs.readFile(path);
+          const windowed = applyReadWindow(raw, args.offset, args.limit);
+          return {
+            op: args.op,
+            ok: true as const,
+            path,
+            content: windowed.content,
+            ...(windowed.truncated
+              ? { truncated: true as const, note: windowed.note! }
+              : {}),
+          };
         }
         case 'find': {
           const root = normalizeFsPath(args.root);
@@ -197,24 +241,28 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
             const normalizedRoot = root === '/' ? '/' : root.replace(/\/$/, '');
             return p === normalizedRoot || p.startsWith(`${normalizedRoot}/`);
           });
+          const { entries: cappedPaths, truncated } = capList(rooted);
           return {
             op: args.op,
             ok: true as const,
             root,
             glob,
-            paths: rooted,
+            paths: cappedPaths,
+            ...(truncated ? { truncated: true as const } : {}),
           };
         }
         case 'grep': {
           const pattern = requireField(args, 'pattern', args.op);
           const path = normalizeFsPath(args.path);
-          const hits = await grepFiles(fs, pattern, path, args.flags);
+          const rawHits = await grepFiles(fs, pattern, path, args.flags);
+          const { hits, truncated } = capGrepHits(rawHits);
           return {
             op: args.op,
             ok: true as const,
             pattern,
             path,
             hits,
+            ...(truncated ? { truncated: true as const } : {}),
           };
         }
         case 'write': {
@@ -230,9 +278,25 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
           const replace = requireField(args, 'replace', args.op);
           assertWritable(readOnly, path);
           const current = await fs.readFile(path);
-          if (!current.includes(find)) {
+          const occurrences = countOccurrences(current, find);
+          if (occurrences === 0) {
             throw new Error(
               `ENOENT: find string not found in file, edit '${path}'`,
+            );
+          }
+          if (args.replaceAll) {
+            const next = current.replaceAll(find, replace);
+            await fs.writeFile(path, next);
+            return {
+              op: args.op,
+              ok: true as const,
+              path,
+              replacements: occurrences,
+            };
+          }
+          if (occurrences > 1) {
+            throw new Error(
+              `EAMBIG: ${occurrences} occurrences of find string in '${path}'; add surrounding context or use replaceAll`,
             );
           }
           const next = current.replace(find, replace);

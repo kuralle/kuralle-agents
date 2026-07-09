@@ -81,4 +81,115 @@ describe('test:fs-tool', () => {
     const fs = new InMemoryFs();
     await expect(run(fs, { op: 'cat', path: '/missing.md' })).rejects.toThrow(/ENOENT/);
   });
+
+  it('read truncates files beyond 2000 lines', async () => {
+    const lines = Array.from({ length: 2500 }, (_, i) => `line-${i + 1}`);
+    const fs = new InMemoryFs({ '/big.txt': lines.join('\n') });
+    const result = await run(fs, { op: 'read', path: '/big.txt' });
+    expect(result).toMatchObject({
+      op: 'read',
+      ok: true,
+      truncated: true,
+      note: expect.stringContaining('2000 lines'),
+    });
+    const content = (result as { content: string }).content;
+    expect(content.split('\n').length).toBe(2000);
+    expect(content.startsWith('line-1\n')).toBe(true);
+    expect(content.endsWith('line-2000')).toBe(true);
+  });
+
+  it('read with offset and limit returns the requested window', async () => {
+    const fs = new InMemoryFs({
+      '/window.txt': 'one\ntwo\nthree\nfour\nfive',
+    });
+    const result = await run(fs, {
+      op: 'read',
+      path: '/window.txt',
+      offset: 2,
+      limit: 2,
+    });
+    expect(result).toMatchObject({
+      op: 'read',
+      ok: true,
+      path: '/window.txt',
+      content: 'two\nthree',
+      truncated: true,
+    });
+  });
+
+  it('grep caps results beyond 200 hits', async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 250; i++) {
+      files[`/hits/f-${i}.txt`] = 'needle here';
+    }
+    const fs = new InMemoryFs(files);
+    const result = await run(fs, { op: 'grep', pattern: 'needle', path: '/' });
+    const hits = (result as { hits: unknown[] }).hits;
+    expect(hits).toHaveLength(200);
+    expect(result).toMatchObject({ truncated: true });
+  });
+
+  it('grep truncates hit lines beyond 500 characters', async () => {
+    const longLine = `match-${'x'.repeat(600)}`;
+    const fs = new InMemoryFs({ '/long.txt': longLine });
+    const result = await run(fs, { op: 'grep', pattern: 'match', path: '/' });
+    const hit = (result as { hits: { text: string }[] }).hits[0]!;
+    expect(hit.text.length).toBe(501);
+    expect(hit.text.endsWith('…')).toBe(true);
+  });
+
+  it('grep accepts g and m flags without throwing', async () => {
+    const fs = new InMemoryFs({ '/flags.txt': 'Foo\nbar\nFOO' });
+    const result = await run(fs, {
+      op: 'grep',
+      pattern: '^foo$',
+      path: '/',
+      flags: 'gim',
+    });
+    expect(result).toMatchObject({ op: 'grep', ok: true });
+    const hits = (result as { hits: { text: string }[] }).hits;
+    expect(hits.map((h) => h.text)).toEqual(['Foo', 'FOO']);
+  });
+
+  it('edit throws when find string is missing', async () => {
+    const fs = new InMemoryFs({ '/edit.txt': 'only one line' });
+    await expect(
+      run(fs, {
+        op: 'edit',
+        path: '/edit.txt',
+        find: 'missing',
+        replace: 'x',
+      }),
+    ).rejects.toThrow(/ENOENT: find string not found/);
+  });
+
+  it('edit throws when find string matches more than once', async () => {
+    const fs = new InMemoryFs({ '/edit.txt': 'dup dup tail' });
+    await expect(
+      run(fs, {
+        op: 'edit',
+        path: '/edit.txt',
+        find: 'dup',
+        replace: 'once',
+      }),
+    ).rejects.toThrow(/EAMBIG: 2 occurrences/);
+  });
+
+  it('edit with replaceAll replaces every occurrence', async () => {
+    const fs = new InMemoryFs({ '/edit.txt': 'dup dup tail' });
+    const result = await run(fs, {
+      op: 'edit',
+      path: '/edit.txt',
+      find: 'dup',
+      replace: 'once',
+      replaceAll: true,
+    });
+    expect(result).toMatchObject({
+      op: 'edit',
+      ok: true,
+      path: '/edit.txt',
+      replacements: 2,
+    });
+    expect(await fs.readFile('/edit.txt')).toBe('once once tail');
+  });
 });

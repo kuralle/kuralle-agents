@@ -5,7 +5,7 @@ import { deriveAgentCapabilities, deriveAgentShape } from '../../src/runtime/der
 
 describe('F5: agent shape and capability precedence defaults', () => {
   it('instructions-only agent is answering agent without local procedure', () => {
-    const agent = { instructions: 'hi' } as AgentConfig;
+    const agent = { instructions: 'hi' } as unknown as AgentConfig;
     const shape = deriveAgentShape(agent);
 
     expect(shape.isAnsweringAgent).toBe(true);
@@ -14,7 +14,7 @@ describe('F5: agent shape and capability precedence defaults', () => {
   });
 
   it('tools-only agent is answering agent without local procedure', () => {
-    const agent = { tools: { x: {} } } as AgentConfig;
+    const agent = { tools: { x: {} } } as unknown as AgentConfig;
     const shape = deriveAgentShape(agent);
 
     expect(shape.isAnsweringAgent).toBe(true);
@@ -23,17 +23,17 @@ describe('F5: agent shape and capability precedence defaults', () => {
   });
 
   it('capability precedence is routes -> flows -> free for single-field agents', () => {
-    const instructionsOnly = { instructions: 'hi' } as AgentConfig;
+    const instructionsOnly = { instructions: 'hi' } as unknown as AgentConfig;
     expect(deriveAgentCapabilities(instructionsOnly).precedence).toBe('free');
 
     const flowsOnly = {
       flows: [{ name: 'f', nodes: [], start: 's' }],
-    } as AgentConfig;
+    } as unknown as AgentConfig;
     expect(deriveAgentCapabilities(flowsOnly).precedence).toBe('flows');
 
     const routesOnly = {
       routes: [{ intent: 'x', agent: 'a' }],
-    } as AgentConfig;
+    } as unknown as AgentConfig;
     expect(deriveAgentCapabilities(routesOnly).precedence).toBe('routes');
   });
 
@@ -41,7 +41,7 @@ describe('F5: agent shape and capability precedence defaults', () => {
     const mixed = {
       routes: [{ intent: 'x', agent: 'a' }],
       flows: [{ name: 'f', nodes: [], start: 's' }],
-    } as AgentConfig;
+    } as unknown as AgentConfig;
     expect(deriveAgentCapabilities(mixed).precedence).toBe('routes');
   });
 
@@ -49,7 +49,7 @@ describe('F5: agent shape and capability precedence defaults', () => {
     const mixed = {
       flows: [{ name: 'f', nodes: [], start: 's' }],
       instructions: 'hi',
-    } as AgentConfig;
+    } as unknown as AgentConfig;
     expect(deriveAgentCapabilities(mixed).precedence).toBe('flows');
   });
 });

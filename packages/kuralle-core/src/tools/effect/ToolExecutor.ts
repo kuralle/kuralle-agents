@@ -158,8 +158,14 @@ export class CoreToolExecutor implements EffectToolExecutor {
         }
       }
 
+      const executeCtx: ToolContext | undefined = toolCtx
+        ? { ...toolCtx, abortSignal }
+        : abortSignal
+          ? ({ abortSignal } as ToolContext)
+          : undefined;
+
       const executePromise = Promise.resolve(
-        def.execute(sanitizedArgs, toolCtx),
+        def.execute(sanitizedArgs, executeCtx),
       ).then(async (result) => {
         if (result && typeof (result as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
           const chunks: unknown[] = [];

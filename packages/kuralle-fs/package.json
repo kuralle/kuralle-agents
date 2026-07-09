@@ -15,10 +15,23 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./shell": {
+      "types": "./dist/shell.d.ts",
+      "default": "./dist/shell.js"
+    },
+    "./node": {
+      "types": "./dist/node/node-shell.d.ts",
+      "default": "./dist/node/node-shell.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/cloudflare/cf-shell.d.ts",
+      "default": "./dist/cloudflare/cf-shell.js"
     }
   },
   "dependencies": {
-    "@kuralle-agents/core": "workspace:*"
+    "@kuralle-agents/core": "workspace:*",
+    "just-bash": "^3.1.0"
   },
   "peerDependencies": {
     "zod": "^4.0.0"
@@ -35,7 +48,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "test": "bun test test/in-memory-fs.test.ts test/fs-tool.test.ts test/composite-fs.test.ts && vitest run --config vitest.config.ts",
+    "test": "bun test ./test && vitest run --config vitest.config.ts",
     "test:inmemoryfs": "bun test test/in-memory-fs.test.ts",
     "test:fs-tool": "bun test test/fs-tool.test.ts",
     "test:fs-workers": "vitest run --config vitest.config.ts",
