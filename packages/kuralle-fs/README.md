@@ -187,6 +187,7 @@ KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/okf-knowledge-a
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/okf-benchmark.ts           # benchmark: progressive vs whole-dump
 KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/skill-latency-spike.ts     # benchmark: with vs without skills
 bun packages/kuralle-fs/examples/persistent-workspace.ts   # SqlFileSystem: file+skill survive a restart
+KURALLE_EXAMPLE_PROVIDER=openai bun packages/kuralle-fs/examples/persistent-workspace-live.ts  # live: model writes, fresh runtime reads back
 ```
 
 ## License
