@@ -1,9 +1,0 @@
-=== REQ-9 grep: no false native-audio prevention claims ===
-(no matches — good)
-
-=== advisory markers present ===
-packages/kuralle-core/src/runtime/channels/VoiceDriver.ts:186:      // Advisory post-hoc gate: provider audio may already have played; correction does not un-speak it.
-packages/kuralle-core/src/runtime/channels/VoiceDriver.ts:188:      out.gateScope = 'advisory';
-packages/kuralle-realtime-audio/README.md:28:Whole-answer content gates are **advisory** on native realtime audio. The provider speaks audio as it generates it, before any Kuralle gate runs, so a blocking gate cannot un-speak audio already played — it emits a `safety-*` event and speaks a correction utterance (post-hoc). The reliable controls on native realtime are **input-side gating** (pre-turn policies) and **tool authority** (tools return data, not conversational text). On the **cascaded** substrate, by contrast, Kuralle controls the emission boundary and the gate is preventive.
-packages/kuralle-core/src/types/channel.ts:35:  /** Native realtime post-hoc gate: provider audio already played; gate is advisory only. */
-packages/kuralle-core/src/types/channel.ts:36:  gateScope?: 'advisory';
