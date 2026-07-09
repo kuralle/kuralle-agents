@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/kuralle-e2e-tests"
   },
-  "version": "0.0.10",
+  "version": "0.12.0",
   "private": true,
   "description": "End-to-end tests for Kuralle voice/realtime pipelines",
   "type": "module",
