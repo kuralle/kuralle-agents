@@ -14,31 +14,22 @@
  *   GET  /                            -> demo page
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createClient } from '@libsql/client/web';
 import {
   InMemoryFs,
   sqlFileSystem,
+  libsqlHttpBackend,
   listOkfConcepts,
-  type SqlBackend,
   type FileSystem,
 } from '@kuralle-agents/fs';
 
-// libSQL (Turso) as a two-method SqlBackend. Rows come back keyed by column name.
-function libsqlBackend(url: string, authToken: string): SqlBackend {
-  const client = createClient({ url, authToken });
-  return {
-    query: async (sql, ...args) =>
-      (await client.execute({ sql, args: args as never })).rows as never,
-    run: async (sql, ...args) => {
-      await client.execute({ sql, args: args as never });
-    },
-  };
-}
-
 function workspace(): { fs: FileSystem; persistent: boolean } {
   const url = process.env.TURSO_DATABASE_URL;
-  const token = process.env.TURSO_AUTH_TOKEN;
-  if (url && token) return { fs: sqlFileSystem(libsqlBackend(url, token)), persistent: true };
+  const authToken = process.env.TURSO_AUTH_TOKEN;
+  if (url && authToken) {
+    // Zero-dependency fetch-only libSQL backend — no @libsql/client, so no native
+    // binary and no `ws`; bundles cleanly for serverless with no esbuild banner.
+    return { fs: sqlFileSystem(libsqlHttpBackend({ url, authToken })), persistent: true };
+  }
   // Fallback for local dev without Turso creds — ephemeral.
   return { fs: new InMemoryFs(), persistent: false };
 }

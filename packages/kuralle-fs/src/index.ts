@@ -57,6 +57,7 @@ export {
   type SqlFileSystemFactoryOptions,
 } from './sql/factory.js';
 export { r2BlobStore, type R2Bucketish } from './sql/r2-blob.js';
+export { libsqlHttpBackend, type LibsqlHttpOptions } from './sql/libsql-http.js';
 // NOTE: shell backends (bashShell/virtualShell) live at the `@kuralle-agents/fs/shell`
 // subpath, NOT the root — they pull `just-bash`, whose browser bundle depends on
 // `turndown` and is not workerd-clean. Keeping them off the root export preserves the

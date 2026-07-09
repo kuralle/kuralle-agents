@@ -124,11 +124,20 @@ const db = new Database('/data/agent.db');
 const backend: SqlBackend = { query: (s, ...p) => db.query(s).all(...p) as never, run: (s, ...p) => { db.query(s).run(...p); } };
 const fs = sqlFileSystem(backend);
 
+// Serverless / edge (Vercel) — hosted SQLite (Turso / libSQL) over a
+// zero-dependency fetch-only backend: no @libsql/client, no native binary, no
+// bundler banner. Optional — nothing here requires Turso; on-disk SQLite above
+// is equally first-class.
+import { sqlFileSystem, libsqlHttpBackend } from '@kuralle-agents/fs';
+const fs2 = sqlFileSystem(libsqlHttpBackend({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN }));
+
 // then, exactly as with InMemoryFs:
 const agent = defineAgent({ id: 'a', model, workspace: fs, skills: fsSkillStore(fs) });
 ```
 
 `SqlFileSystem` is a proven drop-in for `InMemoryFs` (same behavior + error codes, verified by a shared conformance suite) and is verified on real Cloudflare workerd over a Durable Object's `ctx.storage.sql`. Large files (≥ `inlineThreshold`, default 1.5MB) spill to the `BlobStore` (R2); everything else stores inline. See `examples/persistent-workspace.ts` and ADR-0013.
+
+**No storage is enforced or bundled by default.** A workspace is opt-in (agents have none unless you set `workspace`), and the backend is entirely yours: in-memory, on-disk SQLite, DO SQLite, D1, hosted libSQL, or any object satisfying the two-method `SqlBackend`. Turso is one option, not a requirement — `@kuralle-agents/fs` has **no** `@libsql/client` dependency (the fetch-only `libsqlHttpBackend` needs only `fetch`).
 
 ## Open Knowledge Format (OKF)
 
