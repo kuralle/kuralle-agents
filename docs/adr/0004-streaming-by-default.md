@@ -1,7 +1,7 @@
 # ADR 0004 — Streaming-by-default (incremental commit at the smallest guardrail boundary)
 
 **Status:** Accepted (2026-06-05)
-**Context:** `docs/rfc-streaming-by-default.md`, ADR 0002/0003 (post-turn gate introduced global buffering), `docs/kuralle-hardening-plan.md` (H6 whole-answer grounding gate).
+**Context:** ADR 0002/0003 (post-turn gate introduced global buffering) and the H6 whole-answer grounding gate.
 **Related:** REQ-9 native-realtime advisory; unified `0.4.0` breaking release (S4-03).
 
 ## Context

@@ -35,7 +35,7 @@ Unified bump across the graph (0.9.0 → 0.10.0). Contains **breaking** `@kurall
 
 ## 0.9.0 — WhatsApp first-class: Meta API conformance, inbound coalescing, interactive-by-default
 
-Unified bump across the graph (0.8.5 → 0.9.0). Contains **breaking** `@kuralle-agents/messaging-meta` contract fixes (minor bump per repo convention). Grounded in a live conformance audit of every wire payload against developers.facebook.com (June 2026; 27 findings) plus an industry survey of burst-message handling (`research/inbound-coalescing-design.md`).
+Unified bump across the graph (0.8.5 → 0.9.0). Contains **breaking** `@kuralle-agents/messaging-meta` contract fixes (minor bump per repo convention). Grounded in a live conformance audit of every wire payload against developers.facebook.com (June 2026; 27 findings) plus an industry survey of burst-message handling.
 
 **Meta API conformance (`@kuralle-agents/messaging-meta` + `@kuralle-agents/http-client`):**
 - **Webhook reply `context` fixed** — real WhatsApp payloads send `{from, id}` (not `{message_id}`): reply correlation (`context.messageId`) was always `undefined`. Normalized properly + new `forwarded`/`frequently_forwarded`/`referred_product` (product-inquiry) fields with a typed `parseProductInquiry` accessor.
@@ -58,7 +58,7 @@ Unified bump across the graph (0.8.5 → 0.9.0). Contains **breaking** `@kuralle
 
 ## 0.8.5 — Agentic harness completion (escalation, wake, memory lifecycle, guardrails, commerce, simulation)
 
-Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes below ship in this same release). **Not breaking** — every surface is additive. Closes the six gaps from the industry-baseline evaluation; most wire dormant seams the v2 recon flagged as "shipped but silent". See `docs/adr/0010-agentic-harness-completion.md`, `docs/adr/0011-commerce-package.md`, and `MIGRATION.md`.
+Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes below ship in this same release). **Not breaking** — every surface is additive. Closes the six gaps from the industry-baseline evaluation; most wire dormant seams the v2 recon flagged as "shipped but silent". See `docs/adr/0010-agentic-harness-completion.md` and `docs/adr/0011-commerce-package.md`.
 
 **Escalation/handoff loop** (`@kuralle-agents/core` + `@kuralle-agents/engagement`):
 - `HarnessConfig.escalation { handler, summarize?, model?, recentMessageCount? }` — every escalation path (validator `escalate`, host control, terminal handoff, flow `escalate()`) builds an `EscalationRequest` (state snapshot + recent messages + optional LLM handoff brief) and invokes the handler; outcome recorded on `session.metadata.lastEscalation` and emitted as an `escalation` stream part. Flow escalations notify at the `__escalate` pause; a one-shot latch prevents double-fire after resume.
@@ -117,7 +117,7 @@ Unified minor bump across the graph (0.7.2 → 0.8.0). **Breaking type change**:
 
 **Not multimodal:** the legacy `/api/flow/*` string-only endpoints (`flowManager.process(input: string)`) degrade media to its text projection — a capability limit of that older subsystem, not the runtime path.
 
-See `MIGRATION.md` and `docs/adr/0009-multimodal-intake.md`.
+See `docs/adr/0009-multimodal-intake.md`.
 
 ## 0.7.2 — Wire provider prompt caching (was shipped-but-dead)
 
@@ -150,7 +150,7 @@ Unified patch bump across the graph (0.7.0 → 0.7.1). No API removed, no type c
 - Agents that set `knowledge.autoRetrieve: false` previously got no retrieval at all; they now expose `knowledge_search` to the model. Drop `knowledge` entirely to disable retrieval.
 - **Unchanged:** `knowledge.autoRetrieve: true`/omitted (guaranteed pre-injection); node-level `grounding.knowledge.autoRetrieve: false` (per-node opt-out).
 
-See `MIGRATION.md` and `docs/adr/0008-declared-grounding-contract.md`.
+See `docs/adr/0008-declared-grounding-contract.md`.
 
 ## 0.7.0 — Derived host routing (BREAKING)
 
@@ -172,7 +172,7 @@ Unified minor bump across the graph (0.6.1 → 0.7.0). **Breaking**: removes the
 - A routes-only triage agent now derives as a **silent pure dispatcher** (no fallback prose) — add `instructions` if it must speak before routing.
 - Internal: `HostControlContext.guard` removed (drivers no longer own the guard). No consumer action unless you extended a `ChannelDriver`.
 
-See `MIGRATION.md` and `docs/adr/0007-derived-host-routing.md`.
+See `docs/adr/0007-derived-host-routing.md`.
 
 ## 0.6.1 — zod 4
 
@@ -209,7 +209,7 @@ Unified minor bump across the graph (0.5.0 → 0.6.0). One breaking change (the 
 
 **Cloudflare:** every new primitive ships day-1 Workers support (`workerd` parity tests; cf-agent auto-wires DO-SQLite working memory, zero config).
 
-See `MIGRATION.md` (Tool model cleanup section), `docs/adr/0006-fs-reframe-and-working-memory.md`, and `rfcs/kuralle-harness/`.
+See `docs/adr/0006-fs-reframe-and-working-memory.md`.
 
 ## 0.5.0 — AI-SDK-native by default (BREAKING: web stream output)
 
@@ -229,7 +229,7 @@ Unified minor bump across the graph (0.4.1 → 0.5.0). **Breaking wire-format ch
 
 **Unchanged:** `HarnessStreamPart`, `toResponseStream('sse'|'ndjson')`, cascaded voice, messaging, WebSocket widget (still `HarnessStreamPart` JSON).
 
-See `docs/adr/0005-ai-sdk-native-uimessage-default.md` and `docs/rfc-ai-sdk-native-uimessage-stream.md`.
+See `docs/adr/0005-ai-sdk-native-uimessage-default.md`.
 
 ## 0.4.1 — Streaming follow-up fixes (patch)
 
@@ -260,7 +260,7 @@ Unified minor bump across the graph (0.3.20 -> 0.4.0). **Breaking event-protocol
 - **Cascaded LiveKit TTFT** drops to first-token latency (`aria_runtime_ttft` fires on the first delta).
 - **Native realtime gate is advisory (REQ-9):** the provider speaks audio before any gate runs, so a whole-answer gate on native realtime emits a `safety-*` event + correction post-hoc but cannot un-speak audio. Preventive only on text/cascaded. See ADR 0004.
 
-See `docs/adr/0004-streaming-by-default.md` and `docs/rfc-streaming-by-default.md`. Downstream consumers (e.g. external Studio `SSEChatTransport`) migrate `part.text` -> `part.delta`.
+See `docs/adr/0004-streaming-by-default.md`. Downstream consumers (e.g. external Studio `SSEChatTransport`) migrate `part.text` -> `part.delta`.
 
 > Known (non-shipping): `bun run typecheck:all` reports pre-existing drift in 4 test/example tsconfigs (unrelated to streaming; not in published tarballs, which build from `src`). Tracked as a follow-up; the published packages build clean.
 
@@ -370,7 +370,7 @@ to H6. core 449/449; W1/W9/parking/turn-lock green.
 ## 0.3.13 — H3: per-session turn lock + FIFO input inbox
 
 Patch across the graph (0.3.12 -> 0.3.13). Second hardening chunk
-(`docs/kuralle-hardening-plan.md`, Phase 0). Closes the overlapping-turn race:
+(hardening plan, Phase 0). Closes the overlapping-turn race:
 two concurrent `runtime.run()` on the SAME session (double-tap, retry-on-slow-
 stream, multi-tab, reconnect) used to interleave — both buffered into one
 overwritable input slot (last-writer-wins ate a message) and an empty consume
@@ -386,7 +386,7 @@ hono 52/52; W1/W9/collect-parking suites green.
 ## 0.3.12 — H2: pinned temperature-0 control-model channel
 
 Patch across the graph (0.3.11 -> 0.3.12). First chunk of the core-primitive
-hardening plan (`docs/kuralle-hardening-plan.md`), the cheapest highest-leverage
+hardening plan, the cheapest highest-leverage
 anti-flakiness lever. The control path (routing, `decide`/`runStructured`, collect
 extraction) ran on the same model that speaks to the user, at default sampling —
 so identical prompts produced different routes/branches/extractions across
@@ -632,7 +632,7 @@ flow engines, parallel voice authority) is deleted.
 - LiveKit native-realtime *authority* path (`KuralleRealtimeAgentController`, `LiveKitRealtimeAdapter`, `ToolContextBuilder`, `TurnCompletionCoordinator`, `createVoiceSession({ mode: 'realtime' })`). LiveKit voice is cascaded-only; provider-native realtime (Gemini/OpenAI/xAI) lives in `@kuralle-agents/realtime-audio` (`VoiceEngine`).
 - `Runtime.chat()`; `compressNow()`, `drainBackgroundCompactions()`, `shutdown()`, `getAutoResolutionRate()`; `abortTurn()` (use `abortSession()`); `runtime.sessionStore` getter (use `getSessionStore()`).
 - v1 `HarnessHooks` on `HarnessConfig` (20+ hooks) — v2 `Hooks` has five: `onStart`, `onStreamPart`, `onEnd`, `onConversationEnd`, `onError`.
-- Pack-era `LegacyHarnessConfig` and ~40 harness-only fields (`autoCompaction`, `keyFacts`, `safety`, `escalation`, `contextManager`, `sessionCache`, `streamCallback` / `callback`, `channels`, `outputRedaction`, `personaExperiment`, …); `HarnessConfig` is only `runtime/Runtime.ts` (see [`MIGRATION.md`](./MIGRATION.md)).
+- Pack-era `LegacyHarnessConfig` and ~40 harness-only fields (`autoCompaction`, `keyFacts`, `safety`, `escalation`, `contextManager`, `sessionCache`, `streamCallback` / `callback`, `channels`, `outputRedaction`, `personaExperiment`, …); `HarnessConfig` is only `runtime/Runtime.ts`.
 
 #### Packages & packs
 

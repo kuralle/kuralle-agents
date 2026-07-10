@@ -1,7 +1,7 @@
 # ADR 0005 — AI-SDK-native `UIMessageStream` as the default web output
 
 **Status:** Accepted (2026-06-05)
-**Context:** `docs/rfc-ai-sdk-native-uimessage-stream.md`, ADR 0004 (0.4.0 assistant-text lifecycle aligned to AI SDK `UIMessageChunk` shape but still serialized as Kuralle JSON-SSE).
+**Context:** ADR 0004 (0.4.0 assistant-text lifecycle aligned to AI SDK `UIMessageChunk` shape but still serialized as Kuralle JSON-SSE).
 **Related:** ADR 0004 — natural successor; 0.4.0 made text *chunks* native-shaped; 0.5.0 makes the *wire* native.
 
 ## Context

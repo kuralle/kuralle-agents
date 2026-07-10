@@ -1,8 +1,8 @@
 # ADR 0003 — Out-of-band control evaluator (H1 / W2 keystone)
 
 **Status:** Proposed — **Revision 1** (post external review, kimi-k2.6). Implementation gated on final sign-off.
-**Context:** `docs/kuralle-hardening-plan.md` (H1, the keystone), ADR 0002, `docs/kuralle-stability-rootcause.md`. Builds on shipped H2 (`ctx.controlModel`, 0.3.12) and H3 (turn lock, 0.3.13).
-**Review:** `.handoff/result-h1-adr-review.txt` (kimi-k2.6) — verdict "not ready" on the v0 design; the revision below resolves its four blockers. **See "Revision 1" at the bottom — it supersedes parts of the original draft above it.**
+**Context:** the hardening plan (H1, the keystone) and ADR 0002. Builds on shipped H2 (`ctx.controlModel`, 0.3.12) and H3 (turn lock, 0.3.13).
+**Review:** external review (kimi-k2.6) — verdict "not ready" on the v0 design; the revision below resolves its four blockers. **See "Revision 1" at the bottom — it supersedes parts of the original draft above it.**
 
 ## Context — control is fused into generation
 

@@ -54,6 +54,6 @@ Audio is handled explicitly, not by guessing model capability:
 ## Consequences
 
 - Photos, documents, and voice notes now reach the model on both the web (`/api/chat/*`) and messaging ingress paths.
-- **Breaking:** `RunOptions.input: string → UserInputContent`; `ChannelPolicy.resolveInbound` / `InboundResolverPlugin` return `{ input: UserInputContent }`. See [`MIGRATION.md`](../../MIGRATION.md).
+- **Breaking:** `RunOptions.input: string → UserInputContent`; `ChannelPolicy.resolveInbound` / `InboundResolverPlugin` return `{ input: UserInputContent }`.
 - New exports from `@kuralle-agents/core`: `UserInputContent`, `userInputToText`, `hasMediaParts`, `transcribeAudioParts`. New export from `@kuralle-agents/messaging`: `attachInboundMedia`.
 - Verified: full graph build green; `multimodal-input.test.ts` (core), `inbound-media.test.ts` (messaging), and a live offline smoke (`examples/multimodal-intake-smoke.ts`) prove image-reaches-model and voice-note-transcribed end-to-end.

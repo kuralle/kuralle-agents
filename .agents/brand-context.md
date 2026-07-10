@@ -1,8 +1,7 @@
 # Kuralle — Brand Context
 
 > Single source of truth for Kuralle written voice. Every README, doc page, and
-> landing section reads this **before** generating. Pairs with
-> `.handoff/docs-revamp/API-FACTSHEET.md` (which governs technical accuracy).
+> landing section reads this **before** generating.
 > Voice anchor: **OpenAI Agents SDK** README/docs, seasoned with the directness of
 > `qmd` and the confidence of LangChain `deepagents`.
 

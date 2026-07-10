@@ -112,5 +112,3 @@ Offline E2E: `packages/engagement/test/same-bot-across-channels.test.ts`.
 - **`@kuralle-agents/messaging`** — `createMessagingRouter`, `OutboundPipeline`, `windowGuard`, `WindowStore`
 - **`@kuralle-agents/messaging-meta`** — WhatsApp and Instagram clients
 - **`@kuralle-agents/core`** — agents, flows, runtime
-
-RFC: [`rfcs/whatsapp-engagement/`](../../rfcs/whatsapp-engagement/).

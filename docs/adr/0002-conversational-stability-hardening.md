@@ -1,7 +1,7 @@
 # ADR 0002 — Conversational-stability hardening (W1–W9)
 
 **Status:** Accepted (2026-06-04)
-**Context:** `docs/kuralle-stability-rootcause.md`, `docs/kuralle-stability-validation.md`, `docs/kuralle-stability-impl-plan.md`
+**Context:** conversational-stability root-cause, validation, and implementation analysis (W1–W9).
 
 ## Context
 

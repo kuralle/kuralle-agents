@@ -109,6 +109,5 @@ The same agent config runs over voice via **cascaded voice (STT → Kuralle text
 
 - [Documentation site](apps/docs) — guides, API reference, concepts
 - [CONTRIBUTING.md](CONTRIBUTING.md) — monorepo dev setup, build, test, publish
-- [MIGRATION.md](MIGRATION.md) — upgrading from v1 to v2
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [LICENSE](LICENSE)

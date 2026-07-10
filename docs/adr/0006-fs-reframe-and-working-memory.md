@@ -1,6 +1,6 @@
 # ADR 0006 — Reframe the filesystem; wire working memory (Mastra-informed)
 
-**Status:** Accepted · **Date:** 2026-06-07 · **Supersedes (in part):** the FS-as-knowledge-layer framing in `research/fs-skills-harness-synthesis.md` / RFC-03.
+**Status:** Accepted · **Date:** 2026-06-07 · **Supersedes (in part):** the earlier FS-as-knowledge-layer framing (harness research / RFC-03).
 
 ## Context
 

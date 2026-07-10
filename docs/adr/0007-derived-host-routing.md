@@ -6,7 +6,7 @@
 
 An agent with ≥2 flows (or any routes) runs a per-turn **host selector** — a `generateObject` call in `runtime/select.ts` (`selectHostTarget`) — on **every non-flow "keep" turn**, just to decide `enterFlow | route | keep`. This is an always-on tax that blows the ~800–1000ms voice-to-voice budget. In-flow resume turns skip it (`run.activeFlow` short-circuits in `hostLoop.ts`), proving the selector — not RAG or skills — is the dominant keep-turn cost. Measured (sibling repo `syrinx`, `kuralle-full-findings.md`): T1 keep-turn TTFT **2874ms** with only 301ms of RAG.
 
-We prototyped an opt-in `routing.mode: 'tools'` that folds flow entry into the speaking turn via an `enter_flow` control tool (the handoff-as-tool pattern used by OpenAI Agents SDK, LiveKit, and Pipecat). An A/B smoke (`examples/flows/routing-mode-ttft-smoke.ts`, bare 2-flow agent, gpt-4.1-mini, selector isolated) measured keep-turn TTFT dropping from **~2.8s → ~0.9s (≈3× across 3 runs)**, and the legacy selector **mis-routed** a Q&A keep turn into a flow on every run while tools-mode answered correctly. Two external review rounds (codex, high reasoning — `.handoff/wbs-routing-architecture.md`, `.handoff/wbs-routing-modes.md`) confirmed the direction and sharpened it.
+We prototyped an opt-in `routing.mode: 'tools'` that folds flow entry into the speaking turn via an `enter_flow` control tool (the handoff-as-tool pattern used by OpenAI Agents SDK, LiveKit, and Pipecat). An A/B smoke (`examples/flows/routing-mode-ttft-smoke.ts`, bare 2-flow agent, gpt-4.1-mini, selector isolated) measured keep-turn TTFT dropping from **~2.8s → ~0.9s (≈3× across 3 runs)**, and the legacy selector **mis-routed** a Q&A keep turn into a flow on every run while tools-mode answered correctly. Two external review rounds (codex, high reasoning) confirmed the direction and sharpened it.
 
 Two constraints shaped the decision:
 
@@ -61,5 +61,3 @@ The guard has exactly one owner — the host loop. The streaming dispatch gate n
 - **Breaking for consumers:** `routing.mode` / `routing.always` / `routing.default` stop typechecking. Routes-only / agents-only configs stop speaking fallback prose and become silent pure dispatchers. Fallback is now modeled as a normal semantic child agent/route (e.g. a "general support" target), not a config default; a pure dispatcher with no viable target is an invalid shape.
 - **Docs:** the rule "triage must be structured when it routes" becomes "pure dispatchers route silently by derived shape; answering agents use host-control tools + guard." `apps/docs/.../guides/routing.mdx`, `CLAUDE.md`, examples, and skills update accordingly.
 - **Multilingual:** routing decisions go only through model reasoning over semantic flow/route descriptions — no ASCII tokenization, no per-language prototypes.
-
-Implementation WBS: `.handoff/wbs-routing-modes.md` (R-01…R-15), superseding `.handoff/wbs-routing-architecture.md` where they overlap.
