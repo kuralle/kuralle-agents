@@ -34,13 +34,15 @@ Tests that need API keys skip gracefully when keys are missing — they print `S
 
 ## Rebuild Before Testing
 
-The E2E tests import from compiled `dist/` of workspace packages. After editing source in `packages/livekit-plugin/src/` or `packages/core/src/`, rebuild before running E2E tests:
+The E2E tests import from compiled `dist/` of workspace packages. After editing source in `packages/realtime-audio/src/` or `packages/core/src/`, rebuild before running E2E tests:
 
 ```bash
 bun run build          # rebuild all
 # or
-cd packages/livekit-plugin && npm run build   # rebuild one
+cd packages/realtime-audio && npm run build   # rebuild one
 ```
+
+> LiveKit `AgentSession` bridge tests moved with the packages to [kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit).
 
 Stale dist is the most common cause of "the fix doesn't work" false negatives.
 

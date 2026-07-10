@@ -88,9 +88,9 @@ More examples: `packages/core/examples/agents/` — form-filler, transfer-agent,
 
 ## Text and voice, one agent
 
-The same agent config runs over voice via **cascaded voice (STT → Kuralle text runtime → TTS)**: `@kuralle-agents/livekit-plugin` bridges the runtime to a LiveKit voice pipeline with full tool/flow/handoff authority, on the text path.
+The same agent config runs over voice. **Provider-native realtime** (speech-to-speech) lives in `@kuralle-agents/realtime-audio` (`VoiceEngine`, the realtime `VoiceDriver`) — kept intact but paused off the headline API while we harden text as the primary primitive.
 
-> **Provider-native realtime (speech-to-speech) is paused.** `@kuralle-agents/realtime-audio` (`VoiceEngine`, the realtime `VoiceDriver`) is kept intact but is off the headline API while we harden text as the primary primitive. Use cascaded voice for now; native realtime resumes later.
+> **Cascaded voice (STT → Kuralle text runtime → TTS) and telephony transports** (LiveKit, WebSocket, SIP, Twilio, SmartPBX) now live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)** — extracted so voice can version independently.
 
 ## Packages
 
@@ -103,7 +103,7 @@ The same agent config runs over voice via **cascaded voice (STT → Kuralle text
 | [`@kuralle-agents/rag`](https://www.npmjs.com/package/@kuralle-agents/rag) | RAG primitives — knowledge sources, chunkers, retrieval |
 | [`@kuralle-agents/redis-store`](https://www.npmjs.com/package/@kuralle-agents/redis-store) | Redis-backed session persistence (`RedisSessionStore`) |
 | [`@kuralle-agents/postgres-store`](https://www.npmjs.com/package/@kuralle-agents/postgres-store) | Postgres-backed session persistence |
-| [`@kuralle-agents/livekit-plugin`](https://www.npmjs.com/package/@kuralle-agents/livekit-plugin) | Cascaded voice pipeline (STT → Kuralle → TTS) with LiveKit |
+| [`@kuralle-agents/realtime-audio`](https://www.npmjs.com/package/@kuralle-agents/realtime-audio) | Provider-native speech-to-speech (paused; kept intact) |
 
 ## Documentation
 

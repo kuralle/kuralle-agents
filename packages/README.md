@@ -41,13 +41,9 @@ Then read the [documentation](../apps/docs) and the [root README](../README.md).
 | Package | Description |
 |---------|-------------|
 | [`@kuralle-agents/realtime-audio`](kuralle-realtime-audio) | Provider-native speech-to-speech (Gemini, OpenAI, xAI) with Kuralle keeping tool/flow/handoff authority. |
-| [`@kuralle-agents/livekit-plugin`](kuralle-livekit-plugin) | LiveKit Agents plugin — cascaded STT→Kuralle→TTS, Gemini STT/TTS. |
-| [`@kuralle-agents/livekit-plugin-transport-ws`](kuralle-livekit-plugin-transport-ws) | WebSocket transport (no LiveKit server needed). |
-| [`@kuralle-agents/livekit-plugin-transport-http`](kuralle-livekit-plugin-transport-http) | HTTP/SSE transport. |
-| [`@kuralle-agents/livekit-plugin-transport-sip`](kuralle-livekit-plugin-transport-sip) | SIP/RTP telephony transport (G.711). |
-| [`@kuralle-agents/livekit-plugin-transport-twilio`](kuralle-livekit-plugin-transport-twilio) | Twilio Media Streams transport. |
-| [`@kuralle-agents/livekit-plugin-transport-smartpbx`](kuralle-livekit-plugin-transport-smartpbx) | SmartPBX transport. |
 | [`@kuralle-agents/voice-protocol`](kuralle-voice-protocol) | Canonical client/server wire protocol for voice transports (types + optional Zod). |
+
+> **Cascaded voice (STT→LLM→TTS) + telephony transports** (`livekit-plugin`, `livekit-plugin-transport-{ws,http,sip,twilio,smartpbx}`, `transport-base`) now live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)**, versioned independently while Kuralle hardens text-first.
 
 ## Messaging
 

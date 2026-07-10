@@ -5,6 +5,8 @@ description: Build, configure, and debug Kuralle voice agents. Use this skill wh
 
 # Kuralle Voice Agents
 
+> **Cascaded voice + telephony transports moved.** The `livekit-plugin`, `transport-base`, and `livekit-plugin-transport-*` (ws/http/sip/twilio/smartpbx) packages now live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)**. Provider-native realtime (`@kuralle-agents/realtime-audio`) stays in the main repo. When this skill refers to cascaded/telephony packages, install them from that repo.
+
 Use this skill when adding audio to any Kuralle agent — from a simple WebSocket voice demo to a production SIP call center.
 
 ## Read this first
