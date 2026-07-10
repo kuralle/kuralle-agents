@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check server.mjs && node --check server-livekit.mjs",
+    "build": "node --check server.mjs",
     "start": "node server.mjs",
     "dev": "node --watch server.mjs"
   },
