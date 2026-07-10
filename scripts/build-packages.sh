@@ -19,9 +19,7 @@ tier core                                                                       
 tier fs skills commerce                                                                    # T2 (need core)
 tier realtime-audio tools messaging                                                        # T2 (need core/rag/voice-protocol)
 tier rag-loaders lancedb-store postgres-store redis-store upstash-store \
-     vectorize-store hono-server cf-agent livekit-plugin messaging-meta engagement         # T3 (need core/rag/realtime-audio/tools)
-tier transport-base                                                                        # T4
-tier livekit-plugin-transport-ws livekit-plugin-transport-sip livekit-plugin-transport-http \
-     livekit-plugin-transport-twilio livekit-plugin-transport-smartpbx                     # T5 transports
+     vectorize-store hono-server cf-agent messaging-meta engagement                        # T3 (need core/rag/realtime-audio/tools)
+# (LiveKit voice/telephony packages extracted to kuralle/kuralle-livekit)
 # (no T6 tier: `studio` was dropped in the rebrand and `e2e-tests` has no build step)
 echo "✓ all packages built (ordered)"
