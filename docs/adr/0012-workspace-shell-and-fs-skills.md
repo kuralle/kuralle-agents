@@ -1,6 +1,6 @@
 # ADR 0012 — Workspace completion: Shell capability, FS-backed Skills, and non-replayed effect tools
 
-**Status:** Accepted · **Date:** 2026-07-09 · **Extends:** ADR-0006 (fs reframe) · **RFC:** `rfcs/rfc-fs-shell-skills.md`
+**Status:** Accepted · **Date:** 2026-07-09 · **Extends:** ADR-0006 (fs reframe)
 
 ## Context
 

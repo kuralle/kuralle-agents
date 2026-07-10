@@ -1,4 +1,4 @@
-// Shared FileSystem conformance suite (RFC rfc-persistent-filesystem §4 P3).
+// Shared FileSystem conformance suite.
 // Runs an IDENTICAL battery of assertions against every FileSystem backend, so
 // SqlFileSystem is proven a true drop-in for InMemoryFs — same behavior, same
 // error codes — across the whole 19-method surface.

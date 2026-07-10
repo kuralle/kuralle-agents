@@ -1,6 +1,6 @@
 # ADR 0013 — Persistent FileSystem backends (platform-chosen)
 
-**Status:** Accepted · **Date:** 2026-07-09 · **Extends:** ADR-0012 (workspace/shell/skills) · **RFC:** `rfcs/rfc-persistent-filesystem.md`
+**Status:** Accepted · **Date:** 2026-07-09 · **Extends:** ADR-0012 (workspace/shell/skills)
 
 ## Context
 
