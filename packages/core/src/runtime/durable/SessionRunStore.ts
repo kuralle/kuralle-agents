@@ -97,7 +97,9 @@ export class SessionRunStore implements RunStore {
     const runs = readRuns(session);
     const persisted = runs[runId];
     if (!persisted) {
-      throw new RunNotFoundError(runId);
+      // Nothing to prune — the run has not been initialised yet (e.g. a fresh
+      // logical run before initRun, or a session with no durable run). No-op.
+      return;
     }
 
     const kept = persisted.steps.filter(

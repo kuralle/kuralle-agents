@@ -91,8 +91,16 @@ export async function reloadRunStateSameEpoch(
   return state;
 }
 
-/** Simulate a fresh user turn: bump runEpoch, prune prior-epoch steps, reset turn count. */
+/** Reload run state for a RESUME within the same logical run (suspend/resume replay).
+ *  This is the default semantics every durable/approval/flow test relies on — the
+ *  effect/pause keys must stay stable across the reload. Alias of reloadRunStateSameEpoch. */
 export async function reloadRunState(runStore: SessionRunStore, runId: string): Promise<RunState> {
+  return reloadRunStateSameEpoch(runStore, runId);
+}
+
+/** Simulate a FRESH user turn: bump runEpoch, prune prior-epoch steps, reset turn count.
+ *  Only the keystone tests (cross-turn stale replay / epoch prune) want this. */
+export async function reloadRunStateFreshTurn(runStore: SessionRunStore, runId: string): Promise<RunState> {
   const state = await reloadRunStateSameEpoch(runStore, runId);
   state.runEpoch = (state.runEpoch ?? 0) + 1;
   await runStore.pruneStepsBeforeEpoch(runId, state.runEpoch);

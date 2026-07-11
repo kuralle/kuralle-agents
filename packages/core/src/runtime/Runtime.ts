@@ -304,12 +304,17 @@ export class Runtime {
               throw new Error(`maxHandoffs exceeded (${this.maxHandoffs})`);
             }
 
+            // Cross-turn ping-pong safeguard (handoffCount resets each turn, so it
+            // can't catch A↔B oscillation spread across turns). This is a bound
+            // ABOVE maxHandoffs: within-run runaway is caught by the maxHandoffs
+            // check above; oscillation only fires for same-pair accumulation in the
+            // persisted handoffHistory beyond that, so it never pre-empts maxHandoffs.
             if (
               isHandoffOscillating(
                 opened.session.handoffHistory,
                 runCtx.runState.activeAgentId,
                 loopResult.to,
-                this.maxHandoffs,
+                this.maxHandoffs + 1,
               )
             ) {
               throw new Error(

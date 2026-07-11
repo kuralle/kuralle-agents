@@ -1,6 +1,6 @@
 // H3: pruneStepsBeforeEpoch drops prior-epoch steps so the journal bounds to the current logical run.
 import { describe, expect, it } from 'bun:test';
-import { buildCtx, reloadRunState, setupDurableHarness } from '../core-durable/helpers.js';
+import { buildCtx, reloadRunStateFreshTurn, setupDurableHarness } from '../core-durable/helpers.js';
 
 describe('H3: epoch prune keeps only the current logical run steps', () => {
   it('after N fresh epochs, getSteps returns only the current epoch steps', async () => {
@@ -17,11 +17,11 @@ describe('H3: epoch prune keeps only the current logical run steps', () => {
     await epoch0.tool('mark_epoch_0', {});
 
     // Simulate N=2 additional fresh logical runs (epochs 1 and 2).
-    let current = await reloadRunState(runStore, runState.runId);
+    let current = await reloadRunStateFreshTurn(runStore, runState.runId);
     const epoch1 = await buildCtx({ session, runStore, runState: current, toolExecutor });
     await epoch1.tool('mark_epoch_1', {});
 
-    current = await reloadRunState(runStore, runState.runId);
+    current = await reloadRunStateFreshTurn(runStore, runState.runId);
     const epoch2 = await buildCtx({ session, runStore, runState: current, toolExecutor });
     await epoch2.tool('mark_epoch_2', {});
 

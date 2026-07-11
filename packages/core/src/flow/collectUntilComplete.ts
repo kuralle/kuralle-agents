@@ -42,8 +42,13 @@ export async function collectUntilComplete(
   ctx: RunContext,
   options?: { agent?: AgentConfig; activeFlowName?: string },
 ): Promise<NormalizedTransition> {
+  // A satisfied collect defers completion for ONE pass when there is pending input,
+  // so a correction ("no, Tuesday") is re-extracted and overwrites before completing
+  // (G14). Bounded to a single pass so the loop cannot spin if a driver's awaitUser
+  // does not clear the pending buffer — completion no longer depends on that.
+  let pendingConsumed = false;
   for (;;) {
-    if (schemaSatisfied(node, run.state) && !hasPendingUserInput(ctx.session)) {
+    if (schemaSatisfied(node, run.state) && (!hasPendingUserInput(ctx.session) || pendingConsumed)) {
       const data = projectCollectData(node, run.state);
       return normalizeTransition(await node.onComplete(data, run.state));
     }
@@ -59,6 +64,7 @@ export async function collectUntilComplete(
     if (hasPendingUserInput(ctx.session)) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
+      pendingConsumed = true;
     } else if (ctx.turnInputConsumed) {
       // No fresh input to extract this turn: ask (deterministically) for the
       // fields still missing and wait. Never run extraction over stale context.

@@ -1,6 +1,6 @@
 import type { RunState, SignalDelivery, StepRecord } from './types.js';
 import type { RunStore } from './RunStore.js';
-import { pauseEffectKey } from './idempotency.js';
+import { pauseEffectKey, logicalRunId } from './idempotency.js';
 
 export function findStepByKey(steps: StepRecord[], key: string): StepRecord | undefined {
   return steps.find((step) => step.key === key);
@@ -27,7 +27,10 @@ export async function recordSignalDelivery(
     );
   }
 
-  const key = pauseEffectKey(runState.runId, waitingFor.callsite, delivery.name);
+  // Must match the key pauseEffect used when it suspended: the keystone scopes the
+  // effect-key namespace by logical run (runId#epoch), so the resume-side delivery
+  // key has to use logicalRunId too, else the pause never finds its own decision.
+  const key = pauseEffectKey(logicalRunId(runState.runId, runState.runEpoch), waitingFor.callsite, delivery.name);
   if (findStepByKey(steps, key)) {
     return false;
   }

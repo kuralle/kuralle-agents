@@ -2,7 +2,7 @@
 // re-executes identical tool+args instead of replaying a prior turn's cached result.
 import { describe, expect, it } from 'bun:test';
 import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
-import { buildCtx, reloadRunState, setupDurableHarness } from '../core-durable/helpers.js';
+import { buildCtx, reloadRunStateFreshTurn, setupDurableHarness } from '../core-durable/helpers.js';
 
 describe('F6: cross-turn effect-key collision returns stale tool results', () => {
   it('runId is the sessionId verbatim — the durable run spans the whole session', () => {
@@ -34,7 +34,7 @@ describe('F6: cross-turn effect-key collision returns stale tool results', () =>
 
     // Turn 5 (a NEW user request, hours later): Runtime builds a fresh RunContext
     // (effectOrdinal restarts at 0) over the SAME session-lifetime run and step log.
-    const reloaded = await reloadRunState(runStore, runState.runId);
+    const reloaded = await reloadRunStateFreshTurn(runStore, runState.runId);
     const turn5 = await buildCtx({ session, runStore, runState: reloaded, toolExecutor });
     const second = await turn5.tool('get_balance', {});
 
