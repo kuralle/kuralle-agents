@@ -6,6 +6,7 @@ import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { loadRecordedSteps } from '../../src/runtime/durable/replay.js';
+import { resetTurnCount } from '../../src/runtime/policies/limits.js';
 
 export function makeTestSession(sessionId = 'sess-1'): Session {
   const now = new Date();
@@ -78,10 +79,24 @@ export async function buildCtx(
   });
 }
 
-export async function reloadRunState(runStore: SessionRunStore, runId: string): Promise<RunState> {
+/** Reload run state without advancing the logical-run epoch (suspend/resume replay). */
+export async function reloadRunStateSameEpoch(
+  runStore: SessionRunStore,
+  runId: string,
+): Promise<RunState> {
   const state = await runStore.getRunState(runId);
   if (!state) {
     throw new Error(`Missing run state for ${runId}`);
   }
+  return state;
+}
+
+/** Simulate a fresh user turn: bump runEpoch, prune prior-epoch steps, reset turn count. */
+export async function reloadRunState(runStore: SessionRunStore, runId: string): Promise<RunState> {
+  const state = await reloadRunStateSameEpoch(runStore, runId);
+  state.runEpoch = (state.runEpoch ?? 0) + 1;
+  await runStore.pruneStepsBeforeEpoch(runId, state.runEpoch);
+  resetTurnCount(state);
+  await runStore.putRunState(state);
   return state;
 }

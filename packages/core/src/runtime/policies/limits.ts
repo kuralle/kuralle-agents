@@ -22,6 +22,10 @@ export function incrementTurnCount(run: RunState): number {
   return next;
 }
 
+export function resetTurnCount(run: RunState): void {
+  run.state[TURN_COUNT_KEY] = 0;
+}
+
 export function assertWithinTurnLimit(run: RunState, limits?: Limits): void {
   const maxTurns = limits?.maxTurns;
   if (maxTurns == null) {

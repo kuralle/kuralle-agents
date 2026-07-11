@@ -92,6 +92,24 @@ export class SessionRunStore implements RunStore {
     await this.sessionStore.save(session);
   }
 
+  async pruneStepsBeforeEpoch(runId: string, keepEpoch: number): Promise<void> {
+    const session = await this.requireSession();
+    const runs = readRuns(session);
+    const persisted = runs[runId];
+    if (!persisted) {
+      throw new RunNotFoundError(runId);
+    }
+
+    const kept = persisted.steps.filter(
+      (step) => step.epoch === undefined || step.epoch >= keepEpoch,
+    );
+    persisted.steps = kept.map((step, index) => ({ ...cloneSession(step), index }));
+    persisted.runState.updatedAt = Date.now();
+    runs[runId] = persisted;
+    writeRuns(session, runs);
+    await this.sessionStore.save(session);
+  }
+
   private async requireSession(): Promise<Session> {
     const session = await this.sessionStore.get(this.sessionId);
     if (!session) {

@@ -18,6 +18,19 @@ export class TokenAccumulator {
 
   constructor(private readonly contextWindow?: number) {}
 
+  /** Rehydrate cumulative totals from persisted session state (cross-turn). */
+  restoreCumulative(saved: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cacheReadTokens?: number;
+  }): void {
+    this._cumInput = saved.inputTokens;
+    this._cumOutput = saved.outputTokens;
+    this._cumTotal = saved.totalTokens;
+    this._cumCacheRead = saved.cacheReadTokens ?? 0;
+  }
+
   record(usage: TurnUsageInput): TurnUsage {
     this._cumInput += usage.inputTokens;
     this._cumOutput += usage.outputTokens;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
-import { buildCtx, reloadRunState, setupDurableHarness } from '../core-durable/helpers.js';
+import { buildCtx, reloadRunState, reloadRunStateSameEpoch, setupDurableHarness } from '../core-durable/helpers.js';
 
 describe('replay:false durable journal bypass', () => {
   it('replay:false tool executes twice with identical args on replay', async () => {
@@ -60,7 +60,7 @@ describe('replay:false durable journal bypass', () => {
     await chargeOnly(ctx1);
     expect(chargeSpy.count).toBe(1);
 
-    const reloaded = await reloadRunState(runStore, runState.runId);
+    const reloaded = await reloadRunStateSameEpoch(runStore, runState.runId);
     const ctx2 = await buildCtx({ session, runStore, runState: reloaded, toolExecutor: executor });
     await chargeOnly(ctx2);
     expect(chargeSpy.count).toBe(1);

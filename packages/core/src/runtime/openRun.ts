@@ -10,6 +10,7 @@ import { SessionRunStore } from './durable/SessionRunStore.js';
 import type { RunState } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { recordSignalDelivery } from './durable/replay.js';
+import { resetTurnCount } from './policies/limits.js';
 
 export interface OpenRunOptions {
   sessionId: string;
@@ -95,6 +96,21 @@ export async function openRun(
     typeof effectiveInput === 'string'
       ? effectiveInput.length > 0
       : Array.isArray(effectiveInput) && effectiveInput.length > 0;
+
+  const isResume = Boolean(options.signalDelivery);
+  const isFlowContinuation = Boolean(runState.activeFlow);
+  const isFreshLogicalRun =
+    (hasInput || Boolean(options.wake)) && !isResume && !isFlowContinuation;
+  if (isFreshLogicalRun) {
+    runState.runEpoch = (runState.runEpoch ?? 0) + 1;
+    await runStore.pruneStepsBeforeEpoch(runId, runState.runEpoch);
+    resetTurnCount(runState);
+    if (Array.isArray(runState.state.__completedFlows)) {
+      runState.state.__completedFlows = [];
+    }
+    runState.updatedAt = Date.now();
+    await runStore.putRunState(runState);
+  }
 
   if (hasInput && effectiveInput !== undefined) {
     runState.updatedAt = Date.now();

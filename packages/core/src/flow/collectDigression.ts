@@ -1,35 +1,74 @@
 import type { ModelMessage } from 'ai';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
-import type { CollectNode, ReplyNode } from '../types/flow.js';
+import type { ReplyNode } from '../types/flow.js';
 import type { RunContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
 import { resolveReplyNode } from './nodeBuilders.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
 import { selectHostTarget } from '../runtime/select.js';
+import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
 
-const FLOW_PARK_KEY = '__flowPark';
+const FLOW_PARK_STACK_KEY = '__flowParkStack';
+const LEGACY_FLOW_PARK_KEY = '__flowPark';
+const MAX_FLOW_PARK_DEPTH = 8;
 
 export interface FlowPark {
   flow: string;
   node: string;
 }
 
-export function getFlowPark(state: Record<string, unknown>): FlowPark | undefined {
-  const raw = state[FLOW_PARK_KEY];
+function isFlowPark(raw: unknown): raw is FlowPark {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return undefined;
+    return false;
   }
   const flow = (raw as FlowPark).flow;
   const node = (raw as FlowPark).node;
-  if (typeof flow === 'string' && typeof node === 'string') {
-    return { flow, node };
-  }
-  return undefined;
+  return typeof flow === 'string' && typeof node === 'string';
 }
 
-function setFlowPark(state: Record<string, unknown>, park: FlowPark): void {
-  state[FLOW_PARK_KEY] = park;
+function getFlowParkStack(state: Record<string, unknown>): FlowPark[] | undefined {
+  const raw = state[FLOW_PARK_STACK_KEY];
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const stack = raw.filter(isFlowPark);
+  return stack.length > 0 ? stack : undefined;
+}
+
+export function pushFlowPark(state: Record<string, unknown>, park: FlowPark): void {
+  const stack = getFlowParkStack(state) ?? [];
+  stack.push(park);
+  while (stack.length > MAX_FLOW_PARK_DEPTH) {
+    stack.shift();
+  }
+  state[FLOW_PARK_STACK_KEY] = stack;
+}
+
+export function popFlowPark(state: Record<string, unknown>): FlowPark | undefined {
+  const stack = getFlowParkStack(state);
+  if (!stack) {
+    return undefined;
+  }
+  const park = stack.pop();
+  if (stack.length === 0) {
+    delete state[FLOW_PARK_STACK_KEY];
+  } else {
+    state[FLOW_PARK_STACK_KEY] = stack;
+  }
+  return park;
+}
+
+export function getFlowPark(state: Record<string, unknown>): FlowPark | undefined {
+  const stack = getFlowParkStack(state);
+  if (stack) {
+    return stack[stack.length - 1];
+  }
+  const legacy = state[LEGACY_FLOW_PARK_KEY];
+  if (isFlowPark(legacy)) {
+    return legacy;
+  }
+  return undefined;
 }
 
 function appendAssistantMessage(run: RunState, text: string): void {
@@ -53,7 +92,7 @@ export function looksLikeOffScriptQuestion(input: string): boolean {
 
 export interface CollectDigressionOptions {
   agent: AgentConfig;
-  node: CollectNode;
+  node: { id: string };
   activeFlowName: string;
   run: RunState;
   driver: ChannelDriver;
@@ -91,7 +130,7 @@ export async function runCollectDigression(
   }
 
   if (selection.kind === 'enterFlow') {
-    setFlowPark(run.state, { flow: activeFlowName, node: node.id });
+    pushFlowPark(run.state, { flow: activeFlowName, node: node.id });
     return {
       kind: 'transition',
       transition: {
@@ -119,6 +158,7 @@ export async function runCollectDigression(
     resolveReplyNode(replyNode, run.state, { freeConversation: true }),
     ctx,
   );
+  await persistTurnUsageFromTurn(ctx, turn);
 
   if (turn.text.trim()) {
     appendAssistantMessage(run, turn.text);

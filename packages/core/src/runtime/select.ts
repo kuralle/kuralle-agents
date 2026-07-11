@@ -35,12 +35,16 @@ const dispatcherSchema = z.object({
   reason: z.union([z.string(), z.null()]),
 });
 
+export const DEFAULT_CLASSIFIER_CONTEXT_MESSAGES = 6;
+
 export interface ClassifyHostOptions {
   agent: AgentConfig;
   run: RunState;
   model: LanguageModel;
   allowKeep: boolean;
   excludeFlowNames?: string[];
+  /** How many recent messages to include in the classifier prompt. Default: 6. */
+  contextMessageLimit?: number;
 }
 
 export async function classifyHostTarget(options: ClassifyHostOptions): Promise<HostGuardVerdict> {
@@ -48,6 +52,10 @@ export async function classifyHostTarget(options: ClassifyHostOptions): Promise<
   const flows = agent.flows ?? [];
   const routes = agent.routes ?? [];
   const latestUser = latestUserMessage(run.messages);
+  const recentContext = formatRecentConversation(
+    run.messages,
+    options.contextMessageLimit ?? DEFAULT_CLASSIFIER_CONTEXT_MESSAGES,
+  );
 
   if (!latestUser) {
     return { action: 'keep', confidence: 1 };
@@ -90,7 +98,9 @@ export async function classifyHostTarget(options: ClassifyHostOptions): Promise<
       'Output schema fields only — never user-facing prose. ' +
       'Reason over semantic descriptions only; never match keywords or substrings.',
     prompt:
-      `User message:\n${latestUser}\n\n` +
+      (recentContext
+        ? `Recent conversation:\n${recentContext}\n\n`
+        : `User message:\n${latestUser}\n\n`) +
       (completedFlows.length > 0 ? `Completed flows: ${completedFlows.join(', ')}\n\n` : '') +
       (flowLines ? `Available flows:\n${flowLines}\n\n` : '') +
       (routeLines ? `Routes:\n${routeLines}\n\n` : '') +
@@ -215,6 +225,36 @@ function isValidTransferTarget(agent: AgentConfig, targetId: string): boolean {
 function formatRouteLine(route: Route, index: number): string {
   const target = route.agent ? `agent "${route.agent}"` : route.flow ? `flow "${route.flow}"` : 'keep';
   return `- route ${index + 1} → ${target} when: ${route.when}`;
+}
+
+function formatMessageContent(message: ModelMessage): string {
+  if (typeof message.content === 'string') {
+    return message.content;
+  }
+  if (Array.isArray(message.content)) {
+    return message.content
+      .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+      .map((part) => part.text)
+      .join('');
+  }
+  return '';
+}
+
+export function formatRecentConversation(
+  messages: ModelMessage[],
+  limit = DEFAULT_CLASSIFIER_CONTEXT_MESSAGES,
+): string {
+  const slice = messages.slice(-limit);
+  return slice
+    .map((message) => {
+      const content = formatMessageContent(message);
+      if (!content.trim()) {
+        return undefined;
+      }
+      return `${message.role}: ${content}`;
+    })
+    .filter((line): line is string => line != null)
+    .join('\n');
 }
 
 function latestUserMessage(messages: ModelMessage[]): string | undefined {

@@ -21,11 +21,17 @@ import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
+import { isHandoffOscillating } from './handoffOscillation.js';
 import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 import type { classifyHostTarget, selectHostTarget } from './select.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
 import { openRun, sessionDerivedRunId } from './openRun.js';
+
+function resolveOutOfBandControl(agent: AgentConfig): boolean {
+  const hasFlows = (agent.flows?.length ?? 0) > 0;
+  return agent.experimental?.outOfBandControl ?? hasFlows;
+}
 import { closeRun } from './closeRun.js';
 import { SessionRunStore } from './durable/SessionRunStore.js';
 import { loadRecordedSteps } from './durable/replay.js';
@@ -42,7 +48,9 @@ import {
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { SessionMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
+import { readLastPromptTokens } from './turnTokenUsage.js';
 import { isContextOverflowError, recoverFromContextOverflow } from './contextOverflow.js';
+import { projectGoalsPromptFromState, updateGoalsFromTurn } from './goals.js';
 import type { RunContext } from '../types/run-context.js';
 import type { EscalationConfig, EscalationOutcome, EscalationReason } from '../escalation/types.js';
 import {
@@ -51,6 +59,7 @@ import {
   ESCALATION_NOTIFIED_KEY,
 } from '../escalation/escalation.js';
 import type { WakeOptions } from '../scheduler/index.js';
+import type { HandoffInputFilter } from './handoffFilters.js';
 
 export interface HarnessConfig {
   agents: AgentConfig[];
@@ -90,6 +99,14 @@ export interface HarnessConfig {
    * invokes the handler. Resume with `runtime.resumeFromEscalation()`.
    */
   escalation?: EscalationConfig;
+  /** Default handoff input filter when a route does not define `filter`. */
+  handoffInputFilter?: HandoffInputFilter;
+  /**
+   * Structured goal/thread tracking (G5). When enabled, a cheap control-model
+   * pass at turn end patches `session.workingMemory.__goals` and open threads
+   * are projected into the next turn's prompt. Default off — opt-in cost/latency.
+   */
+  trackGoals?: boolean;
 }
 
 export interface RunOptions {
@@ -223,9 +240,12 @@ export class Runtime {
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = openingSurface.globalTools;
-      runCtx.outOfBandControl = opened.agent.experimental?.outOfBandControl ?? false;
+      runCtx.outOfBandControl = resolveOutOfBandControl(opened.agent);
       runCtx.skillPrompt = openingSurface.skillPrompt;
-      runCtx.workingMemoryPrompt = openingSurface.workingMemoryPrompt;
+      runCtx.workingMemoryPrompt = appendGoalsPrompt(
+        openingSurface.workingMemoryPrompt,
+        opened.session.workingMemory,
+      );
       runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
 
       await this.hooks?.onStart?.(runCtx);
@@ -284,6 +304,19 @@ export class Runtime {
               throw new Error(`maxHandoffs exceeded (${this.maxHandoffs})`);
             }
 
+            if (
+              isHandoffOscillating(
+                opened.session.handoffHistory,
+                runCtx.runState.activeAgentId,
+                loopResult.to,
+                this.maxHandoffs,
+              )
+            ) {
+              throw new Error(
+                `Handoff oscillation detected between "${runCtx.runState.activeAgentId}" and "${loopResult.to}"`,
+              );
+            }
+
             const target = this.agentsById.get(loopResult.to);
             if (!target) {
               throw new Error(`Handoff target agent not found: ${loopResult.to}`);
@@ -295,6 +328,21 @@ export class Runtime {
               reason: loopResult.reason ?? 'handoff',
               timestamp: new Date(),
             });
+
+            const handoffTarget = loopResult.to;
+            const routeFilter = activeAgent.routes?.find((r) => r.agent === handoffTarget)?.filter;
+            const inputFilter = routeFilter ?? this.config.handoffInputFilter;
+            if (inputFilter) {
+              const filtered = await inputFilter({
+                messages: runCtx.runState.messages,
+                workingMemory: runCtx.session.workingMemory,
+                sourceAgentId: runCtx.runState.activeAgentId,
+                targetAgentId: handoffTarget,
+                reason: loopResult.reason,
+              });
+              runCtx.runState.messages = filtered.messages as ModelMessage[];
+              runCtx.session.workingMemory = filtered.workingMemory;
+            }
 
             runCtx.runState.activeAgentId = loopResult.to;
             activeAgent = target;
@@ -308,12 +356,42 @@ export class Runtime {
               : undefined;
             runCtx.globalTools = targetSurface.globalTools;
             runCtx.skillPrompt = targetSurface.skillPrompt;
-            runCtx.workingMemoryPrompt = targetSurface.workingMemoryPrompt;
+            runCtx.workingMemoryPrompt = appendGoalsPrompt(
+              targetSurface.workingMemoryPrompt,
+              runCtx.session.workingMemory,
+            );
             runCtx.workingMemoryTools = targetSurface.workingMemoryTools;
             runCtx.fs = targetSurface.resolvedWorkspace?.fs;
             runCtx.memoryService = this.config.memoryService
               ? buildMemoryService(this.config.memoryService, target)
               : undefined;
+
+            const targetPolicies = resolveAgentPolicies(target);
+            const targetModel = target.model ?? this.defaultModel;
+            if (!targetModel) {
+              throw new Error('Runtime requires agent.model or config.defaultModel');
+            }
+            runCtx.baseInstructions = target.instructions;
+            runCtx.model = targetModel;
+            runCtx.controlModel = target.controlModel ?? targetModel;
+            runCtx.outOfBandControl = resolveOutOfBandControl(target);
+            runCtx.limits = targetPolicies.limits;
+            runCtx.refinementPolicies = targetPolicies.refinementPolicies;
+            runCtx.validationPolicies = targetPolicies.validationPolicies;
+            runCtx.inputProcessors = targetPolicies.inputProcessors;
+            runCtx.outputProcessors = targetPolicies.outputProcessors;
+            runCtx.toolExecutor = new CoreToolExecutor({
+              tools: targetSurface.executorTools,
+              enforcer: targetPolicies.enforcer,
+              agentId: target.id,
+              onInterim: (message) => {
+                const id = crypto.randomUUID();
+                emit({ type: 'text-start', id });
+                emit({ type: 'text-delta', id, delta: message });
+                emit({ type: 'text-end', id });
+              },
+            });
+
             await runCtx.runStore.putRunState(runCtx.runState);
             continue;
           }
@@ -378,6 +456,12 @@ export class Runtime {
           outcomeReason: loopResult.kind === 'ended' ? loopResult.reason : undefined,
           memoryIngest: async () => {
             await runMemoryIngest(runCtx);
+            if (this.config.trackGoals) {
+              const controlModel =
+                this.agentsById.get(runCtx.runState.activeAgentId)?.controlModel ??
+                runCtx.controlModel;
+              await updateGoalsFromTurn(runCtx, controlModel);
+            }
           },
         });
         await this.hooks?.onEnd?.(runCtx);
@@ -474,6 +558,7 @@ export class Runtime {
       model,
       config,
       force,
+      lastPromptTokens: readLastPromptTokens(runCtx.runState.state),
     });
 
     if (!result.compacted) {
@@ -658,4 +743,15 @@ function collectAssistantText(messages: ModelMessage[]): string {
     return last.content;
   }
   return '';
+}
+
+function appendGoalsPrompt(
+  workingMemoryPrompt: string | undefined,
+  workingMemory: Record<string, unknown>,
+): string | undefined {
+  const goalsPrompt = projectGoalsPromptFromState(workingMemory);
+  if (!goalsPrompt) {
+    return workingMemoryPrompt;
+  }
+  return [workingMemoryPrompt, goalsPrompt].filter((part) => part && part.trim()).join('\n\n');
 }

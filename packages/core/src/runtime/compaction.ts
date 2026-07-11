@@ -102,6 +102,8 @@ export interface CompactMessagesOptions {
   /** Skip the threshold check (overflow recovery). */
   force?: boolean;
   abortSignal?: AbortSignal;
+  /** Real last-turn prompt tokens when available (replaces chars/4 for threshold). */
+  lastPromptTokens?: number;
 }
 
 /**
@@ -110,11 +112,12 @@ export interface CompactMessagesOptions {
  * pairs are never split across the summary boundary.
  */
 export async function compactMessages(options: CompactMessagesOptions): Promise<CompactionResult> {
-  const { messages, model, config, force, abortSignal } = options;
+  const { messages, model, config, force, abortSignal, lastPromptTokens } = options;
   const triggerTokens = config.triggerTokens ?? DEFAULT_COMPACTION_TRIGGER_TOKENS;
   const keepRecent = config.keepRecentMessages ?? DEFAULT_COMPACTION_KEEP_RECENT;
 
-  const beforeTokens = estimateMessagesTokens(messages);
+  const estimatedTokens = estimateMessagesTokens(messages);
+  const beforeTokens = lastPromptTokens ?? estimatedTokens;
   if (!force && beforeTokens < triggerTokens) {
     return { compacted: false, reason: 'under-threshold', beforeTokens };
   }

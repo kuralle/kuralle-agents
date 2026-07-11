@@ -14,6 +14,10 @@ function stableStringify(value: unknown): string {
   });
 }
 
+export function logicalRunId(runId: string, runEpoch: number | undefined): string {
+  return `${runId}#${runEpoch ?? 0}`;
+}
+
 export function idempotencyKey(runId: string, callsite: string, payload: unknown): string {
   const material = stableStringify({ runId, callsite, payload });
   return createHash('sha256').update(material).digest('hex');

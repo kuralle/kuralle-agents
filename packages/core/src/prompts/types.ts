@@ -90,6 +90,8 @@ export interface SessionMemory {
   conversationState?: Record<string, unknown>;
   flowProgress?: { currentNode: string; collectedData: Record<string, unknown> };
   workingMemory?: Array<{ label: string; content: string }>;
+  /** Compact open-thread note projected from session.workingMemory.__goals (G5). */
+  openGoalsPrompt?: string;
 }
 
 export interface AgentDefinition {

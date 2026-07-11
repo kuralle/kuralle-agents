@@ -5,6 +5,7 @@ import type { CollectNode } from '../types/flow.js';
 import type { RunContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
 import { runCollectDigression } from './collectDigression.js';
+import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
 import { hasPendingUserInput } from '../runtime/channels/inputBuffer.js';
 import { userInputToText, type UserInputContent } from '../runtime/userInput.js';
 import { resolveCollectExtractionNode } from './nodeBuilders.js';
@@ -86,6 +87,7 @@ export async function collectUntilComplete(
     const turn = await (driver.runExtraction
       ? driver.runExtraction(resolved, ctx)
       : driver.runAgentTurn(resolved, ctx));
+    await persistTurnUsageFromTurn(ctx, turn);
     mergeExtractionFromTurn(node, run, turn, ctx);
 
     const missingAfter = computeMissingFields(node, getCollectData(run.state, node.id));

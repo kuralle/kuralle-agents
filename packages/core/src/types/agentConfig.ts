@@ -52,7 +52,8 @@ export interface AgentConfig {
   /** Pre-turn refinement policies. Default: none. */
   refine?: RefinementCapability[];
   experimental?: {
-    /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1). Default OFF. */
+    /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1).
+     *  Default ON when the agent declares `flows`; OFF for answering-only agents. Override explicitly to opt out. */
     outOfBandControl?: boolean;
   };
   /** Portable workspace filesystem; auto-registers the durable `workspace` tool when set.

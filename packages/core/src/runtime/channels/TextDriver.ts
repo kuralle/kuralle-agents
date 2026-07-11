@@ -1,8 +1,8 @@
-import type { TurnResult, UserSignal, ResolvedNode } from '../../types/channel.js';
+import type { TurnResult, TurnUsageSnapshot, UserSignal, ResolvedNode } from '../../types/channel.js';
 import type { RunContext } from '../../types/run-context.js';
 import type { ChannelDriver } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
-import { streamText, type ModelMessage, type ToolSet } from 'ai';
+import { streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import { buildToolSet } from '../../tools/effect/index.js';
@@ -61,6 +61,7 @@ export class TextDriver implements ChannelDriver {
     const scope = resolveNodeGatherScope(replyNode, ctx.runState.state, ctx.runState.messages);
     const gather = await runGatherPhase(ctx, scope);
     const out: TurnResult = { text: '', toolResults: [] };
+    const toolMessages: ModelMessage[] = [];
     const model = replyNode.model ?? ctx.model;
     const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
     const baseSystem = composeSystem(
@@ -77,6 +78,7 @@ export class TextDriver implements ChannelDriver {
     const toolCallsMade: ToolCallRecord[] = [];
     const mode = resolveStreamMode(ctx, node);
     const turnId = crypto.randomUUID();
+    let turnUsage: TurnUsageSnapshot | undefined;
 
     const source: TokenSource = {
       async *[Symbol.asyncIterator]() {
@@ -105,11 +107,20 @@ export class TextDriver implements ChannelDriver {
 
           const finishReason = await result.finishReason;
           const response = await result.response;
-          messages.push(...response.messages);
+          if (result.totalUsage) {
+            const stepUsage = await result.totalUsage;
+            if (stepUsage) {
+              turnUsage = addTurnUsage(turnUsage, stepUsage);
+            }
+          }
 
           if (finishReason !== 'tool-calls') {
+            messages.push(...response.messages);
             break;
           }
+
+          messages.push(...response.messages);
+          toolMessages.push(...response.messages);
 
           const toolCalls = await result.toolCalls;
           for (const call of toolCalls) {
@@ -152,12 +163,12 @@ export class TextDriver implements ChannelDriver {
               toolCallId: call.toolCallId,
             });
 
-            messages.push(
-              toolResultMessage(
-                { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-                toolResult,
-              ),
+            const resultMessage = toolResultMessage(
+              { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+              toolResult,
             );
+            messages.push(resultMessage);
+            toolMessages.push(resultMessage);
           }
         }
       },
@@ -197,6 +208,12 @@ export class TextDriver implements ChannelDriver {
     out.text = spoken.text;
     out.control = spoken.control ?? out.control;
     out.confidence = spoken.confidence;
+    if (toolMessages.length > 0) {
+      out.toolMessages = toolMessages;
+    }
+    if (turnUsage && turnUsage.totalTokens > 0) {
+      out.usage = turnUsage;
+    }
 
     ctx.emit({ type: 'turn-end' });
     return out;
@@ -266,6 +283,25 @@ export class TextDriver implements ChannelDriver {
     }
     return aiTools;
   }
+}
+
+function addTurnUsage(
+  current: TurnUsageSnapshot | undefined,
+  usage: LanguageModelUsage,
+): TurnUsageSnapshot {
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
+  const totalTokens = usage.totalTokens ?? inputTokens + outputTokens;
+  const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+  if (!current) {
+    return { inputTokens, outputTokens, totalTokens, cacheReadTokens };
+  }
+  return {
+    inputTokens: current.inputTokens + inputTokens,
+    outputTokens: current.outputTokens + outputTokens,
+    totalTokens: current.totalTokens + totalTokens,
+    cacheReadTokens: (current.cacheReadTokens ?? 0) + cacheReadTokens,
+  };
 }
 
 export { buildNodePrompt };

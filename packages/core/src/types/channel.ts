@@ -1,4 +1,4 @@
-import type { ToolSet } from 'ai';
+import type { ModelMessage, ToolSet } from 'ai';
 import type { UserInputContent } from '../runtime/userInput.js';
 import type { RunContext } from './run-context.js';
 import type { FlowNode } from './flow.js';
@@ -40,6 +40,13 @@ export interface ChannelDriver {
   runExtraction?(node: ResolvedNode, ctx: RunContext): Promise<TurnResult>;
 }
 
+export interface TurnUsageSnapshot {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cacheReadTokens?: number;
+}
+
 export interface TurnResult {
   text: string;
   toolResults: ToolResultRecord[];
@@ -49,6 +56,11 @@ export interface TurnResult {
   confidence?: number;
   /** Native realtime post-hoc gate: provider audio already played; gate is advisory only. */
   gateScope?: 'advisory';
+  /** AI-SDK tool round-trip messages (assistant tool-call + tool-result) produced this turn,
+   *  so the host loop can persist them to history in free conversation (G18). */
+  toolMessages?: ModelMessage[];
+  /** Real token usage from the AI SDK when the driver captured it. */
+  usage?: TurnUsageSnapshot;
 }
 
 export type UserSignal = { type: 'message'; input: UserInputContent };

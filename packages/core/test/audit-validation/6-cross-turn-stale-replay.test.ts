@@ -1,4 +1,5 @@
-// FINDING 6: runId === sessionId and callsite ordinals reset per turn, so a NEW user turn re-issuing the same tool+args replays the first turn's cached result instead of executing | anchor src/runtime/openRun.ts:37-39, src/runtime/ctx.ts:60-73,219-221 | proves "exactly-once" is actually "once-ever-per-session" for stable-arg tools
+// FINDING 6 (FIXED): runEpoch scopes the effect-key namespace per logical run so a NEW user turn
+// re-executes identical tool+args instead of replaying a prior turn's cached result.
 import { describe, expect, it } from 'bun:test';
 import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { buildCtx, reloadRunState, setupDurableHarness } from '../core-durable/helpers.js';
@@ -8,7 +9,7 @@ describe('F6: cross-turn effect-key collision returns stale tool results', () =>
     expect(sessionDerivedRunId('sess-abc')).toBe('sess-abc');
   });
 
-  it('a genuinely new turn calling the same tool with the same args never executes it again', async () => {
+  it('a genuinely new turn calling the same tool with the same args re-executes with fresh results', async () => {
     const balanceSpy = { count: 0, balance: 100 };
     const toolExecutor = {
       execute: async ({ name }: { name: string; args: unknown; session: unknown }) => {
@@ -37,10 +38,12 @@ describe('F6: cross-turn effect-key collision returns stale tool results', () =>
     const turn5 = await buildCtx({ session, runStore, runState: reloaded, toolExecutor });
     const second = await turn5.tool('get_balance', {});
 
-    // CURRENT behavior: the key hash(runId, callsite=0, name, args) collides with
-    // turn 1's step, so the executor never runs and the user is told a stale balance.
-    expect(balanceSpy.count).toBe(1);
-    expect(second).toEqual({ balance: 100 });
-    expect(await runStore.getSteps(runState.runId)).toHaveLength(1);
+    // runEpoch bumped on the fresh turn scopes the key namespace; prior-epoch steps are pruned.
+    expect(balanceSpy.count).toBe(2);
+    expect(second).toEqual({ balance: 60 });
+    const steps = await runStore.getSteps(runState.runId);
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.epoch).toBe(1);
+    expect(steps[0]?.result).toEqual({ balance: 60 });
   });
 });

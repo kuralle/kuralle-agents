@@ -296,6 +296,14 @@ export class PromptBuilder {
       });
     }
 
+    if (memory.openGoalsPrompt) {
+      sections.push({
+        type: 'conversation_summary',
+        content: memory.openGoalsPrompt,
+        priority: LAYER_PRIORITIES.CONVERSATION_SUMMARY,
+      });
+    }
+
     return sections;
   }
 

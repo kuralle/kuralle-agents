@@ -2,7 +2,7 @@ import type { ModelMessage } from 'ai';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
 import type { DecideNode, Flow, FlowNode } from '../types/flow.js';
-import { getFlowPark } from './collectDigression.js';
+import { popFlowPark, runCollectDigression } from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
@@ -22,6 +22,7 @@ import { resolveReplyNode } from './nodeBuilders.js';
 import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
+import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
 import { SuspendError } from '../runtime/durable/RunStore.js';
 import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
@@ -184,7 +185,33 @@ async function dispatchNode(
   }
 
   if (isReplyNode(node)) {
+    let freshUserInput = false;
+    if (hasPendingUserInput(ctx.session)) {
+      const signal = await driver.awaitUser(ctx);
+      appendUserMessage(run, signal.input);
+      ctx.turnInputConsumed = true;
+      freshUserInput = true;
+    }
+
+    if (freshUserInput && ctx.outOfBandControl && agent) {
+      const digression = await runCollectDigression({
+        agent,
+        node,
+        activeFlowName: flow.name,
+        run,
+        driver,
+        ctx,
+      });
+      if (digression.kind === 'transition') {
+        return digression.transition;
+      }
+      if (digression.kind === 'answeredThenResume') {
+        return { kind: 'stay' };
+      }
+    }
+
     const turn = await driver.runAgentTurn(resolveReplyNode(node, run.state), ctx);
+    await persistTurnUsageFromTurn(ctx, turn);
 
     if (ctx.outOfBandControl) {
       const decision = await evaluateReplyControl({
@@ -196,6 +223,23 @@ async function dispatchNode(
       if (decision.kind === 'redispatch') {
         const signal = await driver.awaitUser(ctx);
         appendUserMessage(run, signal.input);
+        ctx.turnInputConsumed = true;
+        if (agent) {
+          const digression = await runCollectDigression({
+            agent,
+            node,
+            activeFlowName: flow.name,
+            run,
+            driver,
+            ctx,
+          });
+          if (digression.kind === 'transition') {
+            return digression.transition;
+          }
+          if (digression.kind === 'answeredThenResume') {
+            return { kind: 'stay' };
+          }
+        }
         return dispatchNode(node, run, driver, ctx, agent, flow);
       }
       appendAssistantMessage(run, turn.text);
@@ -306,9 +350,8 @@ export async function runFlow(
     }
 
     if (transition.kind === 'end') {
-      const park = getFlowPark(run.state);
+      const park = popFlowPark(run.state);
       if (park && agent) {
-        delete run.state.__flowPark;
         const parkedFlow = agent.flows?.find((candidate) => candidate.name === park.flow);
         if (parkedFlow) {
           run.activeFlow = park.flow;

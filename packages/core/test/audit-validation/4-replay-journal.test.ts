@@ -1,6 +1,6 @@
 // FINDING 4: Durable runtime replay misses journal when callsite ordinal shifts | anchor src/runtime/ctx.ts:99-133, :219-221 | why this proves it
 import { describe, expect, it } from 'bun:test';
-import { buildCtx, reloadRunState, setupDurableHarness } from '../core-durable/helpers.js';
+import { buildCtx, reloadRunStateSameEpoch, setupDurableHarness } from '../core-durable/helpers.js';
 
 describe('F4: durable journal replay with shifted callsite ordinal', () => {
   it('preceding effect on replay shifts ordinal and re-executes the tool', async () => {
@@ -35,7 +35,7 @@ describe('F4: durable journal replay with shifted callsite ordinal', () => {
       return ctx.tool('charge', { amount: 100 });
     }
 
-    const reloaded = await reloadRunState(runStore, runState.runId);
+    const reloaded = await reloadRunStateSameEpoch(runStore, runState.runId);
     const ctx2 = await buildCtx({ session, runStore, runState: reloaded, toolExecutor });
     const replayResult = await nowThenCharge(ctx2);
 
@@ -70,7 +70,7 @@ describe('F4: durable journal replay with shifted callsite ordinal', () => {
     await chargeOnly(ctx1);
     expect(chargeSpy.count).toBe(1);
 
-    const reloaded = await reloadRunState(runStore, runState.runId);
+    const reloaded = await reloadRunStateSameEpoch(runStore, runState.runId);
     const ctx2 = await buildCtx({ session, runStore, runState: reloaded, toolExecutor });
     await chargeOnly(ctx2);
 

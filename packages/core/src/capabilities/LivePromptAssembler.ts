@@ -123,6 +123,7 @@ const INTERNAL_MEMORY_KEYS = [
   'flowStateByAgent',
   '__ariaAssistantText',
   '__ariaContextBudget',
+  '__goals',
 ];
 
 /**

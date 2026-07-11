@@ -30,6 +30,7 @@ import {
 import { resolveDispatchMode, isAdvisoryDispatch } from './dispatchMode.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
 import type { selectHostTarget } from './select.js';
+import { persistTurnUsageFromTurn } from './turnTokenUsage.js';
 
 export type HostLoopResult =
   | { kind: 'handoff'; to: string; reason?: string; category?: EscalationReason }
@@ -136,6 +137,12 @@ async function runActiveFlow(
   const result = await runFlow(flow, run, driver, ctx, agent);
 
   if (result.kind === 'handoff') {
+    // A handoff fired from inside a flow: the source flow is abandoned for this turn.
+    // Clear the active-flow pointers so the target agent does not try (and fail) to
+    // resume a flow that belongs to the source agent (G17).
+    run.activeFlow = undefined;
+    run.activeNode = undefined;
+    await ctx.runStore.putRunState(run);
     return { kind: 'handoff', to: result.to, reason: result.reason };
   }
 
@@ -197,6 +204,7 @@ async function runFreeConversation(
   }
 
   const turn = await driver.runAgentTurn(resolved, ctx);
+  await persistTurnUsageFromTurn(ctx, turn);
 
   if (turn.control && isValidControl(turn.control, agent, run)) {
     emitHostGuardTelemetry(ctx, { invoked: false, reason: 'main-control' });
@@ -205,6 +213,9 @@ async function runFreeConversation(
 
   if (turn.text.trim()) {
     emitHostGuardTelemetry(ctx, { invoked: false, reason: 'answered' });
+    if (turn.toolMessages?.length) {
+      run.messages = [...run.messages, ...turn.toolMessages];
+    }
     const message: ModelMessage = { role: 'assistant', content: turn.text };
     run.messages = [...run.messages, message];
     await ctx.runStore.putRunState(run);

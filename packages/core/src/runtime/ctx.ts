@@ -19,6 +19,7 @@ import type { RunStore } from './durable/RunStore.js';
 import { SuspendError } from './durable/RunStore.js';
 import {
   clockEffectKey,
+  logicalRunId,
   pauseEffectKey,
   toolEffectKey,
 } from './durable/idempotency.js';
@@ -66,6 +67,9 @@ function makeCtx(deps: CtxDeps): RunContext {
 
   const emit = deps.emit ?? (() => {});
 
+  // Mutable holder: handoff reassigns runCtx.toolExecutor; ctx.tool must see the swap.
+  const toolExecutorHolder = { executor: deps.toolExecutor };
+
   const consumeCallsite = (): string => {
     const site = String(effectOrdinal);
     effectOrdinal += 1;
@@ -89,6 +93,7 @@ function makeCtx(deps: CtxDeps): RunContext {
       result,
       startedAt,
       finishedAt: startedAt,
+      epoch: deps.runState.runEpoch ?? 0,
     };
     await deps.runStore.appendStep(deps.runState.runId, record);
     steps.push(record);
@@ -125,12 +130,16 @@ function makeCtx(deps: CtxDeps): RunContext {
         error: { name: err.name, message: err.message },
         startedAt,
         finishedAt: startedAt,
+        epoch: deps.runState.runEpoch ?? 0,
       };
       await deps.runStore.appendStep(deps.runState.runId, record);
       steps.push(record);
       throw err;
     }
   };
+
+  const effectRunId = () =>
+    logicalRunId(deps.runState.runId, deps.runState.runEpoch);
 
   const suspendForSignal = async (
     signalName: string,
@@ -156,7 +165,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     meta?: { deadline?: number; meta?: Record<string, unknown>; approval?: { title: string; description?: string } },
   ): Promise<unknown> => {
     const callsite = consumeCallsite();
-    const key = pauseEffectKey(deps.runState.runId, callsite, signalName);
+    const key = pauseEffectKey(effectRunId(), callsite, signalName);
     const hit = findStepByKey(steps, key);
     if (hit) {
       if (hit.error) {
@@ -174,7 +183,12 @@ function makeCtx(deps: CtxDeps): RunContext {
     runState: deps.runState,
     runStore: deps.runStore,
     emit,
-    toolExecutor: deps.toolExecutor,
+    get toolExecutor() {
+      return toolExecutorHolder.executor;
+    },
+    set toolExecutor(executor: EffectToolExecutor) {
+      toolExecutorHolder.executor = executor;
+    },
     hookRunner: deps.hookRunner ?? {},
     model: deps.model,
     controlModel: deps.controlModel ?? deps.model,
@@ -207,7 +221,7 @@ function makeCtx(deps: CtxDeps): RunContext {
       // ordering is deterministic across replays. NOTE: the surrounding agent turn is not
       // itself a replayable effect — this is fully deterministic for flow `action` tools;
       // for model-issued tool calls, resume re-enters the agent turn.
-      const def = options?.def ?? deps.toolExecutor.getTool?.(name);
+      const def = options?.def ?? toolExecutorHolder.executor.getTool?.(name);
       if (def?.needsApproval) {
         const decision = (await pauseEffect(APPROVAL_SIGNAL, {
           approval: { title: `Approve tool: ${name}` },
@@ -217,9 +231,9 @@ function makeCtx(deps: CtxDeps): RunContext {
         }
       }
       const callsite = consumeCallsite();
-      const key = toolEffectKey(deps.runState.runId, callsite, name, args);
+      const key = toolEffectKey(effectRunId(), callsite, name, args);
       const executeTool = () =>
-        deps.toolExecutor.execute({
+        toolExecutorHolder.executor.execute({
           name,
           args,
           session: deps.session,
@@ -246,6 +260,7 @@ function makeCtx(deps: CtxDeps): RunContext {
             error: { name: err.name, message: err.message },
             startedAt,
             finishedAt: startedAt,
+            epoch: deps.runState.runEpoch ?? 0,
           };
           await deps.runStore.appendStep(deps.runState.runId, record);
           steps.push(record);
@@ -269,12 +284,12 @@ function makeCtx(deps: CtxDeps): RunContext {
     },
     now: async () => {
       const callsite = consumeCallsite();
-      const key = clockEffectKey(deps.runState.runId, callsite, 'now');
+      const key = clockEffectKey(effectRunId(), callsite, 'now');
       return replayOrExecute(key, 'now', 'now', async () => clock.now()) as Promise<number>;
     },
     uuid: async () => {
       const callsite = consumeCallsite();
-      const key = clockEffectKey(deps.runState.runId, callsite, 'uuid');
+      const key = clockEffectKey(effectRunId(), callsite, 'uuid');
       return replayOrExecute(key, 'uuid', 'uuid', async () => clock.uuid()) as Promise<string>;
     },
   };

@@ -1,27 +1,16 @@
-// FINDING 9: a completed flow is excluded from every re-entry surface (guard classifier + enter_flow tool) and __completedFlows is never cleared, so flows are one-shot per session — a user can never run the order flow twice | anchor src/runtime/hostControlTools.ts:14-21, src/runtime/select.ts:56-61, src/runtime/hostLoop.ts:147-151 | proves repeat business is impossible in one session
+// FINDING 9 (FIXED): completed flows are excluded within a logical run but cleared on a fresh logical run — repeat business is allowed across independent user requests | anchor src/runtime/openRun.ts:104-112, src/runtime/hostControlTools.ts:14-21, src/runtime/select.ts:56-61, src/runtime/hostLoop.ts:147-151 | proves within-run exclusion holds and fresh-run re-entry works
 import { describe, expect, it } from 'bun:test';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { defineAgent } from '../../src/authoring/defineAgent.js';
+import { defineFlow, reply } from '../../src/types/flow.js';
+import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
+import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
+import { openRun, sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import type { AgentConfig } from '../../src/types/agentConfig.js';
 import { availableHostFlows } from '../../src/runtime/hostControlTools.js';
-import { makeRunState } from '../core-durable/helpers.js';
+import { makeRunState, makeTestSession, stubModel } from '../core-durable/helpers.js';
 
-function walkTsFiles(dir: string): string[] {
-  const entries = readdirSync(dir);
-  const files: string[] = [];
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      files.push(...walkTsFiles(full));
-    } else if (entry.endsWith('.ts')) {
-      files.push(full);
-    }
-  }
-  return files;
-}
-
-describe('F9: completed flows are permanently unavailable for the session', () => {
-  it('availableHostFlows excludes a completed flow forever', () => {
+describe('F9: completed flows are repeatable per logical run (FIXED)', () => {
+  it('availableHostFlows excludes a completed flow within the same logical run', () => {
     const orderFlow = { name: 'order', description: 'Place an order', nodes: [], start: 's' };
     const agent = { id: 'a', flows: [orderFlow] } as unknown as AgentConfig;
 
@@ -31,26 +20,35 @@ describe('F9: completed flows are permanently unavailable for the session', () =
     // First order completes (hostLoop appends the flow name).
     run.state.__completedFlows = ['order'];
 
-    // "I want to order again" — the flow is gone from both the guard
-    // classifier's candidate list and the enter_flow tool surface.
+    // Within the same logical run the flow stays excluded from guard + enter_flow.
     expect(availableHostFlows(agent, run)).toEqual([]);
   });
 
-  it('no src code ever removes a name from __completedFlows (append is the only write)', () => {
-    const srcRoot = join(import.meta.dirname, '../../src');
-    const assignments: string[] = [];
-    for (const file of walkTsFiles(srcRoot)) {
-      const lines = readFileSync(file, 'utf8').split('\n');
-      for (const line of lines) {
-        if (!line.includes('__completedFlows')) continue;
-        if (/__completedFlows\s*=/.test(line) || /delete\b.*__completedFlows/.test(line)) {
-          assignments.push(`${file}: ${line.trim()}`);
-        }
-      }
-    }
-    // The sole write site is the append in hostLoop; nothing resets or deletes.
-    expect(assignments).toHaveLength(1);
-    expect(assignments[0]).toContain('hostLoop.ts');
-    expect(assignments[0]).toContain('[...completedFlows, flow.name]');
+  it('fresh logical run clears __completedFlows so the flow is available again', async () => {
+    const start = reply({ id: 'order-start', instructions: 'x', next: () => ({ end: 'ok' }) });
+    const orderFlow = defineFlow({ name: 'order', description: 'Place an order', start, nodes: [start] });
+    const agent = defineAgent({ id: 'agent-1', model: stubModel, flows: [orderFlow] });
+    const agents = new Map([[agent.id, agent]]);
+
+    const sessionId = 'f9-repeat-sess';
+    const memoryStore = new MemoryStore();
+    const runId = sessionDerivedRunId(sessionId);
+
+    const runState = makeRunState(sessionId, runId);
+    runState.state.__completedFlows = ['order'];
+    const session = makeTestSession(sessionId);
+    await memoryStore.save(session);
+    const runStore = new SessionRunStore(memoryStore, sessionId);
+    await runStore.initRun(runState);
+
+    const result = await openRun(agents, {
+      sessionId,
+      defaultAgentId: agent.id,
+      sessionStore: memoryStore,
+      input: 'I want to order again',
+    });
+
+    expect(result.runState.state.__completedFlows).toEqual([]);
+    expect(availableHostFlows(agent, result.runState).map((f) => f.name)).toEqual(['order']);
   });
 });

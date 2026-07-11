@@ -8,6 +8,16 @@ import type { ConversationAuditEntry } from '../audit/types.js';
 
 export type ChannelId = 'web' | 'email' | 'sms' | 'voice' | 'api' | 'slack' | 'discord' | (string & {});
 
+/** Structured goal/thread entry on session.workingMemory.__goals (G5). */
+export type GoalStatus = 'open' | 'resolved';
+
+export interface TrackedGoal {
+  topic: string;
+  status: GoalStatus;
+  lastTurn: number;
+  note?: string;
+}
+
 // ============================================
 // WORKING MEMORY / AGENT CONTEXT
 // ============================================

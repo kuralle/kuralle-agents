@@ -12,6 +12,8 @@ export interface StepRecord {
   error?: { name: string; message: string };
   startedAt: number;
   finishedAt?: number;
+  /** Logical-run epoch when this step was recorded. Absent on legacy steps → prune keeps them until superseded. */
+  epoch?: number;
 }
 
 interface WaitingFor {
@@ -34,6 +36,10 @@ export interface RunState {
   messages: ModelMessage[];
   createdAt: number;
   updatedAt: number;
+  /** Monotonic logical-run counter. Increments on each fresh turn; stable across suspend/resume.
+   *  Scopes the durable effect-key namespace so a new turn re-executes rather than replaying a
+   *  prior turn's cached result (F6/G8). Absent on legacy runs → treat as 0. */
+  runEpoch?: number;
 }
 
 export interface SignalDelivery {
