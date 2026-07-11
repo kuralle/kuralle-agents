@@ -20,7 +20,7 @@
  *     instancePath: "/agents/cfvoicerealtimegemini/smoke-test",
  *     pcmFixture:   "bench_hello.pcm",
  *     tailWorker:   "cf-voice-realtime-gemini",
- *     accountId:    "YOUR_CF_ACCOUNT_ID",
+ *     accountId:    "<your-cloudflare-account-id>",
  *     tailDurationMs: 45_000,
  *     audioInputRate: 16000,    // Gemini expects 16kHz; fixtures are 24kHz
  *   });

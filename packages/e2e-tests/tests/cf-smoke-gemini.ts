@@ -16,7 +16,7 @@
 import { runCfVoiceSmoke } from './cf_smoke_harness.js';
 
 const DEFAULT_WS = 'wss://cf-voice-realtime-gemini.mithushancj.workers.dev';
-const DEFAULT_ACCOUNT = 'YOUR_CF_ACCOUNT_ID';
+const DEFAULT_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? '';
 
 async function main() {
   const wsUrl = process.argv[2] ?? DEFAULT_WS;
