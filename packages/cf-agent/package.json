@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.7",
+    "@cloudflare/workers-types": "^4.0.0",
     "@kuralle-agents/voice-protocol": "workspace:*",
     "agents": "^0.15.0",
     "typescript": "^5.7.0",

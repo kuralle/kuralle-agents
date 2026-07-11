@@ -7,7 +7,9 @@ import { SqlFileSystem } from './sql-fs.js';
 
 /** Minimal structural shape of a Cloudflare DO SqlStorage (no @cloudflare/workers-types dep). */
 export interface SqlStorageLike {
-  exec(query: string, ...bindings: SqlParam[]): Iterable<Record<string, SqlParam>>;
+  // Read rows may include ArrayBuffer (BLOB columns) — matches CF `SqlStorageValue`;
+  // `SqlParam` stays the (narrower) bind-parameter type.
+  exec(query: string, ...bindings: SqlParam[]): Iterable<Record<string, SqlParam | ArrayBuffer>>;
   databaseSize: number;
 }
 
