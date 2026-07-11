@@ -1,14 +1,13 @@
 /**
  * A tiny JSON-file-backed SessionStore so a conversation survives across separate
- * process invocations — the substrate that lets `send.ts` do adaptive multi-turn
+ * process invocations — the substrate that lets `send` do adaptive multi-turn
  * (one turn per call). `reviveSession` spreads all keys, so the durable-run state
  * (`durableRuns`: journal + flow position + runEpoch) round-trips through JSON intact.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Session } from '../../src/types/session.js';
-import type { SessionStore } from '../../src/session/SessionStore.js';
-import { reviveSession } from '../../src/session/utils.js';
+import type { Session, SessionStore } from '@kuralle-agents/core';
+import { reviveSession } from '@kuralle-agents/core';
 
 export function fileSessionStore(path: string): SessionStore {
   const readAll = (): Record<string, unknown> => {

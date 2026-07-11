@@ -310,6 +310,33 @@
         "wrangler": "^4.0.0",
       },
     },
+    "packages/cli": {
+      "name": "@kuralle-agents/cli",
+      "version": "0.12.0",
+      "bin": {
+        "kuralle": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@ai-sdk/openai": "^3.0.0",
+        "@kuralle-agents/core": "workspace:*",
+        "ai": "^6.0.0",
+        "dotenv": "^16.4.0",
+        "ink": "^7.1.0",
+        "ink-text-input": "^6.0.0",
+        "react": "^19.2.7",
+        "zod": "^4.0.0",
+      },
+      "devDependencies": {
+        "@types/node": "^20.11.0",
+        "@types/react": "^19.2.17",
+        "typescript": "^5.3.0",
+      },
+      "peerDependencies": {
+        "@kuralle-agents/core": "workspace:*",
+        "ai": "^6.0.0",
+        "zod": "^4.0.0",
+      },
+    },
     "packages/commerce": {
       "name": "@kuralle-agents/commerce",
       "version": "0.12.0",
@@ -340,13 +367,9 @@
         "@kuralle-agents/fs": "workspace:*",
         "@kuralle-agents/realtime-audio": "workspace:*",
         "@types/node": "^20.11.0",
-        "@types/react": "^19.2.17",
         "ai": "^6.0.0",
         "bun-types": "^1.3.0",
         "dotenv": "^16.4.0",
-        "ink": "^7.1.0",
-        "ink-text-input": "^6.0.0",
-        "react": "^19.2.7",
         "typescript": "^5.3.0",
         "vitest": "^3.2.4",
         "zod": "^4.0.0",
@@ -1065,6 +1088,8 @@
     "@kuralle-agents/analytics-sdk": ["@kuralle-agents/analytics-sdk@workspace:packages/analytics-sdk"],
 
     "@kuralle-agents/cf-agent": ["@kuralle-agents/cf-agent@workspace:packages/cf-agent"],
+
+    "@kuralle-agents/cli": ["@kuralle-agents/cli@workspace:packages/cli"],
 
     "@kuralle-agents/commerce": ["@kuralle-agents/commerce@workspace:packages/commerce"],
 
@@ -2522,13 +2547,15 @@
 
     "@jridgewell/remapping/@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
+    "@kuralle-agents/cli/@ai-sdk/openai": ["@ai-sdk/openai@3.0.70", "", { "dependencies": { "@ai-sdk/provider": "3.0.10", "@ai-sdk/provider-utils": "4.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-0sAaS5IrgHvLF1OUHCB1fV+d4HCvfUvhnf5Hpq2yrzFRPLKdLv6TDohWOt/vmf1A6tXO1DuQKKsSuNqG3Rydgw=="],
+
+    "@kuralle-agents/cli/@types/react": ["@types/react@19.2.17", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="],
+
+    "@kuralle-agents/cli/react": ["react@19.2.7", "", {}, "sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ=="],
+
     "@kuralle-agents/commerce/@ai-sdk/openai": ["@ai-sdk/openai@3.0.70", "", { "dependencies": { "@ai-sdk/provider": "3.0.10", "@ai-sdk/provider-utils": "4.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-0sAaS5IrgHvLF1OUHCB1fV+d4HCvfUvhnf5Hpq2yrzFRPLKdLv6TDohWOt/vmf1A6tXO1DuQKKsSuNqG3Rydgw=="],
 
     "@kuralle-agents/core/@ai-sdk/openai": ["@ai-sdk/openai@3.0.70", "", { "dependencies": { "@ai-sdk/provider": "3.0.10", "@ai-sdk/provider-utils": "4.0.28" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-0sAaS5IrgHvLF1OUHCB1fV+d4HCvfUvhnf5Hpq2yrzFRPLKdLv6TDohWOt/vmf1A6tXO1DuQKKsSuNqG3Rydgw=="],
-
-    "@kuralle-agents/core/@types/react": ["@types/react@19.2.17", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw=="],
-
-    "@kuralle-agents/core/react": ["react@19.2.7", "", {}, "sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ=="],
 
     "@kuralle-agents/e2e-tests/@ai-sdk/google": ["@ai-sdk/google@2.0.74", "", { "dependencies": { "@ai-sdk/provider": "2.0.3", "@ai-sdk/provider-utils": "3.0.25" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-Lhw1742RXc+4pRIvqVXa0jdl5+qdpmw8lj0lm6OchUg9rVGHzymlaxe7CDiYX5U2af4jbjKeTY22LDi3bIycgQ=="],
 

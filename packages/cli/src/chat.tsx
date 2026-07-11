@@ -1,29 +1,21 @@
-#!/usr/bin/env bun
 /**
- * Kuralle TUI chat — an interactive terminal chat REPL for a live Kuralle runtime,
- * built with Ink + ink-text-input. Talk to a real agent, watch replies stream, and
- * see flow/tool/handoff events + session state (activeFlow, runEpoch) update live.
- *
- * Interactive:  bun examples/tui-chat/index.tsx
- * Headless smoke (verify without a TTY):
- *   bun examples/tui-chat/index.tsx --auto "what's the special?|order a latte for Friday|no, make it Saturday|yes"
+ * Kuralle TUI chat — interactive terminal REPL for a live Kuralle runtime.
  *
  * Slash commands: /state  /reset  /help  /quit
- * Provider: OpenAI gpt-4.1-mini (needs OPENAI_API_KEY).
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { render, Box, Text, useApp, useInput, Static } from 'ink';
 import TextInput from 'ink-text-input';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
-import { buildDemoRuntime, type DemoRuntime } from './demoAgent.js';
-import { newSessionId } from '../../src/runtime/openRun.js';
+import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
+import { newSessionId } from './sessionId.js';
 
 type Line = { id: number; kind: 'user' | 'assistant' | 'event' | 'system'; text: string };
 let LINE_ID = 0;
 const line = (kind: Line['kind'], text: string): Line => ({ id: LINE_ID++, kind, text });
 
 async function runTurn(
-  demo: DemoRuntime,
+  demo: AgentRuntime,
   input: string,
   onText: (t: string) => void,
   onEvent: (e: string) => void,
@@ -48,9 +40,9 @@ async function runTurn(
   return text.trim();
 }
 
-function App({ scripted }: { scripted?: string[] }) {
+function App({ scripted, buildRuntime }: { scripted?: string[]; buildRuntime: BuildRuntime }) {
   const { exit } = useApp();
-  const demoRef = useRef<DemoRuntime>(buildDemoRuntime());
+  const demoRef = useRef<AgentRuntime>(buildRuntime());
   const [log, setLog] = useState<Line[]>([line('system', demoRef.current.label)]);
   const [live, setLive] = useState('');
   const [events, setEvents] = useState<string[]>([]);
@@ -58,7 +50,6 @@ function App({ scripted }: { scripted?: string[] }) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Raw-mode input only when interactive (a TTY); disabled under --auto / piped stdin.
   useInput((input, key) => { if (key.ctrl && input === 'c') exit(); }, { isActive: !scripted && Boolean(process.stdin.isTTY) });
 
   const push = (l: Line) => setLog((prev) => [...prev, l]);
@@ -71,11 +62,19 @@ function App({ scripted }: { scripted?: string[] }) {
     const text = raw.trim();
     if (!text || busy) return;
     setValue('');
-    // slash commands
     if (text === '/quit') { exit(); return; }
     if (text === '/help') { push(line('system', 'commands: /state  /reset  /quit')); return; }
-    if (text === '/reset') { demoRef.current = buildDemoRuntime(newSessionId()); push(line('system', `— new session ${demoRef.current.sessionId.slice(0, 8)} —`)); await refreshStatus(); return; }
-    if (text === '/state') { const s = await demoRef.current.readState(); push(line('system', `state: flow=${s.activeFlow ?? 'none'} epoch=${s.runEpoch ?? 0} completed=${JSON.stringify(s.completedFlows ?? [])} roles=[${s.roles.join(',')}]`)); return; }
+    if (text === '/reset') {
+      demoRef.current = buildRuntime(newSessionId());
+      push(line('system', `— new session ${demoRef.current.sessionId.slice(0, 8)} —`));
+      await refreshStatus();
+      return;
+    }
+    if (text === '/state') {
+      const s = await demoRef.current.readState();
+      push(line('system', `state: flow=${s.activeFlow ?? 'none'} epoch=${s.runEpoch ?? 0} completed=${JSON.stringify(s.completedFlows ?? [])} roles=[${s.roles.join(',')}]`));
+      return;
+    }
 
     push(line('user', text));
     setBusy(true); setEvents([]); setLive('');
@@ -88,7 +87,6 @@ function App({ scripted }: { scripted?: string[] }) {
     await refreshStatus();
   };
 
-  // Headless --auto: play scripted turns then exit (verifies the full render+runtime path without a TTY).
   useEffect(() => {
     if (!scripted?.length) return;
     let cancelled = false;
@@ -133,8 +131,8 @@ function App({ scripted }: { scripted?: string[] }) {
   );
 }
 
-// ── entry ────────────────────────────────────────────────────────────────────
-const argv = process.argv.slice(2);
-const autoIdx = argv.indexOf('--auto');
-const scripted = autoIdx >= 0 ? (argv[autoIdx + 1] ?? '').split('|').map((s) => s.trim()).filter(Boolean) : undefined;
-render(<App scripted={scripted} />);
+export function runChat(argv: string[], buildRuntime: BuildRuntime): void {
+  const autoIdx = argv.indexOf('--auto');
+  const scripted = autoIdx >= 0 ? (argv[autoIdx + 1] ?? '').split('|').map((s) => s.trim()).filter(Boolean) : undefined;
+  render(<App scripted={scripted} buildRuntime={buildRuntime} />);
+}
