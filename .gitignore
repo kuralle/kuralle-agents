@@ -66,3 +66,5 @@ research/pi/
 research/kuralle-whatsapp-product/
 kh-*-implementation-notes.md
 *-implementation-notes.md
+.plandesk/token
+.plandesk/server.json
