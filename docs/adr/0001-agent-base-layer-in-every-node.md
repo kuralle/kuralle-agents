@@ -9,7 +9,7 @@ A Kuralle flow is a graph of nodes (`collect` / `decide` / `action` / `reply`). 
 
 Two problems follow:
 
-1. **No shared persona/safety floor.** Each in-flow node behaves like a standalone mini-agent. Global grounding/safety rules placed on `agent.instructions` do not reach `welcome`, `giftCard`, `orderConfirm`, etc. In the acme concierge this is exactly why prompt-level grounding had to be duplicated per node, and why a sparsely-instructed reply node (`noResults`) still drifted into "visit the website".
+1. **No shared persona/safety floor.** Each in-flow node behaves like a standalone mini-agent. Global grounding/safety rules placed on `agent.instructions` do not reach `welcome`, `giftCard`, `orderConfirm`, etc. In one production concierge agent this is exactly why prompt-level grounding had to be duplicated per node, and why a sparsely-instructed reply node (`noResults`) still drifted into "visit the website".
 2. **No always-available tools.** A node can only call the tools it declares. There is no way to make a safe, cross-cutting capability (a returns/FAQ knowledge-base lookup) callable from anywhere a user might ask for it mid-flow.
 
 ElevenLabs' ElevenAgents orchestration does the opposite and it is the better shape: a base system prompt + core tools + global knowledge are **always present regardless of the active node**, and each sub-agent **layers** its own instructions on top ("prompt composition"), with the orchestrator rebuilt per transition. See `reference_elevenlabs_orchestration` and `docs/solution` prior art.

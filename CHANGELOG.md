@@ -76,11 +76,11 @@ Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes belo
 - `createFactMemoryService({ store, model })` — LLM fact extraction with merge-on-ingest (existing facts + transcript → complete updated list), per-user block on any `PersistentMemoryStore` (file / Postgres / Redis / CF DO SQLite), injection-scanned writes. Identity verified end-to-end: messaging `customerId` → `RunOptions.userId` → memory owner.
 
 **Real guardrails** (the pipeline existed; the guards now ship):
-- `createPromptInjectionGuard()` (audited pattern set shared with memory-write scanning), `createPiiInputGuard()`/`createPiiOutputGuard()` (Luhn-validated cards + emails by default, opt-in phone/IBAN, redact-or-block), `createModerationGuard()`/`createModerationOutputGuard()` (temperature-0 LLM classifier, fail-open default), `createGroundingValidator()` (the productized Acme H6 gate: completed-action claims vs tool calls/state/citations, rewrite-not-block).
+- `createPromptInjectionGuard()` (audited pattern set shared with memory-write scanning), `createPiiInputGuard()`/`createPiiOutputGuard()` (Luhn-validated cards + emails by default, opt-in phone/IBAN, redact-or-block), `createModerationGuard()`/`createModerationOutputGuard()` (temperature-0 LLM classifier, fail-open default), `createGroundingValidator()` (the productized H6 grounding gate: completed-action claims vs tool calls/state/citations, rewrite-not-block).
 - Pre-turn blocks now emit `safety-blocked { moderator, rationale, userFacingMessage }`.
 
 **Commerce**:
-- New `@kuralle-agents/commerce`: integer minor-unit `Money`, `ProductCatalog` contract, durable cart tools in flow state (`product_search`/`cart_add`/`cart_remove`/`cart_view`), idempotent `createOrderTool` (content-key ledger + in-flight coalescing — the Acme pattern, productized), `toWhatsAppProductList` mapper.
+- New `@kuralle-agents/commerce`: integer minor-unit `Money`, `ProductCatalog` contract, durable cart tools in flow state (`product_search`/`cart_add`/`cart_remove`/`cart_view`), idempotent `createOrderTool` (content-key ledger + in-flight coalescing — a proven production pattern, productized), `toWhatsAppProductList` mapper.
 - `@kuralle-agents/messaging-meta` WhatsApp commerce surface: `sendProduct`, `sendProductList` (limits validated), `sendCatalog`, `sendAddressRequest`; inbound `order` webhooks normalized with typed `parseInboundOrder` / `parseInboundAddress`. Payment messages deliberately out of scope.
 
 **Simulated-user eval + LLM judge** (`@kuralle-agents/core`):

@@ -8,7 +8,7 @@ Kuralle's stated use case is agentic conversational commerce, but no package
 contained a cart, order, catalog, or payment concept, and the WhatsApp client
 could not send product/catalog messages or parse inbound orders. The
 idempotent-order pattern (content-key dedupe + in-flight coalescing) had been
-proven in the Acme production bot but never productized.
+proven in a production bot but never productized.
 
 ## Decisions
 
@@ -41,8 +41,8 @@ A channel-agnostic package owning the typed commerce contract:
 - `createOrderTool({ submit, ledger })` — idempotent order placement with two
   dedupe layers beyond the effect log (which only covers replay of the same
   call): a content key (hash of session + sorted cart lines) checked against
-  an `OrderLedger`, and in-flight coalescing. This is the productized Acme
-  pattern.
+  an `OrderLedger`, and in-flight coalescing. This is that pattern,
+  productized.
 - `toWhatsAppProductList` maps products/carts to the messaging-meta
   `sendProductList` payload **structurally** (no hard dependency) so commerce
   stays channel-agnostic.

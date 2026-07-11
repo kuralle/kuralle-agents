@@ -81,7 +81,7 @@ Shipped implementations for the existing pipeline (no new config surface):
 `createPiiInputGuard`/`createPiiOutputGuard` (Luhn-validated cards, emails;
 opt-in phone/IBAN; redact-or-block), `createModerationGuard` (temperature-0
 LLM classifier, fail-open default), and `createGroundingValidator` (the
-productized Acme H6 gate: completed-action claims checked against tool
+productized H6 grounding gate: completed-action claims checked against tool
 calls/state/citations, rewrite-not-block). Pre-turn blocks now emit
 `safety-blocked` with the moderator id.
 
