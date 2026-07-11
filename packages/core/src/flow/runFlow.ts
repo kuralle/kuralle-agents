@@ -192,15 +192,24 @@ async function dispatchNode(
   }
 
   if (isReplyNode(node)) {
+    // Consume input here ONLY to feed the out-of-band digression check below, and
+    // only for input this turn genuinely fresh to THIS reply — gated on both:
+    //   !turnInputConsumed: a prior node (e.g. a collect) already took the turn's
+    //     input, so a terminal reply like `done` (next→end) must not re-digress on
+    //     the leftover — otherwise it returns `stay`, the main loop's stay+pending
+    //     branch re-dispatches, and completion hangs on a driver clearing the buffer.
+    //   outOfBandControl: with OOB off there is no digression, so the reply must not
+    //     swallow input here — it returns its transition (`next: () => 'stay'`) and the
+    //     main loop's stay-branch owns awaitUser.
     let freshUserInput = false;
-    if (hasPendingUserInput(ctx.session)) {
+    if (hasPendingUserInput(ctx.session) && !ctx.turnInputConsumed && ctx.outOfBandControl) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
       ctx.turnInputConsumed = true;
       freshUserInput = true;
     }
 
-    if (freshUserInput && ctx.outOfBandControl && agent) {
+    if (freshUserInput && agent) {
       const digression = await runCollectDigression({
         agent,
         node,
