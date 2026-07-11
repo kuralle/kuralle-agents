@@ -97,8 +97,11 @@ const suite: [string, () => Promise<void>][] = [
   ['G1', verifyG1],
   ['G14', verifyG14],
 ];
+// FIX_ONLY=G14 runs just that scenario (for repeated-run reliability checks).
+const only = process.env.FIX_ONLY;
+const active = only ? suite.filter(([n]) => n === only) : suite;
 let hardErrors = 0;
-for (const [name, fn] of suite) {
+for (const [name, fn] of active) {
   try { await fn(); } catch (e) { hardErrors++; record(name, false, `HARNESS ERROR: ${e instanceof Error ? e.message : String(e)}`); }
 }
 const pass = results.filter((r) => r.pass).length;
