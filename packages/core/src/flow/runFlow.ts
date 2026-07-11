@@ -6,7 +6,7 @@ import { popFlowPark, runCollectDigression } from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
-import { hasPendingUserInput } from '../runtime/channels/inputBuffer.js';
+import { hasPendingUserInput, setPendingUserInput } from '../runtime/channels/inputBuffer.js';
 import { userInputToText, type UserInputContent } from '../runtime/userInput.js';
 import { collectUntilComplete } from './collectUntilComplete.js';
 import {
@@ -103,16 +103,23 @@ async function dispatchConfirmGate(
   }
 
   let input = '';
+  let rawInput: UserInputContent = '';
   if (hasPendingUserInput(ctx.session)) {
     const signal = await driver.awaitUser(ctx);
+    rawInput = signal.input;
     input = userInputToText(signal.input);
     appendUserMessage(run, signal.input);
   } else {
     input = latestUserText(run);
+    rawInput = input;
   }
-  ctx.turnInputConsumed = true;
 
   const verdict = parseConfirmation(input);
+  if (verdict === 'decline') {
+    setPendingUserInput(ctx.session, rawInput);
+  } else {
+    ctx.turnInputConsumed = true;
+  }
   const branch =
     verdict === 'affirm'
       ? gate.onConfirm

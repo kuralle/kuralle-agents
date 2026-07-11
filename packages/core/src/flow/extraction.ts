@@ -13,6 +13,11 @@ function collectTurnsKey(nodeId: string): string {
   return `__collectTurns_${nodeId}`;
 }
 
+export function resetCollect(state: FlowState, nodeId: string): void {
+  delete state[collectDataKey(nodeId)];
+  delete state[collectTurnsKey(nodeId)];
+}
+
 export function getCollectData(state: FlowState, nodeId: string): Record<string, unknown> {
   const raw = state[collectDataKey(nodeId)];
   if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {

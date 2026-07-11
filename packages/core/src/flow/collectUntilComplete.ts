@@ -43,7 +43,7 @@ export async function collectUntilComplete(
   options?: { agent?: AgentConfig; activeFlowName?: string },
 ): Promise<NormalizedTransition> {
   for (;;) {
-    if (schemaSatisfied(node, run.state)) {
+    if (schemaSatisfied(node, run.state) && !hasPendingUserInput(ctx.session)) {
       const data = projectCollectData(node, run.state);
       return normalizeTransition(await node.onComplete(data, run.state));
     }
