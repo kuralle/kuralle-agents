@@ -1,0 +1,35 @@
+export type SpanKind = 'turn' | 'flow' | 'node' | 'tool' | 'handoff' | 'llm';
+
+export interface AgentSpan {
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  kind: SpanKind;
+  startTime: number;
+  endTime?: number;
+  status: 'ok' | 'error';
+  attributes: {
+    sessionId: string;
+    activeFlow?: string;
+    nodeId?: string;
+    toolName?: string;
+    handoffFrom?: string;
+    handoffTo?: string;
+    input?: unknown;
+    output?: unknown;
+    error?: string;
+  };
+}
+
+export interface AgentTrace {
+  traceId: string;
+  sessionId: string;
+  spans: AgentSpan[];
+  answer: string;
+  usedTool: boolean;
+  toolCalls: Array<{ name: string; args: unknown }>;
+  toolResults: Array<{ name: string; result: unknown }>;
+  startedAt: number;
+  endedAt?: number;
+}

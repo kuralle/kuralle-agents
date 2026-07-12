@@ -60,6 +60,8 @@ import {
 } from '../escalation/escalation.js';
 import type { WakeOptions } from '../scheduler/index.js';
 import type { HandoffInputFilter } from './handoffFilters.js';
+import { runOnce as recordRunOnce } from './TraceRecorder.js';
+import type { AgentTrace } from '../types/trace.js';
 
 export interface HarnessConfig {
   agents: AgentConfig[];
@@ -490,6 +492,10 @@ export class Runtime {
       abortController,
       run: gated,
     });
+  }
+
+  runOnce(opts: RunOptions): Promise<AgentTrace> {
+    return recordRunOnce(this, opts);
   }
 
   stream(opts: RunOptions): TurnHandle {

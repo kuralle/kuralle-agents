@@ -5,6 +5,8 @@ export {
   type RunOptions,
 } from './Runtime.js';
 export type { RuntimeLike } from './RuntimeLike.js';
+export { TraceRecorder, runOnce, type TraceRecorderOptions } from './TraceRecorder.js';
+export type { AgentSpan, AgentTrace, SpanKind } from '../types/trace.js';
 export { SessionWorkingMemory } from './WorkingMemory.js';
 export { TextDriver, VoiceDriver } from './channels/index.js';
 export type { VoiceDriverConfig } from './channels/index.js';

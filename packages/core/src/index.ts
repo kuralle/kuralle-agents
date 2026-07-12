@@ -391,6 +391,8 @@ export type { ConfirmVerdict } from './flow/confirmParse.js';
 export type { Route } from './types/route.js';
 export type { TurnHandle } from './types/stream.js';
 export type { HarnessStreamPart } from './types/stream.js';
+export type { AgentSpan, AgentTrace, SpanKind } from './types/trace.js';
+export { TraceRecorder, runOnce, type TraceRecorderOptions } from './runtime/TraceRecorder.js';
 export { harnessToUIMessageStream } from './ai-sdk/uiMessageStream.js';
 export type {
   KuralleMetadata,

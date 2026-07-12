@@ -10,6 +10,7 @@ export * from './tool.js';
 export * from './effectTool.js';
 export * from './voice.js';
 export * from './runtime.js';
+export * from './trace.js';
 export type * from '../audit/types.js';
 export type * from '../outcomes/index.js';
 export type * from '../channels/index.js';

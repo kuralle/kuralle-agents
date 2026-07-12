@@ -60,6 +60,29 @@ for await (const part of handle.events) {           // events is a property, not
 await handle;   // resolves to TurnResult once the stream is consumed
 ```
 
+## Single-run trace / `runOnce`
+
+Use `runOnce` when an evaluator needs one complete, JSON-serializable turn instead
+of a live stream. The trace includes the answer, tool roll-up, and nested spans.
+
+```ts
+const trace = await runtime.runOnce({
+  sessionId: 'grounding-eval-42',
+  input: 'What was my last invoice total?',
+});
+
+const judgeContext = {
+  answer: trace.answer,
+  evidence: trace.toolResults.map(({ name, result }) => ({ name, result })),
+};
+
+const verdict = await groundingJudge(judgeContext);
+console.log(verdict, trace.usedTool, trace.traceId);
+```
+
+`runOnce` executes exactly one normal runtime turn and only observes its existing
+event stream; it does not persist traces or change session/run behavior.
+
 ## Flows
 
 A flow is a node graph that enforces a multi-step procedure without embedding a 600-line SOP in a system prompt.
