@@ -153,6 +153,7 @@ It renders into a Shadow DOM root when available (`attachShadow`), so its styles
 - **Spans nest by construction**: `turn` is the root, `flow`/`node` spans open and close as the run enters/exits them, and `tool`/`handoff` spans are leaves — this is exactly what the terminal waterfall and `trace-ui` render.
 - **Recording is a side-observer** (`TraceRecorder`) on the existing `HarnessStreamPart` event stream — it does not sit in the execution path, so a bug in trace recording can never change a turn's answer.
 - **IDs are OTLP-compatible hex** from the start, so native and exported traces share identifiers without remapping.
+- **Token usage rides the trace.** The `turn` span carries `attributes.tokensIn` (the context-window size in flight — last prompt tokens) and `attributes.tokensOut` (generated tokens), so context and token counts are available everywhere the trace goes: `getTrace`/`listTraces`, the OTLP export (as `kuralle.tokensIn` / `kuralle.tokensOut`, so Langfuse shows them), and `kuralle trace` / `kuralle chat --trace` — not just the terminal.
 
 ## Related
 

@@ -1,4 +1,4 @@
-import type { Runtime, SessionStore } from '@kuralle-agents/core';
+import type { Runtime, SessionStore, TraceStore } from '@kuralle-agents/core';
 
 export interface AgentRuntime {
   runtime: Runtime;
@@ -14,4 +14,8 @@ export interface AgentRuntime {
   }>;
 }
 
-export type BuildRuntime = (sessionId?: string, store?: SessionStore) => AgentRuntime;
+export type BuildRuntime = (
+  sessionId?: string,
+  store?: SessionStore,
+  traceStore?: TraceStore,
+) => AgentRuntime;

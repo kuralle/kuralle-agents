@@ -64,3 +64,13 @@ export function readLastPromptTokens(state: Record<string, unknown>): number | u
   const value = state[LAST_PROMPT_TOKENS_KEY];
   return typeof value === 'number' ? value : undefined;
 }
+
+/** Token usage for a trace's `done` event: context-window size (last prompt tokens)
+ *  + the session's cumulative generated tokens. Both undefined until a turn records usage. */
+export function readTraceTokenUsage(
+  state: Record<string, unknown>,
+): { inputTokens?: number; outputTokens?: number } {
+  const inputTokens = readLastPromptTokens(state);
+  const saved = readPersistedUsage(state);
+  return { inputTokens, outputTokens: saved?.outputTokens };
+}

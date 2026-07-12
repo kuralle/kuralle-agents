@@ -48,7 +48,7 @@ import {
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { SessionMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
-import { readLastPromptTokens } from './turnTokenUsage.js';
+import { readLastPromptTokens, readTraceTokenUsage } from './turnTokenUsage.js';
 import { isContextOverflowError, recoverFromContextOverflow } from './contextOverflow.js';
 import { projectGoalsPromptFromState, updateGoalsFromTurn } from './goals.js';
 import type { RunContext } from '../types/run-context.js';
@@ -509,7 +509,11 @@ export class Runtime {
           },
         });
         await this.hooks?.onEnd?.(runCtx);
-        emit({ type: 'done', sessionId: opened.session.id });
+        emit({
+          type: 'done',
+          sessionId: opened.session.id,
+          usage: readTraceTokenUsage(runCtx.runState.state),
+        });
       }
 
       return { text: collectAssistantText(runCtx.runState.messages), toolResults: [] };

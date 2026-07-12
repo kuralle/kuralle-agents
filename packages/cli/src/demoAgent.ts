@@ -17,7 +17,9 @@ import {
   collect,
   defineTool,
   MemoryStore,
+  MemoryTraceStore,
   type SessionStore,
+  type TraceStore,
 } from '@kuralle-agents/core';
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
 import { newSessionId } from './sessionId.js';
@@ -35,7 +37,11 @@ export function demoModel(): LanguageModel {
   return createOpenAI({ apiKey: key })(process.env.OPENAI_MODEL ?? 'gpt-4.1-mini');
 }
 
-export function buildDemoRuntime(sessionId = newSessionId(), store: SessionStore = new MemoryStore()): AgentRuntime {
+export function buildDemoRuntime(
+  sessionId = newSessionId(),
+  store: SessionStore = new MemoryStore(),
+  traceStore: TraceStore = new MemoryTraceStore(),
+): AgentRuntime {
   const model = demoModel();
 
   const lastInvoice = defineTool({
@@ -96,6 +102,7 @@ export function buildDemoRuntime(sessionId = newSessionId(), store: SessionStore
     defaultAgentId: 'concierge',
     sessionStore: store,
     defaultModel: model,
+    tracing: { store: traceStore },
   });
 
   const readState = async () => {

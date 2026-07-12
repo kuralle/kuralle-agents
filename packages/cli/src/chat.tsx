@@ -6,9 +6,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { render, Box, Text, useApp, useInput, Static } from 'ink';
 import TextInput from 'ink-text-input';
-import type { AgentSpan, AgentTrace, HarnessStreamPart } from '@kuralle-agents/core';
+import type { AgentSpan, AgentTrace, HarnessStreamPart, SessionStore, TraceStore } from '@kuralle-agents/core';
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
 import { newSessionId } from './sessionId.js';
+import { fileSessionStore } from './fileStore.js';
+import { fileTraceStore } from './fileTraceStore.js';
+
+type Persist = { sessionStore: SessionStore; traceStore: TraceStore; sessionId: string };
 
 /** Order spans as a depth-first tree (turn root → flow → node → tool/handoff). */
 function orderSpans(spans: AgentSpan[]): Array<{ span: AgentSpan; depth: number }> {
@@ -33,6 +37,12 @@ const kindColor = (k: AgentSpan['kind']): string =>
 
 /** Live trace side panel — the built-in AgentTrace of the last turn. */
 function TracePanel({ trace }: { trace: AgentTrace | null }): React.ReactElement {
+  const turn = trace?.spans.find((s) => s.kind === 'turn');
+  const tin = turn?.attributes.tokensIn;
+  const tout = turn?.attributes.tokensOut;
+  const tokensLine = tin !== undefined || tout !== undefined
+    ? `context ${tin ?? '?'} tok · out ${tout ?? '?'} tok`
+    : undefined;
   return (
     <Box flexDirection="column" width={46} borderStyle="round" borderColor="gray" paddingX={1}>
       <Text bold color="gray">TRACE {trace ? `· ${trace.traceId.slice(0, 8)}` : ''}</Text>
@@ -46,6 +56,7 @@ function TracePanel({ trace }: { trace: AgentTrace | null }): React.ReactElement
             </Text>
           ))}
           <Box marginTop={1} flexDirection="column">
+            {tokensLine && <Text color="cyan">{tokensLine}</Text>}
             <Text dimColor>used tool: {String(trace.usedTool)}</Text>
             {trace.toolResults.map((r, i) => (
               <Text key={i} color="yellow" wrap="truncate-end">→ {r.name}: {JSON.stringify(r.result)}</Text>
@@ -87,9 +98,11 @@ async function runTurn(
   return text.trim();
 }
 
-function App({ scripted, buildRuntime, showTrace }: { scripted?: string[]; buildRuntime: BuildRuntime; showTrace?: boolean }) {
+function App({ scripted, buildRuntime, showTrace, persist }: { scripted?: string[]; buildRuntime: BuildRuntime; showTrace?: boolean; persist?: Persist }) {
   const { exit } = useApp();
-  const demoRef = useRef<AgentRuntime>(buildRuntime());
+  const make = (sid?: string): AgentRuntime =>
+    persist ? buildRuntime(sid ?? persist.sessionId, persist.sessionStore, persist.traceStore) : buildRuntime(sid);
+  const demoRef = useRef<AgentRuntime>(make());
   const [log, setLog] = useState<Line[]>([line('system', demoRef.current.label)]);
   const [live, setLive] = useState('');
   const [events, setEvents] = useState<string[]>([]);
@@ -113,7 +126,7 @@ function App({ scripted, buildRuntime, showTrace }: { scripted?: string[]; build
     if (text === '/quit') { exit(); return; }
     if (text === '/help') { push(line('system', 'commands: /state  /reset  /quit')); return; }
     if (text === '/reset') {
-      demoRef.current = buildRuntime(newSessionId());
+      demoRef.current = make(newSessionId());
       push(line('system', `— new session ${demoRef.current.sessionId.slice(0, 8)} —`));
       await refreshStatus();
       return;
@@ -186,8 +199,25 @@ function App({ scripted, buildRuntime, showTrace }: { scripted?: string[]; build
 }
 
 export function runChat(argv: string[], buildRuntime: BuildRuntime): void {
-  const autoIdx = argv.indexOf('--auto');
-  const scripted = autoIdx >= 0 ? (argv[autoIdx + 1] ?? '').split('|').map((s) => s.trim()).filter(Boolean) : undefined;
+  const flag = (name: string): string | undefined => {
+    const i = argv.indexOf(name);
+    return i >= 0 ? argv[i + 1] : undefined;
+  };
+  const scripted = argv.includes('--auto')
+    ? (flag('--auto') ?? '').split('|').map((s) => s.trim()).filter(Boolean)
+    : undefined;
   const showTrace = argv.includes('--trace');
-  render(<App scripted={scripted} buildRuntime={buildRuntime} showTrace={showTrace} />);
+
+  // --store persists BOTH the session (conversation/journal) and the traces to
+  // JSON files, so `--trace` accumulates across launches. --session picks the id.
+  const storePath = flag('--store');
+  const persist: Persist | undefined = storePath
+    ? {
+        sessionStore: fileSessionStore(storePath),
+        traceStore: fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json'),
+        sessionId: flag('--session') ?? 'default',
+      }
+    : undefined;
+
+  render(<App scripted={scripted} buildRuntime={buildRuntime} showTrace={showTrace} persist={persist} />);
 }

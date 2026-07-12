@@ -20,6 +20,10 @@ export interface AgentSpan {
     input?: unknown;
     output?: unknown;
     error?: string;
+    /** Prompt/context tokens for this turn (the context-window size in flight). */
+    tokensIn?: number;
+    /** Generated tokens for this turn. */
+    tokensOut?: number;
   };
 }
 

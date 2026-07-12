@@ -65,7 +65,13 @@ export type HarnessStreamPart =
     }
   | { type: 'error'; error: string }
   | { type: 'custom'; name: string; data: unknown }
-  | { type: 'done'; sessionId: string };
+  | {
+      type: 'done';
+      sessionId: string;
+      /** Token usage as of this turn: `inputTokens` is the context-window size in
+       *  flight (last prompt tokens); `outputTokens` is the session's generated total. */
+      usage?: { inputTokens?: number; outputTokens?: number };
+    };
 
 export interface TurnHandle extends Promise<import('./channel.js').TurnResult> {
   readonly events: AsyncIterable<HarnessStreamPart>;

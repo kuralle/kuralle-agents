@@ -149,6 +149,10 @@ export class TraceRecorder {
         case 'done':
           this.setSessionId(part.sessionId);
           this.root.attributes.output = this.trace.answer;
+          if (part.usage) {
+            if (typeof part.usage.inputTokens === 'number') this.root.attributes.tokensIn = part.usage.inputTokens;
+            if (typeof part.usage.outputTokens === 'number') this.root.attributes.tokensOut = part.usage.outputTokens;
+          }
           this.close(at);
           break;
       }

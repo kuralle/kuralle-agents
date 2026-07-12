@@ -42,6 +42,9 @@ kuralle trace --agent ./custom-agent.ts demo
 
 An Ink-rendered terminal REPL over a live runtime. Slash commands: `/state`, `/reset`, `/help`, `/quit`. Pass `--auto "msg1|msg2"` to drive it headlessly with a scripted turn sequence instead of a real terminal.
 
+- **`--trace`** renders a live **trace side panel** next to the chat — the built-in `AgentTrace` of each turn as a `turn → flow → node → tool` waterfall with per-span durations, the tool results, and the **context-window + token counts** (`context <n> tok · out <n> tok`). Works for any agent, because [tracing is on by default](/guides/observability#enabling-tracing).
+- **`--store <file>`** persists both the session (conversation + journal) and the traces to JSON files, so `--trace` accumulates history across launches instead of resetting each run; **`--session <id>`** picks which session to resume (default `default`).
+
 ## `send` — adaptive single-turn
 
 One turn per invocation against a **persisted, file-backed session** — the shape you want for scripting a multi-turn conversation one shell command at a time, or for driving a real chat integration test:
