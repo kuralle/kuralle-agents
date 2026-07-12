@@ -64,18 +64,6 @@ export async function dispatchModelToolCalls(
     outcome: ModelToolCallOutcome;
   }) => void,
 ): Promise<void> {
-  const parallel: ModelToolCall[] = [];
-  const serial: ModelToolCall[] = [];
-
-  for (const call of toolCalls) {
-    const def = localTools[call.toolName];
-    if (isParallelSafeTool(def)) {
-      parallel.push(call);
-    } else {
-      serial.push(call);
-    }
-  }
-
   const runOne = async (call: ModelToolCall, durableOpts?: { callsite?: string; index?: number }) => {
     ctx.emit({
       type: 'tool-call',
@@ -93,7 +81,7 @@ export async function dispatchModelToolCalls(
     });
   };
 
-  if (parallel.length > 0) {
+  const runParallel = async (parallel: ModelToolCall[]) => {
     const callsites = ctx.reserveCallsites(parallel.length);
     const steps = await ctx.runStore.getSteps(ctx.runState.runId);
     const logicalId = logicalRunId(ctx.runState.runId, ctx.runState.runEpoch);
@@ -130,10 +118,25 @@ export async function dispatchModelToolCalls(
         runOne(call, { callsite, index }),
       ),
     );
-  }
+  };
 
-  for (const call of serial) {
-    await runOne(call);
+  for (let cursor = 0; cursor < toolCalls.length;) {
+    const call = toolCalls[cursor]!;
+    if (!isParallelSafeTool(localTools[call.toolName])) {
+      await runOne(call);
+      cursor += 1;
+      continue;
+    }
+
+    const parallel: ModelToolCall[] = [];
+    while (
+      cursor < toolCalls.length &&
+      isParallelSafeTool(localTools[toolCalls[cursor]!.toolName])
+    ) {
+      parallel.push(toolCalls[cursor]!);
+      cursor += 1;
+    }
+    await runParallel(parallel);
   }
 }
 

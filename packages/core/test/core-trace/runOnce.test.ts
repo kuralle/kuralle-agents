@@ -104,4 +104,66 @@ describe('Runtime.runOnce', () => {
     expect(tool?.parentSpanId).toBe(turn?.spanId);
     expect(() => JSON.stringify(trace)).not.toThrow();
   });
+
+  it('reports summed turn cost but only the final tool-loop prompt as context tokens', async () => {
+    let modelCall = 0;
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        streamText: () => {
+          modelCall += 1;
+          if (modelCall === 1) {
+            return {
+              fullStream: (async function* () {})(),
+              finishReason: Promise.resolve('tool-calls'),
+              response: Promise.resolve({ messages: [] }),
+              toolCalls: Promise.resolve([
+                { toolName: 'lookup', toolCallId: 'call-usage', input: {} },
+              ]),
+              totalUsage: Promise.resolve({
+                inputTokens: 100,
+                outputTokens: 10,
+                totalTokens: 110,
+              }),
+            };
+          }
+          return {
+            fullStream: (async function* () {
+              yield Object.assign({ type: 'text-delta' }, { text: 'Done.' });
+            })(),
+            finishReason: Promise.resolve('stop'),
+            response: Promise.resolve({ messages: [] }),
+            toolCalls: Promise.resolve([]),
+            totalUsage: Promise.resolve({
+              inputTokens: 150,
+              outputTokens: 20,
+              totalTokens: 170,
+            }),
+          };
+        },
+      };
+    });
+
+    const lookup = defineTool({
+      name: 'lookup',
+      description: 'Lookup data',
+      input: z.object({}),
+      execute: async () => ({ ok: true }),
+    });
+    const agent = defineAgent({
+      id: 'usage',
+      instructions: 'Use the lookup tool.',
+      model: stubModel,
+      tools: { lookup },
+    });
+    const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });
+
+    const trace = await runtime.runOnce({ sessionId: 'trace-usage', input: 'Look it up' });
+    const turn = trace.spans.find((span) => span.kind === 'turn');
+
+    expect(turn?.attributes.tokensIn).toBe(250);
+    expect(turn?.attributes.tokensOut).toBe(30);
+    expect(turn?.attributes.contextTokens).toBe(150);
+  });
 });

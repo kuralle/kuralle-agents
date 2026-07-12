@@ -55,7 +55,8 @@ export async function persistTurnUsageFromTurn(ctx: RunContext, turn: TurnResult
   });
 
   ctx.runState.state[TOKEN_USAGE_STATE_KEY] = acc.cumulative;
-  ctx.runState.state[LAST_PROMPT_TOKENS_KEY] = turn.usage.inputTokens;
+  ctx.runState.state[LAST_PROMPT_TOKENS_KEY] =
+    turn.usage.contextTokens ?? turn.usage.inputTokens;
   ctx.runState.updatedAt = Date.now();
   await ctx.runStore.putRunState(ctx.runState);
 }

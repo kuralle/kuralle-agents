@@ -1,8 +1,70 @@
 import { describe, expect, it } from 'bun:test';
 import type { EffectToolExecutor } from '../../src/types/run-context.js';
+import { dispatchModelToolCalls } from '../../src/runtime/channels/executeModelTool.js';
 import { buildCtx, reloadRunState, setupDurableHarness } from './helpers.js';
 
 describe('G9 parallel-safe durable tools', () => {
+  it('does not move parallel-safe calls across an exclusive call in the same model batch', async () => {
+    const executionOrder: string[] = [];
+    const tools = {
+      parallel_before: {
+        name: 'parallel_before',
+        description: 'Parallel lookup before the exclusive effect',
+        parallelSafe: true as const,
+        execute: async () => {
+          executionOrder.push('parallel_before');
+          return { ok: true };
+        },
+      },
+      exclusive: {
+        name: 'exclusive',
+        description: 'Exclusive effect',
+        execute: async () => {
+          executionOrder.push('exclusive');
+          return { ok: true };
+        },
+      },
+      parallel_after: {
+        name: 'parallel_after',
+        description: 'Parallel lookup after the exclusive effect',
+        parallelSafe: true as const,
+        execute: async () => {
+          executionOrder.push('parallel_after');
+          return { ok: true };
+        },
+      },
+    };
+
+    const toolExecutor: EffectToolExecutor = {
+      getTool: (name) => tools[name as keyof typeof tools],
+      execute: async (args) => {
+        const def = tools[args.name as keyof typeof tools];
+        if (!def) throw new Error(`Unknown tool: ${args.name}`);
+        return def.execute();
+      },
+    };
+    const { session, runStore, runState } = await setupDurableHarness();
+    const ctx = await buildCtx({ session, runStore, runState, toolExecutor });
+
+    await dispatchModelToolCalls(
+      ctx,
+      [
+        { toolName: 'parallel_before', input: {}, toolCallId: 'call-1' },
+        { toolName: 'exclusive', input: {}, toolCallId: 'call-2' },
+        { toolName: 'parallel_after', input: {}, toolCallId: 'call-3' },
+      ],
+      tools,
+      () => {},
+    );
+
+    expect(executionOrder).toEqual(['parallel_before', 'exclusive', 'parallel_after']);
+    expect((await runStore.getSteps(runState.runId)).map((step) => step.name)).toEqual([
+      'parallel_before',
+      'exclusive',
+      'parallel_after',
+    ]);
+  });
+
   it('fans out parallel-safe tools with non-colliding journal indices and deterministic replay', async () => {
     const spy = { a: 0, b: 0, c: 0 };
 

@@ -57,19 +57,21 @@ export function reviveSession(raw: unknown): Session {
   return session;
 }
 
-/** Persist a session with optimistic CAS retry (refreshes `version` from store between attempts). */
-export async function saveSessionWithRetry(
+/** Apply a session mutation to the latest snapshot and retry it after CAS conflicts. */
+export async function mutateSessionWithRetry(
   store: SessionStore,
-  session: Session,
-): Promise<void> {
+  sessionId: string,
+  mutator: (session: Session) => void | Promise<void>,
+): Promise<Session> {
   for (let attempt = 0; attempt < CAS_RETRIES; attempt++) {
-    const fresh = await store.get(session.id);
-    if (fresh) {
-      session.version = fresh.version;
+    const session = await store.get(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
+    await mutator(session);
     try {
       await store.save(session);
-      return;
+      return (await store.get(sessionId)) ?? session;
     } catch (error) {
       if (error instanceof StaleWriteError && attempt < CAS_RETRIES - 1) {
         continue;
@@ -77,4 +79,5 @@ export async function saveSessionWithRetry(
       throw error;
     }
   }
+  throw new Error(`CAS retry limit exceeded for session: ${sessionId}`);
 }

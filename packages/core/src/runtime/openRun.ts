@@ -11,7 +11,7 @@ import type { RunState } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { recordSignalDelivery } from './durable/replay.js';
 import { resetTurnCount } from './policies/limits.js';
-import { saveSessionWithRetry } from '../session/utils.js';
+import { mutateSessionWithRetry } from '../session/utils.js';
 
 export interface OpenRunOptions {
   sessionId: string;
@@ -66,8 +66,9 @@ export async function openRun(
     };
     await runStore.initRun(runState);
     if (initialMessages.length > 0) {
-      session.messages = [...initialMessages];
-      await saveSessionWithRetry(options.sessionStore, session);
+      await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
+        latest.messages = [...initialMessages];
+      });
     }
   }
 
@@ -75,8 +76,9 @@ export async function openRun(
     runState.messages = [...runState.messages, ...options.historyDelta];
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
-    session.messages = [...session.messages, ...options.historyDelta];
-    await saveSessionWithRetry(options.sessionStore, session);
+    await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
+      latest.messages = [...latest.messages, ...options.historyDelta!];
+    });
   }
 
   if (options.signalDelivery) {
@@ -132,17 +134,17 @@ export async function openRun(
     runState.updatedAt = Date.now();
     if (runState.activeFlow) {
       await runStore.putRunState(runState);
-      const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
-      setPendingUserInput(sessionAfterPersist, effectiveInput);
-      await saveSessionWithRetry(options.sessionStore, sessionAfterPersist);
+      await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
+        setPendingUserInput(latest, effectiveInput);
+      });
     } else {
       const userMessage: ModelMessage = { role: 'user', content: effectiveInput };
       runState.messages = [...runState.messages, userMessage];
       runState.updatedAt = Date.now();
       await runStore.putRunState(runState);
-      const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
-      sessionAfterPersist.messages = [...sessionAfterPersist.messages, userMessage];
-      await saveSessionWithRetry(options.sessionStore, sessionAfterPersist);
+      await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
+        latest.messages = [...latest.messages, userMessage];
+      });
     }
   }
 
@@ -160,9 +162,9 @@ export async function openRun(
     runState.messages = [...runState.messages, wakeMessage];
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
-    const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
-    sessionAfterPersist.messages = [...sessionAfterPersist.messages, wakeMessage];
-    await saveSessionWithRetry(options.sessionStore, sessionAfterPersist);
+    await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
+      latest.messages = [...latest.messages, wakeMessage];
+    });
   }
 
   const agent = agentsById.get(runState.activeAgentId);
@@ -170,10 +172,14 @@ export async function openRun(
     throw new Error(`Unknown activeAgentId "${runState.activeAgentId}"`);
   }
 
-  const latestSession = (await options.sessionStore.get(options.sessionId)) ?? session;
-  latestSession.currentAgent = runState.activeAgentId;
-  latestSession.activeAgentId = runState.activeAgentId;
-  await saveSessionWithRetry(options.sessionStore, latestSession);
+  const latestSession = await mutateSessionWithRetry(
+    options.sessionStore,
+    session.id,
+    (latest) => {
+      latest.currentAgent = runState.activeAgentId;
+      latest.activeAgentId = runState.activeAgentId;
+    },
+  );
 
   return { session: latestSession, runState, runStore, agent };
 }
@@ -200,7 +206,7 @@ async function loadOrCreateSession(options: OpenRunOptions): Promise<Session> {
     handoffHistory: [],
   };
 
-  await saveSessionWithRetry(options.sessionStore, session);
+  await options.sessionStore.save(session);
   return session;
 }
 

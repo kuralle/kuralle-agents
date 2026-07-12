@@ -274,13 +274,14 @@ function addTurnUsage(
   const totalTokens = usage.totalTokens ?? inputTokens + outputTokens;
   const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
   if (!current) {
-    return { inputTokens, outputTokens, totalTokens, cacheReadTokens };
+    return { inputTokens, outputTokens, totalTokens, cacheReadTokens, contextTokens: inputTokens };
   }
   return {
     inputTokens: current.inputTokens + inputTokens,
     outputTokens: current.outputTokens + outputTokens,
     totalTokens: current.totalTokens + totalTokens,
     cacheReadTokens: (current.cacheReadTokens ?? 0) + cacheReadTokens,
+    contextTokens: inputTokens,
   };
 }
 

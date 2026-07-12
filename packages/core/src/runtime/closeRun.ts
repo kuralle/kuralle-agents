@@ -6,6 +6,8 @@ import type { RunState } from './durable/types.js';
 import type { RunStore } from './durable/RunStore.js';
 import { isTerminalOutcome, markSessionOutcome } from './outcomeMarking.js';
 import type { ConversationOutcome } from '../outcomes/types.js';
+import { mutateSessionWithRetry } from '../session/utils.js';
+import { syncPendingUserInput } from './channels/inputBuffer.js';
 
 export interface CloseRunOptions {
   session: Session;
@@ -50,12 +52,13 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
     });
   }
 
-  const latest = (await sessionStore.get(session.id)) ?? session;
-  latest.currentAgent = runState.activeAgentId;
-  latest.activeAgentId = runState.activeAgentId;
-  // Sync the session-level message mirror to the canonical run record — it
-  // otherwise lacks assistant turns and keeps pre-guardrail (unredacted)
-  // user input written at openRun.
-  latest.messages = [...runState.messages];
-  await sessionStore.save(latest);
+  await mutateSessionWithRetry(sessionStore, session.id, (latest) => {
+    latest.currentAgent = runState.activeAgentId;
+    latest.activeAgentId = runState.activeAgentId;
+    // Sync the session-level message mirror to the canonical run record — it
+    // otherwise lacks assistant turns and keeps pre-guardrail (unredacted)
+    // user input written at openRun.
+    latest.messages = [...runState.messages];
+    syncPendingUserInput(ctx.session, latest);
+  });
 }

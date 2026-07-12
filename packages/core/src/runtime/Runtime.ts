@@ -64,7 +64,7 @@ import { runOnce as recordRunOnce } from './TraceRecorder.js';
 import { TraceRecorder } from './TraceRecorder.js';
 import type { AgentSpan, AgentTrace } from '../types/trace.js';
 import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
-import { saveSessionWithRetry } from '../session/utils.js';
+import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 
 export interface TracingConfig {
@@ -694,11 +694,9 @@ export class Runtime {
     runCtx.runState.updatedAt = Date.now();
     await runCtx.runStore.putRunState(runCtx.runState);
 
-    const latest = await this.sessionStore.get(runCtx.session.id);
-    if (latest) {
+    await mutateSessionWithRetry(this.sessionStore, runCtx.session.id, (latest) => {
       latest.messages = [...result.messages];
-      await saveSessionWithRetry(this.sessionStore, latest);
-    }
+    });
     runCtx.session.messages = [...result.messages];
 
     emit({
@@ -786,12 +784,18 @@ export class Runtime {
       };
     }
 
-    recordEscalationOutcome(runCtx.session, info.category ?? 'user-request', outcome);
     if (opts.setLatch) {
       runCtx.runState.state[ESCALATION_NOTIFIED_KEY] = true;
     }
     await runCtx.runStore.putRunState(runCtx.runState);
-    await saveSessionWithRetry(this.sessionStore, runCtx.session);
+    const latestSession = await mutateSessionWithRetry(
+      this.sessionStore,
+      runCtx.session.id,
+      (latest) => {
+        recordEscalationOutcome(latest, info.category ?? 'user-request', outcome);
+      },
+    );
+    runCtx.session.metadata = latestSession.metadata;
 
     emit({
       type: 'escalation',
@@ -838,9 +842,9 @@ export class Runtime {
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
 
-    const latest = (await this.sessionStore.get(sessionId)) ?? session;
-    latest.messages = [...runState.messages];
-    await saveSessionWithRetry(this.sessionStore, latest);
+    await mutateSessionWithRetry(this.sessionStore, sessionId, (latest) => {
+      latest.messages = [...runState.messages];
+    });
   }
 }
 

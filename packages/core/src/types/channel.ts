@@ -45,6 +45,8 @@ export interface TurnUsageSnapshot {
   outputTokens: number;
   totalTokens: number;
   cacheReadTokens?: number;
+  /** Input tokens on the final model call, i.e. current context-window occupancy. */
+  contextTokens?: number;
 }
 
 export interface TurnResult {

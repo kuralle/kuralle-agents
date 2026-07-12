@@ -37,3 +37,12 @@ export function peekPendingUserInput(session: Session): UserInputContent | undef
 export function hasPendingUserInput(session: Session): boolean {
   return queue(session).length > 0;
 }
+
+export function syncPendingUserInput(source: Session, target: Session): void {
+  const pending = queue(source);
+  if (pending.length > 0) {
+    target.workingMemory[PENDING_INPUT_KEY] = [...pending];
+  } else {
+    delete target.workingMemory[PENDING_INPUT_KEY];
+  }
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import { action, collect, confirmGate, defineFlow } from '../../src/types/flow.js';
+import { action, collect, confirmGate, defineFlow, reply } from '../../src/types/flow.js';
 import { runFlow } from '../../src/flow/runFlow.js';
 import { collectUntilComplete } from '../../src/flow/collectUntilComplete.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
@@ -20,6 +20,12 @@ import {
 import { userInputToText } from '../../src/runtime/userInput.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { RunContext } from '../../src/types/run-context.js';
+import { defineAgent } from '../../src/authoring/defineAgent.js';
+import { createRuntime } from '../../src/runtime/Runtime.js';
+import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
+import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
+import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
+import type { HostSelection } from '../../src/runtime/select.js';
 
 describe('G14: resetCollect clears collected slot', () => {
   it('clears data and turns so schemaSatisfied is false', () => {
@@ -245,5 +251,97 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
     expect(completed[0]).toEqual({ date: 'Tuesday', venue: 'Main Hall' });
     expect(getCollectData(runState.state, dateCollect.id).date).toBe('Tuesday');
     expect(getCollectData(runState.state, dateCollect.id).venue).toBe('Main Hall');
+  });
+
+  it('accepts affirmation on the turn after a correction readback', async () => {
+    const done = reply({
+      id: 'done',
+      instructions: 'Confirm the corrected day.',
+      next: () => ({ end: 'booked' }),
+    });
+    const review = confirmGate({
+      id: 'review',
+      instructions: 'Confirm the appointment day.',
+      onConfirm: done,
+      onDecline: () => dateCollect,
+    });
+    const readback = reply({
+      id: 'readback',
+      instructions: 'Read back the appointment day.',
+      next: () => review,
+    });
+    const dateCollect = collect({
+      id: 'date',
+      schema: z.object({ day: z.string() }),
+      required: ['day'],
+      onComplete: () => readback,
+    });
+    const flow = defineFlow({
+      name: 'book',
+      description: 'Book and confirm an appointment',
+      start: dateCollect,
+      nodes: [dateCollect, readback, review, done],
+    });
+    const agent = defineAgent({
+      id: 'clinic',
+      model: {} as import('ai').LanguageModel,
+      flows: [flow],
+    });
+    const store = new MemoryStore();
+    const sessionId = 'g14-confirm-after-correction';
+    let extraction = 0;
+    const spokenNodes: string[] = [];
+    const driver: ChannelDriver = {
+      async runAgentTurn(node) {
+        spokenNodes.push(node.node.id);
+        if (node.freeConversation) {
+          return { text: '', toolResults: [] };
+        }
+        return {
+          text: node.node.id === 'done' ? 'Confirmed for Tuesday.' : 'Is Tuesday correct?',
+          toolResults: [],
+        };
+      },
+      async runExtraction() {
+        extraction += 1;
+        const day = extraction === 1 ? 'Thursday' : 'Tuesday';
+        return {
+          text: '',
+          toolResults: [{ name: 'submit_date_data', args: { day }, result: { day } }],
+        };
+      },
+      async awaitUser(ctx) {
+        return { type: 'message', input: consumeAllPendingUserInput(ctx.session) ?? '' };
+      },
+    };
+    const hostSelect = async (): Promise<HostSelection> => ({ kind: 'enterFlow', flow });
+    const runtime = createRuntime({
+      agents: [agent],
+      defaultAgentId: agent.id,
+      sessionStore: store,
+      hostSelect,
+    });
+
+    await runtime.run({ sessionId, input: 'Book Thursday', driver });
+    const beforeCorrection = await new SessionRunStore(store, sessionId).getRunState(
+      sessionDerivedRunId(sessionId),
+    );
+    expect(beforeCorrection?.activeNode).toBe('review');
+    await runtime.run({ sessionId, input: 'No, make it Tuesday instead', driver });
+    const beforeAffirm = await new SessionRunStore(store, sessionId).getRunState(
+      sessionDerivedRunId(sessionId),
+    );
+    expect(beforeAffirm?.activeNode).toBe('review');
+    spokenNodes.length = 0;
+    const third = runtime.run({ sessionId, input: 'Yes, that is correct.', driver });
+    const result = await third;
+
+    const state = await new SessionRunStore(store, sessionId).getRunState(
+      sessionDerivedRunId(sessionId),
+    );
+    expect(state?.activeFlow).toBeUndefined();
+    expect(spokenNodes).toEqual(['done']);
+    expect(result.text).toBe('Confirmed for Tuesday.');
+    expect(state?.state.__collect_date).toEqual({ day: 'Tuesday' });
   });
 });
