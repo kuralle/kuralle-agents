@@ -22,6 +22,7 @@ import {
   type TraceStore,
 } from '@kuralle-agents/core';
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
+import { readAgentRunState } from './runState.js';
 import { newSessionId } from './sessionId.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -105,16 +106,7 @@ export function buildDemoRuntime(
     tracing: { store: traceStore },
   });
 
-  const readState = async () => {
-    const s = await store.get(sessionId);
-    const rs = (s as unknown as { durableRuns?: Record<string, { runState?: { activeFlow?: string; runEpoch?: number; state?: Record<string, unknown> } }> })?.durableRuns?.[sessionId]?.runState;
-    return {
-      activeFlow: rs?.activeFlow,
-      runEpoch: rs?.runEpoch,
-      completedFlows: (rs?.state as Record<string, unknown> | undefined)?.__completedFlows,
-      roles: (s?.messages ?? []).map((m) => m.role),
-    };
-  };
+  const readState = () => readAgentRunState(store, sessionId);
 
   return {
     runtime,

@@ -22,7 +22,8 @@ Usage:
   kuralle trace <session> [--last] [--json] [--web] [--port N]
 
 Options:
-  --agent <path.ts>   Load a custom agent module exporting buildRuntime(sessionId?, store?)
+  --agent <path.ts>   Load a Runtime, defineAgent export, or buildRuntime factory
+  --model <id>        OpenAI model id when the agent export has no model (bare-agent shape)
   --auto "a|b|c"      Headless scripted turns (chat only)
   --trace             Live trace side panel — the built-in AgentTrace of each turn (chat only)
   --store <file>      Persist the session + traces to JSON files so chat survives across launches (chat only)
@@ -59,7 +60,9 @@ async function main(): Promise<void> {
   const { rest, agentPath } = stripGlobalFlags(rawArgv);
   const sub = rest[0];
   const subArgv = rest.slice(1);
-  const buildRuntime = await resolveBuildRuntime(agentPath ?? flag(rawArgv, '--agent'));
+  const buildRuntime = await resolveBuildRuntime(agentPath ?? flag(rawArgv, '--agent'), {
+    modelFlag: flag(rawArgv, '--model'),
+  });
 
   switch (sub) {
     case 'chat':

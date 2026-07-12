@@ -24,9 +24,35 @@ Without `--agent`, every command runs against a bundled cafe-concierge demo agen
 
 ## The `--agent` contract
 
-`--agent <path.ts>` points at a module that exports `buildRuntime(sessionId?, store?)`. The CLI loads it with a dynamic `import()`, so it must resolve as-is (compiled or a runtime that supports TypeScript directly, e.g. Bun).
+`--agent <path.ts>` points at a module the CLI loads with a dynamic `import()` (compiled JS or a runtime that supports TypeScript directly, e.g. Bun). The export is resolved **by shape** — you do not hand-wire `readState`, `label`, or `sessionId`; the CLI assembles those.
+
+Resolution order: `default` export, then named `runtime`, `agent`, `buildRuntime` / `build`. First matching shape wins.
+
+### 1. Bare agent (recommended)
+
+Export a `defineAgent` config. The CLI calls `createRuntime`, picks the dev session store, and wires `readState` for you.
 
 <Code code={customAgentExample} lang="typescript" title="custom-agent.ts" />
+
+If the agent has no `model`, pass `--model <id>` or set `OPENAI_MODEL` (with `OPENAI_API_KEY`).
+
+### 2. Runtime
+
+Export an assembled `createRuntime({...})` instance (detected by a `.run` method). Use this when you need full control over agents, handoffs, tracing, or hooks at construction time.
+
+```typescript
+import { createRuntime, defineAgent, MemoryStore } from '@kuralle-agents/core';
+
+export default createRuntime({
+  agents: [defineAgent({ id: 'bot', instructions: '…', model })],
+  defaultAgentId: 'bot',
+  sessionStore: new MemoryStore(), // CLI overrides store per command when needed
+});
+```
+
+### 3. Factory (legacy)
+
+Export `buildRuntime(sessionId?, store?, traceStore?)` returning `{ runtime, store, sessionId, agentId, label, readState }` — still supported for backward compatibility.
 
 ```bash
 kuralle chat --agent ./custom-agent.ts
@@ -35,7 +61,7 @@ kuralle trace --agent ./custom-agent.ts demo
 ```
 
 <Aside type="note">
-  `buildRuntime` returns the live `Runtime` plus the `SessionStore` it was built with. `send` and `trace` reuse that store across separate CLI invocations (see below) — the runtime and the store must agree, or state won't round-trip.
+  `send` and `trace` reuse a file-backed session store across separate CLI invocations (see below). For bare-agent and runtime shapes the CLI picks the store; for legacy `buildRuntime` modules the factory's store is used as returned.
 </Aside>
 
 ## `chat` — interactive TUI
