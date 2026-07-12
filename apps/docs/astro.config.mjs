@@ -89,6 +89,8 @@ const sidebar = [
       { label: 'Voice Agents', link: '/guides/voice' },
       { label: 'Engagement & Messaging', link: '/guides/engagement' },
       { label: 'Deployment', link: '/guides/deployment' },
+      { label: 'Observability', link: '/guides/observability' },
+      { label: 'CLI & Devtools', link: '/guides/cli' },
     ],
   },
   {

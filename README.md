@@ -17,6 +17,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 - **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
 - **Routing / Handoffs** — model-reasoned routing (`routes`/`agents`, derived from agent shape) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
 - **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `HarnessStreamPart` JSON-SSE.
+- **Observability** — every run is captured as a structured `AgentTrace`. `runtime.runOnce()` returns one complete trace for evals; tracing is on by default (`MemoryTraceStore`), durable on Redis/Postgres/Cloudflare DO-SQLite, exportable to OTLP/Langfuse, and inspectable via `kuralle trace` or the embeddable `@kuralle-agents/trace-ui` viewer.
 
 ## Why Kuralle
 
@@ -104,6 +105,7 @@ The same agent config runs over voice. **Provider-native realtime** (speech-to-s
 | [`@kuralle-agents/redis-store`](https://www.npmjs.com/package/@kuralle-agents/redis-store) | Redis-backed session persistence (`RedisSessionStore`) |
 | [`@kuralle-agents/trace-ui`](https://www.npmjs.com/package/@kuralle-agents/trace-ui) | Embeddable read-only trace waterfall and span detail viewer |
 | [`@kuralle-agents/postgres-store`](https://www.npmjs.com/package/@kuralle-agents/postgres-store) | Postgres-backed session persistence |
+| [`@kuralle-agents/cli`](https://www.npmjs.com/package/@kuralle-agents/cli) | `kuralle` CLI — interactive chat, adaptive send, simulation, trace inspection |
 | [`@kuralle-agents/realtime-audio`](https://www.npmjs.com/package/@kuralle-agents/realtime-audio) | Provider-native speech-to-speech (paused; kept intact) |
 
 ## Documentation

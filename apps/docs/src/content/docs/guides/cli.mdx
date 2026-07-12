@@ -1,0 +1,84 @@
+---
+title: CLI & Devtools
+description: kuralle chat/send/sim/trace — interactive TUI, adaptive single-turn, persona simulation, and trace inspection for any Kuralle runtime.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+import customAgentExample from '../../../examples/cli/custom-agent.ts?raw';
+
+`@kuralle-agents/cli` is the `kuralle` binary — an interactive chat TUI, an adaptive single-turn driver, a persona-driven simulator, and the trace inspector, all pointed at either a bundled demo agent or your own runtime.
+
+```bash
+npm install -g @kuralle-agents/cli
+# or: npx @kuralle-agents/cli chat
+```
+
+```
+kuralle chat [--auto "msg1|msg2"] [--agent <path.ts>]
+kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
+kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
+kuralle trace <session> [--last] [--json] [--web] [--port N]
+```
+
+Without `--agent`, every command runs against a bundled cafe-concierge demo agent (order flow, a global tool, a billing handoff) — enough to try each command with zero setup, given an `OPENAI_API_KEY`.
+
+## The `--agent` contract
+
+`--agent <path.ts>` points at a module that exports `buildRuntime(sessionId?, store?)`. The CLI loads it with a dynamic `import()`, so it must resolve as-is (compiled or a runtime that supports TypeScript directly, e.g. Bun).
+
+<Code code={customAgentExample} lang="typescript" title="custom-agent.ts" />
+
+```bash
+kuralle chat --agent ./custom-agent.ts
+kuralle send --agent ./custom-agent.ts --session demo "hello"
+kuralle trace --agent ./custom-agent.ts demo
+```
+
+<Aside type="note">
+  `buildRuntime` returns the live `Runtime` plus the `SessionStore` it was built with. `send` and `trace` reuse that store across separate CLI invocations (see below) — the runtime and the store must agree, or state won't round-trip.
+</Aside>
+
+## `chat` — interactive TUI
+
+An Ink-rendered terminal REPL over a live runtime. Slash commands: `/state`, `/reset`, `/help`, `/quit`. Pass `--auto "msg1|msg2"` to drive it headlessly with a scripted turn sequence instead of a real terminal.
+
+## `send` — adaptive single-turn
+
+One turn per invocation against a **persisted, file-backed session** — the shape you want for scripting a multi-turn conversation one shell command at a time, or for driving a real chat integration test:
+
+```bash
+kuralle send --session demo "I'd like to order"
+kuralle send --session demo "a cardamom bun, for tomorrow"
+kuralle send --session demo --state    # inspect active flow / epoch / turns, no new turn
+kuralle send --session demo --reset    # delete the session
+```
+
+`--store <file>` (default `runs/tui-sessions.json`) is a small JSON-file `SessionStore` — durable enough to survive across separate `send` calls without a real database.
+
+## `sim` — persona-driven simulation
+
+Drives `simulateConversation` with a synthetic persona toward a goal, then scores the transcript with an LLM judge (`createJudge`):
+
+```bash
+kuralle sim --goal "cancel my subscription" --profile "a frustrated customer" --turns 8
+```
+
+Prints the full transcript, how the conversation ended, which tools were called, and the judge's `overall` score, `pass`/`fail`, and summary.
+
+## `trace` — inspect recorded traces
+
+Reads whatever `TraceStore` the target runtime is configured with (`MemoryTraceStore` by default — see the [Observability guide](/guides/observability)):
+
+```bash
+kuralle trace session-42            # terminal waterfall for every trace in the session
+kuralle trace session-42 --last     # just the most recent trace
+kuralle trace session-42 --json     # native AgentTrace[] JSON — for agents and CI
+kuralle trace session-42 --web --port 4319   # loopback dev server + embedded trace-ui
+```
+
+The terminal waterfall marks each span with an offset, a duration, and a glyph for tool (🔧), handoff (⇢), or error (✕) spans. `--web` starts a **loopback-only**, read-only HTTP server: `GET /` serves the `@kuralle-agents/trace-ui` viewer (CSP-nonced), and `GET /api/traces/:session` / `GET /api/trace/:id` serve the same JSON `runtime.listTraces()` / `runtime.getTrace()` return.
+
+## Related
+
+- [Observability](/guides/observability) — `runOnce`, tracing config, store backends, OTLP/Langfuse export.
+- [Sessions & State](/guides/sessions) — the `SessionStore` interface `--agent` modules configure.
