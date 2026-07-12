@@ -48,7 +48,7 @@ import {
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { SessionMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
-import { readLastPromptTokens, readTraceTokenUsage } from './turnTokenUsage.js';
+import { readLastPromptTokens, readCumulativeUsage, computeTurnTraceUsage } from './turnTokenUsage.js';
 import { isContextOverflowError, recoverFromContextOverflow } from './contextOverflow.js';
 import { projectGoalsPromptFromState, updateGoalsFromTurn } from './goals.js';
 import type { RunContext } from '../types/run-context.js';
@@ -246,6 +246,10 @@ export class Runtime {
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =
         (await opened.runStore.getRunState(opened.runState.runId)) ?? opened.runState;
+      // Snapshot cumulative token usage as this turn opens, so the trace can report
+      // THIS turn's consumption (delta), not the running session total (see the
+      // per-turn scope requirement in the observability guide).
+      const usageBaseline = readCumulativeUsage(freshRunState.state);
 
       const model = opened.agent.model ?? this.defaultModel;
       if (!model) {
@@ -512,7 +516,7 @@ export class Runtime {
         emit({
           type: 'done',
           sessionId: opened.session.id,
-          usage: readTraceTokenUsage(runCtx.runState.state),
+          usage: computeTurnTraceUsage(usageBaseline, runCtx.runState.state),
         });
       }
 

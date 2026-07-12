@@ -152,6 +152,7 @@ export class TraceRecorder {
           if (part.usage) {
             if (typeof part.usage.inputTokens === 'number') this.root.attributes.tokensIn = part.usage.inputTokens;
             if (typeof part.usage.outputTokens === 'number') this.root.attributes.tokensOut = part.usage.outputTokens;
+            if (typeof part.usage.contextTokens === 'number') this.root.attributes.contextTokens = part.usage.contextTokens;
           }
           this.close(at);
           break;

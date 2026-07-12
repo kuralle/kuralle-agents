@@ -68,9 +68,10 @@ export type HarnessStreamPart =
   | {
       type: 'done';
       sessionId: string;
-      /** Token usage as of this turn: `inputTokens` is the context-window size in
-       *  flight (last prompt tokens); `outputTokens` is the session's generated total. */
-      usage?: { inputTokens?: number; outputTokens?: number };
+      /** Per-turn token usage: `inputTokens`/`outputTokens` are THIS turn's
+       *  consumption (deltas, for cost attribution); `contextTokens` is the current
+       *  context-window occupancy (last prompt tokens, a snapshot). */
+      usage?: { inputTokens?: number; outputTokens?: number; contextTokens?: number };
     };
 
 export interface TurnHandle extends Promise<import('./channel.js').TurnResult> {

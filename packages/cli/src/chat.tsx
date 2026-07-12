@@ -40,9 +40,11 @@ function TracePanel({ trace }: { trace: AgentTrace | null }): React.ReactElement
   const turn = trace?.spans.find((s) => s.kind === 'turn');
   const tin = turn?.attributes.tokensIn;
   const tout = turn?.attributes.tokensOut;
-  const tokensLine = tin !== undefined || tout !== undefined
-    ? `context ${tin ?? '?'} tok · out ${tout ?? '?'} tok`
-    : undefined;
+  const ctx = turn?.attributes.contextTokens;
+  const parts: string[] = [];
+  if (tin !== undefined || tout !== undefined) parts.push(`turn ${tin ?? '?'}↓/${tout ?? '?'}↑ tok`);
+  if (ctx !== undefined) parts.push(`ctx ${ctx} tok`);
+  const tokensLine = parts.length > 0 ? parts.join(' · ') : undefined;
   return (
     <Box flexDirection="column" width={46} borderStyle="round" borderColor="gray" paddingX={1}>
       <Text bold color="gray">TRACE {trace ? `· ${trace.traceId.slice(0, 8)}` : ''}</Text>
