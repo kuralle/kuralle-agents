@@ -6,9 +6,56 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { render, Box, Text, useApp, useInput, Static } from 'ink';
 import TextInput from 'ink-text-input';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { AgentSpan, AgentTrace, HarnessStreamPart } from '@kuralle-agents/core';
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
 import { newSessionId } from './sessionId.js';
+
+/** Order spans as a depth-first tree (turn root → flow → node → tool/handoff). */
+function orderSpans(spans: AgentSpan[]): Array<{ span: AgentSpan; depth: number }> {
+  const byParent = new Map<string | undefined, AgentSpan[]>();
+  for (const s of spans) {
+    const list = byParent.get(s.parentSpanId) ?? [];
+    list.push(s);
+    byParent.set(s.parentSpanId, list);
+  }
+  const roots = spans.filter((s) => !s.parentSpanId || !spans.some((p) => p.spanId === s.parentSpanId));
+  const out: Array<{ span: AgentSpan; depth: number }> = [];
+  const walk = (s: AgentSpan, depth: number): void => {
+    out.push({ span: s, depth });
+    for (const child of byParent.get(s.spanId) ?? []) walk(child, depth + 1);
+  };
+  for (const r of roots) walk(r, 0);
+  return out;
+}
+
+const kindColor = (k: AgentSpan['kind']): string =>
+  k === 'turn' ? 'white' : k === 'flow' ? 'magenta' : k === 'node' ? 'blue' : k === 'tool' ? 'yellow' : k === 'handoff' ? 'cyan' : 'gray';
+
+/** Live trace side panel — the built-in AgentTrace of the last turn. */
+function TracePanel({ trace }: { trace: AgentTrace | null }): React.ReactElement {
+  return (
+    <Box flexDirection="column" width={46} borderStyle="round" borderColor="gray" paddingX={1}>
+      <Text bold color="gray">TRACE {trace ? `· ${trace.traceId.slice(0, 8)}` : ''}</Text>
+      {!trace && <Text dimColor>run a turn to see its trace…</Text>}
+      {trace && (
+        <>
+          {orderSpans(trace.spans).map(({ span, depth }) => (
+            <Text key={span.spanId} color={kindColor(span.kind)}>
+              {'  '.repeat(depth)}{span.status === 'error' ? '✖ ' : ''}{span.name}
+              <Text dimColor> · {span.endTime ? `${span.endTime - span.startTime}ms` : '…'}</Text>
+            </Text>
+          ))}
+          <Box marginTop={1} flexDirection="column">
+            <Text dimColor>used tool: {String(trace.usedTool)}</Text>
+            {trace.toolResults.map((r, i) => (
+              <Text key={i} color="yellow" wrap="truncate-end">→ {r.name}: {JSON.stringify(r.result)}</Text>
+            ))}
+          </Box>
+        </>
+      )}
+    </Box>
+  );
+}
 
 type Line = { id: number; kind: 'user' | 'assistant' | 'event' | 'system'; text: string };
 let LINE_ID = 0;
@@ -40,7 +87,7 @@ async function runTurn(
   return text.trim();
 }
 
-function App({ scripted, buildRuntime }: { scripted?: string[]; buildRuntime: BuildRuntime }) {
+function App({ scripted, buildRuntime, showTrace }: { scripted?: string[]; buildRuntime: BuildRuntime; showTrace?: boolean }) {
   const { exit } = useApp();
   const demoRef = useRef<AgentRuntime>(buildRuntime());
   const [log, setLog] = useState<Line[]>([line('system', demoRef.current.label)]);
@@ -49,6 +96,7 @@ function App({ scripted, buildRuntime }: { scripted?: string[]; buildRuntime: Bu
   const [status, setStatus] = useState('flow: none · epoch: 0');
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
+  const [trace, setTrace] = useState<AgentTrace | null>(null);
 
   useInput((input, key) => { if (key.ctrl && input === 'c') exit(); }, { isActive: !scripted && Boolean(process.stdin.isTTY) });
 
@@ -85,6 +133,9 @@ function App({ scripted, buildRuntime }: { scripted?: string[]; buildRuntime: Bu
     push(line('assistant', answer || '(no text)'));
     setBusy(false);
     await refreshStatus();
+    if (showTrace) {
+      setTrace((await demoRef.current.runtime.listTraces(demoRef.current.sessionId))[0] ?? null);
+    }
   };
 
   useEffect(() => {
@@ -102,8 +153,8 @@ function App({ scripted, buildRuntime }: { scripted?: string[]; buildRuntime: Bu
   const color = (k: Line['kind']) => (k === 'user' ? 'cyan' : k === 'assistant' ? 'green' : k === 'event' ? 'gray' : 'yellow');
   const prefix = (k: Line['kind']) => (k === 'user' ? 'You' : k === 'assistant' ? 'Agent' : k === 'event' ? '  ·' : '  ~');
 
-  return (
-    <Box flexDirection="column">
+  const body = (
+    <Box flexDirection="column" flexGrow={1} paddingRight={showTrace ? 1 : 0}>
       <Static items={log}>
         {(l) => (
           <Text key={l.id} color={color(l.kind)}>
@@ -129,10 +180,14 @@ function App({ scripted, buildRuntime }: { scripted?: string[]; buildRuntime: Bu
       )}
     </Box>
   );
+  return showTrace ? (
+    <Box flexDirection="row">{body}<TracePanel trace={trace} /></Box>
+  ) : body;
 }
 
 export function runChat(argv: string[], buildRuntime: BuildRuntime): void {
   const autoIdx = argv.indexOf('--auto');
   const scripted = autoIdx >= 0 ? (argv[autoIdx + 1] ?? '').split('|').map((s) => s.trim()).filter(Boolean) : undefined;
-  render(<App scripted={scripted} buildRuntime={buildRuntime} />);
+  const showTrace = argv.includes('--trace');
+  render(<App scripted={scripted} buildRuntime={buildRuntime} showTrace={showTrace} />);
 }

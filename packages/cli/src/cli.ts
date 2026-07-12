@@ -2,7 +2,7 @@
 /**
  * kuralle — Kuralle CLI for interactive chat, adaptive send, and simulation.
  *
- *   kuralle chat [--auto "msg1|msg2"] [--agent <path.ts>]
+ *   kuralle chat [--trace] [--auto "msg1|msg2"] [--agent <path.ts>]
  *   kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
  *   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
  *   kuralle trace <session> [--last] [--json] [--web] [--port N]
@@ -16,7 +16,7 @@ import { runTrace } from './trace.js';
 const HELP = `kuralle — Kuralle agent CLI
 
 Usage:
-  kuralle chat [--auto "msg1|msg2"] [--agent <path.ts>]
+  kuralle chat [--trace] [--auto "msg1|msg2"] [--agent <path.ts>]
   kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
   kuralle trace <session> [--last] [--json] [--web] [--port N]
@@ -24,6 +24,7 @@ Usage:
 Options:
   --agent <path.ts>   Load a custom agent module exporting buildRuntime(sessionId?, store?)
   --auto "a|b|c"      Headless scripted turns (chat only)
+  --trace             Live trace side panel — the built-in AgentTrace of each turn (chat only)
 `;
 
 function flag(argv: string[], name: string): string | undefined {
