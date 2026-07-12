@@ -1,6 +1,8 @@
 # ADR 0014 — Durable effects: fix the portable journal, delegate *background* durability to the substrate
 
-**Status:** Proposed (2026-07-11)
+**Status:** Accepted (2026-07-12), with two amendments:
+1. **Idempotency keys are auto-derived by default** — `idempotencyKey(logicalRunId, callsite, {name,args})` is computed for every durable tool automatically (safe-by-default); a tool may override with an explicit key when args are not a stable identity (e.g. a `nonce`). Rationale: the "money-moving agent" the ADR cites must be crash-safe without every author remembering to declare a key.
+2. **§3 (DurableJob seam + CF Workflows) is deferred** — not part of the current build. The in-turn track (H1 → C2 → G9) proceeds now; background-job durability is revisited later. The `runFiber`/`step.do()` delegation is not being built yet.
 **Context owners:** Kuralle core
 **Related:** teardown §2/§9.1 (F6/G8, H1, H3), gaps G8; ADR 0010 (agentic harness); the journal-scoping keystone (`runEpoch`, landed); the staged task *Intent-before-execute for durable tools (H1/H2)*. Cross-ref `feedback_cloudflare_first_class`.
 
