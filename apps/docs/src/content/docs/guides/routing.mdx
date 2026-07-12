@@ -43,6 +43,21 @@ Model every fallback as a normal route with a semantic `when` (e.g. "general sup
 
 A handoff moves the conversation to another agent and carries full session context. The receiving agent picks up with the complete message history.
 
+### Silent handoffs (default)
+
+A handoff should read as **one continuous assistant** — the user shouldn't see a "transferring you…" line or the target re-introducing itself. Kuralle makes this the default:
+
+- **No transfer announcement** (deterministic): the transfer is a silent control tool call — the runtime never emits a "please hold / connecting you" message.
+- **Continuation nudge** (best-effort): the target is given a directive not to greet or re-introduce itself, so it continues seamlessly. This mirrors the OpenAI Agents SDK's history-nesting approach.
+
+```typescript
+createRuntime({ agents, defaultAgentId, silentHandoff: false }); // opt into a visible transfer
+```
+
+<Aside type="caution">
+  The continuation nudge is best-effort — a prompt cannot reliably override a target that is **explicitly instructed** to introduce itself (e.g. `instructions: "Start replies with 'Bill here'"`). For truly seamless handoffs, **don't instruct handoff-target agents to greet or self-introduce**; the framework guarantees no *announcement*, not that the model disobeys its own instructions. Use `silentHandoff: false` when you want the target to follow its own greeting.
+</Aside>
+
 For tool-based handoffs — where the agent decides explicitly when to transfer — declare which agent IDs the agent can hand off to with `handoffs`, and wire a handoff tool:
 
 ```typescript

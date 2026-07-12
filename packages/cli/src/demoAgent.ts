@@ -52,8 +52,11 @@ export function buildDemoRuntime(
     execute: async () => ({ invoiceUsd: 18.5, date: '2026-07-01' }),
   });
   const billing = defineAgent({
+    // Bill from billing — no forced self-introduction, so the handoff reads as one
+    // continuous assistant (silent handoff is on by default). Instructing a handoff
+    // target to greet/introduce itself is the anti-pattern that leaks the transfer.
     id: 'billing',
-    instructions: 'You are Bill from billing. Start replies with "Bill here". Use last_invoice for billing questions. Keep replies to one or two sentences.',
+    instructions: 'You are Bill, the billing specialist. Answer billing/invoice questions using last_invoice. Keep replies to one or two sentences.',
     model,
     globalTools: { last_invoice: lastInvoice },
   });

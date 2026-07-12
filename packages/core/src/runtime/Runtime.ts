@@ -22,6 +22,7 @@ import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isHandoffOscillating } from './handoffOscillation.js';
+import { applyHandoffContinuation } from './handoffContinuation.js';
 import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 import type { classifyHostTarget, selectHostTarget } from './select.js';
@@ -115,6 +116,14 @@ export interface HarnessConfig {
   escalation?: EscalationConfig;
   /** Default handoff input filter when a route does not define `filter`. */
   handoffInputFilter?: HandoffInputFilter;
+  /**
+   * Silent handoff (default `true`). A transfer between agents reads as one
+   * continuous assistant: the transfer is a silent control tool call, and the
+   * target is given a continuation directive so it does not greet or
+   * re-introduce itself. Set `false` for an explicit visible transfer (the
+   * target follows its own instructions, e.g. "Bill here").
+   */
+  silentHandoff?: boolean;
   /**
    * Structured goal/thread tracking (G5). When enabled, a cheap control-model
    * pass at turn end patches `session.workingMemory.__goals` and open threads
@@ -419,7 +428,10 @@ export class Runtime {
             if (!targetModel) {
               throw new Error('Runtime requires agent.model or config.defaultModel');
             }
-            runCtx.baseInstructions = target.instructions;
+            runCtx.baseInstructions =
+              (this.config.silentHandoff ?? true)
+                ? applyHandoffContinuation(target.instructions)
+                : target.instructions;
             runCtx.model = targetModel;
             runCtx.controlModel = target.controlModel ?? targetModel;
             runCtx.outOfBandControl = resolveOutOfBandControl(target);
