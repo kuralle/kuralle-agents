@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import type { AuditListOptions, ConversationAuditEntry, Session, SessionStore } from '@kuralle-agents/core';
+import {
+  StaleWriteError,
+  type AuditListOptions,
+  type ConversationAuditEntry,
+  type Session,
+  type SessionStore,
+} from '@kuralle-agents/core';
 import {
   callCommand,
   getMembers,
@@ -143,9 +149,20 @@ export class RedisSessionStore implements SessionStore {
 
   async save(session: Session): Promise<void> {
     const previous = await this.get(session.id);
+    const expectedVersion = session.version ?? 0;
+    if (previous !== null) {
+      const storedVersion = previous.version ?? 0;
+      if (storedVersion !== expectedVersion) {
+        throw new StaleWriteError(session.id, expectedVersion, storedVersion);
+      }
+    } else if (expectedVersion !== 0) {
+      throw new StaleWriteError(session.id, expectedVersion, 0);
+    }
+
     session.updatedAt = new Date();
     session.conversationId = session.conversationId ?? session.id;
     session.channelId = session.channelId ?? 'web';
+    session.version = expectedVersion + 1;
     const key = this.sessionKey(session.id);
     const payload = JSON.stringify(session);
 

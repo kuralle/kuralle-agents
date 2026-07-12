@@ -7,7 +7,7 @@ import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
 import { buildToolSet } from '../../tools/effect/index.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
-import { executeModelToolCall, toolResultMessage } from './executeModelTool.js';
+import { dispatchModelToolCalls, toolResultMessage } from './executeModelTool.js';
 import { consumeAllPendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
@@ -123,23 +123,13 @@ export class TextDriver implements ChannelDriver {
           toolMessages.push(...response.messages);
 
           const toolCalls = await result.toolCalls;
-          for (const call of toolCalls) {
-            ctx.emit({
-              type: 'tool-call',
-              toolName: call.toolName,
-              args: call.input,
-              toolCallId: call.toolCallId,
-            });
-
-            const { result: toolResult, control, failed } = await executeModelToolCall(
-              ctx,
-              { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-              {
-                ...ctx.globalTools,
-                ...(ctx.workingMemoryTools ?? {}),
-                ...node.localTools,
-              },
-            );
+          const mergedTools = {
+            ...ctx.globalTools,
+            ...(ctx.workingMemoryTools ?? {}),
+            ...node.localTools,
+          };
+          await dispatchModelToolCalls(ctx, toolCalls, mergedTools, ({ call, outcome }) => {
+            const { result: toolResult, control, failed } = outcome;
             out.toolResults.push({
               name: call.toolName,
               args: call.input,
@@ -156,20 +146,10 @@ export class TextDriver implements ChannelDriver {
             });
             out.control ??= control;
 
-            ctx.emit({
-              type: 'tool-result',
-              toolName: call.toolName,
-              result: toolResult,
-              toolCallId: call.toolCallId,
-            });
-
-            const resultMessage = toolResultMessage(
-              { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-              toolResult,
-            );
+            const resultMessage = toolResultMessage(call, toolResult);
             messages.push(resultMessage);
             toolMessages.push(resultMessage);
-          }
+          });
         }
       },
     };

@@ -1,6 +1,6 @@
 import type { Session } from '../../types/index.js';
 import type { AuditListOptions, ConversationAuditEntry } from '../../audit/types.js';
-import type { SessionListWindow, SessionStore } from '../SessionStore.js';
+import { StaleWriteError, type SessionListWindow, type SessionStore } from '../SessionStore.js';
 
 export class MemoryStore implements SessionStore {
   private sessions = new Map<string, Session>();
@@ -11,8 +11,21 @@ export class MemoryStore implements SessionStore {
   }
 
   async save(session: Session): Promise<void> {
-    session.updatedAt = new Date();
-    this.sessions.set(session.id, safeClone(session));
+    const existing = this.sessions.get(session.id);
+    const expected = session.version ?? 0;
+    if (existing !== undefined) {
+      const stored = existing.version ?? 0;
+      if (stored !== expected) {
+        throw new StaleWriteError(session.id, expected, stored);
+      }
+    } else if (expected !== 0) {
+      throw new StaleWriteError(session.id, expected, 0);
+    }
+
+    const toSave = safeClone(session);
+    toSave.updatedAt = new Date();
+    toSave.version = expected + 1;
+    this.sessions.set(session.id, toSave);
   }
 
   async delete(id: string): Promise<void> {

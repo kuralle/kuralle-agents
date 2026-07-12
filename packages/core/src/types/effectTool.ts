@@ -13,6 +13,10 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   timeoutMs?: number;
   /** When false, the durable journal always re-executes this tool instead of returning a cached step result — for observation/mutation tools (fs, shell) whose result must be fresh. Default true. */
   replay?: boolean;
+  /** When true, the tool may run concurrently with other parallel-safe tools in the same model turn. */
+  parallelSafe?: boolean;
+  /** Override the auto-derived effect key (`idempotencyKey(logicalRunId, callsite, {name,args})`). Use when args are not a stable identity (e.g. a nonce). */
+  idempotencyKey?: (args: TInput) => string;
   execute: (
     args: TInput,
     ctx?: ToolContext,

@@ -42,9 +42,11 @@ export async function recordSignalDelivery(
     kind: waitingFor.approval ? 'approval' : 'signal',
     name: delivery.name,
     signalId: delivery.signalId,
+    status: 'finished',
     result: delivery.payload,
     startedAt: now,
     finishedAt: now,
+    epoch: runState.runEpoch ?? 0,
   };
 
   await runStore.appendStep(runState.runId, record);

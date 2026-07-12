@@ -8,6 +8,7 @@ export {
 
 export { SessionManager } from './session/SessionManager.js';
 export type { SessionStore } from './session/SessionStore.js';
+export { StaleWriteError } from './session/SessionStore.js';
 export { MemoryStore } from './session/stores/MemoryStore.js';
 export { reviveSession } from './session/utils.js';
 export {

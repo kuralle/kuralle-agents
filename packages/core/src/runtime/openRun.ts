@@ -11,6 +11,7 @@ import type { RunState } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { recordSignalDelivery } from './durable/replay.js';
 import { resetTurnCount } from './policies/limits.js';
+import { saveSessionWithRetry } from '../session/utils.js';
 
 export interface OpenRunOptions {
   sessionId: string;
@@ -23,6 +24,8 @@ export interface OpenRunOptions {
   seedMessages?: ModelMessage[];
   historyDelta?: ModelMessage[];
   signalDelivery?: SignalDelivery;
+  /** Stable key for this inbound user message; duplicate webhook retries are ignored (H2). */
+  idempotencyKey?: string;
   transcriptionModel?: TranscriptionModel;
   defaultAgentId: string;
   sessionStore: SessionStore;
@@ -64,7 +67,7 @@ export async function openRun(
     await runStore.initRun(runState);
     if (initialMessages.length > 0) {
       session.messages = [...initialMessages];
-      await options.sessionStore.save(session);
+      await saveSessionWithRetry(options.sessionStore, session);
     }
   }
 
@@ -73,7 +76,7 @@ export async function openRun(
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
     session.messages = [...session.messages, ...options.historyDelta];
-    await options.sessionStore.save(session);
+    await saveSessionWithRetry(options.sessionStore, session);
   }
 
   if (options.signalDelivery) {
@@ -113,12 +116,25 @@ export async function openRun(
   }
 
   if (hasInput && effectiveInput !== undefined) {
+    if (options.idempotencyKey) {
+      const processed = runState.processedInboundKeys ?? [];
+      if (processed.includes(options.idempotencyKey)) {
+        const agent = agentsById.get(runState.activeAgentId);
+        if (!agent) {
+          throw new Error(`Unknown activeAgentId "${runState.activeAgentId}"`);
+        }
+        const latestSession = (await options.sessionStore.get(options.sessionId)) ?? session;
+        return { session: latestSession, runState, runStore, agent };
+      }
+      runState.processedInboundKeys = [...processed, options.idempotencyKey];
+    }
+
     runState.updatedAt = Date.now();
     if (runState.activeFlow) {
       await runStore.putRunState(runState);
       const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
       setPendingUserInput(sessionAfterPersist, effectiveInput);
-      await options.sessionStore.save(sessionAfterPersist);
+      await saveSessionWithRetry(options.sessionStore, sessionAfterPersist);
     } else {
       const userMessage: ModelMessage = { role: 'user', content: effectiveInput };
       runState.messages = [...runState.messages, userMessage];
@@ -126,7 +142,7 @@ export async function openRun(
       await runStore.putRunState(runState);
       const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
       sessionAfterPersist.messages = [...sessionAfterPersist.messages, userMessage];
-      await options.sessionStore.save(sessionAfterPersist);
+      await saveSessionWithRetry(options.sessionStore, sessionAfterPersist);
     }
   }
 
@@ -146,7 +162,7 @@ export async function openRun(
     await runStore.putRunState(runState);
     const sessionAfterPersist = (await options.sessionStore.get(options.sessionId)) ?? session;
     sessionAfterPersist.messages = [...sessionAfterPersist.messages, wakeMessage];
-    await options.sessionStore.save(sessionAfterPersist);
+    await saveSessionWithRetry(options.sessionStore, sessionAfterPersist);
   }
 
   const agent = agentsById.get(runState.activeAgentId);
@@ -157,7 +173,7 @@ export async function openRun(
   const latestSession = (await options.sessionStore.get(options.sessionId)) ?? session;
   latestSession.currentAgent = runState.activeAgentId;
   latestSession.activeAgentId = runState.activeAgentId;
-  await options.sessionStore.save(latestSession);
+  await saveSessionWithRetry(options.sessionStore, latestSession);
 
   return { session: latestSession, runState, runStore, agent };
 }
@@ -184,7 +200,7 @@ async function loadOrCreateSession(options: OpenRunOptions): Promise<Session> {
     handoffHistory: [],
   };
 
-  await options.sessionStore.save(session);
+  await saveSessionWithRetry(options.sessionStore, session);
   return session;
 }
 

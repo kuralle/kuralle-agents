@@ -1,6 +1,22 @@
 import type { Session } from '../types/index.js';
 import type { AuditListOptions, ConversationAuditEntry } from '../audit/types.js';
 
+export class StaleWriteError extends Error {
+  readonly sessionId: string;
+  readonly expectedVersion: number;
+  readonly actualVersion: number;
+
+  constructor(sessionId: string, expectedVersion: number, actualVersion: number) {
+    super(
+      `Stale write for session ${sessionId}: expected version ${expectedVersion}, stored version is ${actualVersion}`,
+    );
+    this.name = 'StaleWriteError';
+    this.sessionId = sessionId;
+    this.expectedVersion = expectedVersion;
+    this.actualVersion = actualVersion;
+  }
+}
+
 export interface SessionListWindow {
   from?: Date;
   to?: Date;

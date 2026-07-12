@@ -59,7 +59,10 @@ export class CoreToolExecutor implements EffectToolExecutor {
   }
 
   async execute(args: CoreExecuteArgs): Promise<unknown> {
-    if (!this.parallelExecution) {
+    const registryDef = this.tools.get(args.name);
+    const def = args.def ?? registryDef;
+    const parallelSafe = def?.parallelSafe === true || def?.replay === false;
+    if (!this.parallelExecution && !parallelSafe) {
       return this.withSerialGate(() => this.executeInner(args));
     }
     return this.executeInner(args);

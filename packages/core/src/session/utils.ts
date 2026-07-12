@@ -1,4 +1,7 @@
 import type { Session } from '../types/index.js';
+import { StaleWriteError, type SessionStore } from './SessionStore.js';
+
+const CAS_RETRIES = 8;
 
 /**
  * Restores a Session from its serialized form.
@@ -52,4 +55,26 @@ export function reviveSession(raw: unknown): Session {
   );
 
   return session;
+}
+
+/** Persist a session with optimistic CAS retry (refreshes `version` from store between attempts). */
+export async function saveSessionWithRetry(
+  store: SessionStore,
+  session: Session,
+): Promise<void> {
+  for (let attempt = 0; attempt < CAS_RETRIES; attempt++) {
+    const fresh = await store.get(session.id);
+    if (fresh) {
+      session.version = fresh.version;
+    }
+    try {
+      await store.save(session);
+      return;
+    } catch (error) {
+      if (error instanceof StaleWriteError && attempt < CAS_RETRIES - 1) {
+        continue;
+      }
+      throw error;
+    }
+  }
 }

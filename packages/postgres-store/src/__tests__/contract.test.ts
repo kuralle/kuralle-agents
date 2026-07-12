@@ -14,12 +14,20 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { runSessionStoreContract } from '@kuralle-agents/core/session/testing';
+import { runSessionStoreCasContract, runSessionStoreContract } from '@kuralle-agents/core/session/testing';
 import type { ConversationAuditEntry } from '@kuralle-agents/core';
 
 import { PostgresSessionStore } from '../PostgresSessionStore.js';
 
-type MockRow = { id: string; user_id: string | null; conversation_id: string; channel_id: string; data: string; updated_at: Date };
+type MockRow = {
+  id: string;
+  user_id: string | null;
+  conversation_id: string;
+  channel_id: string;
+  data: string;
+  version: number;
+  updated_at: Date;
+};
 type MockAuditRow = { id: number; session_id: string; at: Date; type: string; payload: string };
 
 function createMockPgClient() {
@@ -34,8 +42,20 @@ function createMockPgClient() {
         return { rows: [], rowCount: 0 };
       }
 
-      if (sql.startsWith('ALTER TABLE') || sql.startsWith('UPDATE')) {
+      if (sql.startsWith('ALTER TABLE')) {
         return { rows: [], rowCount: 0 };
+      }
+
+      if (sql.startsWith('SELECT version FROM') && sql.includes('WHERE id =')) {
+        const [id] = params as [string];
+        const row = sessions.find(r => r.id === id);
+        return { rows: row ? [{ version: row.version }] : [], rowCount: row ? 1 : 0 };
+      }
+
+      if (sql.startsWith('SELECT data, version FROM') && sql.includes('WHERE id =')) {
+        const [id] = params as [string];
+        const row = sessions.find(r => r.id === id);
+        return { rows: row ? [{ data: row.data, version: row.version }] : [], rowCount: row ? 1 : 0 };
       }
 
       if (sql.startsWith('SELECT data FROM') && sql.includes('WHERE id =')) {
@@ -83,6 +103,39 @@ function createMockPgClient() {
         return { rows: sorted.map(row => ({ payload: row.payload })), rowCount: sorted.length };
       }
 
+      if (sql.startsWith('UPDATE') && sql.includes('version = version + 1')) {
+        const [id, , , , data, expectedVersion] = params as [string, string | null, string, string, string, number];
+        const idx = sessions.findIndex(r => r.id === id);
+        if (idx < 0 || sessions[idx]!.version !== expectedVersion) {
+          return { rows: [], rowCount: 0 };
+        }
+        sessions[idx] = {
+          ...sessions[idx]!,
+          data,
+          version: sessions[idx]!.version + 1,
+          updated_at: new Date(),
+        };
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (sql.startsWith('INSERT INTO') && sql.includes('kuralle_sessions')) {
+        const [id, userId, conversationId, channelId, data] = params as [string, string | null, string, string, string];
+        const existing = sessions.findIndex(r => r.id === id);
+        if (existing >= 0) {
+          return { rows: [], rowCount: 0 };
+        }
+        sessions.push({
+          id,
+          user_id: userId ?? null,
+          conversation_id: conversationId,
+          channel_id: channelId,
+          data,
+          version: 1,
+          updated_at: new Date(),
+        });
+        return { rows: [], rowCount: 1 };
+      }
+
       if (sql.startsWith('INSERT INTO')) {
         const [id, userId, conversationId, channelId, data] = params as [string, string | null, string, string, string];
         const existing = sessions.findIndex(r => r.id === id);
@@ -92,6 +145,7 @@ function createMockPgClient() {
           conversation_id: conversationId,
           channel_id: channelId,
           data,
+          version: 1,
           updated_at: new Date(),
         };
         if (existing >= 0) sessions[existing] = row;
@@ -122,6 +176,10 @@ function createMockPgClient() {
 }
 
 runSessionStoreContract(() =>
+  new PostgresSessionStore({ client: createMockPgClient() as never }),
+);
+
+runSessionStoreCasContract(() =>
   new PostgresSessionStore({ client: createMockPgClient() as never }),
 );
 

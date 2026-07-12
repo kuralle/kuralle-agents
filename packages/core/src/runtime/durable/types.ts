@@ -2,6 +2,8 @@ import type { ModelMessage } from 'ai';
 
 export type StepKind = 'tool' | 'approval' | 'signal' | 'now' | 'uuid';
 
+export type StepStatus = 'running' | 'paused' | 'finished' | 'error' | 'aborted';
+
 export interface StepRecord {
   index: number;
   key: string;
@@ -10,6 +12,8 @@ export interface StepRecord {
   signalId?: string;
   result?: unknown;
   error?: { name: string; message: string };
+  /** Intent lifecycle: `running` = pending execute; `finished`/`error` = finalized. Legacy steps omit status. */
+  status?: StepStatus;
   startedAt: number;
   finishedAt?: number;
   /** Logical-run epoch when this step was recorded. Absent on legacy steps → prune keeps them until superseded. */
@@ -40,6 +44,8 @@ export interface RunState {
    *  Scopes the durable effect-key namespace so a new turn re-executes rather than replaying a
    *  prior turn's cached result (F6/G8). Absent on legacy runs → treat as 0. */
   runEpoch?: number;
+  /** Inbound message idempotency keys already accepted (H2 webhook-retry dedup). */
+  processedInboundKeys?: string[];
 }
 
 export interface SignalDelivery {

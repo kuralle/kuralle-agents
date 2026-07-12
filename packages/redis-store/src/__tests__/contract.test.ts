@@ -14,9 +14,9 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { runSessionStoreContract } from '@kuralle-agents/core/session/testing';
+import { runSessionStoreCasContract, runSessionStoreContract } from '@kuralle-agents/core/session/testing';
 import { runTraceStoreContract } from '@kuralle-agents/core/tracing/testing';
-import type { ConversationAuditEntry } from '@kuralle-agents/core';
+import { StaleWriteError, type ConversationAuditEntry } from '@kuralle-agents/core';
 
 import { RedisSessionStore } from '../RedisSessionStore.js';
 import { RedisTraceStore } from '../RedisTraceStore.js';
@@ -39,7 +39,22 @@ function createMockRedisClient() {
 
   return {
     async get(key: string) { return kv.get(key) ?? null; },
-    async set(key: string, value: string) { kv.set(key, value); return 'OK'; },
+    async set(key: string, value: string) {
+      const next = JSON.parse(value) as { id?: string; version?: number };
+      const expected = (next.version ?? 1) - 1;
+      const raw = kv.get(key);
+      if (raw) {
+        const stored = JSON.parse(raw) as { version?: number };
+        const storedVersion = stored.version ?? 0;
+        if (storedVersion !== expected) {
+          throw new StaleWriteError(next.id ?? key, expected, storedVersion);
+        }
+      } else if (expected !== 0) {
+        throw new StaleWriteError(next.id ?? key, expected, 0);
+      }
+      kv.set(key, value);
+      return 'OK';
+    },
     async del(...keys: string[]) {
       let n = 0;
       for (const k of keys) { if (kv.delete(k)) n++; sets.delete(k); zsets.delete(k); }
@@ -101,6 +116,10 @@ function createMockRedisClient() {
 }
 
 runSessionStoreContract(() =>
+  new RedisSessionStore({ client: createMockRedisClient() as never, enableCleanupIndex: true }),
+);
+
+runSessionStoreCasContract(() =>
   new RedisSessionStore({ client: createMockRedisClient() as never, enableCleanupIndex: true }),
 );
 

@@ -96,7 +96,19 @@ export interface RunContext {
   workingMemoryTools?: Record<string, AnyTool>;
   /** Agent workspace filesystem (same instance as `AgentConfig.workspace`). */
   fs?: FileSystem;
-  tool(name: string, args: unknown, options?: { toolCallId?: string; def?: AnyTool; toolCtx?: ToolContext }): Promise<unknown>;
+  tool(
+    name: string,
+    args: unknown,
+    options?: {
+      toolCallId?: string;
+      def?: AnyTool;
+      toolCtx?: ToolContext;
+      /** Pre-reserved callsite ordinal for parallel-safe tool batches (G9). */
+      callsite?: string;
+      /** Pre-reserved journal index for parallel-safe tool batches (G9). */
+      index?: number;
+    },
+  ): Promise<unknown>;
   approve(req: { title: string; description?: string }): Promise<{ approved: boolean; by?: string }>;
   signal(name: string, opts?: { deadline?: number; meta?: Record<string, unknown> }): Promise<unknown>;
   now(): Promise<number>;
@@ -105,6 +117,8 @@ export interface RunContext {
    *  a flow's durable callsites are anchored to the flow — identical on fresh entry
    *  (after an answering turn) and on resume (where that turn does not re-run). */
   resetCallsites(): void;
+  /** Reserve N contiguous effect callsite ordinals for parallel-safe tool batches (G9). */
+  reserveCallsites(count: number): string[];
 }
 
 export type ActionContext = Pick<

@@ -68,6 +68,7 @@ export class BridgeSessionStore implements SessionStore {
     // Restore the durable run journal so durable tools / suspend-resume can find
     // the run (SessionRunStore reads it off the Session object).
     session[DURABLE_RUNS_KEY] = orchState?.durableRuns ?? {};
+    session.version = orchState?.version ?? 0;
     return session;
   }
 
@@ -89,6 +90,7 @@ export class BridgeSessionStore implements SessionStore {
       })),
       state: session.state,
       durableRuns: (session as SessionWithRuns)[DURABLE_RUNS_KEY],
+      version: session.version ?? 0,
     };
     await this.orchestration.save(session.id, state);
   }

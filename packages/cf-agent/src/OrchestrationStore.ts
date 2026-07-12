@@ -1,3 +1,4 @@
+import { StaleWriteError } from '@kuralle-agents/core';
 import type { SqlExecutor, OrchestrationState } from './types.js';
 
 /**
@@ -57,7 +58,19 @@ export class OrchestrationStore {
 
   async save(id: string, state: OrchestrationState): Promise<void> {
     this.ensureTable();
-    const json = JSON.stringify(state);
+    const existing = await this.get(id);
+    const expected = state.version ?? 0;
+    if (existing) {
+      const stored = existing.version ?? 0;
+      if (stored !== expected) {
+        throw new StaleWriteError(id, expected, stored);
+      }
+    } else if (expected !== 0) {
+      throw new StaleWriteError(id, expected, 0);
+    }
+
+    const toSave: OrchestrationState = { ...state, version: expected + 1 };
+    const json = JSON.stringify(toSave);
     this.sql`
       INSERT INTO kuralle_orchestration (id, state, updated_at)
       VALUES (${id}, ${json}, datetime('now'))

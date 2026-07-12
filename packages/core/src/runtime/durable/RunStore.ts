@@ -33,9 +33,27 @@ export class RunNotFoundError extends Error {
   }
 }
 
+export class StepNotFoundError extends Error {
+  constructor(runId: string, key: string) {
+    super(`Step not found for run ${runId}: ${key}`);
+    this.name = 'StepNotFoundError';
+  }
+}
+
+export interface StepFinalizePatch {
+  status: 'finished' | 'error';
+  result?: unknown;
+  error?: { name: string; message: string };
+  finishedAt?: number;
+}
+
 export interface RunStore {
   appendStep(runId: string, record: StepRecord): Promise<void>;
+  finalizeStep(runId: string, key: string, patch: StepFinalizePatch): Promise<void>;
   getSteps(runId: string): Promise<StepRecord[]>;
   getRunState(runId: string): Promise<RunState | null>;
   putRunState(state: RunState): Promise<void>;
+  initRun?(state: RunState): Promise<void>;
+  pruneStepsBeforeEpoch?(runId: string, keepEpoch: number): Promise<void>;
+  reserveSteps?(runId: string, count: number): Promise<number[]>;
 }

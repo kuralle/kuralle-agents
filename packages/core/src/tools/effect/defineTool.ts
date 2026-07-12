@@ -28,6 +28,8 @@ export function defineTool<
   estimatedDurationMs?: number;
   timeoutMs?: number;
   replay?: boolean;
+  parallelSafe?: boolean;
+  idempotencyKey?: (args: InferToolInput<S>) => string;
   execute: (
     args: InferToolInput<S>,
     ctx?: ToolContext,
@@ -44,6 +46,8 @@ export function defineTool<
     interimAfterMs: config.interimAfterMs ?? config.estimatedDurationMs,
     timeoutMs: config.timeoutMs,
     replay: config.replay,
+    parallelSafe: config.parallelSafe,
+    idempotencyKey: config.idempotencyKey,
     execute: config.execute,
   } as Tool<InferToolInput<S>, R>;
 }

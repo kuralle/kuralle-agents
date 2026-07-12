@@ -64,6 +64,7 @@ import { runOnce as recordRunOnce } from './TraceRecorder.js';
 import { TraceRecorder } from './TraceRecorder.js';
 import type { AgentSpan, AgentTrace } from '../types/trace.js';
 import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
+import { saveSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 
 export interface TracingConfig {
@@ -142,6 +143,8 @@ export interface RunOptions {
   historyDelta?: ModelMessage[];
   driver?: ChannelDriver;
   signalDelivery?: SignalDelivery;
+  /** Stable key for this inbound user message; duplicate webhook retries are ignored (H2). */
+  idempotencyKey?: string;
   abortSignal?: AbortSignal;
 }
 
@@ -213,6 +216,7 @@ export class Runtime {
         seedMessages: opts.seedMessages,
         historyDelta: opts.historyDelta,
         signalDelivery: opts.signalDelivery,
+        idempotencyKey: opts.idempotencyKey,
         transcriptionModel: this.config.transcriptionModel,
         defaultAgentId: this.config.defaultAgentId,
         sessionStore: this.sessionStore,
@@ -685,7 +689,7 @@ export class Runtime {
     const latest = await this.sessionStore.get(runCtx.session.id);
     if (latest) {
       latest.messages = [...result.messages];
-      await this.sessionStore.save(latest);
+      await saveSessionWithRetry(this.sessionStore, latest);
     }
     runCtx.session.messages = [...result.messages];
 
@@ -779,7 +783,7 @@ export class Runtime {
       runCtx.runState.state[ESCALATION_NOTIFIED_KEY] = true;
     }
     await runCtx.runStore.putRunState(runCtx.runState);
-    await this.sessionStore.save(runCtx.session);
+    await saveSessionWithRetry(this.sessionStore, runCtx.session);
 
     emit({
       type: 'escalation',
@@ -828,7 +832,7 @@ export class Runtime {
 
     const latest = (await this.sessionStore.get(sessionId)) ?? session;
     latest.messages = [...runState.messages];
-    await this.sessionStore.save(latest);
+    await saveSessionWithRetry(this.sessionStore, latest);
   }
 }
 

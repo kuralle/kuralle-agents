@@ -22,7 +22,7 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 
-import type { SessionStore } from './SessionStore.js';
+import { StaleWriteError, type SessionStore } from './SessionStore.js';
 import type { Session } from '../types/index.js';
 
 export type SessionStoreFactory = () => SessionStore | Promise<SessionStore>;
@@ -131,6 +131,48 @@ export function runSessionStoreContract(factory: SessionStoreFactory): void {
       await store.save(fresh);
       await store.cleanup(1_000);
       expect(await store.get('fresh')).not.toBeNull();
+    });
+  });
+}
+
+/**
+ * Registers optimistic-concurrency (CAS) contract tests for SessionStore adapters.
+ * Two concurrent saves with the same expected version: exactly one succeeds.
+ */
+export function runSessionStoreCasContract(factory: SessionStoreFactory): void {
+  describe('SessionStore CAS contract', () => {
+    let store: SessionStore;
+
+    beforeEach(async () => {
+      store = await factory();
+    });
+
+    test('concurrent save with same expected version rejects one writer with StaleWriteError', async () => {
+      const session = buildSession({ id: 'cas-sess' });
+      await store.save(session);
+
+      const firstRead = (await store.get('cas-sess'))!;
+      const secondRead = (await store.get('cas-sess'))!;
+      expect(firstRead.version).toBe(1);
+      expect(secondRead.version).toBe(1);
+
+      firstRead.workingMemory = { writer: 'a' };
+      secondRead.workingMemory = { writer: 'b' };
+
+      const results = await Promise.allSettled([
+        store.save(firstRead),
+        store.save(secondRead),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(StaleWriteError);
+
+      const final = await store.get('cas-sess');
+      expect(final?.version).toBe(2);
     });
   });
 }

@@ -19,6 +19,7 @@ import type { RunStore } from './durable/RunStore.js';
 import { SuspendError } from './durable/RunStore.js';
 import {
   clockEffectKey,
+  idempotencyKey,
   logicalRunId,
   pauseEffectKey,
   toolEffectKey,
@@ -76,29 +77,66 @@ function makeCtx(deps: CtxDeps): RunContext {
     return site;
   };
 
-  const appendLiveStep = async (
+  const isFinishedStep = (hit: StepRecord): boolean => {
+    if (hit.status === 'finished') {
+      return true;
+    }
+    if (hit.status === 'running') {
+      return false;
+    }
+    if (hit.status === 'error' || hit.error) {
+      return false;
+    }
+    return hit.result !== undefined;
+  };
+
+  const updateLocalStep = (key: string, patch: Partial<StepRecord>): void => {
+    const idx = steps.findIndex((step) => step.key === key);
+    if (idx >= 0) {
+      steps[idx] = { ...steps[idx]!, ...patch };
+    }
+  };
+
+  const appendPendingStep = async (
     key: string,
     kind: StepKind,
     name: string,
-    result: unknown,
+    index: number,
     signalId?: string,
   ): Promise<void> => {
     const startedAt = Date.now();
     const record: StepRecord = {
-      index: steps.length,
+      index,
       key,
       kind,
       name,
       signalId,
-      result,
+      status: 'running',
       startedAt,
-      finishedAt: startedAt,
       epoch: deps.runState.runEpoch ?? 0,
     };
     await deps.runStore.appendStep(deps.runState.runId, record);
-    steps.push(record);
-    deps.runState.updatedAt = startedAt;
-    await deps.runStore.putRunState(deps.runState);
+    const localIdx = steps.findIndex((step) => step.index === index);
+    if (localIdx >= 0) {
+      steps[localIdx] = record;
+    } else {
+      while (steps.length < index) {
+        steps.push({
+          index: steps.length,
+          key: `__reserve:${deps.runState.runId}:${steps.length}`,
+          kind: 'tool',
+          name: '__reserve',
+          status: 'running',
+          startedAt,
+          epoch: deps.runState.runEpoch ?? 0,
+        });
+      }
+      if (steps.length === index) {
+        steps.push(record);
+      } else {
+        steps[index] = record;
+      }
+    }
   };
 
   const replayOrExecute = async (
@@ -106,36 +144,54 @@ function makeCtx(deps: CtxDeps): RunContext {
     kind: StepKind,
     name: string,
     execute: () => Promise<unknown>,
+    options?: { index?: number },
   ): Promise<unknown> => {
     const hit = findStepByKey(steps, key);
     if (hit) {
-      if (hit.error) {
-        throw Object.assign(new Error(hit.error.message), { name: hit.error.name });
+      if (hit.status === 'error' || hit.error) {
+        throw Object.assign(new Error(hit.error!.message), { name: hit.error!.name });
       }
-      return hit.result;
+      if (isFinishedStep(hit)) {
+        return hit.result;
+      }
     }
 
+    const isRetry = hit?.status === 'running';
+    const stepIndex = options?.index ?? hit?.index ?? steps.length;
+
+    if (!isRetry) {
+      await appendPendingStep(key, kind, name, stepIndex);
+    }
+
+    let result: unknown;
     try {
-      const result = await execute();
-      await appendLiveStep(key, kind, name, result);
-      return result;
+      result = await execute();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      const startedAt = Date.now();
-      const record: StepRecord = {
-        index: steps.length,
-        key,
-        kind,
-        name,
+      const finishedAt = Date.now();
+      await deps.runStore.finalizeStep(deps.runState.runId, key, {
+        status: 'error',
         error: { name: err.name, message: err.message },
-        startedAt,
-        finishedAt: startedAt,
-        epoch: deps.runState.runEpoch ?? 0,
-      };
-      await deps.runStore.appendStep(deps.runState.runId, record);
-      steps.push(record);
+        finishedAt,
+      });
+      updateLocalStep(key, {
+        status: 'error',
+        error: { name: err.name, message: err.message },
+        finishedAt,
+      });
       throw err;
     }
+
+    const finishedAt = Date.now();
+    await deps.runStore.finalizeStep(deps.runState.runId, key, {
+      status: 'finished',
+      result,
+      finishedAt,
+    });
+    updateLocalStep(key, { status: 'finished', result, finishedAt });
+    deps.runState.updatedAt = finishedAt;
+    await deps.runStore.putRunState(deps.runState);
+    return result;
   };
 
   const effectRunId = () =>
@@ -168,10 +224,12 @@ function makeCtx(deps: CtxDeps): RunContext {
     const key = pauseEffectKey(effectRunId(), callsite, signalName);
     const hit = findStepByKey(steps, key);
     if (hit) {
-      if (hit.error) {
-        throw Object.assign(new Error(hit.error.message), { name: hit.error.name });
+      if (hit.status === 'error' || hit.error) {
+        throw Object.assign(new Error(hit.error!.message), { name: hit.error!.name });
       }
-      return hit.result;
+      if (hit.status === 'finished' || hit.result !== undefined) {
+        return hit.result;
+      }
     }
 
     await suspendForSignal(signalName, callsite, meta);
@@ -213,6 +271,13 @@ function makeCtx(deps: CtxDeps): RunContext {
     resetCallsites: () => {
       effectOrdinal = 0;
     },
+    reserveCallsites: (count: number) => {
+      const sites: string[] = [];
+      for (let i = 0; i < count; i++) {
+        sites.push(consumeCallsite());
+      }
+      return sites;
+    },
     tool: async (name, args, options) => {
       // needsApproval gate: a tool flagged `needsApproval` must be approved by a human
       // before it runs. Approval is a durable pause (the `__approval` signal); on resume
@@ -230,8 +295,12 @@ function makeCtx(deps: CtxDeps): RunContext {
           throw new ToolApprovalDeniedError(name, decision.by);
         }
       }
-      const callsite = consumeCallsite();
-      const key = toolEffectKey(effectRunId(), callsite, name, args);
+      const callsite = options?.callsite ?? consumeCallsite();
+      const logicalId = effectRunId();
+      const key =
+        def?.idempotencyKey != null
+          ? def.idempotencyKey(args)
+          : idempotencyKey(logicalId, callsite, { name, args });
       const executeTool = () =>
         toolExecutorHolder.executor.execute({
           name,
@@ -245,30 +314,10 @@ function makeCtx(deps: CtxDeps): RunContext {
 
       if (def?.replay === false) {
         const auditKey = `${key}:${steps.length}`;
-        try {
-          const result = await executeTool();
-          await appendLiveStep(auditKey, 'tool', name, result);
-          return result;
-        } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          const startedAt = Date.now();
-          const record: StepRecord = {
-            index: steps.length,
-            key: auditKey,
-            kind: 'tool',
-            name,
-            error: { name: err.name, message: err.message },
-            startedAt,
-            finishedAt: startedAt,
-            epoch: deps.runState.runEpoch ?? 0,
-          };
-          await deps.runStore.appendStep(deps.runState.runId, record);
-          steps.push(record);
-          throw err;
-        }
+        return replayOrExecute(auditKey, 'tool', name, executeTool, { index: options?.index });
       }
 
-      return replayOrExecute(key, 'tool', name, executeTool);
+      return replayOrExecute(key, 'tool', name, executeTool, { index: options?.index });
     },
     approve: async (req) => {
       return pauseEffect(APPROVAL_SIGNAL, { approval: req }) as Promise<{

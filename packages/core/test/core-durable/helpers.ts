@@ -1,6 +1,7 @@
 import type { LanguageModel } from 'ai';
 import type { Session } from '../../src/types/session.js';
 import type { RunState } from '../../src/runtime/durable/types.js';
+import type { RunStore } from '../../src/runtime/durable/RunStore.js';
 import type { EffectToolExecutor } from '../../src/types/run-context.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
@@ -55,7 +56,7 @@ export async function setupDurableHarness(sessionId = 'sess-1', runId = 'run-1')
 export async function buildCtx(
   args: {
     session: Session;
-    runStore: SessionRunStore;
+    runStore: RunStore;
     runState: RunState;
     toolExecutor: EffectToolExecutor;
     fs?: import('../../src/types/filesystem.js').FileSystem;

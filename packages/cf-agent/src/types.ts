@@ -40,6 +40,8 @@ export interface OrchestrationState {
    * with "Run not found" on CF.
    */
   durableRuns?: SessionDurableRuns;
+  /** Optimistic-concurrency version for orchestration row CAS (C2). */
+  version?: number;
 }
 
 /**

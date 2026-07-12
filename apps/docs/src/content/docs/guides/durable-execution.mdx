@@ -10,7 +10,7 @@ Every run in Kuralle is **deterministically replayable**. The runtime does not r
 
 This is the same model used by durable workflow engines like Temporal and DBOS. It is what gives Kuralle two guarantees:
 
-- **Exactly-once tool execution** — a payment tool won't charge twice if a turn retries.
+- **Exactly-once-modulo-idempotency** — a payment tool won't charge twice if a turn retries, provided the effect honors an idempotency key (auto-derived by default).
 - **Durable pause/resume** — a run can suspend for human approval (or any external signal) and resume later, even in a different process, without losing its place.
 
 <Aside type="note">
@@ -22,7 +22,7 @@ This is the same model used by durable workflow engines like Temporal and DBOS. 
 A run is stored as two things:
 
 - **`RunState`** — the mutable snapshot: status (`running` / `paused` / `finished` / `error` / `aborted`), the active agent, active flow and node, the flow `state` bag, the message history, and `waitingFor` (set while suspended).
-- **`StepRecord[]`** — the append-only log. Each record holds an `index`, an idempotency `key`, a `kind` (`tool` / `approval` / `signal` / `now` / `uuid`), and either a `result` or an `error`.
+- **`StepRecord[]`** — the append-only log. Each record holds an `index`, an idempotency `key`, a `kind` (`tool` / `approval` / `signal` / `now` / `uuid`), a `status` (`running` while pending, `finished` or `error` when done), and either a `result` or an `error`.
 
 Both live inside the session under a `durableRuns` key, so durability is inherited from whichever [`SessionStore`](/guides/sessions) you configured — Memory in development, Redis or Postgres in production.
 
@@ -35,14 +35,19 @@ Every durable effect funnels through one decision:
 ```typescript
 // Conceptually, for each effect:
 const recorded = findStepByKey(steps, key);
-if (recorded) {
-  if (recorded.error) throw recorded.error; // errors replay too
+if (recorded?.status === 'finished') {
   return recorded.result;                   // cached — do NOT re-run
 }
-const result = await execute();             // first time only
-appendStep({ key, kind, result });
+if (recorded?.status === 'error' || recorded?.error) {
+  throw recorded.error;                     // errors replay too
+}
+appendStep({ key, kind, status: 'running' }); // intent BEFORE execute
+const result = await execute();
+finalizeStep(key, { status: 'finished', result });
 return result;
 ```
+
+A `running` step means a crash happened between execute and finalize — the effect re-runs on resume. External side effects must honor the tool's idempotency key so a re-run dedups at the boundary.
 
 On the **first** pass an effect runs and its outcome is appended to the log. On **every** subsequent pass — a retry, a resume after a pause, or a later turn — the recorded outcome is returned without touching the outside world.
 
@@ -60,7 +65,11 @@ Inside `action` nodes, these are available on the `ctx` argument (`ctx.tool`, `c
 
 ## Idempotency keys
 
-Each effect's key is a hash of `{ runId, callsite, payload }`, where the **`callsite` is the effect's ordinal position in the run** — the first effect is `0`, the second `1`, and so on. This is what makes replay align: the Nth effect this pass must match the Nth effect recorded last pass.
+Each effect's key is a hash of `{ logicalRunId, callsite, payload }`, where the **`callsite` is the effect's ordinal position in the run** — the first effect is `0`, the second `1`, and so on. This is what makes replay align: the Nth effect this pass must match the Nth effect recorded last pass.
+
+By default every durable tool gets an auto-derived key: `idempotencyKey(logicalRunId, callsite, { name, args })`. Override with `idempotencyKey?: (args) => string` on `defineTool` when args are not a stable identity (e.g. a nonce).
+
+Inbound user messages accept an optional `idempotencyKey` on `runtime.run({ ... })` so webhook retries do not duplicate the turn.
 
 <Aside type="caution">
   **Effects must run in the same order on every replay.** Branching flow-control logic on a non-replayed value (`Date.now()`, `Math.random()`, an un-logged external read) can change the effect order and misalign the log. That is exactly why `ctx.now()` and `ctx.uuid()` exist — use them instead of `Date.now()` / `randomUUID()` in `action` node logic.
@@ -89,6 +98,14 @@ runtime.run({
 The `action` node collects an amount, pauses for a supervisor decision, and runs the refund tool exactly once on approval.
 
 <Code code={approvalFlowExample} lang="typescript" title="approval-flow.ts" />
+
+## Deployment matrix
+
+| Backend | Concurrency | Guarantee |
+|---|---|---|
+| Cloudflare Durable Objects | Single-writer per session (one DO thread) | Intent-before-execute journal; version is a cheap backstop |
+| Memory / Redis / Postgres | Multi-writer — CAS on `session.version` | Stale writers get `StaleWriteError`; retry or reload |
+| Parallel-safe tools (`parallelSafe: true`) | Same turn, `Promise.all` | `reserveSteps` pre-assigns journal ordinals; read-only / `replay: false` tools qualify |
 
 ## Two sharp edges
 

@@ -1,4 +1,10 @@
-import type { AuditListOptions, ConversationAuditEntry, Session, SessionStore } from '@kuralle-agents/core';
+import {
+  StaleWriteError,
+  type AuditListOptions,
+  type ConversationAuditEntry,
+  type Session,
+  type SessionStore,
+} from '@kuralle-agents/core';
 import type { QueryResult } from 'pg';
 
 type PostgresClient = {
@@ -78,9 +84,11 @@ export class PostgresSessionStore implements SessionStore {
         conversation_id TEXT NOT NULL DEFAULT '',
         channel_id TEXT NOT NULL DEFAULT 'web',
         data JSONB NOT NULL,
+        version INTEGER NOT NULL DEFAULT 0,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`
     );
+    await this.client.query(`ALTER TABLE ${this.table} ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0`);
     await this.client.query(`ALTER TABLE ${this.table} ADD COLUMN IF NOT EXISTS conversation_id TEXT NOT NULL DEFAULT ''`);
     await this.client.query(`ALTER TABLE ${this.table} ADD COLUMN IF NOT EXISTS channel_id TEXT NOT NULL DEFAULT 'web'`);
     await this.client.query(`UPDATE ${this.table} SET conversation_id = id WHERE conversation_id = ''`);
@@ -107,7 +115,7 @@ export class PostgresSessionStore implements SessionStore {
   async get(id: string): Promise<Session | null> {
     await this.ready;
     const result = await this.client.query(
-      `SELECT data FROM ${this.table} WHERE id = $1`,
+      `SELECT data, version FROM ${this.table} WHERE id = $1`,
       [id]
     );
 
@@ -116,9 +124,12 @@ export class PostgresSessionStore implements SessionStore {
     }
 
     const raw = result.rows[0]?.data;
+    const version = result.rows[0]?.version as number | undefined;
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      return reviveSession(parsed as Session);
+      const session = reviveSession(parsed as Session);
+      session.version = version ?? session.version ?? 0;
+      return session;
     } catch (error) {
       console.error('Failed to parse session data from Postgres', error);
       return null;
@@ -130,15 +141,50 @@ export class PostgresSessionStore implements SessionStore {
     session.updatedAt = new Date();
     session.conversationId = session.conversationId ?? session.id;
     session.channelId = session.channelId ?? 'web';
+    const expectedVersion = session.version ?? 0;
     const data = JSON.stringify(session);
 
-    await this.client.query(
-      `INSERT INTO ${this.table} (id, user_id, conversation_id, channel_id, data, updated_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
-       ON CONFLICT (id)
-       DO UPDATE SET data = EXCLUDED.data, user_id = EXCLUDED.user_id, conversation_id = EXCLUDED.conversation_id, channel_id = EXCLUDED.channel_id, updated_at = NOW()`,
-      [session.id, session.userId ?? null, session.conversationId, session.channelId, data]
+    const update = await this.client.query(
+      `UPDATE ${this.table}
+       SET data = $5::jsonb,
+           user_id = $2,
+           conversation_id = $3,
+           channel_id = $4,
+           version = version + 1,
+           updated_at = NOW()
+       WHERE id = $1 AND version = $6`,
+      [
+        session.id,
+        session.userId ?? null,
+        session.conversationId,
+        session.channelId,
+        data,
+        expectedVersion,
+      ],
     );
+
+    if ((update.rowCount ?? 0) > 0) {
+      return;
+    }
+
+    if (expectedVersion === 0) {
+      const insert = await this.client.query(
+        `INSERT INTO ${this.table} (id, user_id, conversation_id, channel_id, data, version, updated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, 1, NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        [session.id, session.userId ?? null, session.conversationId, session.channelId, data],
+      );
+      if ((insert.rowCount ?? 0) > 0) {
+        return;
+      }
+    }
+
+    const current = await this.client.query(
+      `SELECT version FROM ${this.table} WHERE id = $1`,
+      [session.id],
+    );
+    const actual = (current.rows[0]?.version as number | undefined) ?? 0;
+    throw new StaleWriteError(session.id, expectedVersion, actual);
   }
 
   async delete(id: string): Promise<void> {

@@ -64,6 +64,8 @@ export interface Session {
   pendingRefinement?: RefinementStageResult;
   /** @internal Pending key-facts extraction promises. Awaited before session save. */
   __pendingExtractions?: Promise<void>[];
+  /** Optimistic-concurrency version; must match the stored row on save (C2 CAS). */
+  version?: number;
 }
 
 export interface SessionMetadata {
