@@ -79,6 +79,38 @@ Every tool call is keyed in an append-only effect log. The runtime checks that k
 
 This means a payment tool won't charge twice if the turn fails mid-execution, and a booking tool won't double-book a slot.
 
+## Parallel execution
+
+By default, tools in the same model turn run one at a time through the durable effect log. Mark a tool `parallelSafe: true` to let it run concurrently with other parallel-safe tools called in the same turn — safe for independent reads, not for tools that mutate shared state:
+
+```typescript
+const get_weather = defineTool({
+  name: 'get_weather',
+  description: 'Current weather for a city',
+  parallelSafe: true,
+  input: z.object({ city: z.string() }),
+  execute: async ({ city }) => fetchWeather(city),
+});
+```
+
+A `replay: false` tool (one whose result must always be fresh — filesystem reads, shell commands) also qualifies for parallel execution, since it never returns a cached step result to race against. The runtime pre-assigns journal ordinals for the batch (`reserveSteps`) so replay stays aligned no matter which parallel call finishes first.
+
+## Overriding the idempotency key
+
+Every tool call is keyed automatically — a hash of the run, its position in the effect log, and `{ name, args }`. That's a stable identity as long as `args` uniquely identifies the call. When it doesn't (for example, args include a fresh nonce), override the key with `idempotencyKey` so a retry still dedups on the field that actually identifies the operation:
+
+```typescript
+const chargeCard = defineTool({
+  name: 'charge_card',
+  description: 'Charge a customer for an amount',
+  input: z.object({ amount: z.number(), nonce: z.string() }),
+  idempotencyKey: ({ amount }) => `charge:${amount}`,
+  execute: async ({ amount }) => processCharge(amount),
+});
+```
+
+See [Durable Execution](/guides/durable-execution#idempotency-keys) for how the effect log and idempotency keys work end to end.
+
 ## Multiple tools
 
 ```typescript

@@ -99,6 +99,8 @@ See [Routing & Handoffs](/guides/routing).
 
 `agents` registers sub-agents the runtime can activate during a handoff. `handoffs` declares which agent IDs this agent is allowed to transfer to. The combination enables tool-based handoffs where the agent explicitly decides when to transfer.
 
+Handoffs are silent by default — no transfer announcement, and the target agent gets a best-effort nudge not to re-introduce itself. See [Silent handoffs](/guides/routing#silent-handoffs-default) in the Routing guide, including the honest limit on that guarantee.
+
 ### `knowledge` — who invokes retrieval
 
 When an agent declares `knowledge`, the runtime wires retrieval from `HarnessConfig.knowledge` (the shared `KnowledgeProvider`). The `knowledge.autoRetrieve` boolean declares **who invokes** that retrieval — the runtime, or the model:
