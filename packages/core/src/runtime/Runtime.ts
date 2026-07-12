@@ -61,7 +61,18 @@ import {
 import type { WakeOptions } from '../scheduler/index.js';
 import type { HandoffInputFilter } from './handoffFilters.js';
 import { runOnce as recordRunOnce } from './TraceRecorder.js';
-import type { AgentTrace } from '../types/trace.js';
+import { TraceRecorder } from './TraceRecorder.js';
+import type { AgentSpan, AgentTrace } from '../types/trace.js';
+import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
+import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
+
+export interface TracingConfig {
+  enabled?: boolean;
+  store?: TraceStore;
+  sinks?: TraceSink[];
+  redact?: (span: AgentSpan) => AgentSpan | null;
+  sampling?: number | ((context: { sessionId: string; input?: unknown }) => boolean);
+}
 
 export interface HarnessConfig {
   agents: AgentConfig[];
@@ -109,6 +120,8 @@ export interface HarnessConfig {
    * are projected into the next turn's prompt. Default off — opt-in cost/latency.
    */
   trackGoals?: boolean;
+  /** Read-only observability, configured independently from durable session state. */
+  tracing?: TracingConfig;
 }
 
 export interface RunOptions {
@@ -141,6 +154,9 @@ export class Runtime {
   private readonly hooks?: Hooks;
   private readonly activeTurnAborts = new Map<string, AbortController>();
   private readonly sessionMutex = new SessionMutex();
+  private readonly traceStore?: TraceStore;
+  private readonly traceSinks: TraceSink[];
+  private readonly pendingTraceWrites = new Set<Promise<void>>();
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
@@ -149,6 +165,14 @@ export class Runtime {
     this.maxHandoffs = config.maxHandoffs ?? 5;
     this.terminalHandoffTargets = new Set(config.terminalHandoffTargets ?? ['human']);
     this.hooks = config.hooks;
+    const configuredSinks = config.tracing?.sinks ?? [];
+    const configuredStore = config.tracing?.store ?? configuredSinks.find(isTraceStore);
+    this.traceStore = config.tracing?.enabled === false
+      ? undefined
+      : configuredStore ?? new MemoryTraceStore();
+    this.traceSinks = this.traceStore
+      ? [this.traceStore, ...configuredSinks.filter((sink) => sink !== this.traceStore)]
+      : [];
   }
 
   run(opts: RunOptions): TurnHandle {
@@ -156,6 +180,13 @@ export class Runtime {
       throw new Error('RunOptions.wake and RunOptions.input are mutually exclusive');
     }
     const sessionId = opts.sessionId || randomUUID();
+    const recorder = this.shouldTrace(sessionId, opts.input)
+      ? new TraceRecorder({
+          sessionId,
+          input: opts.input,
+          onSpan: (span) => this.writeSpan(span),
+        })
+      : undefined;
     const bus = createEventBus();
     const abortController = new AbortController();
     this.activeTurnAborts.set(sessionId, abortController);
@@ -166,6 +197,8 @@ export class Runtime {
     const execute = async (): Promise<TurnResult> => {
       let runCtx!: import('../types/run-context.js').RunContext;
       const emit = (part: HarnessStreamPart) => {
+        recorder?.record(part);
+        if (part.type === 'done') this.flushTraceSinks();
         bus.emit(part);
         void this.hooks?.onStreamPart?.(runCtx, part);
       };
@@ -506,6 +539,20 @@ export class Runtime {
     return this.sessionStore.get(sessionId);
   }
 
+  async getTrace(traceId: string): Promise<AgentTrace | null> {
+    await this.settleTraceWrites();
+    return this.traceStore?.getTrace(traceId) ?? null;
+  }
+
+  async listTraces(sessionId: string): Promise<AgentTrace[]> {
+    await this.settleTraceWrites();
+    return this.traceStore?.listTraces(sessionId) ?? [];
+  }
+
+  getTraceStore(): TraceStore | undefined {
+    return this.traceStore;
+  }
+
   getSessionStore(): SessionStore {
     return this.sessionStore;
   }
@@ -542,6 +589,58 @@ export class Runtime {
       reason: opts?.reason,
       markedBy: opts?.markedBy ?? 'http',
     });
+  }
+
+  private shouldTrace(sessionId: string, input?: unknown): boolean {
+    if (this.traceSinks.length === 0) return false;
+    const sampling = this.config.tracing?.sampling;
+    if (typeof sampling === 'function') {
+      try { return sampling({ sessionId, input }); } catch { return false; }
+    }
+    if (sampling === undefined) return true;
+    return sampling > 0 && (sampling >= 1 || Math.random() < sampling);
+  }
+
+  private writeSpan(original: AgentSpan): void {
+    let span: AgentSpan | null = original;
+    try {
+      if (this.config.tracing?.redact) {
+        span = this.config.tracing.redact(structuredClone(original));
+      }
+    } catch {
+      return;
+    }
+    if (!span) return;
+    for (const sink of this.traceSinks) {
+      try {
+        const result = sink.write(span);
+        if (result instanceof Promise) {
+          const pending = result.catch(() => {}).finally(() => this.pendingTraceWrites.delete(pending));
+          this.pendingTraceWrites.add(pending);
+        }
+      } catch {
+        // Traces are derived observability and never participate in run correctness.
+      }
+    }
+  }
+
+  private async settleTraceWrites(): Promise<void> {
+    await Promise.allSettled([...this.pendingTraceWrites]);
+    await Promise.allSettled(this.traceSinks.map((sink) => sink.flush?.()));
+  }
+
+  private flushTraceSinks(): void {
+    for (const sink of this.traceSinks) {
+      try {
+        const result = sink.flush?.();
+        if (result) {
+          const pending = result.catch(() => {}).finally(() => this.pendingTraceWrites.delete(pending));
+          this.pendingTraceWrites.add(pending);
+        }
+      } catch {
+        // Export flushes are observational and never affect the run.
+      }
+    }
   }
 
   /**

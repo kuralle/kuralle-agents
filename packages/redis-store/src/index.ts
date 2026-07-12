@@ -1,5 +1,7 @@
 export { RedisSessionStore } from './RedisSessionStore.js';
 export type { RedisClientLike, RedisStoreOptions } from './RedisSessionStore.js';
+export { RedisTraceStore } from './RedisTraceStore.js';
+export type { RedisTraceStoreOptions } from './RedisTraceStore.js';
 export { RedisMemoryService } from './RedisMemoryService.js';
 export type { RedisMemoryStoreOptions } from './RedisMemoryService.js';
 export { RedisPersistentMemoryStore } from './RedisPersistentMemoryStore.js';

@@ -80,8 +80,70 @@ const verdict = await groundingJudge(judgeContext);
 console.log(verdict, trace.usedTool, trace.traceId);
 ```
 
-`runOnce` executes exactly one normal runtime turn and only observes its existing
-event stream; it does not persist traces or change session/run behavior.
+`runOnce` executes exactly one normal runtime turn and observes its existing event
+stream. Runtime tracing also captures normal `run()` calls; trace persistence is
+physically separate from the session store and durable effect journal.
+
+## Observability
+
+Tracing is enabled by default with an in-process `MemoryTraceStore`. Supply a native
+store for durable reads and add any number of export sinks independently of
+`sessionStore`:
+
+```ts
+import { createRuntime } from '@kuralle-agents/core';
+import { RedisTraceStore } from '@kuralle-agents/redis-store';
+
+const traceStore = new RedisTraceStore({
+  client,
+  traceTtlSeconds: 7 * 24 * 60 * 60,
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: {
+    store: traceStore,
+    sampling: 0.1,
+    sinks: [externalSink],
+    redact: (span) => ({
+      ...span,
+      attributes: { ...span.attributes, input: undefined, output: undefined },
+    }),
+  },
+});
+
+const latest = (await runtime.listTraces('session-42'))[0];
+const trace = latest ? await runtime.getTrace(latest.traceId) : null;
+```
+
+Sink failures are swallowed and never change the run result. Redaction is off by
+default for useful local debugging; use the hook above before persisting sensitive
+tool inputs or outputs. Set `tracing.enabled: false` to disable capture.
+
+### OTLP and Langfuse
+
+The built-in exporter uses HTTP/JSON over `fetch`, so it runs in Bun, Node.js, and
+Cloudflare Workers without a Node OpenTelemetry SDK:
+
+```ts
+import { langfuseSink, otelSink } from '@kuralle-agents/core';
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: {
+    store: traceStore,
+    sinks: [
+      otelSink({ endpoint: 'https://collector.example.com', headers: { Authorization: 'Bearer token' } }),
+      langfuseSink({ publicKey: env.LANGFUSE_PUBLIC_KEY, secretKey: env.LANGFUSE_SECRET_KEY }),
+    ],
+  },
+});
+```
+
+Endpoints may include `/v1/traces`; otherwise the sink appends it. For self-hosted
+Langfuse, pass its OTLP base URL as `endpoint`.
 
 ## Flows
 

@@ -102,6 +102,7 @@ The same agent config runs over voice. **Provider-native realtime** (speech-to-s
 | [`@kuralle-agents/tools`](https://www.npmjs.com/package/@kuralle-agents/tools) | CAG tools for grounded retrieval and answering |
 | [`@kuralle-agents/rag`](https://www.npmjs.com/package/@kuralle-agents/rag) | RAG primitives — knowledge sources, chunkers, retrieval |
 | [`@kuralle-agents/redis-store`](https://www.npmjs.com/package/@kuralle-agents/redis-store) | Redis-backed session persistence (`RedisSessionStore`) |
+| [`@kuralle-agents/trace-ui`](https://www.npmjs.com/package/@kuralle-agents/trace-ui) | Embeddable read-only trace waterfall and span detail viewer |
 | [`@kuralle-agents/postgres-store`](https://www.npmjs.com/package/@kuralle-agents/postgres-store) | Postgres-backed session persistence |
 | [`@kuralle-agents/realtime-audio`](https://www.npmjs.com/package/@kuralle-agents/realtime-audio) | Provider-native speech-to-speech (paused; kept intact) |
 

@@ -392,6 +392,22 @@ export type { Route } from './types/route.js';
 export type { TurnHandle } from './types/stream.js';
 export type { HarnessStreamPart } from './types/stream.js';
 export type { AgentSpan, AgentTrace, SpanKind } from './types/trace.js';
+export {
+  MemoryTraceStore,
+  isTraceStore,
+  type MemoryTraceStoreOptions,
+  type TraceListWindow,
+  type TraceSink,
+  type TraceStore,
+} from './tracing/index.js';
+export {
+  OtelTraceSink,
+  langfuseSink,
+  otelSink,
+  toOtlpPayload,
+  type LangfuseSinkOptions,
+  type OtelTraceSinkOptions,
+} from './tracing/index.js';
 export { TraceRecorder, runOnce, type TraceRecorderOptions } from './runtime/TraceRecorder.js';
 export { harnessToUIMessageStream } from './ai-sdk/uiMessageStream.js';
 export type {
@@ -420,6 +436,7 @@ export {
   Runtime,
   type HarnessConfig,
   type RunOptions,
+  type TracingConfig,
 } from './runtime/Runtime.js';
 export type { RuntimeLike } from './runtime/RuntimeLike.js';
 export {

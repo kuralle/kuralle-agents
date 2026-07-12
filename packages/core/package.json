@@ -48,6 +48,14 @@
       "types": "./dist/session/testing.d.ts",
       "default": "./dist/session/testing.js"
     },
+    "./tracing": {
+      "types": "./dist/tracing/index.d.ts",
+      "default": "./dist/tracing/index.js"
+    },
+    "./tracing/testing": {
+      "types": "./dist/tracing/testing.d.ts",
+      "default": "./dist/tracing/testing.js"
+    },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"

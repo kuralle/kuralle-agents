@@ -9,6 +9,7 @@ export interface AgentSpan {
   startTime: number;
   endTime?: number;
   status: 'ok' | 'error';
+  events?: Array<{ name: string; time: number; attributes?: Record<string, unknown> }>;
   attributes: {
     sessionId: string;
     activeFlow?: string;

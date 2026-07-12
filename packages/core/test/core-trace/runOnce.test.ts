@@ -27,7 +27,11 @@ describe('Runtime.runOnce', () => {
     });
 
     const agent = defineAgent({ id: 'support', instructions: 'Help the user.', model: stubModel });
-    const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });
+    const runtime = createRuntime({
+      agents: [agent],
+      defaultAgentId: agent.id,
+      tracing: { sinks: [{ write: () => { throw new Error('telemetry offline'); } }] },
+    });
 
     const trace = await runtime.runOnce({ sessionId: 'trace-text', input: 'Help me' });
 
@@ -36,6 +40,10 @@ describe('Runtime.runOnce', () => {
     expect(trace.toolCalls).toEqual([]);
     expect(trace.toolResults).toEqual([]);
     expect(trace.spans.some((span) => span.kind === 'turn' && !span.parentSpanId)).toBe(true);
+    const stored = await runtime.listTraces('trace-text');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.answer).toBe('Grounded answer.');
+    expect(await runtime.getTrace(stored[0]!.traceId)).toEqual(stored[0]!);
   });
 
   it('records a tool call, result, and nested tool span', async () => {

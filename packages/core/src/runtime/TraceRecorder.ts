@@ -6,6 +6,7 @@ import type { RunOptions } from './Runtime.js';
 export interface TraceRecorderOptions {
   sessionId?: string;
   input?: unknown;
+  onSpan?: (span: AgentSpan) => void;
 }
 
 export class TraceRecorder {
@@ -15,14 +16,17 @@ export class TraceRecorder {
   private currentNode?: AgentSpan;
   private readonly openTools: AgentSpan[] = [];
   private readonly toolCallIds = new Map<AgentSpan, string | undefined>();
+  private readonly emitted = new Set<string>();
+  private readonly onSpan?: (span: AgentSpan) => void;
 
   constructor(options: TraceRecorderOptions = {}) {
     const startedAt = Date.now();
     const sessionId = options.sessionId ?? '';
-    const traceId = sessionId || crypto.randomUUID();
+    const traceId = crypto.randomUUID().replaceAll('-', '');
+    this.onSpan = options.onSpan;
     this.root = {
       traceId,
-      spanId: crypto.randomUUID(),
+      spanId: newSpanId(),
       name: 'turn',
       kind: 'turn',
       startTime: startedAt,
@@ -119,6 +123,7 @@ export class TraceRecorder {
             });
           span.attributes.output = result;
           span.endTime = at;
+          this.emitSpan(span);
           break;
         }
         case 'handoff': {
@@ -130,6 +135,7 @@ export class TraceRecorder {
             attributes: { handoffTo: part.targetAgent },
           });
           span.endTime = at;
+          this.emitSpan(span);
           break;
         }
         case 'error': {
@@ -142,6 +148,7 @@ export class TraceRecorder {
         }
         case 'done':
           this.setSessionId(part.sessionId);
+          this.root.attributes.output = this.trace.answer;
           this.close(at);
           break;
       }
@@ -172,7 +179,7 @@ export class TraceRecorder {
   }): AgentSpan {
     const span: AgentSpan = {
       traceId: this.trace.traceId,
-      spanId: crypto.randomUUID(),
+      spanId: newSpanId(),
       parentSpanId: args.parentSpanId,
       name: args.name,
       kind: args.kind,
@@ -199,6 +206,7 @@ export class TraceRecorder {
     for (const span of this.openTools.splice(0)) {
       span.endTime ??= at;
       this.toolCallIds.delete(span);
+      this.emitSpan(span);
     }
   }
 
@@ -206,6 +214,7 @@ export class TraceRecorder {
     this.closeTools(at);
     if (this.currentNode) {
       this.currentNode.endTime ??= at;
+      this.emitSpan(this.currentNode);
       this.currentNode = undefined;
     }
   }
@@ -213,15 +222,14 @@ export class TraceRecorder {
   private closeFlow(at: number): void {
     if (this.currentFlow) {
       this.currentFlow.endTime ??= at;
+      this.emitSpan(this.currentFlow);
       this.currentFlow = undefined;
     }
   }
 
   private setSessionId(sessionId: string): void {
     this.trace.sessionId = sessionId;
-    this.trace.traceId = sessionId;
     for (const span of this.trace.spans) {
-      span.traceId = sessionId;
       span.attributes.sessionId = sessionId;
     }
   }
@@ -231,6 +239,17 @@ export class TraceRecorder {
     this.closeFlow(at);
     this.trace.endedAt ??= at;
     this.root.endTime ??= at;
+    this.emitSpan(this.root);
+  }
+
+  private emitSpan(span: AgentSpan): void {
+    if (this.emitted.has(span.spanId) || span.endTime === undefined) return;
+    this.emitted.add(span.spanId);
+    try {
+      this.onSpan?.(structuredClone(span));
+    } catch {
+      // A tracing callback is never allowed to change run behavior.
+    }
   }
 }
 
@@ -252,6 +271,10 @@ function activeFlowName(span: AgentSpan): string {
 
 function nodeName(span: AgentSpan): string {
   return span.attributes.nodeId ?? span.name.slice('node:'.length);
+}
+
+function newSpanId(): string {
+  return crypto.randomUUID().replaceAll('-', '').slice(0, 16);
 }
 
 function toJsonValue(value: unknown, seen = new WeakSet<object>()): unknown {

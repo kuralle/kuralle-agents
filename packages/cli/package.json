@@ -15,6 +15,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.0",
     "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/trace-ui": "workspace:*",
     "ai": "^6.0.0",
     "dotenv": "^16.4.0",
     "ink": "^7.1.0",

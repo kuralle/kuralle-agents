@@ -17,6 +17,7 @@ Three backend implementations — sessions, long-term memory, and vector search 
 **Key exports:**
 
 - **`RedisSessionStore`** — `SessionStore` implementation for durable session persistence.
+- **`RedisTraceStore`** — independent native trace persistence and read API.
 - **`RedisMemoryService`** — `MemoryService` implementation for cross-session long-term memory.
 - **`RedisPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`RedisVectorStore`** — `VectorStoreCore` implementation for vector similarity search.
@@ -37,6 +38,21 @@ const runtime = createRuntime({
   sessionStore,
 });
 ```
+
+## Trace store
+
+```ts
+import { RedisTraceStore } from '@kuralle-agents/redis-store';
+
+const traceStore = new RedisTraceStore({ client, traceTtlSeconds: 604800 });
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: { store: traceStore },
+});
+```
+
+Trace keys use a separate `trace`/`traces` namespace from sessions.
 
 ## Client adapters
 

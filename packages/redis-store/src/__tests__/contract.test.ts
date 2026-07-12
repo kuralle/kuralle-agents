@@ -15,9 +15,11 @@
 
 import { describe, expect, test } from 'bun:test';
 import { runSessionStoreContract } from '@kuralle-agents/core/session/testing';
+import { runTraceStoreContract } from '@kuralle-agents/core/tracing/testing';
 import type { ConversationAuditEntry } from '@kuralle-agents/core';
 
 import { RedisSessionStore } from '../RedisSessionStore.js';
+import { RedisTraceStore } from '../RedisTraceStore.js';
 
 function createMockRedisClient() {
   const kv = new Map<string, string>();
@@ -100,6 +102,10 @@ function createMockRedisClient() {
 
 runSessionStoreContract(() =>
   new RedisSessionStore({ client: createMockRedisClient() as never, enableCleanupIndex: true }),
+);
+
+runTraceStoreContract(() =>
+  new RedisTraceStore({ client: createMockRedisClient() as never }),
 );
 
 describe('RedisSessionStore audit entries', () => {

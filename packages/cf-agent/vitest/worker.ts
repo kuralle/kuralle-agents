@@ -3,10 +3,37 @@ import type { HarnessConfig, ScheduledJob } from '@kuralle-agents/core';
 import { SqlPersistentMemoryStore } from '../src/SqlPersistentMemoryStore.js';
 import { createSqlExecutor } from '../src/sqlExecutor.js';
 import { KuralleAgent } from '../src/KuralleAgent.js';
+import { SqlTraceStore } from '../src/SqlTraceStore.js';
+import { OtelTraceSink } from '@kuralle-agents/core';
 
 export class TestMemoryDO extends DurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === '/trace-roundtrip') {
+      const store = new SqlTraceStore(createSqlExecutor(this.ctx.storage.sql));
+      await store.putSpan({
+        traceId: 'workerd-trace', spanId: 'root', name: 'turn', kind: 'turn',
+        startTime: 10, endTime: 20, status: 'ok', attributes: { sessionId: 'workerd-session' },
+      });
+      return Response.json(await store.getTrace('workerd-trace'));
+    }
+    if (url.pathname === '/otel-smoke') {
+      let captured: unknown;
+      const sink = new OtelTraceSink({
+        endpoint: 'https://collector.invalid',
+        fetch: async (_input, init) => {
+          captured = JSON.parse(String(init?.body));
+          return new Response(null, { status: 200 });
+        },
+      });
+      sink.write({
+        traceId: '00112233445566778899aabbccddeeff', spanId: '0011223344556677',
+        name: 'turn', kind: 'turn', startTime: 10, endTime: 20,
+        status: 'ok', attributes: { sessionId: 'workerd-session' },
+      });
+      await sink.flush();
+      return Response.json(captured);
+    }
     if (url.pathname !== '/roundtrip') {
       return new Response('not found', { status: 404 });
     }

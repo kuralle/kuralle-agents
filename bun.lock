@@ -319,6 +319,7 @@
       "dependencies": {
         "@ai-sdk/openai": "^3.0.0",
         "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/trace-ui": "workspace:*",
         "ai": "^6.0.0",
         "dotenv": "^16.4.0",
         "ink": "^7.1.0",
@@ -689,6 +690,13 @@
         "@kuralle-agents/rag": "workspace:*",
         "ai": "^6.0.0",
         "zod": "^4.0.0",
+      },
+    },
+    "packages/trace-ui": {
+      "name": "@kuralle-agents/trace-ui",
+      "version": "0.12.0",
+      "dependencies": {
+        "@kuralle-agents/core": "workspace:*",
       },
     },
     "packages/upstash-store": {
@@ -1126,6 +1134,8 @@
     "@kuralle-agents/skills": ["@kuralle-agents/skills@workspace:packages/skills"],
 
     "@kuralle-agents/tools": ["@kuralle-agents/tools@workspace:packages/tools"],
+
+    "@kuralle-agents/trace-ui": ["@kuralle-agents/trace-ui@workspace:packages/trace-ui"],
 
     "@kuralle-agents/upstash-store": ["@kuralle-agents/upstash-store@workspace:packages/upstash-store"],
 

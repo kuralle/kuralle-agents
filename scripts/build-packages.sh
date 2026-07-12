@@ -16,7 +16,7 @@ tier() {
 
 tier voice-protocol rag http-client analytics-sdk eval widget ws-bench   # T0 leaves
 tier core                                                                                  # T1 hub
-tier cli fs skills commerce                                                                # T2 (need core)
+tier cli fs skills commerce trace-ui                                                       # T2 (need core)
 tier realtime-audio tools messaging                                                        # T2 (need core/rag/voice-protocol)
 tier rag-loaders lancedb-store postgres-store redis-store upstash-store \
      vectorize-store hono-server cf-agent messaging-meta engagement                        # T3 (need core/rag/realtime-audio/tools)

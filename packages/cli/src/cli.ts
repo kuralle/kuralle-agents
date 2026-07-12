@@ -5,11 +5,13 @@
  *   kuralle chat [--auto "msg1|msg2"] [--agent <path.ts>]
  *   kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
  *   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
+ *   kuralle trace <session> [--last] [--json] [--web] [--port N]
  */
 import { resolveBuildRuntime } from './agentLoader.js';
 import { runChat } from './chat.js';
 import { runSend } from './send.js';
 import { runSim } from './sim.js';
+import { runTrace } from './trace.js';
 
 const HELP = `kuralle — Kuralle agent CLI
 
@@ -17,6 +19,7 @@ Usage:
   kuralle chat [--auto "msg1|msg2"] [--agent <path.ts>]
   kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
+  kuralle trace <session> [--last] [--json] [--web] [--port N]
 
 Options:
   --agent <path.ts>   Load a custom agent module exporting buildRuntime(sessionId?, store?)
@@ -64,6 +67,9 @@ async function main(): Promise<void> {
       break;
     case 'sim':
       await runSim(subArgv, buildRuntime);
+      break;
+    case 'trace':
+      await runTrace(subArgv, buildRuntime);
       break;
     default:
       console.error(`Unknown command: ${sub}\n`);

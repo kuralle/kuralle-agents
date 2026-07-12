@@ -17,6 +17,7 @@ Three backend implementations — sessions, long-term memory, and pgvector simil
 **Key exports:**
 
 - **`PostgresSessionStore`** — `SessionStore` implementation for durable session persistence.
+- **`PostgresTraceStore`** — independent native trace persistence and read API.
 - **`PostgresMemoryService`** — `MemoryService` implementation for cross-session long-term memory.
 - **`PostgresPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`PgVectorStore`** — `VectorStoreCore` implementation using pgvector for similarity search.
@@ -37,6 +38,21 @@ const runtime = createRuntime({
   sessionStore,
 });
 ```
+
+## Trace store
+
+```ts
+import { PostgresTraceStore } from '@kuralle-agents/postgres-store';
+
+const traceStore = new PostgresTraceStore({ client: pool, retentionMs: 604_800_000 });
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: { store: traceStore },
+});
+```
+
+Spans live in the separate `kuralle_trace_spans` table. Set `tableName` to override it.
 
 ## Store options
 
