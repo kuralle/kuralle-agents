@@ -22,6 +22,7 @@ import type {
   HarnessStreamPart,
   RetrievalCacheAdapter,
 } from '../types/index.js';
+import { InMemoryRetrievalCache } from './InMemoryRetrievalCache.js';
 
 // Re-export so existing consumers that import from KnowledgeProvider still work
 export type { RetrievalCacheAdapter } from '../types/index.js';
@@ -67,7 +68,11 @@ export class KnowledgeProvider {
     this.config = options.config;
     this.retriever = options.config.retriever;
     this.embedder = options.config.embedder;
-    this.cacheFactory = options.cacheFactory;
+    // Default to a zero-config in-process cache when an embedder is available
+    // (the cache is keyed by query embedding). Apps can inject their own adapter.
+    this.cacheFactory =
+      options.cacheFactory ??
+      (this.embedder ? () => new InMemoryRetrievalCache(options.config.cache) : undefined);
   }
 
   /**

@@ -56,7 +56,7 @@ export function buildAutoRetrieveProvider(
     retrieve: async (ctx, scope) => {
       const query = scope?.query ?? latestUserMessage(ctx);
       const merged = scope?.knowledge ? { ...overrides, ...scope.knowledge } : overrides;
-      const cache = undefined;
+      const cache = ctx.retrievalCache;
       const { results, events } = await provider.retrieve(
         query || ' ',
         cache,

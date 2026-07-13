@@ -289,6 +289,11 @@ export class Runtime {
         fs: openingSurface.resolvedWorkspace?.fs,
       });
 
+      // Session retrieval cache (G6): created once per run, persists across
+      // in-session handoffs (runCtx survives the handoff branch). RAG-only —
+      // a knowledge-less runtime leaves it undefined.
+      runCtx.retrievalCache = knowledgeProvider?.createSessionCache();
+
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = openingSurface.globalTools;

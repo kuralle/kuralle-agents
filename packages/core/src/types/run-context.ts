@@ -10,7 +10,7 @@ import type { Limits } from './guardrails.js';
 import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
 import type { Instructions } from './agentConfig.js';
-import type { AgentKnowledgeOverrides, SourceRef } from './voice.js';
+import type { AgentKnowledgeOverrides, SourceRef, RetrievalCacheAdapter } from './voice.js';
 
 export interface GatherScope {
   query?: string;
@@ -82,6 +82,13 @@ export interface RunContext {
   turnInputConsumed?: boolean;
   /** Citations from the latest gather-phase retrieval on this turn. */
   lastRetrievalCitations?: SourceRef[];
+  /**
+   * Session retrieval cache (G6): created once per run by the KnowledgeProvider,
+   * persists across in-session agent handoffs (this RunContext survives the
+   * handoff branch). Keyed by query embedding; RAG-only, undefined without a
+   * configured knowledge provider + embedder.
+   */
+  retrievalCache?: RetrievalCacheAdapter;
   /** Agent base layer (ADR 0001), set when entering a flow. `baseInstructions`
    *  is composed as a prefix into every node turn's system prompt (persona /
    *  safety / grounding floor); `globalTools` are safe tools made model-visible
