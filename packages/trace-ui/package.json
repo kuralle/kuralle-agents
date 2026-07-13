@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/trace-ui",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Embeddable read-only trace viewer for Kuralle agents",
   "license": "Apache-2.0",
   "type": "module",
@@ -12,15 +12,22 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
-  "dependencies": { "@kuralle-agents/core": "workspace:*" },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*"
+  },
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "rm -rf dist"
   },
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
