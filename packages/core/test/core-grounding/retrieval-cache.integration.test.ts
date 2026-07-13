@@ -5,7 +5,6 @@ import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
 import { createInMemoryKnowledgeConfig } from '../../src/runtime/grounding/inMemoryKnowledge.js';
 import { stubModel } from '../core-durable/helpers.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
 import type { KnowledgeEmbedderAdapter } from '../../src/types/voice.js';
 
 afterEach(() => {
@@ -64,7 +63,10 @@ describe('Runtime session retrieval cache wiring (G6, run-open → consumer)', (
       input: 'How long is the return window?',
     });
 
-    const events: HarnessStreamPart[] = [];
+    // knowledge-* observability events piggyback the harness stream (emitted via
+    // the same cast KnowledgeProvider uses) and are not in HarnessStreamPart's
+    // public union — collect by the runtime `type` string.
+    const events: { type: string }[] = [];
     for await (const part of handle.events) {
       events.push(part);
     }
