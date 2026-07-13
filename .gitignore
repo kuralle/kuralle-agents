@@ -68,3 +68,7 @@ kh-*-implementation-notes.md
 *-implementation-notes.md
 .plandesk/token
 .plandesk/server.json
+.plandesk/workspace.db
+.plandesk/pd.sh
+# Factory transient machine state (see .agents/factory/factory.md)
+runs/
