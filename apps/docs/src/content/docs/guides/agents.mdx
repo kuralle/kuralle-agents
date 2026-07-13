@@ -61,12 +61,12 @@ defineAgent({
 
 A string, an `AgentPrompt`, or a function of session state, describing the agent's role and rules. Keep it focused on persona and constraints — if you're writing more than ~20 lines of procedure here, move it to a flow.
 
-### `tools` and `tools`
+### `tools`
 
-`tools` is the AI SDK `ToolSet` — what the model sees when deciding what to call. `tools` is the durable executor map. Pass the same tools to both using `buildToolSet`:
+`tools` is a single record of durable **effect tools** (`Record<string, AnyTool>` from `defineTool`). You author each tool once and pass the record — the runtime makes them model-visible (deriving the AI SDK `ToolSet` for you) *and* routes every model-issued call through the durable effect log for exactly-once replay:
 
 ```typescript
-import { defineTool, buildToolSet } from '@kuralle-agents/core';
+import { defineTool } from '@kuralle-agents/core';
 
 const tools = { echo, lookup };
 
@@ -74,8 +74,7 @@ defineAgent({
   id: 'support',
   instructions: '...',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet(tools),   // model-visible
-  tools: tools,           // durable executor
+  tools,   // durable, model-callable effect tools
 });
 ```
 

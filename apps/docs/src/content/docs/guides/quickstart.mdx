@@ -36,11 +36,11 @@ import firstAgentExample from '../../../examples/quickstart/first-agent.ts?raw';
    });
    ```
 
-4. Define an agent and wire the tool. `tools: buildToolSet({ echo })` makes it model-visible; `tools: { echo }` wires the durable executor.
+4. Define an agent and wire the tool. Pass your effect tools as a single `tools` record — the runtime makes them model-visible *and* runs each call through the durable effect log.
 
    ```typescript
    import { openai } from '@ai-sdk/openai';
-   import { defineAgent, buildToolSet } from '@kuralle-agents/core';
+   import { defineAgent } from '@kuralle-agents/core';
 
    const agent = defineAgent({
      id: 'support',

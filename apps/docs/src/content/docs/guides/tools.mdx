@@ -30,14 +30,10 @@ const echo = defineTool({
 
 ## Wiring a tool to an agent
 
-There are two wiring steps — both are required:
-
-**`tools: buildToolSet(...)`** — makes the tool model-visible. The model sees the schema and can decide to call it.
-
-**`tools: { ... }`** — registers the executors on the agent so the runtime can resolve them by name (for example when a flow node calls a tool). Tool calls run through the runtime's effect log, which gives exactly-once replay on retry.
+Pass your effect tools as a single `tools` record on the agent. The runtime makes them model-visible (deriving the AI SDK `ToolSet` for you) *and* registers the executors so calls — whether the model issues them or a flow node calls them by name — route through the effect log for exactly-once replay.
 
 ```typescript
-import { defineAgent, buildToolSet } from '@kuralle-agents/core';
+import { defineAgent } from '@kuralle-agents/core';
 
 const tools = { echo };
 
@@ -45,33 +41,29 @@ const agent = defineAgent({
   id: 'support',
   instructions: 'Use the echo tool when asked.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet(tools),   // model-visible
-  tools: tools,           // durable executor
+  tools,
 });
 ```
 
 <Aside type="note">
-  If you only pass `tools`, the model won't know the tool exists. The model-facing entry is schema-only, so execution always runs through the runtime's effect log — never the AI SDK — and replays on retry. Passing both is the safe default: `tools` for visibility, `tools` so the executor is also registered for calls made by name (such as from a flow node).
+  You author each tool once with `defineTool` and pass it in `tools` — no separate model-visible map. The model-facing entry is derived internally and is schema-only, so execution always runs through the runtime's effect log — never the AI SDK directly — and replays on retry.
 </Aside>
 
 ## What `buildToolSet` does
 
-`defineTool` returns a Kuralle **effect tool** — `{ name, description, input, execute }`, where `input` is a Standard Schema and `execute` is your durable handler. The model, however, speaks the [Vercel AI SDK](https://sdk.vercel.ai/) tool format. `buildToolSet` is the bridge between the two:
+`defineTool` returns a Kuralle **effect tool** — `{ name, description, input, execute }`, where `input` is a Standard Schema and `execute` is your durable handler. The model, however, speaks the [Vercel AI SDK](https://sdk.vercel.ai/) tool format, so the runtime derives an AI SDK `ToolSet` from your `tools` record automatically — you don't call anything to make a tool model-visible.
+
+`buildToolSet` is that bridge, exported for the cases where you need the `ToolSet` yourself — most commonly a **flow node's** `tools` field (which takes an AI SDK `ToolSet`), or handing tools directly to a realtime/voice model:
 
 ```typescript
+import { buildToolSet } from '@kuralle-agents/core';
+
 buildToolSet({ echo, lookup_order })
 // → an AI SDK ToolSet: each entry has the tool's name, description, and
 //   inputSchema — the shape the model needs to know a tool exists and how to call it.
 ```
 
-It copies each tool's `name`, `description`, and `input` schema into an AI SDK `ToolSet`. It deliberately does **not** copy `execute` into the model-facing tool — the AI SDK entry is schema-only. The actual execution runs through the runtime, which routes every model-issued call through the durable effect log for exactly-once replay. (`buildToolSet` keeps each tool's executor recoverable, so a model-issued call replays even before you register it in `tools`.)
-
-That's why the two fields are complementary rather than redundant:
-
-- **`tools: buildToolSet(tools)`** — *what the model can see and decide to call* (name + description + input schema).
-- **`tools: tools`** — *the executor registry* the runtime resolves by name (e.g. from flow nodes), and the fallback for tools not built with `buildToolSet`.
-
-You author each tool once with `defineTool`; `buildToolSet` derives the model-facing view from it.
+It copies each tool's `name`, `description`, and `input` schema into the `ToolSet`. It deliberately does **not** copy `execute` — the AI SDK entry is schema-only; the actual execution runs through the runtime, which routes every model-issued call through the durable effect log for exactly-once replay.
 
 ## Durable execution
 
