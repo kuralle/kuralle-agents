@@ -312,7 +312,7 @@
     },
     "packages/cli": {
       "name": "@kuralle-agents/cli",
-      "version": "0.13.0",
+      "version": "0.13.1",
       "bin": {
         "kuralle": "./dist/cli.js",
       },
