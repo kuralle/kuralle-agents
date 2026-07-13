@@ -2,11 +2,23 @@ import type { AgentSpan, AgentTrace } from '@kuralle-agents/core';
 import { renderTraceViewerDocument } from '@kuralle-agents/trace-ui';
 import { createServer, type Server } from 'node:http';
 import type { BuildRuntime } from './agentRuntime.js';
+import { fileSessionStore } from './fileStore.js';
+import { fileTraceStore } from './fileTraceStore.js';
 
 export async function runTrace(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
-  const sessionId = argv.find((arg) => !arg.startsWith('--'));
-  if (!sessionId) throw new Error('Usage: kuralle trace <session> [--last] [--json]');
-  const { runtime } = buildRuntime(sessionId);
+  // --store <file> points at the same file `kuralle chat --store` / `kuralle send`
+  // persist to; traces live in the `<file>.traces.json` sidecar (chat's convention).
+  // Without wiring these, buildRuntime falls back to an in-memory store that is
+  // always empty in a fresh process, so no persisted trace is ever found.
+  const storeIdx = argv.indexOf('--store');
+  const storePath = storeIdx >= 0 ? argv[storeIdx + 1] : undefined;
+  const sessionId = argv.find((arg, i) => !arg.startsWith('--') && i !== storeIdx + 1);
+  if (!sessionId) throw new Error('Usage: kuralle trace <session> [--last] [--json] [--store <file>]');
+  const sessionStore = storePath ? fileSessionStore(storePath) : undefined;
+  const traceStore = storePath
+    ? fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json')
+    : undefined;
+  const { runtime } = buildRuntime(sessionId, sessionStore, traceStore);
   if (argv.includes('--web')) {
     const port = numberFlag(argv, '--port') ?? 4319;
     await startTraceWebServer(runtime, sessionId, port);

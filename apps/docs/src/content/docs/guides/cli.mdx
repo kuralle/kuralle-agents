@@ -17,7 +17,7 @@ npm install -g @kuralle-agents/cli
 kuralle chat [--trace] [--store <file>] [--session <id>] [--auto "msg1|msg2"] [--agent <path.ts>]
 kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
 kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
-kuralle trace <session> [--last] [--json] [--web] [--port N]
+kuralle trace <session> [--last] [--json] [--web] [--port N] [--store <file>]
 ```
 
 Without `--agent`, every command runs against a bundled cafe-concierge demo agent (order flow, a global tool, a billing handoff) — enough to try each command with zero setup, given an `OPENAI_API_KEY`.
@@ -96,12 +96,13 @@ Prints the full transcript, how the conversation ended, which tools were called,
 
 ## `trace` — inspect recorded traces
 
-Reads whatever `TraceStore` the target runtime is configured with (`MemoryTraceStore` by default — see the [Observability guide](/guides/observability)):
+Reads whatever `TraceStore` the target runtime is configured with (`MemoryTraceStore` by default — see the [Observability guide](/guides/observability)). Pass **`--store <file>`** to read the file-backed traces that `kuralle chat --store` / `send` wrote (the traces live in the `<file>.traces.json` sidecar), so you can inspect a session recorded by an earlier, separate CLI invocation:
 
 ```bash
 kuralle trace session-42            # terminal waterfall for every trace in the session
 kuralle trace session-42 --last     # just the most recent trace
 kuralle trace session-42 --json     # native AgentTrace[] JSON — for agents and CI
+kuralle trace session-42 --store runs/tui-sessions.json --last   # a persisted session from `chat`/`send`
 kuralle trace session-42 --web --port 4319   # loopback dev server + embedded trace-ui
 ```
 
