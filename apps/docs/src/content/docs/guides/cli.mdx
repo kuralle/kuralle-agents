@@ -5,6 +5,7 @@ description: kuralle chat/send/sim/trace — interactive TUI, adaptive single-tu
 
 import { Aside, Code } from '@astrojs/starlight/components';
 import customAgentExample from '../../../examples/cli/custom-agent.ts?raw';
+import customAgentWithToolExample from '../../../examples/cli/custom-agent-with-tool.ts?raw';
 
 `@kuralle-agents/cli` is the `kuralle` binary — an interactive chat TUI, an adaptive single-turn driver, a persona-driven simulator, and the trace inspector, all pointed at either a bundled demo agent or your own runtime.
 
@@ -24,9 +25,13 @@ Without `--agent`, every command runs against a bundled cafe-concierge demo agen
 
 ## The `--agent` contract
 
-`--agent <path.ts>` points at a module the CLI loads with a dynamic `import()` (compiled JS or a runtime that supports TypeScript directly, e.g. Bun). The export is resolved **by shape** — you do not hand-wire `readState`, `label`, or `sessionId`; the CLI assembles those.
+`--agent <path.ts>` points at a module the CLI loads with a dynamic `import()`. The export is resolved **by shape** — you do not hand-wire `readState`, `label`, or `sessionId`; the CLI assembles those.
 
 Resolution order: `default` export, then named `runtime`, `agent`, `buildRuntime` / `build`. First matching shape wins.
+
+<Aside type="caution" title="Running a `.ts` agent">
+  Plain `node` cannot `import()` a TypeScript file. Run the CLI with a TypeScript-capable runtime — **`bun kuralle chat --agent ./agent.ts`** or `tsx` — or point `--agent` at compiled `.js`. The agent module must also be able to resolve its own imports (`@kuralle-agents/core`, `zod`, `@ai-sdk/openai`, …), so keep it inside a project where those are installed rather than a bare scratch file.
+</Aside>
 
 ### 1. Bare agent (recommended)
 
@@ -35,6 +40,15 @@ Export a `defineAgent` config. The CLI calls `createRuntime`, picks the dev sess
 <Code code={customAgentExample} lang="typescript" title="custom-agent.ts" />
 
 If the agent has no `model`, pass `--model <id>` or set `OPENAI_MODEL` (with `OPENAI_API_KEY`).
+
+Give the agent `tools` (a record of `defineTool` effect tools) and the model can call them — each call shows up in the `--trace` panel as a `⚙ tool` span with its result and per-turn token counts:
+
+<Code code={customAgentWithToolExample} lang="typescript" title="agent-with-tool.ts" />
+
+```bash
+bun kuralle chat --agent ./agent-with-tool.ts --trace
+# then ask: "What's the weather in Paris?" → fires get_weather
+```
 
 ### 2. Runtime
 
