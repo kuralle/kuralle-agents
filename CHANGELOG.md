@@ -168,6 +168,14 @@ Flow `action` nodes were never affected — `runFlow` already rethrew both `Susp
 
 The fix keeps the property the parallel path depends on. `executeModelToolCall` still never rejects: a signal comes back as a *value* on the outcome, and the dispatcher rethrows it only once the whole batch has settled. Failing fast would abandon in-flight siblings — you cannot cancel a running promise, so the effect would happen anyway with its journal step left `running` and re-executed on resume.
 
+**A denied approval crashed the turn.** `ToolApprovalDeniedError` was thrown by `ctx.tool` and caught by nobody: it is not in `isDegradableRuntimeError`, so `Runtime.run` rethrew it and the rejection escaped the runtime entirely. A supervisor clicking "deny" ended the turn with an exception — the model was told nothing, the user was told nothing.
+
+A denial is now a **result** on the model path: `{ __denied: true, toolName, deniedBy, message }`, so the agent can tell the user the request was declined. No client `error` part, because nothing malfunctioned, and `__denied` rather than `error: true` keeps it distinguishable from a genuine failure.
+
+Flow `action` nodes are unchanged — `ctx.tool` still throws there, because the node's author chose to call the tool and can catch it or branch on `ctx.approve()` instead. Both paths still refuse to be degraded into "something went wrong on my side"; that message is for malfunctions, and a human saying no is not one.
+
+This corrects a classification made earlier in this same release. `isControlFlowSignal` originally covered both `SuspendError` and `ToolApprovalDeniedError`, mirroring a grouping in `runFlow`. But `runFlow` grouped them to keep both out of the degrade path — not because both defer the run. A suspend defers a decision; a denial resolves one. They are now separate predicates, `isControlFlowSignal` and `isApprovalDenial`, with the shared reason stated at the one place that needs both.
+
 **`timeoutMs` abandoned the tool instead of cancelling it.** The old implementation raced a `setTimeout` against the tool's promise; on timeout the runtime stopped waiting and the tool kept running to completion. The timeout is now composed into the `AbortSignal` handed to the tool, so a cooperative tool actually stops. The race remains, to bound tools that ignore the signal — neither mechanism suffices alone. `interruptible: false` still opts out of caller-driven barge-in, and still does not opt out of `timeoutMs`.
 
 **Added `limits.maxToolConcurrency`.** A parallel batch ran unbounded, letting the model decide how many sockets, subprocesses, or rate-limited calls opened at once. Omitted, behaviour is unchanged.

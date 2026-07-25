@@ -23,7 +23,7 @@ import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
-import { isControlFlowSignal } from '../runtime/controlFlowSignal.js';
+import { isApprovalDenial, isControlFlowSignal } from '../runtime/controlFlowSignal.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
 import { appendConversationAudit } from '../audit/record.js';
 import {
@@ -347,7 +347,10 @@ export async function runFlow(
     try {
       transition = await dispatchNode(node, run, driver, ctx, agent, flow);
     } catch (error) {
-      if (isControlFlowSignal(error)) {
+      // Neither is a malfunction, so neither may reach degradeFlowError and be reported to
+      // the user as "something went wrong on my side". A suspend resumes later; a denial is
+      // the action node author's to handle, since they chose to call the tool.
+      if (isControlFlowSignal(error) || isApprovalDenial(error)) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);

@@ -97,6 +97,28 @@ The same holds for a tool declared `needsApproval: true`, whether the call comes
 
 A suspend travels as an exception, but it is **not** a tool failure. It is never reported to the model as one, never shown to the user as an error, and never journaled as an error. When one call in a parallel batch suspends, the runtime lets the rest of the batch settle first and only then propagates — an abandoned sibling would leave its step `running` and re-execute on resume, since an in-flight promise cannot be cancelled.
 
+### When approval is denied
+
+A denial is the opposite of a suspend: a suspend defers the decision, a denial resolves it. The tool never runs either way, but what happens next depends on who asked for the call.
+
+**The model asked.** There is no author code to catch anything, so the model receives a result and the turn continues:
+
+```json
+{ "__denied": true, "toolName": "issue_refund", "deniedBy": "supervisor",
+  "message": "The \"issue_refund\" action was not approved by supervisor. Tell the user it was declined; do not retry it." }
+```
+
+The agent can then tell the user the request was declined. Nothing is emitted as an error, because nothing malfunctioned. `__denied` rather than `error: true` keeps it distinguishable from a genuine tool failure.
+
+**A flow `action` node asked.** `ctx.tool` throws `ToolApprovalDeniedError` and it propagates out of the flow, because the node's author chose to call that tool and is in a position to handle it. Catch it, or avoid it entirely by branching on `ctx.approve()` yourself:
+
+```typescript
+const decision = await ctx.approve({ title: 'Approve refund' });
+if (!decision.approved) return { kind: 'handoff', to: 'human', reason: 'declined' };
+```
+
+Either way a denial is never degraded into "something went wrong on my side" — that message is for malfunctions, and a human saying no is not one.
+
 ## Example: a refund flow with an approval gate
 
 The `action` node collects an amount, pauses for a supervisor decision, and runs the refund tool exactly once on approval.

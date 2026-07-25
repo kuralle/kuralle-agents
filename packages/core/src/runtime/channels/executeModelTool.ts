@@ -3,10 +3,10 @@ import type { TurnControl } from '../../types/channel.js';
 import type { RunContext } from '../../types/run-context.js';
 import type { AnyTool } from '../../types/effectTool.js';
 import { classifyControl } from '../../flow/classifyControl.js';
-import { toolErrorResult } from '../../tools/controlResults.js';
+import { toolDeniedResult, toolErrorResult } from '../../tools/controlResults.js';
 import { idempotencyKey, logicalRunId } from '../durable/idempotency.js';
 import { findStepByKey } from '../durable/replay.js';
-import { isControlFlowSignal } from '../controlFlowSignal.js';
+import { isApprovalDenial, isControlFlowSignal } from '../controlFlowSignal.js';
 
 export interface ModelToolCall {
   toolName: string;
@@ -53,10 +53,15 @@ export async function executeModelToolCall(
     return { result: toolResult, control: classifyControl(toolResult), failed: false };
   } catch (error) {
     if (isControlFlowSignal(error)) {
-      // A suspend or an approval denial. Not a failure, so no client-facing error and no
-      // tool result: returning it as a value keeps this function's never-rejects contract
-      // (which `Promise.all` below depends on) while letting the dispatcher rethrow it.
+      // A suspend. Not a failure, so no client-facing error and no tool result: returning it
+      // as a value keeps this function's never-rejects contract (which `Promise.all` below
+      // depends on) while letting the dispatcher rethrow it once the batch has settled.
       return { result: undefined, failed: true, signal: error };
+    }
+    if (isApprovalDenial(error)) {
+      // A human declined. The model asked for this call, so the model is told — otherwise
+      // the turn dies and the user never hears why. No client error part: nothing broke.
+      return { result: toolDeniedResult(error.toolName, error.by), failed: true };
     }
     const message = error instanceof Error ? error.message : String(error);
     ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });

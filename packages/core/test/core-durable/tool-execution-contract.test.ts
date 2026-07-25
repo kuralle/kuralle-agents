@@ -94,6 +94,60 @@ describe('control-flow signals are not tool failures', () => {
     expect(results).toEqual([{ refunded: true }]);
   });
 
+  it('tells the model when a human denies a tool it asked to run', async () => {
+    const harness = await setupDurableHarness('deny-sess', 'deny-run');
+    let refunds = 0;
+    const tools = {
+      issue_refund: {
+        name: 'issue_refund',
+        description: 'Issue a refund',
+        needsApproval: true,
+        execute: async () => {
+          refunds += 1;
+          return { refunded: true };
+        },
+      },
+    };
+    const call = { toolName: 'issue_refund', input: { id: 'a' }, toolCallId: 'c1' };
+
+    const ctx = await buildCtx({ ...harness, toolExecutor: new CoreToolExecutor({ tools }) });
+    await expect(
+      dispatchModelToolCalls(ctx, [call], tools, () => {}),
+    ).rejects.toBeInstanceOf(SuspendError);
+
+    const resumed = await reloadRunState(harness.runStore, 'deny-run');
+    await recordSignalDelivery(harness.runStore, resumed, {
+      signalId: 'sig-deny',
+      name: APPROVAL_SIGNAL,
+      payload: { approved: false, by: 'supervisor' },
+    });
+
+    const emitted: StreamPart[] = [];
+    const delivered: unknown[] = [];
+    const resumedCtx = await buildCtx({
+      ...harness,
+      runState: resumed,
+      toolExecutor: new CoreToolExecutor({ tools }),
+      emit: (part) => emitted.push(part),
+    });
+
+    // A denial is a decision, not a suspend and not a malfunction. The turn must survive it:
+    // the model asked for this call, so the model is told, and the agent can tell the user.
+    await dispatchModelToolCalls(resumedCtx, [call], tools, ({ outcome }) =>
+      delivered.push(outcome.result),
+    );
+
+    expect(refunds).toBe(0);
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]).toMatchObject({
+      __denied: true,
+      toolName: 'issue_refund',
+      deniedBy: 'supervisor',
+    });
+    // Nothing broke, so nothing may be reported to the user as an error.
+    expect(emitted.filter((p) => p.type === 'error')).toEqual([]);
+  });
+
   it('still finalizes sibling effects when one call in a parallel batch suspends', async () => {
     const harness = await setupDurableHarness('par-sess', 'par-run');
     let siblingRuns = 0;
