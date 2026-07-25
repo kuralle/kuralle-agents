@@ -8,6 +8,7 @@ import { isTerminalOutcome, markSessionOutcome } from './outcomeMarking.js';
 import type { ConversationOutcome } from '../outcomes/types.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { syncPendingUserInput } from './channels/inputBuffer.js';
+import { runHookSafely } from './runHookSafely.js';
 
 export interface CloseRunOptions {
   session: Session;
@@ -46,10 +47,10 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
   }
 
   if (outcomeRecord && isTerminalOutcome(outcomeRecord.outcome)) {
-    await hooks?.onConversationEnd?.({
+    await runHookSafely('onConversationEnd', () => hooks?.onConversationEnd?.({
       session,
       outcome: outcomeRecord,
-    });
+    }));
   }
 
   await mutateSessionWithRetry(sessionStore, session.id, (latest) => {
