@@ -29,7 +29,7 @@ security and persistence order implicit. Hooks are not a subset of either becaus
 lifecycle events rather than decide content.
 
 The source audit also found two hook types. `Runtime` and `HarnessConfig` use the five-method
-`types/hooks.ts#Hooks`. The 19-method `types/runtime.ts#HarnessHooks` is used by the older
+`types/hooks.ts#Hooks`. The 21-method `types/runtime.ts#HarnessHooks` is used by the older
 `createFoundation`/`HookRunner` surface; most of those methods are not invoked by `Runtime`.
 RFC-0001 must not present that legacy interface as runtime turn composition.
 
@@ -74,7 +74,7 @@ execution user-orderable requires a separate runtime RFC.
   confidence, audit, and escalation authority.
 - Project hooks cannot be mistaken for per-agent middleware.
 - The legacy `HarnessHooks` surface is explicitly outside file-based turn composition; this ADR does
-  not claim its 19 methods are wired into `Runtime`.
+  not claim its 21 methods are wired into `Runtime`.
 
 ## Rejected
 

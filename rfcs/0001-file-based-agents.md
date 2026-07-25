@@ -181,7 +181,7 @@ guardrails.input → refine → model/tool execution → guardrails.output → v
 
 Project `hooks.ts` remains separate because it configures the operational `HarnessConfig.hooks`
 surface around the whole run, not an individual agent. The build targets the actual five-method
-`Hooks` contract used by `Runtime`; it does not expose the legacy 19-method `HarnessHooks` facade.
+`Hooks` contract used by `Runtime`; it does not expose the legacy 21-method `HarnessHooks` facade.
 Kuralle deliberately does not copy DeepAgents' middleware-everything model: arbitrary ordering
 would turn durable redaction and output-release boundaries into an implicit user convention.
 
