@@ -5,6 +5,7 @@ import type { RunOptions } from './Runtime.js';
 
 export interface TraceRecorderOptions {
   sessionId?: string;
+  agentId?: string;
   input?: unknown;
   onSpan?: (span: AgentSpan) => void;
 }
@@ -18,12 +19,14 @@ export class TraceRecorder {
   private readonly toolCallIds = new Map<AgentSpan, string | undefined>();
   private readonly emitted = new Set<string>();
   private readonly onSpan?: (span: AgentSpan) => void;
+  private currentAgentId?: string;
 
   constructor(options: TraceRecorderOptions = {}) {
     const startedAt = Date.now();
     const sessionId = options.sessionId ?? '';
     const traceId = crypto.randomUUID().replaceAll('-', '');
     this.onSpan = options.onSpan;
+    this.currentAgentId = options.agentId;
     this.root = {
       traceId,
       spanId: newSpanId(),
@@ -33,6 +36,7 @@ export class TraceRecorder {
       status: 'ok',
       attributes: {
         sessionId,
+        ...(options.agentId ? { agentId: options.agentId } : {}),
         ...(options.input !== undefined ? { input: toJsonValue(options.input) } : {}),
       },
     };
@@ -46,6 +50,11 @@ export class TraceRecorder {
       toolResults: [],
       startedAt,
     };
+  }
+
+  setInitiatingAgent(agentId: string): void {
+    this.currentAgentId = agentId;
+    this.root.attributes.agentId = agentId;
   }
 
   record(part: StreamPart): void {
@@ -130,15 +139,20 @@ export class TraceRecorder {
           break;
         }
         case 'handoff': {
+          const handoffFrom = this.currentAgentId;
           const span = this.openSpan({
             name: `handoff:${part.payload.targetAgent}`,
             kind: 'handoff',
             parentSpanId: this.root.spanId,
             at,
-            attributes: { handoffTo: part.payload.targetAgent },
+            attributes: {
+              ...(handoffFrom ? { handoffFrom } : {}),
+              handoffTo: part.payload.targetAgent,
+            },
           });
           span.endTime = at;
           this.emitSpan(span);
+          this.currentAgentId = part.payload.targetAgent;
           break;
         }
         case 'error': {
@@ -199,7 +213,11 @@ export class TraceRecorder {
       kind: args.kind,
       startTime: args.at,
       status: 'ok',
-      attributes: { sessionId: this.trace.sessionId, ...args.attributes },
+      attributes: {
+        sessionId: this.trace.sessionId,
+        ...(this.currentAgentId ? { agentId: this.currentAgentId } : {}),
+        ...args.attributes,
+      },
     };
     this.trace.spans.push(span);
     return span;
@@ -267,12 +285,40 @@ export class TraceRecorder {
   }
 }
 
+/**
+ * What the standalone {@link runOnce} needs from a runtime. `run` is required;
+ * the optional accessors let it resolve the same agent `Runtime.runOnce` would.
+ *
+ * It must NOT call `runtime.runOnce` — that method delegates here, so delegating
+ * back is infinite recursion.
+ */
+export interface RunOnceRuntime {
+  run(opts: RunOptions): TurnHandle;
+  getSessionStore?(): { get(id: string): Promise<{ activeAgentId?: string; currentAgent?: string } | null> };
+  getDefaultAgentId?(): string;
+}
+
 export async function runOnce(
-  runtime: { run(opts: RunOptions): TurnHandle },
+  runtime: RunOnceRuntime,
   opts: RunOptions,
 ): Promise<AgentTrace> {
+  // Resolve attribution the same way Runtime.runOnce does: caller's agentId
+  // first, then persisted state, then the runtime default. Without this the
+  // standalone helper produced spans with no `agentId` and handoff spans with
+  // no `handoffFrom` — the exact feature it is documented to provide.
+  let agentId = opts.agentId;
+  if (!agentId && opts.sessionId && runtime.getSessionStore) {
+    const existing = await runtime.getSessionStore().get(opts.sessionId);
+    agentId = existing?.activeAgentId ?? existing?.currentAgent;
+  }
+  agentId ??= runtime.getDefaultAgentId?.();
+
   const handle = runtime.run(opts);
-  const recorder = new TraceRecorder({ sessionId: opts.sessionId, input: opts.input });
+  const recorder = new TraceRecorder({
+    sessionId: opts.sessionId,
+    agentId,
+    input: opts.input,
+  });
   for await (const part of handle.events) {
     recorder.record(part);
   }

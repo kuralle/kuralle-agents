@@ -1,12 +1,168 @@
 # Changelog
 
-## Unreleased — Stream envelope and explicit audience (BREAKING)
+## Unreleased — 1.0.0: one trace surface and one stream envelope (BREAKING)
+
+This major combines the already-staged stream-envelope break with removal of lifecycle APIs that were publicly exported but not wired to the runtime. The fixed Changesets group moves the package family from 0.13.x to 1.0.0 together.
+
+### Removed lifecycle surface
+
+- Removed `HarnessHooks`; `HookRunner` and `createHookRunner`; `loggingHooks` and `createLoggingHooks`; `createMetricsHooks` and `InMemoryMetrics`; and `createObservabilityHooks` and `ObservabilityConfig`.
+- Removed the hook-helper exports `initTracing`, `startSpan`, `endSpan`, `addSpanEvent`, `getCurrentSpan`, `createTracingHooks`, `initMetrics`, `getMetrics`, `createObservabilityMetrics`, `createTelemetryHooks`, and `captureSessionTelemetry`. The independent `TracingService`, `MetricsService`, and `InMemoryMetricsService` services remain.
+- Removed `foundation/ConversationEventLog.ts` (`ConversationEventLog` and `ConversationEvent`), `foundation/ConversationState.ts` (`ConversationState`), `foundation/createFoundation.ts` (`createFoundation`, `Foundation`, and `FoundationConfig`), `foundation/DefaultConversationEventLog.ts` (`DefaultConversationEventLog` and `DefaultConversationEventLogConfig`), and `foundation/DefaultConversationState.ts` (`DefaultConversationState` and `DefaultConversationStateConfig`). `AgentDefinition`, `AgentStateController`, `DefaultAgentStateController`, and `ToolExecutor` remain. **`DefaultToolExecutor`, `DefaultToolExecutorConfig` and `ToolTimeoutError` (the `foundation/` copy) are also removed** — `createFoundation` was their only caller, leaving them orphaned. The public `ToolTimeoutError` is unaffected: it resolves from `tools/effect`.
+- Removed the orphaned `TurnEndHookResult`, `StepResult`, `TurnSummary`, `BeforeModelCallData`, and `BeforeModelCallResult` types.
+
+These APIs could never provide the lifecycle telemetry they promised. A live runtime probe reached only 5 of the 21 `HarnessHooks` method names; 16 were inert. Static tracing found `HookRunner` constructed only by `createFoundation`, which had zero callers, and the live `Runtime` never constructed or referenced it. Keeping the types would preserve silent failure rather than working compatibility.
+
+### Migration: `HarnessHooks` to `TraceSink`
+
+| Removed hook | Trace replacement |
+|---|---|
+| `onStart`, `onEnd`, `onTurnEnd` | Completed `turn` span |
+| `onToolCall`, `onToolResult`, `onToolError` | `tool` span with input, output, status, and error attributes |
+| `onAgentStart`, `onAgentEnd` | `agentId` on spans |
+| `onHandoff` | `handoff` span with `handoffFrom` and `handoffTo` |
+| `onStepStart`, `onStepEnd` | `flow` and `node` spans |
+| `onTokensUpdate` | `tokensIn`, `tokensOut`, and `contextTokens` on the turn span |
+
+Before:
+
+```ts
+import { createRuntime, type HarnessHooks } from '@kuralle-agents/core';
+
+const hooks: HarnessHooks = {
+  async onToolResult(context, call) {
+    await analytics.track({
+      sessionId: context.session.id,
+      agentId: context.agentId,
+      workspaceId: 'my-workspace',
+      type: 'tool.completed',
+      data: { toolName: call.toolName, durationMs: call.durationMs },
+    });
+  },
+};
+
+const runtime = createRuntime({ agents, defaultAgentId: 'support', hooks });
+```
+
+After (the same sink used by `docs/skills/kuralle-usage/references/analytics.md`):
+
+```ts
+import {
+  createRuntime,
+  OtelTraceSink,
+  type AgentSpan,
+  type TraceSink,
+} from '@kuralle-agents/core';
+import {
+  createAnalyticsClient,
+  type AnalyticsClient,
+  type AnalyticsEventType,
+} from '@kuralle-agents/analytics-sdk';
+
+const analytics = createAnalyticsClient({
+  apiKey: process.env.ANALYTICS_API_KEY!,
+  workspaceId: 'my-workspace',
+});
+
+class AnalyticsTraceSink implements TraceSink {
+  constructor(
+    private readonly client: AnalyticsClient,
+    private readonly workspaceId: string,
+  ) {}
+
+  async write(span: AgentSpan): Promise<void> {
+    const { sessionId, agentId = 'unknown' } = span.attributes;
+    await this.client.track({
+      sessionId,
+      conversationId: sessionId,
+      agentId,
+      workspaceId: this.workspaceId,
+      type: analyticsEventType(span),
+      data: {
+        traceId: span.traceId,
+        spanId: span.spanId,
+        parentSpanId: span.parentSpanId,
+        kind: span.kind,
+        name: span.name,
+        status: span.status,
+        startTime: new Date(span.startTime).toISOString(),
+        endTime: span.endTime ? new Date(span.endTime).toISOString() : undefined,
+        durationMs: span.endTime ? span.endTime - span.startTime : undefined,
+        attributes: span.attributes,
+      },
+    });
+  }
+
+  flush(): Promise<void> {
+    return this.client.flush();
+  }
+}
+
+function analyticsEventType(span: AgentSpan): AnalyticsEventType {
+  if (span.kind === 'turn') return 'conversation.ended';
+  if (span.kind === 'tool') return span.status === 'error' ? 'tool.error' : 'tool.completed';
+  if (span.kind === 'handoff') return 'handoff.initiated';
+  if (span.kind === 'node') return 'node.exited';
+  return 'custom';
+}
+
+const runtime = createRuntime({
+  agents,
+  defaultAgentId: 'support',
+  tracing: {
+    sinks: [
+      new AnalyticsTraceSink(analytics, 'my-workspace'),
+      new OtelTraceSink({
+        endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT!,
+        serviceName: 'support-agent',
+      }),
+    ],
+  },
+});
+```
+
+Turn spans now include `agentId`, which makes trace export a true superset of the removed per-agent hooks. The turn keeps the initiating agent for stable run-root attribution; a handoff opens a separate transition span, and subsequent child spans carry the target agent. `toOtlpPayload` exports the value as `kuralle.agentId`, so `OtelTraceSink` and `langfuseSink` retain it.
+
+### Stream envelope and explicit audience
 
 - Renamed `HarnessStreamPart` to `StreamPart` and replaced flat variant fields with the `{ channel, type, payload }` envelope.
 - Removed the shadow stream union formerly exported from `types/voice.ts`; knowledge types now live in `types/knowledge.ts`, and all six emitted knowledge events narrow from the public `StreamPart` export.
 - Added the exhaustive `PART_CHANNEL` map. `@kuralle-agents/hono-server` uses it as the single owner of client-vs-internal filtering.
 
-Migration: rename imports to `StreamPart`, read variant fields through `part.payload`, and include both `channel` and `payload` when constructing test or custom stream parts.
+Stream migration: rename imports to `StreamPart`, read variant fields through `part.payload`, and include both `channel` and `payload` when constructing test or custom stream parts.
+
+### WebSocket frames now satisfy the stream contract
+
+The envelope reshape swept every *typed* emit site, but `@kuralle-agents/hono-server` hand-built its WebSocket frames as `JSON.stringify` object literals — which `tsc` cannot check against anything. They kept the pre-envelope flat shape and included `suggested-questions`, one of the deleted variants.
+
+- Every WebSocket send is now a typed `StreamPart` routed through the same `PART_CHANNEL` filter as the SSE path, so the client/internal split holds on both transports. `createKuralleRouter`'s socket previously applied no filter at all and could deliver internal parts, and unredacted `error` payloads, straight to a browser.
+- Added `WebSocketTransportFrame` for genuine transport messages (`connected`, `cancelled`, `pong`). These are not stream parts and are no longer pretending to be.
+- **Removed the suggested-questions feature**: the `widgetWelcomeSuggestions` router option, and the corresponding rendering in `@kuralle-agents/widget`. This is a capability removal, not only a type cleanup — the server emitted it and the widget rendered it. If you use `widgetWelcomeSuggestions`, there is no drop-in replacement; send the prompts as ordinary assistant text, or pin the previous version while we decide whether to restore it as a first-class client part.
+- `@kuralle-agents/widget` also dropped its handlers for `step-start`, `step-end`, `agent-start`, `agent-end`, `interrupted`, and `cancelled` — all deleted from the union — and for `handoff`, which remains `internal` and so never reaches a browser under the default `safe` filter.
+
+### Lifecycle hooks can no longer break a run
+
+The five live `Hooks` callbacks were invoked without isolation: `onStart`, `onError`, `onEnd`, and `onConversationEnd` were bare `await`s, so a throwing hook aborted the run, and `onStreamPart` was a bare `void` call, so a rejection surfaced as an unhandled rejection.
+
+Hooks are user code and now follow the same rule as `TraceSink`: **observation never participates in run correctness.** A hook that throws or rejects is contained and reported via `console.error`, and the run proceeds. Unlike trace sinks, hook failures are logged rather than silent — silent failure is how the removed `HarnessHooks` defect stayed invisible.
+
+This is a behaviour change: a hook that previously failed a run will now let it succeed. If you relied on a throwing hook to abort a turn, move that logic into a guardrail or a flow node — the hook surface is for observation only.
+
+### Removed the second tool-error surface
+
+- Removed `packages/core/src/tools/errorHandling.ts` and its exports from `@kuralle-agents/core/tools`: `withErrorHandling`, `executeWithRetry`, `createCircuitBreaker`, `withTimeout`, `isPermanentError`, `isCircuitOpenError`, `CircuitOpenError`, and a **second** `ToolTimeoutError`.
+
+That second `ToolTimeoutError` was the reason. Two distinct classes shared the name, each reachable from a different public entry point of the same package — `@kuralle-agents/core` resolved to `tools/effect/errors.ts`, `@kuralle-agents/core/tools` to `errorHandling.ts`. Both set `name = 'ToolTimeoutError'`, so a `catch (e) { if (e instanceof ToolTimeoutError) … }` written against the natural import silently failed to match a timeout thrown by `withTimeout()`, with no diagnostic signal in logs or stack traces.
+
+The module had no internal consumers — every export resolved only to its own barrel line. The functions worked; they were simply a second, unwired timeout mechanism (plus an unwired circuit breaker) sitting beside the live one in `tools/effect/ToolExecutor.ts`. `ToolTimeoutError` imported from `@kuralle-agents/core` is unchanged. If you used `withTimeout` or `createCircuitBreaker`, copy them into your project — they had no dependency on Kuralle internals.
+
+Added `exported-definition-uniqueness`, a type-checker-backed guard asserting each publicly exported name has exactly one definition. It found 18 further duplicates, tracked on an explicit allow-list so new ones fail immediately.
+
+### Parallel `ctx.tool` from action nodes
+
+`await Promise.all([ctx.tool(…), ctx.tool(…)])` — the obvious way to parallelise — previously threw `LogConflictError`, naming a journal invariant rather than anything actionable. Concurrent calls each read the step count before any of them appended, so they all claimed the same ordinal.
+
+`ctx.tool` now reserves its journal ordinal when the call starts, using the run store's atomic `reserveSteps` where available and serializing pending appends where it is not. `reserveSteps` remains optional on `RunStore`, so custom stores need no change. `LogConflictError`'s message now names `ctx.reserveCallsites(count)` for callers supplying explicit indices.
 
 ## 0.10.0 — Retrieval hardening: embedder lock, incremental ingest, persistent keyword tier, multilingual keyword search
 

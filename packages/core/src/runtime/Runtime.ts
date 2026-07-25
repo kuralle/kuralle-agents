@@ -67,6 +67,7 @@ import type { AgentSpan, AgentTrace } from '../types/trace.js';
 import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
+import { runHookSafely } from './runHookSafely.js';
 
 export interface TracingConfig {
   enabled?: boolean;
@@ -195,6 +196,7 @@ export class Runtime {
     const recorder = this.shouldTrace(sessionId, opts.input)
       ? new TraceRecorder({
           sessionId,
+          agentId: opts.agentId ?? this.config.defaultAgentId,
           input: opts.input,
           onSpan: (span) => this.writeSpan(span),
         })
@@ -212,7 +214,7 @@ export class Runtime {
         recorder?.record(part);
         if (part.type === 'done') this.flushTraceSinks();
         bus.emit(part);
-        void this.hooks?.onStreamPart?.(runCtx, part);
+        void runHookSafely('onStreamPart', () => this.hooks?.onStreamPart?.(runCtx, part));
       };
 
       const opened = await openRun(this.agentsById, {
@@ -230,6 +232,7 @@ export class Runtime {
         defaultAgentId: this.config.defaultAgentId,
         sessionStore: this.sessionStore,
       });
+      recorder?.setInitiatingAgent(opened.agent.id);
 
       const policies = resolveAgentPolicies(opened.agent);
       const knowledgeProvider = this.config.knowledge
@@ -305,7 +308,7 @@ export class Runtime {
       );
       runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
 
-      await this.hooks?.onStart?.(runCtx);
+      await runHookSafely('onStart', () => this.hooks?.onStart?.(runCtx));
 
       if (opts.wake) {
         emit({ channel: 'internal', type: 'wake', payload: { reason: opts.wake.reason } });
@@ -498,7 +501,7 @@ export class Runtime {
         // is off the user's latency path; the NEXT turn starts compact.
         await this.applyCompaction(runCtx, activeAgent, emit, false);
       } catch (error) {
-        await this.hooks?.onError?.(runCtx, error as Error);
+        await runHookSafely('onError', () => this.hooks?.onError?.(runCtx, error as Error));
         if (isDegradableRuntimeError(error)) {
           const message = error instanceof Error ? error.message : String(error);
           emit({ channel: 'client', type: 'error', payload: { error: message } });
@@ -541,7 +544,7 @@ export class Runtime {
             }
           },
         });
-        await this.hooks?.onEnd?.(runCtx);
+        await runHookSafely('onEnd', () => this.hooks?.onEnd?.(runCtx));
         emit({
           channel: 'client',
           type: 'done',
@@ -571,8 +574,14 @@ export class Runtime {
     });
   }
 
-  runOnce(opts: RunOptions): Promise<AgentTrace> {
-    return recordRunOnce(this, opts);
+  async runOnce(opts: RunOptions): Promise<AgentTrace> {
+    const existing = opts.sessionId ? await this.sessionStore.get(opts.sessionId) : null;
+    // Caller's explicit agentId wins, matching run() (`opts.agentId ?? defaultAgentId`).
+    // Persisted state is the fallback, not an override — otherwise the two public
+    // entry points disagree about which agent handles the same turn.
+    const agentId =
+      opts.agentId ?? existing?.activeAgentId ?? existing?.currentAgent ?? this.config.defaultAgentId;
+    return recordRunOnce(this, { ...opts, agentId });
   }
 
   stream(opts: RunOptions): TurnHandle {
@@ -595,6 +604,11 @@ export class Runtime {
 
   getTraceStore(): TraceStore | undefined {
     return this.traceStore;
+  }
+
+  /** The agent used when neither the caller nor persisted state names one. */
+  getDefaultAgentId(): string {
+    return this.config.defaultAgentId;
   }
 
   getSessionStore(): SessionStore {

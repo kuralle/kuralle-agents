@@ -17,4 +17,53 @@ describe('TraceRecorder sinks', () => {
     expect(new Set(spans.map((span) => span.traceId)).size).toBe(1);
     expect(spans[0]?.traceId).not.toBe('session-a');
   });
+
+  test('attributes the turn span to the initiating agent', () => {
+    const recorder = new TraceRecorder({ sessionId: 'session-agent', agentId: 'support' });
+    recorder.record({ channel: 'client', type: 'done', payload: { sessionId: 'session-agent' } });
+
+    const turn = recorder.finish({ text: '', toolResults: [] }).spans.find((span) => span.kind === 'turn');
+    expect(turn?.attributes.agentId).toBe('support');
+  });
+
+  test('attributes post-handoff spans without rewriting the initiating agent', () => {
+    const recorder = new TraceRecorder({ sessionId: 'session-handoff', agentId: 'support' });
+    recorder.record({
+      channel: 'internal',
+      type: 'handoff',
+      payload: { targetAgent: 'billing', reason: 'billing request' },
+    });
+    recorder.record({
+      channel: 'internal',
+      type: 'tool-call',
+      payload: { toolName: 'invoice', toolCallId: 'call-1', args: {} },
+    });
+    recorder.record({
+      channel: 'internal',
+      type: 'tool-result',
+      payload: { toolName: 'invoice', toolCallId: 'call-1', result: { total: 42 } },
+    });
+    recorder.record({ channel: 'client', type: 'done', payload: { sessionId: 'session-handoff' } });
+
+    const trace = recorder.finish({ text: '', toolResults: [] });
+    const turn = trace.spans.find((span) => span.kind === 'turn');
+    const handoff = trace.spans.find((span) => span.kind === 'handoff');
+    const tool = trace.spans.find((span) => span.kind === 'tool');
+    expect(turn?.attributes.agentId).toBe('support');
+    expect(handoff?.attributes).toMatchObject({
+      agentId: 'support',
+      handoffFrom: 'support',
+      handoffTo: 'billing',
+    });
+    expect(tool?.attributes.agentId).toBe('billing');
+  });
+
+  test('sets the initiating agent after durable run state is opened', () => {
+    const recorder = new TraceRecorder({ sessionId: 'session-resume', agentId: 'default' });
+    recorder.setInitiatingAgent('specialist');
+    recorder.record({ channel: 'client', type: 'done', payload: { sessionId: 'session-resume' } });
+
+    const turn = recorder.finish({ text: '', toolResults: [] }).spans.find((span) => span.kind === 'turn');
+    expect(turn?.attributes.agentId).toBe('specialist');
+  });
 });

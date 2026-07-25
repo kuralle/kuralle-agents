@@ -2,7 +2,7 @@ import type { Session, ToolCallRecord } from '../types/index.js';
 
 /**
  * Minimal tool shape required by the executor.
- * Compatible with AI SDK `Tool`, VoiceToolDef, and plain `{ execute }` objects.
+ * Compatible with AI SDK `Tool` and plain `{ execute }` objects.
  */
 export interface ExecutableTool {
   execute: (args: unknown, options?: unknown) => Promise<unknown>;
@@ -11,7 +11,7 @@ export interface ExecutableTool {
 
 /**
  * Encapsulates tool execution with enforcement, idempotency, and context enrichment.
- * Shared by Runtime (text path) and VoiceEngine (audio path).
+ * Used by Runtime.
  */
 export interface ToolExecutor {
   /**

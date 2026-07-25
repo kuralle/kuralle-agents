@@ -96,7 +96,7 @@
 ## Proof Points
 - One tagless primitive (`defineAgent`) derives flow/triage/composition behavior from the fields you set — fewer concepts than peers.
 - Real example: a form-filler flow replaces a ~584-line v1 state machine with ~60 lines (`packages/core/examples/agents/form-filler.ts`).
-- Durable effect log → exactly-once tool execution across retries.
+- Durable effect log → **exactly-once-modulo-idempotency**. A completed step replays from the journal without re-executing. A crash between execute and finalize re-runs the effect, deduped by the auto-derived idempotency key. Never claim unqualified "exactly-once" — no framework can offer it across a crash.
 - 24 packages, one version line; text and voice share the same runtime and agent config.
 > Use concrete, verifiable numbers only. If a metric isn't in the repo, don't invent it.
 

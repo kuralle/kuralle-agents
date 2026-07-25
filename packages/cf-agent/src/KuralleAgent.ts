@@ -29,7 +29,7 @@ import type {
   Scheduler,
   WakeJobPayload,
 } from '@kuralle-agents/core';
-import type { HarnessHooks, StreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import type { StreamTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
 import { BridgeSessionStore } from './BridgeSessionStore.js';

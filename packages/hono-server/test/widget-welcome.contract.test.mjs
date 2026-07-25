@@ -11,10 +11,10 @@ function createFakeRuntime() {
     calls.push({ input, sessionId, userId });
     const events = (async function* () {
       const id = 'welcome-id';
-      yield { type: 'text-start', id };
-      yield { type: 'text-delta', id, delta: 'Model welcome' };
-      yield { type: 'text-end', id };
-      yield { type: 'done', sessionId: sessionId ?? 'generated-session', timestamp: new Date().toISOString() };
+      yield { channel: 'client', type: 'text-start', payload: { id } };
+      yield { channel: 'client', type: 'text-delta', payload: { id, delta: 'Model welcome' } };
+      yield { channel: 'client', type: 'text-end', payload: { id } };
+      yield { channel: 'client', type: 'done', payload: { sessionId: sessionId ?? 'generated-session' } };
     })();
     const handle = Promise.resolve({ text: 'Model welcome', toolResults: [] });
     handle.events = events;
@@ -104,7 +104,7 @@ function connectAndCollect(port, { waitMs = 300 } = {}) {
       try {
         const payload = JSON.parse(event.data.toString());
         events.push(payload);
-        if (payload.type === 'done') {
+        if (payload.type === 'done' && payload.payload) {
           finish();
         }
       } catch (error) {
@@ -114,21 +114,24 @@ function connectAndCollect(port, { waitMs = 300 } = {}) {
   });
 }
 
-test('widgetWelcomeMode=static sends deterministic welcome and optional chips', async () => {
+test('widgetWelcomeMode=static sends deterministic enveloped welcome', async () => {
   const server = startServer({
     widgetWelcomeMode: 'static',
     widgetWelcomeMessage: "I'm the Ninewells Hospital virtual assistant. How can I assist you today?",
-    widgetWelcomeSuggestions: ['Check Availability', 'Book an Appointment', 'Inquiries', 'Extra Chip'],
   });
 
   try {
     const events = await connectAndCollect(server.port);
     assert.deepEqual(
       events.map((event) => event.type),
-      ['connected', 'text-start', 'text-delta', 'text-end', 'suggested-questions', 'done'],
+      ['connected', 'text-start', 'text-delta', 'text-end', 'done'],
     );
-    assert.equal(events[2].delta, "I'm the Ninewells Hospital virtual assistant. How can I assist you today?");
-    assert.deepEqual(events[4].suggestions, ['Check Availability', 'Book an Appointment', 'Inquiries']);
+    assert.equal(events[2].payload.delta, "I'm the Ninewells Hospital virtual assistant. How can I assist you today?");
+    assert.deepEqual(
+      events.slice(1).map((event) => event.channel),
+      ['client', 'client', 'client', 'client'],
+    );
+    assert.ok(events.slice(1).every((event) => event.payload));
     assert.equal(server.calls.length, 0, 'static mode should not invoke runtime.stream for welcome');
   } finally {
     await server.close();
@@ -149,7 +152,7 @@ test('widgetWelcomeMode=model uses runtime streaming for welcome', async () => {
       'text-end',
       'done',
     ]);
-    assert.equal(events[2].delta, 'Model welcome');
+    assert.equal(events[2].payload.delta, 'Model welcome');
     assert.equal(server.calls.length, 1);
     assert.match(server.calls[0].input, /new user has connected/i);
   } finally {

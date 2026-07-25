@@ -9,7 +9,7 @@ import {
   defineTool,
   ToolTimeoutError,
 } from '../../src/tools/effect/index.js';
-import { createObservabilityHooks } from '../../src/hooks/builtin/observability.js';
+import { TraceRecorder } from '../../src/runtime/TraceRecorder.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import { createMockSession } from '../../src/testing/mocks.js';
 import type { StreamPart } from '../../src/types/stream.js';
@@ -244,51 +244,13 @@ describe('extraction telemetry', () => {
     }
   });
 
-  it('feeds the observability hook extractionSubmissions', async () => {
-    let exported: import('../../src/types/telemetry.js').SessionTrace | null = null;
-    const hooks = createObservabilityHooks({
-      exporter: async (trace) => {
-        exported = trace;
-      },
-    });
-    const { session, runStore, runState } = await setupDurableHarness('obs-ext-sess', 'obs-ext-run');
-    const ctx = await createRunContext({
-      session,
-      runState,
-      runStore,
-      steps: [],
-      toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as import('ai').LanguageModel,
-      emit: () => {},
-    });
-    const hookCtx: import('../../src/types/session.js').RunContext = {
-      session,
-      agentId: runState.activeAgentId ?? 'test-agent',
-      stepCount: 0,
-      totalTokens: 0,
-      handoffStack: [],
-      startTime: Date.now(),
-      consecutiveErrors: 0,
-      toolCallHistory: [],
-    };
-    await hooks.onStart?.(hookCtx);
-    await hooks.onStreamPart?.(hookCtx, {
-      channel: 'internal',
-      type: 'custom',
-      payload: {
-        name: 'flow.extraction.submission',
-        data: { node: 'contact', fieldsAccepted: ['name'], fieldsRejected: ['notes'] },
-      },
-    });
-    await hooks.onSessionEnd?.(session, { success: true });
+  it('attributes extraction node spans to the active agent', () => {
+    const recorder = new TraceRecorder({ sessionId: 'trace-extraction', agentId: 'intake' });
+    recorder.record({ channel: 'internal', type: 'node-enter', payload: { nodeName: 'contact' } });
+    recorder.record({ channel: 'internal', type: 'node-exit', payload: { nodeName: 'contact' } });
+    recorder.record({ channel: 'client', type: 'done', payload: { sessionId: 'trace-extraction' } });
 
-    expect(exported).not.toBeNull();
-    expect(exported!.extractionSubmissions).toEqual([
-      {
-        node: 'contact',
-        fieldsAccepted: ['name'],
-        fieldsRejected: ['notes'],
-      },
-    ]);
+    const node = recorder.finish({ text: '', toolResults: [] }).spans.find((span) => span.kind === 'node');
+    expect(node?.attributes).toMatchObject({ agentId: 'intake', nodeId: 'contact' });
   });
 });

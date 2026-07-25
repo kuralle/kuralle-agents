@@ -60,6 +60,14 @@ const runtime = new Runtime({
 });
 ```
 
+Hooks are for **observation only**. A hook that throws or rejects is contained and reported to
+`console.error`; the run continues either way. Do not use a hook to abort a turn — put that logic in
+a guardrail or a flow node, where the outcome is part of the run rather than a side effect of it.
+
+For per-tool, per-agent, or per-run telemetry, reach for `TraceSink`/`TraceStore` instead — spans
+carry `agentId`, tool input/output/status, and token counts without threading a callback through
+agent code.
+
 ## Auto-retrieve (agent-level)
 
 ```ts

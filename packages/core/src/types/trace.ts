@@ -12,6 +12,8 @@ export interface AgentSpan {
   events?: Array<{ name: string; time: number; attributes?: Record<string, unknown> }>;
   attributes: {
     sessionId: string;
+    /** Agent active when the span opened; a turn span keeps its initiating agent across handoffs. */
+    agentId?: string;
     activeFlow?: string;
     nodeId?: string;
     toolName?: string;

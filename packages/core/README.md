@@ -1,6 +1,6 @@
 # @kuralle-agents/core
 
-The runtime and primitives for building conversational AI agents — text and voice — with structured flows, routing, and durable tool execution.
+The runtime and primitives for building conversational AI agents with structured flows, routing, and durable tool execution.
 
 ## Install
 

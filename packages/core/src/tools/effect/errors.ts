@@ -1,8 +1,4 @@
-/**
- * Thrown by `ctx.tool(...)` when a tool declared `needsApproval: true` is denied
- * by a human (the `__approval` signal resolves with `approved: false`). Catch it
- * inside the calling flow `action` node to route gracefully (e.g. escalate or end).
- */
+/** Thrown when a tool execution exceeds its configured timeout. */
 export class ToolTimeoutError extends Error {
   readonly toolName: string;
   readonly timeoutMs: number;
@@ -15,6 +11,7 @@ export class ToolTimeoutError extends Error {
   }
 }
 
+/** Thrown when a human denies a tool call that requires approval. */
 export class ToolApprovalDeniedError extends Error {
   readonly toolName: string;
   readonly by?: string;

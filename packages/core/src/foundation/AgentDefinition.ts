@@ -3,7 +3,7 @@ import type { AgentPrompt } from '../prompts/AgentPrompt.js';
 
 /**
  * Shared agent definition — the minimal shape every engine needs.
- * Both Runtime (text) and VoiceEngine (audio) extend this.
+ * Runtime extends this interface.
  *
  * Define agents once against this interface, then spread into
  * engine-specific configs to add model, voice, processors, etc.

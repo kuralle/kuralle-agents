@@ -82,14 +82,19 @@ Kuralle has **three** parallel mechanisms for the same job:
 | `processors` (input/output) | stream/message transforms | middleware |
 | `hooks` (the 5-method `Hooks`, `types/hooks.ts`) | project lifecycle observation | middleware |
 
-Three mechanisms means three places to look, three orderings to reason about, and no single answer to
-"what runs between the user's message and the model call?" DeepAgents answers that with one ordered
-list. This is the same class of problem as RFC 0002 — *no single owner of a concept* — and worth its
-own investigation before RFC 0001 adds `validate.ts` / `refine.ts` / `hooks.ts` as three more files
-and hardens the split into the file convention.
+Three mechanisms means three places to look and three orderings to reason about. DeepAgents answers
+"what runs between the user's message and the model call?" with one ordered list.
 
-**Do not copy blindly:** middleware-everything has a real cost (ordering becomes load-bearing and
-implicit). But the current 3-way split should be a decision, not an accident.
+**Resolved by ADR-0015** (`docs/adr/0015-turn-composition.md`): keep the three distinct, with one
+*fixed* pipeline order — input processors → refinement → gather + execute → output processors →
+validation. The DeepAgents single stack was rejected deliberately: its stages are homogeneous
+middleware, whereas ours differ in authority over durable state and output release, so a
+user-orderable list would turn security redaction and persistence ordering into a convention.
+RFC 0001 therefore exposes one agent-level `policies.ts`, not three files; project `hooks.ts` stays
+separate because it configures `HarnessConfig.hooks`, not an `AgentConfig`.
+
+The lesson stands even though we declined the shape: the 3-way split is now a **decision**, not an
+accident — which was the actual defect.
 
 ## 3. DeepAgents: layered skill sources, last-one-wins
 

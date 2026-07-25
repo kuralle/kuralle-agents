@@ -1,4 +1,4 @@
-import type { HarnessConfig, HarnessHooks, Session, SessionDurableRuns } from '@kuralle-agents/core';
+import type { HarnessConfig, Session, SessionDurableRuns } from '@kuralle-agents/core';
 
 /**
  * SQL executor type matching Cloudflare's Durable Object sql binding.

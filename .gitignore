@@ -70,5 +70,11 @@ kh-*-implementation-notes.md
 .plandesk/server.json
 .plandesk/workspace.db
 .plandesk/pd.sh
+.plandesk/better-auth-secret
+# Belt-and-braces: never let a local Plan Desk secret depend on an untracked
+# .plandesk/.gitignore surviving. This repo has already needed one history
+# rewrite to scrub leaked credentials.
+.plandesk/*secret*
+.plandesk/*.key
 # Factory transient machine state (see .agents/factory/factory.md)
 runs/

@@ -3,7 +3,6 @@ import type { LanguageModel } from 'ai';
 import type { Session } from '../types/session.js';
 import type {
   EffectToolExecutor,
-  HookRunner,
   MemoryService,
   AutoRetrieveProvider,
   RunContext,
@@ -40,7 +39,6 @@ export interface CtxDeps {
   runStore: RunStore;
   steps: StepRecord[];
   toolExecutor: EffectToolExecutor;
-  hookRunner?: HookRunner;
   model: LanguageModel;
   controlModel?: LanguageModel;
   outOfBandControl?: boolean;
@@ -70,6 +68,22 @@ function makeCtx(deps: CtxDeps): RunContext {
 
   // Mutable holder: handoff reassigns runCtx.toolExecutor; ctx.tool must see the swap.
   const toolExecutorHolder = { executor: deps.toolExecutor };
+
+  let pendingAppendTail = Promise.resolve();
+  const serializePendingAppend = <T>(operation: () => Promise<T>): Promise<T> => {
+    const previous = pendingAppendTail;
+    let release!: () => void;
+    pendingAppendTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return previous.then(async () => {
+      try {
+        return await operation();
+      } finally {
+        release();
+      }
+    });
+  };
 
   const consumeCallsite = (): string => {
     const site = String(effectOrdinal);
@@ -157,10 +171,28 @@ function makeCtx(deps: CtxDeps): RunContext {
     }
 
     const isRetry = hit?.status === 'running';
-    const stepIndex = options?.index ?? hit?.index ?? steps.length;
+    const stepIndex = options?.index ?? hit?.index;
 
     if (!isRetry) {
-      await appendPendingStep(key, kind, name, stepIndex);
+      const append = async () => {
+        let index = stepIndex;
+        if (index === undefined) {
+          if (deps.runStore.reserveSteps) {
+            index = (await deps.runStore.reserveSteps(deps.runState.runId, 1))[0];
+          } else {
+            // ctx.tool owns ordinal assignment: use the store's atomic reservation when available,
+            // and serialize legacy stores that do not expose reserveSteps within this context.
+            index = steps.length;
+          }
+        }
+        await appendPendingStep(key, kind, name, index);
+      };
+
+      if (stepIndex === undefined && !deps.runStore.reserveSteps) {
+        await serializePendingAppend(append);
+      } else {
+        await append();
+      }
     }
 
     let result: unknown;
@@ -247,7 +279,6 @@ function makeCtx(deps: CtxDeps): RunContext {
     set toolExecutor(executor: EffectToolExecutor) {
       toolExecutorHolder.executor = executor;
     },
-    hookRunner: deps.hookRunner ?? {},
     model: deps.model,
     controlModel: deps.controlModel ?? deps.model,
     outOfBandControl: deps.outOfBandControl ?? false,
@@ -313,7 +344,7 @@ function makeCtx(deps: CtxDeps): RunContext {
         });
 
       if (def?.replay === false) {
-        const auditKey = `${key}:${steps.length}`;
+        const auditKey = `${key}:${steps.length}:${options?.index ?? callsite}`;
         return replayOrExecute(auditKey, 'tool', name, executeTool, { index: options?.index });
       }
 

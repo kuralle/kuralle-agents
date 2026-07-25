@@ -21,9 +21,10 @@ export class TracingService {
         parentSpanId?: string
     ): Span {
         if (!this.config) {
-            // Fallback or throw? Helpers threw.
-            // We will throw to maintain behavior, but maybe warn in future.
-            throw new Error('Tracing not initialized. Call initTracing() first.');
+            throw new Error(
+                'TracingService not initialized. Construct it with a config — ' +
+                'new TracingService(config) — or call .init(config) before startSpan().',
+            );
         }
 
         const span: Span = {

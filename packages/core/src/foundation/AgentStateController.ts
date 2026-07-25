@@ -2,7 +2,7 @@ import type { Session } from '../types/index.js';
 
 /**
  * Manages active agent resolution, handoff recording, and agent state.
- * Shared by Runtime and VoiceEngine.
+ * Used by Runtime.
  */
 export interface AgentStateController {
   /** Resolve the active agent ID, falling back to the provided default. */

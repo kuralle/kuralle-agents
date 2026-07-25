@@ -58,7 +58,7 @@ curl -s "https://graph.facebook.com/v24.0/<PHONE_NUMBER_ID>?fields=verified_name
 
 Ask the user; don't assume. The honest tradeoff:
 
-| Target | Pick it when | Durable checkout (suspend/resume, exactly-once)? |
+| Target | Pick it when | Durable checkout (suspend/resume, exactly-once-modulo-idempotency)? |
 |---|---|---|
 | **Cloudflare Workers** | You want edge + per-user isolation + zero external DB. **Best for durable, human-in-the-loop flows** (payment links, approvals). | ✅ Built in via Durable Object SQLite. |
 | **Fly.io** | You want a normal always-… *no* — a spike-test box. Plain Node/Bun server, simplest mental model, the framework's paved path. | ✅ if you point the session store at Redis/Postgres; ⚠️ in-memory store loses state on restart. |
@@ -70,7 +70,7 @@ Then open the matching reference and follow it:
 - **`references/deploy-fly.md`** — the `whatsapp-server` Node/Bun pattern (`createMessagingRouter` + `engagement`), with a spike-test `fly.toml`.
 - **`references/deploy-vercel.md`** — the same Hono app as a Vercel function, plus the external-session-store change you must make.
 
-> **Durability is just a durable SessionStore.** The framework stores the run state + the exactly-once effect log *inside the Session* (`session.durableRuns`). So "does suspend/resume survive a restart?" reduces to "is my SessionStore durable?" On CF that's DO SQLite (free, built in); on Fly/Vercel it's Redis/Postgres.
+> **Durability is just a durable SessionStore.** The framework stores the run state + the durable effect log (exactly-once-modulo-idempotency) *inside the Session* (`session.durableRuns`). So "does suspend/resume survive a restart?" reduces to "is my SessionStore durable?" On CF that's DO SQLite (free, built in); on Fly/Vercel it's Redis/Postgres.
 
 ## Step 2 — Connect the webhook in Meta
 

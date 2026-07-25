@@ -1,5 +1,82 @@
 import { nanoid } from 'nanoid';
+import type { StreamPart } from '@kuralle-agents/core';
 import { debug } from '../debug.js';
+
+type ClientStreamPart = Extract<StreamPart, { channel: 'client' }>;
+
+type ConnectedFrame = {
+  type: 'connected';
+  sessionId: string;
+  timestamp: string;
+};
+
+type CancelledFrame = {
+  type: 'cancelled';
+  sessionId: string;
+  timestamp: string;
+};
+
+type PongFrame = { type: 'pong' };
+type TransportFrame = ConnectedFrame | CancelledFrame | PongFrame;
+type WidgetFrame = ClientStreamPart | TransportFrame;
+
+type HandledClientStreamType =
+  | 'text-start'
+  | 'text-delta'
+  | 'text-end'
+  | 'text-cancel'
+  | 'conversation-outcome'
+  | 'error'
+  | 'done';
+type UnhandledClientStreamType = Exclude<
+  ClientStreamPart['type'],
+  HandledClientStreamType
+>;
+type AssertNever<T extends never> = T;
+type AllClientStreamTypesHandled = AssertNever<UnhandledClientStreamType>;
+void (undefined as AllClientStreamTypesHandled);
+
+const clientStreamTypes: Record<HandledClientStreamType, true> = {
+  'text-start': true,
+  'text-delta': true,
+  'text-end': true,
+  'text-cancel': true,
+  'conversation-outcome': true,
+  error: true,
+  done: true,
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const parseWidgetFrame = (raw: unknown): WidgetFrame | null => {
+  const data = typeof raw === 'string' ? JSON.parse(raw) as unknown : raw;
+  if (!isRecord(data) || typeof data.type !== 'string') return null;
+
+  if (
+    data.type === 'connected' &&
+    typeof data.sessionId === 'string' &&
+    typeof data.timestamp === 'string'
+  ) {
+    return data as ConnectedFrame;
+  }
+
+  if (
+    data.type === 'cancelled' &&
+    typeof data.sessionId === 'string' &&
+    typeof data.timestamp === 'string'
+  ) {
+    return data as CancelledFrame;
+  }
+
+  if (data.type === 'pong') return data as PongFrame;
+  if (
+    data.channel !== 'client' ||
+    !('payload' in data) ||
+    !(data.type in clientStreamTypes)
+  ) return null;
+  return data as unknown as ClientStreamPart;
+};
 
 export interface AgentConfig {
   id: string;
@@ -31,7 +108,6 @@ export interface Message {
   };
   toolResult?: unknown;
   isStreaming?: boolean;
-  suggestions?: string[];
 }
 
 /**
@@ -42,13 +118,11 @@ export class WidgetClient {
   private agentConfig: AgentConfig | null = null;
   private ws: WebSocket | null = null;
   private messageCallbacks: Set<(messages: Message[]) => void> = new Set();
-  private suggestionsCallbacks: Set<(suggestions: string[]) => void> = new Set();
   private connectionCallbacks: Set<(connected: boolean) => void> = new Set();
   private streamingCallbacks: Set<(streaming: boolean) => void> = new Set();
   private processingCallbacks: Set<(processing: boolean) => void> = new Set();
   private queueCallbacks: Set<(count: number) => void> = new Set();
   private messages: Message[] = [];
-  private activeSuggestions: string[] = [];
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -194,11 +268,26 @@ export class WidgetClient {
 
   private handleMessage(event: MessageEvent): void {
     try {
-      const data = JSON.parse(event.data);
+      const data = parseWidgetFrame(event.data);
+      if (!data) {
+        debug("[Widget] Unknown or malformed frame:", event.data);
+        return;
+      }
 
       if (data.type === "connected") {
         this.notifyConnectionChange(true);
-      } else if (data.type === "text-start") {
+        return;
+      }
+
+      if (data.type === "cancelled") {
+        this.notifyProcessingChange(false);
+        return;
+      }
+
+      if (data.type === "pong") return;
+      if (!('channel' in data)) return;
+
+      if (data.type === "text-start") {
         if (this.isAgentProcessing) {
           this.notifyProcessingChange(false);
         }
@@ -222,7 +311,7 @@ export class WidgetClient {
           if (last && last.role === "assistant" && last.isStreaming) {
             return [
               ...prev.slice(0, -1),
-              { ...last, content: last.content + data.delta },
+              { ...last, content: last.content + data.payload.delta },
             ];
           }
           return [
@@ -230,7 +319,7 @@ export class WidgetClient {
             {
               id: nanoid(),
               role: "assistant",
-              content: data.delta,
+              content: data.payload.delta,
               timestamp: Date.now(),
               isStreaming: true,
             },
@@ -264,41 +353,15 @@ export class WidgetClient {
         this.notifyStreamingChange(false);
         // Send queued messages if any
         this.processMessageQueue();
-      } else if (data.type === "step-start" || data.type === "agent-start") {
-        this.isAgentStreaming = true;
-        this.notifyStreamingChange(true);
-        // Start processing indicator
-        this.notifyProcessingChange(true);
-      } else if (data.type === "step-end" || data.type === "agent-end") {
-        if (data.type === "agent-end") {
-          this.notifyProcessingChange(false);
-        }
-      } else if (data.type === "tool-call") {
-        // Handle both nested tool object (legacy) and flat structure (current)
-        const toolName = data.tool?.name || data.toolName;
-        const toolArgs = data.tool?.arguments || data.args;
-
-        // Tool call implies processing
-        this.notifyProcessingChange(true);
-
-        // Normalize suggestion chips emitted via a tool call.
-        if (toolName === 'suggest_options' && toolArgs?.options) {
-          this.setActiveSuggestions(toolArgs.options);
-        }
-      } else if (data.type === "tool-result") {
-        // Tool result does not directly affect widget UI state.
-      } else if (data.type === "handoff") {
-        // Optional metadata event, no UI update required.
-      } else if (data.type === "suggested-questions") {
-        this.setActiveSuggestions(data.suggestions);
-      } else if (data.type === "error" || data.type === "interrupted") {
+      } else if (data.type === "error") {
         this.notifyProcessingChange(false);
         this.isAgentStreaming = false;
         this.notifyStreamingChange(false);
-      } else if (data.type === "cancelled") {
-        this.notifyProcessingChange(false);
+      } else if (data.type === "conversation-outcome") {
+        debug("[Widget] Conversation outcome:", data.payload.outcome);
       } else {
-        debug("[Widget] Unknown message type:", data.type);
+        const unreachable: never = data;
+        debug("[Widget] Unknown message type:", unreachable);
       }
     } catch (error) {
       console.error("[Widget] Error parsing message:", event.data, error);
@@ -312,8 +375,6 @@ export class WidgetClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("Not connected to agent");
     }
-
-    this.setActiveSuggestions([]);
 
     // Add user message locally
     const userMessage: Message = {
@@ -447,33 +508,6 @@ export class WidgetClient {
     this.queueCallbacks.forEach((cb) => cb(count));
   }
 
-  /**
-   * Register a callback for active suggestion updates
-   */
-  onSuggestionsChange(callback: (suggestions: string[]) => void): () => void {
-    this.suggestionsCallbacks.add(callback);
-    callback(this.activeSuggestions);
-    return () => {
-      this.suggestionsCallbacks.delete(callback);
-    };
-  }
-
-  /**
-   * Normalize and notify suggestion changes
-   */
-  private setActiveSuggestions(suggestions: unknown): void {
-    const normalized = Array.isArray(suggestions)
-      ? suggestions
-          .filter((value): value is string => typeof value === 'string')
-          .map((value) => value.trim())
-          .filter(Boolean)
-      : [];
-
-    const uniqueSuggestions = [...new Set(normalized)];
-    this.activeSuggestions = uniqueSuggestions;
-    this.suggestionsCallbacks.forEach((cb) => cb(uniqueSuggestions));
-  }
-
   private normalizeBaseUrl(url: string): string {
     return url.replace(/\/+$/, '');
   }
@@ -526,7 +560,6 @@ export class WidgetClient {
       this.ws = null;
     }
     this.messageCallbacks.clear();
-    this.suggestionsCallbacks.clear();
     this.connectionCallbacks.clear();
     this.streamingCallbacks.clear();
     this.processingCallbacks.clear();

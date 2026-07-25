@@ -37,7 +37,7 @@ Common types:
 - `flow-enter`, `node-enter`, `node-exit`, `flow-transition`, `flow-end`
 - `custom` (flow/runtime emitted app events)
 - `turn-end`, `done`, `error`
-- `knowledge-citation`, `knowledge-cache-hit`, `knowledge-cache-miss`, `knowledge-search`
+- `knowledge-cache-hit`, `knowledge-cache-miss`, `knowledge-search`, `knowledge-quality-check`, `knowledge-reformulation`
 
 Use `PART_CHANNEL` or the envelope's `channel` field to distinguish client events from privileged internal events.
 
@@ -140,15 +140,21 @@ const runtime = createRuntime({
 });
 ```
 
-## Hooks
+## Tracing
 
-Use hooks for logging, metrics, and audit trails without polluting prompts.
+Use a trace sink for logging, metrics, and audit trails without polluting prompts.
 
 ```ts
+const loggingSink: TraceSink = {
+  write(span) {
+    console.log(JSON.stringify(span));
+  },
+};
+
 const runtime = createRuntime({
   agents,
   defaultAgentId: 'router',
-  hooks: loggingHooks(),
+  tracing: { sinks: [loggingSink] },
 });
 ```
 

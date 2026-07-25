@@ -22,69 +22,96 @@ const analytics = createAnalyticsClient({
 analytics.setContext({ workspaceId: 'my-workspace', agentId: 'support', sessionId: 'session-123' });
 ```
 
-## Wire into Runtime hooks
+## Wire into runtime tracing
 
-The canonical pattern — hooks automatically track the full agent lifecycle:
+`TraceSink.write(span)` receives every completed turn, flow, node, tool, handoff, and model span without changing agent code. Turn spans keep the initiating `agentId`; spans opened after a handoff carry the new active agent.
 
 ```ts
-import { Runtime, type HarnessHooks } from '@kuralle-agents/core';
+import {
+  createRuntime,
+  OtelTraceSink,
+  type AgentSpan,
+  type TraceSink,
+} from '@kuralle-agents/core';
+import {
+  createAnalyticsClient,
+  type AnalyticsClient,
+  type AnalyticsEventType,
+} from '@kuralle-agents/analytics-sdk';
 
-let currentAgentId = 'default';
-const conversationId = `conv-${Date.now()}`;
+const analytics = createAnalyticsClient({
+  apiKey: process.env.ANALYTICS_API_KEY!,
+  workspaceId: 'my-workspace',
+});
 
-const hooks: HarnessHooks = {
-  async onAgentStart(context, agentId) {
-    currentAgentId = agentId;
-    await analytics.track({
-      sessionId: context.session.id, conversationId, agentId, workspaceId: 'my-workspace',
-      type: 'conversation.started',
-      data: { startTime: new Date().toISOString() },
-    });
-  },
-  async onToolCall(context, call) {
-    await analytics.track({
-      sessionId: context.session.id, conversationId, agentId: currentAgentId, workspaceId: 'my-workspace',
-      type: 'tool.called',
-      data: { toolName: call.toolName, toolCallId: call.toolCallId },
-    });
-  },
-  async onToolResult(context, call) {
-    await analytics.track({
-      sessionId: context.session.id, conversationId, agentId: currentAgentId, workspaceId: 'my-workspace',
-      type: 'tool.completed',
-      data: { toolName: call.toolName, success: call.success, durationMs: call.durationMs },
-    });
-  },
-  async onHandoff(context, from, to, reason) {
-    await analytics.track({
-      sessionId: context.session.id, conversationId, agentId: from, workspaceId: 'my-workspace',
-      type: 'handoff.initiated',
-      data: { from, to, reason },
-    });
-    currentAgentId = to;
-  },
-  async onEnd(context, result) {
-    await analytics.track({
-      sessionId: context.session.id, conversationId, agentId: currentAgentId, workspaceId: 'my-workspace',
-      type: 'conversation.ended',
-      data: { success: result.success, stepCount: context.stepCount },
-    });
-    await analytics.flush();
-  },
-};
+class AnalyticsTraceSink implements TraceSink {
+  constructor(
+    private readonly client: AnalyticsClient,
+    private readonly workspaceId: string,
+  ) {}
 
-const runtime = new Runtime({ agents, defaultAgentId: 'support', hooks });
+  async write(span: AgentSpan): Promise<void> {
+    const { sessionId, agentId = 'unknown' } = span.attributes;
+    await this.client.track({
+      sessionId,
+      conversationId: sessionId,
+      agentId,
+      workspaceId: this.workspaceId,
+      type: analyticsEventType(span),
+      data: {
+        traceId: span.traceId,
+        spanId: span.spanId,
+        parentSpanId: span.parentSpanId,
+        kind: span.kind,
+        name: span.name,
+        status: span.status,
+        startTime: new Date(span.startTime).toISOString(),
+        endTime: span.endTime ? new Date(span.endTime).toISOString() : undefined,
+        durationMs: span.endTime ? span.endTime - span.startTime : undefined,
+        attributes: span.attributes,
+      },
+    });
+  }
+
+  flush(): Promise<void> {
+    return this.client.flush();
+  }
+}
+
+function analyticsEventType(span: AgentSpan): AnalyticsEventType {
+  if (span.kind === 'turn') return 'conversation.ended';
+  if (span.kind === 'tool') return span.status === 'error' ? 'tool.error' : 'tool.completed';
+  if (span.kind === 'handoff') return 'handoff.initiated';
+  if (span.kind === 'node') return 'node.exited';
+  return 'custom';
+}
+
+const runtime = createRuntime({
+  agents,
+  defaultAgentId: 'support',
+  tracing: {
+    sinks: [
+      new AnalyticsTraceSink(analytics, 'my-workspace'),
+      new OtelTraceSink({
+        endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT!,
+        serviceName: 'support-agent',
+      }),
+    ],
+  },
+});
 ```
+
+The runtime also keeps spans in its configured `TraceStore` (an in-memory store by default), so the same run is available through `runtime.getTrace()` and `runtime.listTraces()` as well as pushed to each sink. Use `OtelTraceSink` directly when the analytics backend accepts OTLP; `langfuseSink()` is the preconfigured Langfuse variant.
 
 ## Event types
 
 | Type | When |
 |------|------|
-| `conversation.started` | `onAgentStart` on first turn |
-| `tool.called` | `onToolCall` |
-| `tool.completed` | `onToolResult` |
-| `handoff.initiated` | `onHandoff` |
-| `conversation.ended` | `onEnd` |
+| `conversation.ended` | Completed `turn` span |
+| `tool.completed` | Successful `tool` span |
+| `tool.error` | Failed `tool` span |
+| `handoff.initiated` | `handoff` span |
+| `node.exited` | Completed `node` span |
 | `custom` | Any time via `analytics.track({ type: 'custom', ... })` |
 
 ## Voice call tracking

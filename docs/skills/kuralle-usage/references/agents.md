@@ -121,4 +121,4 @@ const leadAgent = defineAgent({
 
 ## Defining agents
 
-Define agents with `defineAgent` in TypeScript and pass them to `createRuntime`. The same `AgentConfig` runs on both `TextDriver` and `VoiceDriver`.
+Define agents with `defineAgent` in TypeScript and pass them to `createRuntime`.

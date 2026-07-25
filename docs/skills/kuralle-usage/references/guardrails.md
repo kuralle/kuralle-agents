@@ -28,7 +28,7 @@ const guardrail: InputProcessor = {
 | Action | Fields | Effect |
 |--------|--------|--------|
 | `allow` | — | Message passes through to LLM |
-| `block` | `message`, `reason?` | LLM is skipped; `message` is sent to user; stream emits `tripwire` event |
+| `block` | `message`, `reason?` | LLM is skipped; `message` is sent to user; stream emits a `safety-blocked` event |
 | `modify` | `text`, `reason?` | Replaced `text` is sent to LLM instead of original |
 
 ### Attach to agent via guardrails
@@ -47,13 +47,13 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
 
 Global processors can also attach at runtime config when loading from packs.
 
-### Handle the tripwire event in the stream
+### Handle the safety-blocked event in the stream
 
 ```ts
 const handle = runtime.run({ input, sessionId });
 for await (const part of handle.events()) {
-  if (part.type === 'tripwire') {
-    console.log(`[BLOCKED] ${part.payload.reason} — message sent: "${part.message}"`);
+  if (part.type === 'safety-blocked') {
+    console.log(`[BLOCKED] ${part.payload.rationale} — message sent: "${part.payload.userFacingMessage}"`);
   }
   if (part.type === 'text-delta') {
     process.stdout.write(part.payload.delta);

@@ -22,7 +22,7 @@ POST /messaging/whatsapp/webhook
 
 ## Why this is durable + production-safe without a database
 
-- The runtime stores run state + the exactly-once effect log inside the Session (`session.durableRuns`), persisted by `SqlSessionStore` (DO SQLite). Suspend/resume + idempotent retries come for free.
+- The runtime stores run state + the durable effect log (exactly-once-modulo-idempotency) inside the Session (`session.durableRuns`), persisted by `SqlSessionStore` (DO SQLite). Suspend/resume + idempotent retries come for free.
 - The **`InboundLedger`** (DO-SQLite) gives **atomic claim** (`claimed | duplicate | in_progress`): a Meta at-least-once retry or a re-clicked `/wa-pay` is a no-op — exactly-once inbound.
 - **Cloudflare's `agents` primitives do the concurrency**: `TurnQueue` serializes turns per user; `messageConcurrency` (e.g. `{strategy:'debounce', debounceMs:50}`) merges a burst into one turn; `Agent.schedule()` backs any timed work. We do **not** ship a parallel scheduler — don't fight the platform.
 
