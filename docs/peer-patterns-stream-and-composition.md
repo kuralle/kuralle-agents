@@ -80,7 +80,7 @@ Kuralle has **three** parallel mechanisms for the same job:
 |---|---|---|
 | `capabilities` (`refine[]` / `validate[]`) | pre/post-turn policies | middleware |
 | `processors` (input/output) | stream/message transforms | middleware |
-| `hooks` (19 `HarnessHooks` methods) | lifecycle observation | middleware |
+| `hooks` (the 5-method `Hooks`, `types/hooks.ts`) | project lifecycle observation | middleware |
 
 Three mechanisms means three places to look, three orderings to reason about, and no single answer to
 "what runs between the user's message and the model call?" DeepAgents answers that with one ordered

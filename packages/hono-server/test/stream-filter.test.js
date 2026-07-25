@@ -25,7 +25,6 @@ test('safe filter allows every client-channel type', () => {
     'conversation-outcome',
     'error',
     'done',
-    'knowledge-citation',
   ]);
   for (const type of clientTypes) {
     assert.equal(shouldEmit(part(type), 'safe'), true, type);

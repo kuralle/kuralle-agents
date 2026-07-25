@@ -56,8 +56,6 @@ function readNarrowedPayload(part: StreamPart): unknown {
       return part.payload.data;
     case 'done':
       return part.payload.sessionId;
-    case 'knowledge-citation':
-      return part.payload.sourceId;
     case 'knowledge-cache-hit':
       return part.payload.resultCount;
     case 'knowledge-cache-miss':
@@ -77,7 +75,7 @@ function readNarrowedPayload(part: StreamPart): unknown {
 
 describe('public StreamPart export', () => {
   it('classifies every publicly exported variant', () => {
-    expect(Object.keys(PART_CHANNEL)).toHaveLength(33);
+    expect(Object.keys(PART_CHANNEL)).toHaveLength(32);
     expect(readNarrowedPayload).toBeFunction();
   });
 });

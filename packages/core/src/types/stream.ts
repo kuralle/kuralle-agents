@@ -142,14 +142,6 @@ export interface DonePayload {
   };
 }
 
-export interface KnowledgeCitationPayload {
-  sourceId: string;
-  title?: string;
-  url?: string;
-  lastModified?: string;
-  score?: number;
-}
-
 export interface KnowledgeCacheHitPayload {
   query: string;
   resultCount: number;
@@ -211,7 +203,6 @@ interface StreamPayloadMap {
   error: ErrorPayload;
   custom: CustomPayload;
   done: DonePayload;
-  'knowledge-citation': KnowledgeCitationPayload;
   'knowledge-cache-hit': KnowledgeCacheHitPayload;
   'knowledge-cache-miss': KnowledgeCacheMissPayload;
   'knowledge-search': KnowledgeSearchPayload;
@@ -225,7 +216,6 @@ type ClientStreamPartType =
   | 'text-end'
   | 'text-cancel'
   | 'conversation-outcome'
-  | 'knowledge-citation'
   | 'error'
   | 'done';
 
@@ -267,7 +257,6 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   error: 'client',
   custom: 'internal',
   done: 'client',
-  'knowledge-citation': 'client',
   'knowledge-cache-hit': 'internal',
   'knowledge-cache-miss': 'internal',
   'knowledge-search': 'internal',

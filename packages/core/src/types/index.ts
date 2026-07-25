@@ -136,7 +136,6 @@ export type {
   ErrorPayload,
   CustomPayload,
   DonePayload,
-  KnowledgeCitationPayload,
   KnowledgeCacheHitPayload,
   KnowledgeCacheMissPayload,
   KnowledgeSearchPayload,

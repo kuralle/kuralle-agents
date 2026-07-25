@@ -7,12 +7,15 @@
 
 ## 1. The defect
 
-`HarnessStreamPart` has two definitions, both publicly reachable from the same package:
+`HarnessStreamPart` had **three** definitions. Two were publicly reachable from the same package:
 
 | Import path | Definition | Variants |
 |---|---|---|
 | `@kuralle-agents/core` | `types/stream.ts` (`index.ts:386`) | 27 |
 | `@kuralle-agents/core/types` | `types/voice.ts` (`types/index.ts:11`, via `export *`) | 58 |
+
+A **third** definition — `AgentStreamPart` (`types/processors.ts:92`), hook-only with no runtime
+caller — was found during implementation and deleted. The original diagnosis undercounted.
 
 The runtime's knowledge subsystem is typed against the 58-variant union and laundered into the
 27-variant one by an explicit cast at `runtime/grounding/knowledge.ts:118`:
@@ -108,10 +111,9 @@ Four properties, each replacing a symptom above:
 
 | Disposition | Count | Basis |
 |---|---|---|
-| → `channel: 'client'` | 1 | `knowledge-citation` — emitted (`policies/agentTurn.ts:63`), already in the SAFE set |
 | → `channel: 'internal'` | 5 | `knowledge-cache-hit`/`-cache-miss`/`-search`/`-quality-check`/`-reformulation` — emitted by `KnowledgeProvider`, consumed by `bench-ttft.ts` |
 | **Deleted** | 27 | zero emit sites **and** zero consumers, incl. the 3 phantom SAFE entries |
-| Not stream parts | 6 | belong to `ConversationAuditEntry` / `ConversationEvent`, different unions |
+| Not stream parts | 7 | belong to `ConversationAuditEntry` / `ConversationEvent`, different unions — **incl. `knowledge-citation`** (corrected 2026-07-25: `policies/agentTurn.ts:63` sits inside `recordKnowledgeCitations`, which calls `appendConversationAudit(...)`; it was never a stream emitter) |
 
 Chesterton's Fence was checked on the three phantom SAFE entries: never emitted by any package at
 `HEAD`, including the (now-deleted) voice stack. No reason behind the fence.
@@ -169,7 +171,7 @@ Chunks 3, 5 and 10 change public type surface. Chunk 10 is `full` lane — it is
 | V2 | Adding a variant without listing it in `PART_CHANNEL` fails to compile | deliberate-omission test |
 | V3 | Zero `as HarnessStreamPart` / `as StreamPart` casts remain in `packages/*/src` | `grep` = 0 |
 | V4 | Exactly one definition of the stream union in `core/src` | chunk 2's guard |
-| V5 | `hono-server` `safe` filter behaviour unchanged for the 9 still-live SAFE types | hono-server tests |
+| V5 | `hono-server` `safe` filter behaviour unchanged for the 8 still-live SAFE types | hono-server tests |
 | V6 | `bench-ttft.ts` still sees `knowledge-search` / `knowledge-cache-hit` | script runs |
 | V7 | Full gate | `bun run build`, `typecheck:all`, `bun run test` all exit 0 |
 
