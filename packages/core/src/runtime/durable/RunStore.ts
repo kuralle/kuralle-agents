@@ -7,7 +7,7 @@ export class LogConflictError extends Error {
 
   constructor(runId: string, expectedIndex: number, actualIndex: number) {
     super(
-      `Log conflict for run ${runId}: expected append at index ${expectedIndex}, current length is ${actualIndex}`,
+      `Log conflict for run ${runId}: expected append at index ${expectedIndex}, current length is ${actualIndex}. For parallel durable effects, use ctx.tool directly or reserve callsites with ctx.reserveCallsites(count) before supplying explicit indices.`,
     );
     this.name = 'LogConflictError';
     this.runId = runId;

@@ -107,6 +107,25 @@ The `action` node collects an amount, pauses for a supervisor decision, and runs
 | Memory / Redis / Postgres | Multi-writer — CAS on `session.version` | Stale writers get `StaleWriteError`; retry or reload |
 | Parallel-safe tools (`parallelSafe: true`) | Same turn, `Promise.all` | `reserveSteps` pre-assigns journal ordinals; read-only / `replay: false` tools qualify |
 
+## Parallel tool calls from action nodes
+
+`ctx.tool` reserves its journal ordinal when the call starts, so an action node can use ordinary
+`Promise.all` without manually coordinating indices:
+
+```typescript
+const [inventory, shipping, tax] = await Promise.all([
+  ctx.tool('lookup_inventory', { sku }),
+  ctx.tool('quote_shipping', { address, sku }),
+  ctx.tool('calculate_tax', { address, price }),
+]);
+```
+
+Each effect is recorded exactly once and is replayed from its own journal record on resume. The
+built-in `SessionRunStore` uses `reserveSteps` for atomic reservations; custom stores may omit that
+optional method and Kuralle serializes pending appends within the current context. If you supply
+explicit `callsite` and `index` options yourself, reserve the callsites first with
+`ctx.reserveCallsites(count)` and provide distinct journal indices.
+
 ## Two sharp edges
 
 - **Errors are frozen, not retried.** A failed effect's error is recorded and **re-thrown on every replay** — a resumed run will not get a second attempt. Put retry logic *inside* the tool's `execute`, or start a fresh logical step (different args produce a different key).

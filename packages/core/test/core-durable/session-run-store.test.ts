@@ -83,5 +83,18 @@ describe('SessionRunStore over SessionStore (MemoryStore)', () => {
         startedAt: Date.now(),
       }),
     ).rejects.toBeInstanceOf(LogConflictError);
+
+    // Asserted separately from the class: the remedy in the message is the only thing that tells a
+    // caller what to do about a conflict, so it is part of the contract, not incidental wording.
+    await expect(
+      runStore.appendStep(runId, {
+        index: 2,
+        key: 'step-2',
+        kind: 'tool',
+        name: 'skip',
+        result: {},
+        startedAt: Date.now(),
+      }),
+    ).rejects.toThrow('ctx.reserveCallsites(count)');
   });
 });
