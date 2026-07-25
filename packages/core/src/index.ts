@@ -238,10 +238,7 @@ export type {
   HandoffInputResult,
 } from './runtime/handoffFilters.js';
 
-export {
-  DefaultToolExecutor,
-  DefaultAgentStateController,
-} from './foundation/index.js';
+export { DefaultAgentStateController } from './foundation/index.js';
 export type {
   ToolExecutor,
   AgentStateController,
