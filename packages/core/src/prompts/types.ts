@@ -94,7 +94,12 @@ export interface SessionMemory {
   openGoalsPrompt?: string;
 }
 
-export interface AgentDefinition {
+/**
+ * Who the agent is, rendered into the `identity` / `role` / `capabilities` prompt
+ * sections by `PromptBuilder`. A prompt fragment — not the agent itself, which is
+ * `AgentConfig` from `defineAgent`.
+ */
+export interface AgentIdentity {
   identity: string;
   role: string;
   capabilities?: string[];
@@ -102,7 +107,7 @@ export interface AgentDefinition {
 
 export interface PromptBuilderConfig {
   template?: PromptTemplate;
-  agentDefinition?: AgentDefinition;
+  agentIdentity?: AgentIdentity;
   persona?: PersonaConfig;
   brandVoice?: BrandVoiceConfig;
   knowledgeContext?: KnowledgeContext;

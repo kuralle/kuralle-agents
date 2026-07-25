@@ -11,7 +11,7 @@ export type {
   BrandVoiceConfig,
   KnowledgeContext,
   SessionMemory,
-  AgentDefinition,
+  AgentIdentity,
   PolicyProfile,
   PromptBuilderConfig,
 } from './types.js';

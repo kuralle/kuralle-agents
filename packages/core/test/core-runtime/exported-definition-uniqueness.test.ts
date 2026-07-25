@@ -16,14 +16,6 @@ interface AllowlistedDuplicate extends DuplicateDefinition {
 }
 
 const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
-  AgentDefinition: {
-    kind: 'export',
-    files: [
-      'packages/core/src/foundation/AgentDefinition.ts',
-      'packages/core/src/prompts/types.ts',
-    ],
-    reason: 'Foundation and prompt-assembly contracts still share this public name; separate cleanup is out of scope.',
-  },
   ChannelPolicy: {
     kind: 'export',
     files: ['packages/core/src/channels/types.ts', 'packages/engagement/src/policy.ts'],

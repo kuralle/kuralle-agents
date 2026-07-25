@@ -6,7 +6,7 @@ import type {
   BrandVoiceConfig,
   KnowledgeContext,
   SessionMemory,
-  AgentDefinition,
+  AgentIdentity,
   PolicyProfile,
 } from './types.js';
 import { LAYER_PRIORITIES } from './types.js';
@@ -36,8 +36,8 @@ export class PromptBuilder {
     return this;
   }
 
-  withAgentDefinition(definition: AgentDefinition): this {
-    this.config.agentDefinition = definition;
+  withAgentIdentity(identity: AgentIdentity): this {
+    this.config.agentIdentity = identity;
     return this;
   }
 
@@ -89,8 +89,8 @@ export class PromptBuilder {
     });
 
     // Layer 1: Agent Definition
-    if (this.config.agentDefinition) {
-      sections.push(...this.buildAgentDefinitionSections());
+    if (this.config.agentIdentity) {
+      sections.push(...this.buildAgentIdentitySections());
     }
 
     if (this.config.persona) {
@@ -138,8 +138,8 @@ export class PromptBuilder {
     return sorted.map(s => this.formatSection(s)).join('\n\n');
   }
 
-  private buildAgentDefinitionSections(): PromptSection[] {
-    const def = this.config.agentDefinition!;
+  private buildAgentIdentitySections(): PromptSection[] {
+    const def = this.config.agentIdentity!;
     const sections: PromptSection[] = [];
 
     sections.push({

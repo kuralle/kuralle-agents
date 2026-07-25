@@ -8,7 +8,7 @@ import { PromptBuilder } from '../src/prompts/PromptBuilder.ts';
 describe('PromptBuilder persona section', () => {
   it('renders Persona after role and before tools', () => {
     const prompt = new PromptBuilder()
-      .withAgentDefinition({
+      .withAgentIdentity({
         identity: 'Support Agent',
         role: 'Help customers resolve account issues.',
       })
@@ -33,7 +33,7 @@ describe('PromptBuilder persona section', () => {
 
   it('does not render a Persona section when no persona is set', () => {
     const prompt = new PromptBuilder()
-      .withAgentDefinition({
+      .withAgentIdentity({
         identity: 'Support Agent',
         role: 'Help customers resolve account issues.',
       })
