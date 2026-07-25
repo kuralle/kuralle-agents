@@ -131,6 +131,39 @@ Turn spans now include `agentId`, which makes trace export a true superset of th
 
 Stream migration: rename imports to `StreamPart`, read variant fields through `part.payload`, and include both `channel` and `payload` when constructing test or custom stream parts.
 
+### WebSocket frames now satisfy the stream contract
+
+The envelope reshape swept every *typed* emit site, but `@kuralle-agents/hono-server` hand-built its WebSocket frames as `JSON.stringify` object literals — which `tsc` cannot check against anything. They kept the pre-envelope flat shape and included `suggested-questions`, one of the deleted variants.
+
+- Every WebSocket send is now a typed `StreamPart` routed through the same `PART_CHANNEL` filter as the SSE path, so the client/internal split holds on both transports. `createKuralleRouter`'s socket previously applied no filter at all and could deliver internal parts, and unredacted `error` payloads, straight to a browser.
+- Added `WebSocketTransportFrame` for genuine transport messages (`connected`, `cancelled`, `pong`). These are not stream parts and are no longer pretending to be.
+- **Removed the suggested-questions feature**: the `widgetWelcomeSuggestions` router option, and the corresponding rendering in `@kuralle-agents/widget`. This is a capability removal, not only a type cleanup — the server emitted it and the widget rendered it. If you use `widgetWelcomeSuggestions`, there is no drop-in replacement; send the prompts as ordinary assistant text, or pin the previous version while we decide whether to restore it as a first-class client part.
+- `@kuralle-agents/widget` also dropped its handlers for `step-start`, `step-end`, `agent-start`, `agent-end`, `interrupted`, and `cancelled` — all deleted from the union — and for `handoff`, which remains `internal` and so never reaches a browser under the default `safe` filter.
+
+### Lifecycle hooks can no longer break a run
+
+The five live `Hooks` callbacks were invoked without isolation: `onStart`, `onError`, `onEnd`, and `onConversationEnd` were bare `await`s, so a throwing hook aborted the run, and `onStreamPart` was a bare `void` call, so a rejection surfaced as an unhandled rejection.
+
+Hooks are user code and now follow the same rule as `TraceSink`: **observation never participates in run correctness.** A hook that throws or rejects is contained and reported via `console.error`, and the run proceeds. Unlike trace sinks, hook failures are logged rather than silent — silent failure is how the removed `HarnessHooks` defect stayed invisible.
+
+This is a behaviour change: a hook that previously failed a run will now let it succeed. If you relied on a throwing hook to abort a turn, move that logic into a guardrail or a flow node — the hook surface is for observation only.
+
+### Removed the second tool-error surface
+
+- Removed `packages/core/src/tools/errorHandling.ts` and its exports from `@kuralle-agents/core/tools`: `withErrorHandling`, `executeWithRetry`, `createCircuitBreaker`, `withTimeout`, `isPermanentError`, `isCircuitOpenError`, `CircuitOpenError`, and a **second** `ToolTimeoutError`.
+
+That second `ToolTimeoutError` was the reason. Two distinct classes shared the name, each reachable from a different public entry point of the same package — `@kuralle-agents/core` resolved to `tools/effect/errors.ts`, `@kuralle-agents/core/tools` to `errorHandling.ts`. Both set `name = 'ToolTimeoutError'`, so a `catch (e) { if (e instanceof ToolTimeoutError) … }` written against the natural import silently failed to match a timeout thrown by `withTimeout()`, with no diagnostic signal in logs or stack traces.
+
+The module had no internal consumers — every export resolved only to its own barrel line. The functions worked; they were simply a second, unwired timeout mechanism (plus an unwired circuit breaker) sitting beside the live one in `tools/effect/ToolExecutor.ts`. `ToolTimeoutError` imported from `@kuralle-agents/core` is unchanged. If you used `withTimeout` or `createCircuitBreaker`, copy them into your project — they had no dependency on Kuralle internals.
+
+Added `exported-definition-uniqueness`, a type-checker-backed guard asserting each publicly exported name has exactly one definition. It found 18 further duplicates, tracked on an explicit allow-list so new ones fail immediately.
+
+### Parallel `ctx.tool` from action nodes
+
+`await Promise.all([ctx.tool(…), ctx.tool(…)])` — the obvious way to parallelise — previously threw `LogConflictError`, naming a journal invariant rather than anything actionable. Concurrent calls each read the step count before any of them appended, so they all claimed the same ordinal.
+
+`ctx.tool` now reserves its journal ordinal when the call starts, using the run store's atomic `reserveSteps` where available and serializing pending appends where it is not. `reserveSteps` remains optional on `RunStore`, so custom stores need no change. `LogConflictError`'s message now names `ctx.reserveCallsites(count)` for callers supplying explicit indices.
+
 ## 0.10.0 — Retrieval hardening: embedder lock, incremental ingest, persistent keyword tier, multilingual keyword search
 
 Unified bump across the graph (0.9.0 → 0.10.0). Contains **breaking** `@kuralle-agents/rag` option renames (minor bump per repo convention). Grounded in a measured before/after benchmark plus live Cloudflare + Fly deployment verification (`packages/rag/bench/results/vecgrep-gap-report.md`).
