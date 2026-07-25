@@ -88,20 +88,3 @@ export interface AgentCapabilityDescriptor {
   handlesIntents?: string[];
   doesNotHandle?: string[];
 }
-
-export type AgentStreamPart =
-  | { type: 'text-start'; id: string }
-  | { type: 'text-delta'; id: string; delta: string }
-  | { type: 'text-end'; id: string }
-  | { type: 'text-cancel'; id: string; reason: string }
-  | { type: 'tool-call'; toolName: string; args: unknown; toolCallId?: string }
-  | { type: 'tool-result'; toolName: string; result: unknown; toolCallId?: string }
-  | { type: 'tool-error'; toolName: string; error: string; toolCallId?: string }
-  | { type: 'handoff'; targetAgent: string; reason?: string }
-  | { type: 'node-enter'; nodeName: string }
-  | { type: 'node-exit'; nodeName: string }
-  | { type: 'flow-transition'; from: string; to: string }
-  | { type: 'flow-end'; reason: string }
-  | { type: 'custom'; name: string; data: unknown; timestamp?: Date }
-  | { type: 'turn-end'; metadata?: Record<string, unknown> }
-  | { type: 'error'; error: string };

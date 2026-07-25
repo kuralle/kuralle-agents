@@ -136,19 +136,17 @@ const runtime = new Runtime({
 
 ### Event Types
 
-All `HarnessStreamPart` types are available for filtering:
+All `StreamPart` types are available for filtering:
 
 - `text-start` / `text-delta` / `text-end` / `text-cancel` - Assistant text lifecycle (`text-delta` carries `id` + `delta`)
-- `tool-call` - Tool invocation starts
-- `tool-result` - Tool returns data
-- `tool-error` - Tool fails
-- `tool-start` - Tool begins (with filler)
-- `tool-done` - Tool completes (with duration)
+- `tool-call` / `tool-result` - Tool lifecycle
 - `handoff` - Agent handoff occurs
-- `agent-start` / `agent-end` - Agent lifecycle
-- `step-start` / `step-end` - Step lifecycle
-- `node-enter` / `node-exit` - Flow node transitions
-- `flow-transition` / `flow-end` - Flow lifecycle
+- `flow-enter` / `flow-end` / `node-enter` / `node-exit` / `flow-transition` - Flow lifecycle
+- `interrupted` / `paused` / `turn-end` / `wake` - Turn lifecycle
+- `pipeline-validation-block` / `safety-blocked` / `escalation` - Policy outcomes
+- `context-compacted` / `compaction-skipped` / `context-overflow-recovered` - Context lifecycle
+- `knowledge-citation` / `knowledge-cache-hit` / `knowledge-cache-miss` / `knowledge-search` / `knowledge-quality-check` / `knowledge-reformulation` - Knowledge lifecycle
+- `conversation-outcome` / `interactive` / `custom` - Structured results
 - `error` - Errors occur
 - `done` - Session completes
 
@@ -162,9 +160,12 @@ Each callback sends a JSON payload:
   "agentId": "agent-id",
   "timestamp": "2026-02-01T16:40:36.950Z",
   "part": {
+    "channel": "client",
     "type": "text-delta",
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "delta": "Hello"
+    "payload": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "delta": "Hello"
+    }
   },
   "fullText": "Hello! I'm here to help."
 }
@@ -209,7 +210,7 @@ Example:
 ```typescript
 {
   allowList: ['text-delta', 'tool-call'],  // Only send these
-  denyList: ['step-start', 'step-end'],  // But never these
+  denyList: ['knowledge-search', 'knowledge-reformulation'],  // But never these
 }
 ```
 
@@ -249,8 +250,8 @@ See `packages/core/examples/http-webhook-demo.ts` for a complete working example
 
 ### Important: Internal Event Exposure
 
-`HarnessStreamPart` includes internal orchestration events such as:
-- `tool-call` / `tool-result` / `tool-error`
+`StreamPart` includes internal orchestration events such as:
+- `tool-call` / `tool-result`
 - `handoff`
 - `node-enter` / `flow-transition`
 

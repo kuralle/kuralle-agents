@@ -1,164 +1,84 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { PART_CHANNEL } from '@kuralle-agents/core';
 import { shouldEmit, sanitizeForClient } from '../dist/index.js';
 
-/** @type {import('@kuralle-agents/core').HarnessStreamPart[]} */
-const allHarnessPartSamples = [
-  { type: 'input', text: 'hi' },
-  { type: 'text-delta', id: 't', delta: 'x' },
-  { type: 'text-clear', agentId: 'ag' },
-  {
-    type: 'tripwire',
-    phase: 'input',
-    processorId: 'p',
-    reason: 'r',
-  },
-  {
-    type: 'tool-call',
-    toolCallId: 'c1',
-    toolName: 't',
-    args: { secret: true },
-  },
-  {
-    type: 'tool-result',
-    toolCallId: 'c1',
-    toolName: 't',
-    result: {},
-  },
-  {
-    type: 'tool-error',
-    toolCallId: 'c1',
-    toolName: 't',
-    error: 'e',
-  },
-  { type: 'handoff', from: 'a', to: 'b', reason: 'r' },
-  { type: 'node-enter', nodeName: 'n' },
-  { type: 'node-exit', nodeName: 'n' },
-  { type: 'flow-transition', from: 'a', to: 'b' },
-  { type: 'flow-end', reason: 'r' },
-  { type: 'turn-end' },
-  { type: 'step-start', step: 1, agentId: 'ag' },
-  { type: 'step-end', step: 1, agentId: 'ag' },
-  { type: 'agent-start', agentId: 'ag' },
-  { type: 'agent-end', agentId: 'ag' },
-  { type: 'context-compacted', messagesBefore: 10, messagesAfter: 2 },
-  {
-    type: 'result-evicted',
-    toolCallId: 'c1',
-    filepath: '/srv/secret.txt',
-  },
-  {
-    type: 'interrupted',
-    sessionId: 's',
-    reason: 'r',
-    timestamp: new Date(),
-  },
-  { type: 'custom', name: 'x', data: {} },
-  { type: 'tool-start', toolCallId: 'c1', toolName: 't' },
-  { type: 'tool-done', toolCallId: 'c1', toolName: 't', durationMs: 1 },
-  { type: 'error', error: 'internal' },
-  { type: 'suggested-questions', suggestions: ['a'], isPartial: false },
-  { type: 'done', sessionId: 's' },
-];
+const clientTypes = Object.entries(PART_CHANNEL)
+  .filter(([, channel]) => channel === 'client')
+  .map(([type]) => type);
+const internalTypes = Object.entries(PART_CHANNEL)
+  .filter(([, channel]) => channel === 'internal')
+  .map(([type]) => type);
 
-test('safe-filter-blocks-tool-call', () => {
-  assert.equal(
-    shouldEmit(
-      { type: 'tool-call', toolCallId: '1', toolName: 'x', args: {} },
-      'safe',
-    ),
-    false,
-  );
+const part = (type) => ({
+  channel: PART_CHANNEL[type],
+  type,
+  payload: {},
 });
 
-test('safe-filter-blocks-node-enter', () => {
-  assert.equal(shouldEmit({ type: 'node-enter', nodeName: 'n' }, 'safe'), false);
-});
-
-test('safe-filter-blocks-flow-transition', () => {
-  assert.equal(
-    shouldEmit({ type: 'flow-transition', from: 'a', to: 'b' }, 'safe'),
-    false,
-  );
-});
-
-test('safe-filter-blocks-result-evicted', () => {
-  assert.equal(
-    shouldEmit(
-      { type: 'result-evicted', toolCallId: '1', filepath: '/x' },
-      'safe',
-    ),
-    false,
-  );
-});
-
-test('safe-filter-allows-text-delta', () => {
-  assert.equal(shouldEmit({ type: 'text-delta', id: 't', delta: 'hi' }, 'safe'), true);
-});
-
-test('safe-filter-allows-done', () => {
-  assert.equal(shouldEmit({ type: 'done', sessionId: 's' }, 'safe'), true);
-});
-
-test('safe-filter-allows-suggested-questions', () => {
-  assert.equal(
-    shouldEmit(
-      { type: 'suggested-questions', suggestions: ['q'], isPartial: false },
-      'safe',
-    ),
-    true,
-  );
-});
-
-test('safe-filter-allows-input', () => {
-  assert.equal(shouldEmit({ type: 'input', text: 'u' }, 'safe'), true);
-});
-
-test('safe-filter-allows-error-type-before-sanitize', () => {
-  assert.equal(shouldEmit({ type: 'error', error: 'x' }, 'safe'), true);
-});
-
-test('all-filter-allows-everything', () => {
-  for (const part of allHarnessPartSamples) {
-    assert.equal(shouldEmit(part, 'all'), true, `type ${part.type}`);
+test('safe filter allows every client-channel type', () => {
+  assert.deepEqual(clientTypes, [
+    'text-start',
+    'text-delta',
+    'text-end',
+    'text-cancel',
+    'conversation-outcome',
+    'error',
+    'done',
+  ]);
+  for (const type of clientTypes) {
+    assert.equal(shouldEmit(part(type), 'safe'), true, type);
   }
 });
 
-test('custom-filter-function', () => {
-  const filter = (part) =>
-    part.type === 'text-delta' || part.type === 'tool-call';
-  assert.equal(shouldEmit({ type: 'text-delta', id: 't', delta: 'a' }, filter), true);
-  assert.equal(
-    shouldEmit(
-      { type: 'tool-call', toolCallId: '1', toolName: 't', args: {} },
-      filter,
-    ),
-    true,
-  );
-  assert.equal(shouldEmit({ type: 'node-enter', nodeName: 'n' }, filter), false);
+test('safe filter blocks every internal-channel type', () => {
+  for (const type of internalTypes) {
+    assert.equal(shouldEmit(part(type), 'safe'), false, type);
+  }
 });
 
-test('sanitize-error-strips-details', () => {
+test('all filter allows every classified type', () => {
+  for (const type of Object.keys(PART_CHANNEL)) {
+    assert.equal(shouldEmit(part(type), 'all'), true, type);
+  }
+});
+
+test('custom filter receives the typed envelope', () => {
+  const filter = (streamPart) =>
+    streamPart.type === 'text-delta' || streamPart.type === 'tool-call';
+  assert.equal(shouldEmit(part('text-delta'), filter), true);
+  assert.equal(shouldEmit(part('tool-call'), filter), true);
+  assert.equal(shouldEmit(part('node-enter'), filter), false);
+});
+
+test('sanitize error strips details without changing the envelope', () => {
   const logs = [];
-  const orig = console.error;
+  const original = console.error;
   console.error = (...args) => {
     logs.push(args);
   };
   try {
-    const out = sanitizeForClient({
+    const output = sanitizeForClient({
+      channel: 'client',
       type: 'error',
-      error: 'SQL syntax error at line 42',
+      payload: { error: 'SQL syntax error at line 42' },
     });
-    assert.equal(out.type, 'error');
-    assert.equal(out.error, 'An error occurred. Please try again.');
+    assert.deepEqual(output, {
+      channel: 'client',
+      type: 'error',
+      payload: { error: 'An error occurred. Please try again.' },
+    });
     assert.ok(logs.length >= 1);
   } finally {
-    console.error = orig;
+    console.error = original;
   }
 });
 
-test('sanitize-error-preserves-non-error', () => {
-  const part = { type: 'text-delta', id: 't', delta: 'hi' };
-  const out = sanitizeForClient(part);
-  assert.deepEqual(out, part);
+test('sanitize preserves non-error parts', () => {
+  const streamPart = {
+    channel: 'client',
+    type: 'text-delta',
+    payload: { id: 't', delta: 'hi' },
+  };
+  assert.deepEqual(sanitizeForClient(streamPart), streamPart);
 });

@@ -1,4 +1,4 @@
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import type { WindowState } from '../adapter/window-store.js';
 import type { InteractiveMessage, MediaPayload } from './messages.js';
 import type { SendResult } from './responses.js';
@@ -56,7 +56,7 @@ export type OutboundPayload =
 
 export interface OutboundMeta {
   window: WindowState;
-  parts: HarnessStreamPart[];
+  parts: StreamPart[];
   sessionId: string;
   userId?: string;
 }

@@ -20,7 +20,7 @@ import { createPromptInjectionGuard } from '../src/processors/builtin/promptInje
 import { createPiiInputGuard } from '../src/processors/builtin/piiGuard.js';
 import { simulateConversation, createJudge } from '../src/eval/simulation.js';
 import type { EscalationRequest } from '../src/escalation/types.js';
-import type { HarnessStreamPart } from '../src/types/stream.js';
+import type { StreamPart } from '../src/types/stream.js';
 import { resolveLiveModel } from './_shared/v2Runner.js';
 
 const exampleDir = dirname(fileURLToPath(import.meta.url));
@@ -45,11 +45,11 @@ function check(name: string, passed: boolean, detail?: string) {
 }
 
 async function collect(handle: import('../src/types/stream.js').TurnHandle) {
-  const parts: HarnessStreamPart[] = [];
+  const parts: StreamPart[] = [];
   let text = '';
   for await (const part of handle.events) {
     parts.push(part);
-    if (part.type === 'text-delta') text += part.delta;
+    if (part.type === 'text-delta') text += part.payload.delta;
   }
   const result = await handle;
   return { parts, text: text || result.text };
@@ -212,7 +212,7 @@ async function collect(handle: import('../src/types/stream.js').TurnHandle) {
       lastRequest!.recentMessages.length > 0 &&
       typeof lastRequest!.summary === 'string' &&
       escalationPart?.type === 'escalation' &&
-      escalationPart.outcome === 'queued',
+      escalationPart.payload.outcome === 'queued',
     `handlerCalls=${requests.length} summary=${lastRequest?.summary?.slice(0, 80)}`,
   );
 

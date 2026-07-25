@@ -35,14 +35,14 @@ Turn tasks into verifiable goals ("add validation" → "write tests for invalid 
 
 ## Architecture
 
-Kuralle is a **TypeScript framework for building conversational AI agents** — text and voice — with structured flows, routing, and durable tool execution. Monorepo on Bun workspaces; built on the Vercel AI SDK (OpenAI, Anthropic, Google, xAI).
+Kuralle is a **TypeScript framework for building conversational AI agents** with structured flows, routing, and durable tool execution. Monorepo on Bun workspaces; built on the Vercel AI SDK (OpenAI, Anthropic, Google, xAI).
 
 - **Agents** — one tagless primitive: `defineAgent({ id, model, instructions, tools?, globalTools?, flows?, routes?, routing?, agents?, handoffs? })`. Behavior is derived from the fields you populate: `flows[]` → flow agent, `routes` + `routing` → triage, `agents[]` → composition.
 - **Flows** — node graphs via `defineFlow` + `reply`/`collect`/`action`/`decide`; each node returns its next transition. Hybrid mode answers off-flow questions, then resumes.
 - **Runtime** — `createRuntime(...)` → `Runtime`; `runtime.run({ input, sessionId })` → `TurnHandle` (`.events` AsyncIterable, awaitable result, `toResponseStream('sse')`). Orchestrates sessions, history, handoffs, streaming, hooks. Flow state lives in the session.
 - **Tools** — `defineTool({ name, description, input: <zod>, execute })` creates a durable effect tool; `buildToolSet(...)` exposes it to the model (model-visible schema) while `tools` runs the durable executor (effect log → exactly-once on retry).
 - **Sessions** — `SessionStore` interface; backends: Memory (default), Redis, Postgres.
-- **Voice** — provider-native realtime in `@kuralle-agents/realtime-audio` (`VoiceEngine`) drives Gemini/OpenAI/xAI `RealtimeModel` audio while Kuralle keeps tool/flow/handoff authority. LiveKit voice is cascaded-only (`KuralleRuntimeLLMAdapter`: STT→LLM→TTS).
+- **Voice** — out of scope. Provider-native realtime and cascaded/telephony voice are not in this repo; Kuralle is text-first. Inbound voice notes remain supported as multimodal audio input.
 - **Runtimes** — Node/Bun via `@kuralle-agents/hono-server`; Cloudflare Workers/Durable Objects via `@kuralle-agents/cf-agent`.
 
 ### Non-negotiable design rules
@@ -71,7 +71,7 @@ pnpm release             # version + build + publish (all packages version toget
 
 **Stale dist gotcha:** workspace packages import from each other's `dist/` (compiled), not `src/`. After editing a package's `src/`, rebuild it before running anything that depends on it — stale dist is a common "my fix didn't take" false negative.
 
-**Voice / E2E tests** (offline fake-client + live API modes): see `packages/e2e-tests/README.md` and the `@kuralle-agents/realtime-audio` test suite.
+**E2E tests**: see `packages/e2e-tests/README.md`.
 
 ## Adding a feature
 1. Start in `@kuralle-agents/core` for primitives or runtime changes; update types under `packages/core/src/types/`.
@@ -102,12 +102,13 @@ pnpm release             # version + build + publish (all packages version toget
 ## Plan Desk Factory — default operating mode
 
 This repository runs on the Factory workflow. On any work request:
-1. **Follow the factory workflow** — orient, then execute the [factory.md](.agents/factory/factory.md) cycle: pull → read → red gate → act → prove → observe → gate → report.
-2. **Operate in autonomous-stand mode** — decompose the goal into verifiable moves, drive them to zero, and ship finished work without pausing for permission.
-3. **Drive via harness tasks** — use `TaskCreate` / `TaskList` / `TaskUpdate` as the execution spine. One task per move; `in_progress` on start, `completed` the instant its done-condition holds.
+1. **Follow the factory cycle** — the always-on [factory.md](.agents/factory/factory.md) contract governs each work item: pull → read → red gate → act → prove → observe → gate → report. For the session program (orient → intake → execute → finish), read [workflow.md](.agents/factory/workflow.md).
+2. **Delegate implementation by default — when a worker is available.** The supervisor orchestrates; IC workers execute. Probe the dispatchers in [.agents/factory/workers/](.agents/factory/workers/) per [protocol.md](.agents/factory/protocol.md) and hand each work item to a probed worker. **If no worker is installed on this machine, do the work yourself under the same contract** — never skip the cycle just because you are the one typing, and never assume a delegation skill or worker CLI exists that this repo did not ship. Write inline without dispatch only for trivial edits, integration/conflict resolution, and review fixes under ~5 lines.
+3. **Operate in autonomous-stand mode** — decompose the goal into verifiable moves on a harness task list (`TaskCreate` / `TaskList` / `TaskUpdate`), drive them to zero, and ship without pausing for permission. The full posture is [autonomous-stand.md](.agents/factory/autonomous-stand.md).
 4. **Prove before done** — re-run the claimed checks per [protocol.md](.agents/factory/protocol.md); exit codes are authoritative.
 
-@.agents/factory/workflow.md
+New to this repo? Run `plandesk onboard` for the full Plan Desk + Factory model and the operating loop.
+
 @.agents/factory/factory.md
-@.agents/factory/autonomous-stand.md
 <!-- plandesk-factory:end -->
+

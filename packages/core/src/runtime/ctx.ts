@@ -8,7 +8,7 @@ import type {
   AutoRetrieveProvider,
   RunContext,
 } from '../types/run-context.js';
-import type { HarnessStreamPart } from '../types/stream.js';
+import type { StreamPart } from '../types/stream.js';
 import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { InputProcessor, OutputProcessor } from '../types/processors.js';
@@ -55,7 +55,7 @@ export interface CtxDeps {
   bargeIn?: AbortSignal;
   abortSignal?: AbortSignal;
   clock?: EffectClock;
-  emit?: (part: HarnessStreamPart) => void;
+  emit?: (part: StreamPart) => void;
 }
 
 function makeCtx(deps: CtxDeps): RunContext {
@@ -212,7 +212,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     deps.runState.status = 'paused';
     deps.runState.updatedAt = Date.now();
     await deps.runStore.putRunState(deps.runState);
-    emit({ type: 'paused', waitingFor: signalName });
+    emit({ channel: 'internal', type: 'paused', payload: { waitingFor: signalName } });
     throw new SuspendError(signalName);
   };
 

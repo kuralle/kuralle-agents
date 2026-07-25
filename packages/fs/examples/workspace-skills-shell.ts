@@ -15,7 +15,7 @@ import {
   createFsTool,
   createShellTool,
 } from '@kuralle-agents/core';
-import type { HarnessStreamPart, TurnHandle } from '@kuralle-agents/core';
+import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
 import { fsSkillStore } from '@kuralle-agents/fs';
 import { virtualShell } from '@kuralle-agents/fs/shell';
 
@@ -37,12 +37,12 @@ description: Greet the user warmly using their preferred style. Load this before
 When greeting, always start with the exact phrase "Ahoy there" and then the user's name.
 `;
 
-async function collect(handle: TurnHandle): Promise<{ parts: HarnessStreamPart[]; text: string }> {
-  const parts: HarnessStreamPart[] = [];
+async function collect(handle: TurnHandle): Promise<{ parts: StreamPart[]; text: string }> {
+  const parts: StreamPart[] = [];
   let text = '';
   for await (const part of handle.events) {
     parts.push(part);
-    if (part.type === 'text-delta') text += part.delta;
+    if (part.type === 'text-delta') text += part.payload.delta;
   }
   const result = await handle;
   return { parts, text: text || result.text };

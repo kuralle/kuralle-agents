@@ -12,11 +12,11 @@ import {
 import { createObservabilityHooks } from '../../src/hooks/builtin/observability.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import { createMockSession } from '../../src/testing/mocks.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 describe('tool interim filler', () => {
   it('emits text-delta via onInterim before the tool completes', async () => {
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const slow = defineTool({
       name: 'lookup',
       description: 'Lookup',
@@ -29,19 +29,19 @@ describe('tool interim filler', () => {
     });
     const executor = new CoreToolExecutor({
       tools: { lookup: slow },
-      onInterim: (message) => { const id = crypto.randomUUID(); parts.push({ type: 'text-start', id }); parts.push({ type: 'text-delta', id, delta: message }); parts.push({ type: 'text-end', id }); },
+      onInterim: (message) => { const id = crypto.randomUUID(); parts.push({ channel: 'client', type: 'text-start', payload: { id } }); parts.push({ channel: 'client', type: 'text-delta', payload: { id, delta: message } }); parts.push({ channel: 'client', type: 'text-end', payload: { id } }); },
     });
     const session = createMockSession({ id: 's1' });
 
     const result = await executor.execute({ name: 'lookup', args: {}, session });
     expect(result).toEqual({ found: true });
-    expect(parts.some((p) => p.type === 'text-delta' && p.delta === 'one sec…')).toBe(true);
-    const fillerIdx = parts.findIndex((p) => p.type === 'text-delta' && p.delta === 'one sec…');
+    expect(parts.some((p) => p.type === 'text-delta' && p.payload.delta === 'one sec…')).toBe(true);
+    const fillerIdx = parts.findIndex((p) => p.type === 'text-delta' && p.payload.delta === 'one sec…');
     expect(fillerIdx).toBeGreaterThanOrEqual(0);
   });
 
   it('does not emit filler when interim is unset', async () => {
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const fast = defineTool({
       name: 'ping',
       description: 'Ping',
@@ -49,7 +49,7 @@ describe('tool interim filler', () => {
     });
     const executor = new CoreToolExecutor({
       tools: { ping: fast },
-      onInterim: (message) => { const id = crypto.randomUUID(); parts.push({ type: 'text-start', id }); parts.push({ type: 'text-delta', id, delta: message }); parts.push({ type: 'text-end', id }); },
+      onInterim: (message) => { const id = crypto.randomUUID(); parts.push({ channel: 'client', type: 'text-start', payload: { id } }); parts.push({ channel: 'client', type: 'text-delta', payload: { id, delta: message } }); parts.push({ channel: 'client', type: 'text-end', payload: { id } }); },
     });
     const session = createMockSession({ id: 's1' });
 
@@ -184,7 +184,7 @@ describe('extraction telemetry', () => {
       nodes: [collectNode, replyNode],
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const driver = {
       async runExtraction() {
         return {
@@ -223,11 +223,11 @@ describe('extraction telemetry', () => {
     await runFlow(flow, runState, driver, ctx);
 
     const submission = parts.find(
-      (p) => p.type === 'custom' && p.name === 'flow.extraction.submission',
+      (p) => p.type === 'custom' && p.payload.name === 'flow.extraction.submission',
     );
     expect(submission).toBeDefined();
     if (submission?.type === 'custom') {
-      const data = submission.data as {
+      const data = submission.payload.data as {
         fieldsAccepted?: string[];
         fieldsRejected?: string[];
       };
@@ -235,10 +235,10 @@ describe('extraction telemetry', () => {
       expect(data.fieldsRejected).toContain('email');
     }
 
-    const update = parts.find((p) => p.type === 'custom' && p.name === 'flow.extraction.update');
+    const update = parts.find((p) => p.type === 'custom' && p.payload.name === 'flow.extraction.update');
     expect(update).toBeDefined();
     if (update?.type === 'custom') {
-      const data = update.data as { collected?: Record<string, unknown>; missing?: string[] };
+      const data = update.payload.data as { collected?: Record<string, unknown>; missing?: string[] };
       expect(data.collected?.name).toBe('Riley');
       expect(data.missing).toEqual([]);
     }
@@ -273,9 +273,12 @@ describe('extraction telemetry', () => {
     };
     await hooks.onStart?.(hookCtx);
     await hooks.onStreamPart?.(hookCtx, {
+      channel: 'internal',
       type: 'custom',
-      name: 'flow.extraction.submission',
-      data: { node: 'contact', fieldsAccepted: ['name'], fieldsRejected: ['notes'] },
+      payload: {
+        name: 'flow.extraction.submission',
+        data: { node: 'contact', fieldsAccepted: ['name'], fieldsRejected: ['notes'] },
+      },
     });
     await hooks.onSessionEnd?.(session, { success: true });
 

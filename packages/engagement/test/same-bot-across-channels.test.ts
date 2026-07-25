@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import type { ChoiceOption, HarnessStreamPart } from '@kuralle-agents/core';
+import type { ChoiceOption, StreamPart } from '@kuralle-agents/core';
 import {
   collect,
   decide,
@@ -126,14 +126,18 @@ function createRecordingSink(): OutboundSink & {
   };
 }
 
-function interactivePart(options: ChoiceOption[], prompt = 'Pick one'): HarnessStreamPart {
-  return { type: 'interactive', nodeId: 'pick', options, prompt };
+function interactivePart(options: ChoiceOption[], prompt = 'Pick one'): StreamPart {
+  return {
+    channel: 'internal',
+    type: 'interactive',
+    payload: { nodeId: 'pick', options, prompt },
+  };
 }
 
 function outboundWithInteractive(
   platform: string,
   threadId: string,
-  part: HarnessStreamPart,
+  part: StreamPart,
   window = openWindow,
 ): OutboundRequest {
   return {
@@ -296,7 +300,7 @@ describe('same_bot_across_channels', () => {
       hostSelect: async () => ({ kind: 'enterFlow' as const, flow }),
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const handle = runtime.run({
       sessionId: 'same-bot-e2e',
       input: 'start',

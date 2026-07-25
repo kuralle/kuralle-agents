@@ -41,26 +41,11 @@ cd packages/core && npm run build
 bun run test
 ```
 
-### Voice pipeline tests
+### End-to-end tests
 
-Two modes: offline (no API keys, <1s) and live (real Gemini, 30-60s per turn).
-
-**Offline — FakeRealtimeAudioClient (CI-safe, deterministic):**
 ```bash
-bun test packages/e2e-tests/tests/fake-client.test.ts
-```
-
-**Live API — real Gemini audio (needs `GOOGLE_GENERATIVE_AI_API_KEY`):**
-```bash
-npx tsx packages/e2e-tests/tests/livekit-model-ws-bridge.ts    # single-turn
-npx tsx packages/e2e-tests/tests/bridge-adapter-debug.ts        # multi-turn
-npx tsx packages/e2e-tests/tests/head-to-head-benchmark.ts      # 3-path benchmark
-```
-
-**AgentSession + Kuralle (needs `DEEPGRAM_API_KEY` + `GOOGLE_GENERATIVE_AI_API_KEY`):**
-```bash
-npx tsx packages/e2e-tests/tests/agentsession-kuralle-direct-e2e.ts
-npx tsx packages/e2e-tests/tests/agentsession-kuralle-e2e.ts
+bun test packages/e2e-tests/tests/flow-triage.test.ts             # offline, deterministic
+cd packages/e2e-tests && npm run test:parallel-durability          # live OPENAI_API_KEY
 ```
 
 See `packages/e2e-tests/README.md` for the full test catalog.
@@ -162,5 +147,10 @@ Use `pnpm publish -r` (not `changeset publish`) to correctly replace `workspace:
 4. **Grounding must be explicit** — use CAG tools + auto-retrieve when you promise grounded responses.
 5. **Source maps must not ship** in published packages — no `.map` files in npm tarballs.
 6. **Docs must be in sync with code** — never ship a feature without updating documentation.
+7. **Never bridge two shapes with a cast.** If a boundary genuinely needs both, name both types and
+   quarantine a typed adapter in one boundary file. RFC-0002 is the failure case: two public stream
+   unions were hidden behind `as HarnessStreamPart` / `as StreamPart`, so emitted knowledge events
+   bypassed the public contract. DeepAgents' versioned protocol plus one named adapter is the
+   acceptable pattern; see `docs/peer-patterns-stream-and-composition.md` §4.
 
 Full rules: `docs/skills/kuralle-usage/rules/`

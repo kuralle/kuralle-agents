@@ -109,6 +109,13 @@ const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkill
 progressive disclosure works identically. On a persistent
 [`SqlFileSystem`](/guides/workspace/#persistence--pick-a-backend-by-platform), skills survive restarts.
 
+Layer shared defaults with agent- or project-specific skills by passing ordered roots. Later roots
+override earlier roots by frontmatter `name`; the winning root supplies the body and resources:
+
+```typescript
+const skills = fsSkillStore(fs, ['/skills/shared', '/skills/project']);
+```
+
 ## Where it runs
 
 Skills are pure data + two tools, so they run identically on Node and Cloudflare Workers. The

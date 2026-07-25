@@ -40,10 +40,7 @@ Then read the [documentation](../apps/docs) and the [root README](../README.md).
 
 | Package | Description |
 |---------|-------------|
-| [`@kuralle-agents/realtime-audio`](kuralle-realtime-audio) | Provider-native speech-to-speech (Gemini, OpenAI, xAI) with Kuralle keeping tool/flow/handoff authority. |
-| [`@kuralle-agents/voice-protocol`](kuralle-voice-protocol) | Canonical client/server wire protocol for voice transports (types + optional Zod). |
-
-> **Cascaded voice (STT→LLM→TTS) + telephony transports** (`livekit-plugin`, `livekit-plugin-transport-{ws,http,sip,twilio,smartpbx}`, `transport-base`) now live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)**, versioned independently while Kuralle hardens text-first.
+> **Voice is out of scope.** Cascaded voice and telephony transports (`livekit-plugin`, its transports, `transport-base`) live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)**. Provider-native speech-to-speech (`realtime-audio`, `voice-protocol`) has been removed. Kuralle is text-first.
 
 ## Messaging
 

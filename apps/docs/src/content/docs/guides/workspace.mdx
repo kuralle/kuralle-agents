@@ -85,6 +85,15 @@ const agent = defineAgent({
 });
 ```
 
+For layered skills, pass roots from broadest to narrowest:
+
+```typescript
+const skills = fsSkillStore(fs, ['/skills/shared', '/skills/project']);
+```
+
+If both roots declare the same frontmatter `name`, the later root supplies that skill's metadata,
+body, and resources.
+
 ## Shell (run commands)
 
 Attach a `Shell` alongside the `FileSystem` and the runtime exposes a durable `bash` tool. Three

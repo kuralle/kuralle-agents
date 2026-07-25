@@ -15,7 +15,7 @@ import {
   type WakeDelivery,
 } from '../../src/scheduler/index.js';
 import type { ChannelDriver, ResolvedNode } from '../../src/types/channel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import type { ToolContext } from '../../src/types/run-context.js';
 
 function proactiveDriver(reply = 'Hi! Your cart is waiting — ready to check out?') {
@@ -50,14 +50,14 @@ describe('wake turns', () => {
       wake: { reason: 'cart abandoned for 2 hours', payload: { cartId: 'c-1' } },
       driver,
     });
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     for await (const part of handle.events) parts.push(part);
     const result = await handle;
 
     const wakePart = parts.find((part) => part.type === 'wake');
     expect(wakePart).toBeDefined();
     if (wakePart?.type === 'wake') {
-      expect(wakePart.reason).toBe('cart abandoned for 2 hours');
+      expect(wakePart.payload.reason).toBe('cart abandoned for 2 hours');
     }
     expect(result.text).toContain('ready to check out');
 

@@ -11,12 +11,12 @@ import firstAgentExample from '../../examples/quickstart/first-agent.ts?raw';
   <Fragment slot="title">Kuralle</Fragment>
   <Fragment slot="description">
     Build conversational agents with structured flows, routing, and durable tool
-    execution. The same agent runs over text or voice.
+    execution.
   </Fragment>
   <Fragment slot="cta">Get started</Fragment>
 </Hero>
 
-Kuralle is a TypeScript framework for building conversational AI agents — text and voice — with structured flows, routing, and durable tool execution.
+Kuralle is a TypeScript framework for building conversational AI agents with structured flows, routing, and durable tool execution.
 
 Most agent frameworks give you a prompt and a tool-call loop. That's fine until the conversation has steps — collect these fields, confirm, then book. Kuralle puts those steps in a **flow**: a small graph of typed nodes with real control flow, so your procedure lives in code you can test, not in a sprawling system prompt.
 
@@ -28,13 +28,11 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 - **Flows** — node graphs (`reply`, `collect`, `action`, `decide`) where each node returns its next transition. Your SOP becomes a typed state machine you didn't have to hand-write.
 - **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
 - **Routing & Handoffs** — model-reasoned routing (`routes`/`agents`, derived from agent shape — no `routing.mode`) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
-- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `HarnessStreamPart` JSON-SSE.
+- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `StreamPart` JSON-SSE.
 
 ## Why Kuralle
 
 **Procedures belong in flows, not prompts.** A booking or intake procedure becomes a handful of typed nodes you can test — not a long prompt you hope the model follows every turn.
-
-**One agent config, text and voice.** The same `defineAgent` runs over chat text and over provider-native realtime voice. You don't maintain two stacks.
 
 **Durable tool execution.** Every `defineTool` call is logged in an append-only effect log. Retries replay against the log — a payment tool doesn't charge twice, a booking tool doesn't double-book.
 

@@ -1,4 +1,4 @@
-import type { HarnessStreamPart, RunContext, Session } from '../types/index.js';
+import type { StreamPart, RunContext, Session } from '../types/index.js';
 
 /**
  * Discriminated union of conversation-level events for the runtime event log.
@@ -23,7 +23,7 @@ export interface ConversationEventLog {
    * Record a stream part into the session's runtime event log.
    * Text-deltas are accumulated; terminal events flush the assistant text.
    */
-  record(context: RunContext, part: HarnessStreamPart): void;
+  record(context: RunContext, part: StreamPart): void;
 
   /**
    * Persist the session as a checkpoint (called after significant events).
@@ -33,7 +33,7 @@ export interface ConversationEventLog {
   /**
    * Whether a given stream part type should trigger a checkpoint save.
    */
-  shouldCheckpoint(part: HarnessStreamPart): boolean;
+  shouldCheckpoint(part: StreamPart): boolean;
 
   /**
    * Clean up transient state (e.g., accumulated assistant text) from the session.

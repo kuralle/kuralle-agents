@@ -85,7 +85,6 @@ Read only what you need:
 - `references/examples.md` - examples index and commands
 
 **Voice (separate skill):**
-- `docs/skills/kuralle-voice-agents/` - VoiceDriver, provider-native realtime, SIP, WebSocket
 
 Rules:
 

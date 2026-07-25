@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import { createEventBus, createTurnHandle } from '../../src/events/TurnHandle.js';
 import { harnessToUIMessageStream } from '../../src/ai-sdk/uiMessageStream.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
-async function* partsSource(parts: HarnessStreamPart[]): AsyncIterable<HarnessStreamPart> {
+async function* partsSource(parts: StreamPart[]): AsyncIterable<StreamPart> {
   for (const part of parts) {
     yield part;
   }
@@ -28,42 +28,51 @@ function chunksOfType(chunks: StreamChunk[], type: string): StreamChunk[] {
   return chunks.filter((chunk) => chunk.type === type);
 }
 
-const FULL_HARNESS_SEQUENCE: HarnessStreamPart[] = [
-  { type: 'text-start', id: 't1' },
-  { type: 'text-delta', id: 't1', delta: 'Hello' },
-  { type: 'text-end', id: 't1' },
-  { type: 'text-cancel', id: 't2', reason: 'user-abort' },
-  { type: 'tool-call', toolName: 'search', args: { q: 'kuralle' }, toolCallId: 'tc-1' },
-  { type: 'tool-result', toolName: 'search', result: { hits: 1 }, toolCallId: 'tc-1' },
-  { type: 'node-enter', nodeName: 'greet' },
-  { type: 'node-exit', nodeName: 'greet' },
-  { type: 'flow-enter', flow: 'onboarding' },
-  { type: 'flow-transition', from: 'greet', to: 'collect' },
-  { type: 'flow-end', flow: 'onboarding', reason: 'completed' },
-  { type: 'handoff', targetAgent: 'support', reason: 'escalation' },
+const FULL_HARNESS_SEQUENCE: StreamPart[] = [
+  { channel: 'client', type: 'text-start', payload: { id: 't1' } },
+  { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'Hello' } },
+  { channel: 'client', type: 'text-end', payload: { id: 't1' } },
+  { channel: 'client', type: 'text-cancel', payload: { id: 't2', reason: 'user-abort' } },
+  { channel: 'internal', type: 'tool-call', payload: { toolName: 'search', args: { q: 'kuralle' }, toolCallId: 'tc-1' } },
+  { channel: 'internal', type: 'tool-result', payload: { toolName: 'search', result: { hits: 1 }, toolCallId: 'tc-1' } },
+  { channel: 'internal', type: 'node-enter', payload: { nodeName: 'greet' } },
+  { channel: 'internal', type: 'node-exit', payload: { nodeName: 'greet' } },
+  { channel: 'internal', type: 'flow-enter', payload: { flow: 'onboarding' } },
+  { channel: 'internal', type: 'flow-transition', payload: { from: 'greet', to: 'collect' } },
+  { channel: 'internal', type: 'flow-end', payload: { flow: 'onboarding', reason: 'completed' } },
+  { channel: 'internal', type: 'handoff', payload: { targetAgent: 'support', reason: 'escalation' } },
   {
+    channel: 'internal',
     type: 'interactive',
-    nodeId: 'pick-plan',
-    prompt: 'Choose a plan',
-    options: [{ id: 'basic', label: 'Basic' }],
+    payload: {
+      nodeId: 'pick-plan',
+      prompt: 'Choose a plan',
+      options: [{ id: 'basic', label: 'Basic' }],
+    },
   },
   {
+    channel: 'internal',
     type: 'safety-blocked',
-    moderator: 'guard',
-    rationale: 'policy violation',
-    userFacingMessage: 'Blocked',
+    payload: {
+      moderator: 'guard',
+      rationale: 'policy violation',
+      userFacingMessage: 'Blocked',
+    },
   },
   {
+    channel: 'internal',
     type: 'pipeline-validation-block',
-    rationale: 'invalid output',
-    userFacingMessage: 'Try again',
+    payload: {
+      rationale: 'invalid output',
+      userFacingMessage: 'Try again',
+    },
   },
-  { type: 'conversation-outcome', outcome: 'resolved' },
-  { type: 'interrupted', reason: 'timeout', lastStep: 2 },
-  { type: 'paused', waitingFor: 'user-input' },
-  { type: 'custom', name: 'metric', data: { ms: 12 } },
-  { type: 'turn-end' },
-  { type: 'done', sessionId: 'sess-1' },
+  { channel: 'client', type: 'conversation-outcome', payload: { outcome: 'resolved' } },
+  { channel: 'internal', type: 'interrupted', payload: { reason: 'timeout', lastStep: 2 } },
+  { channel: 'internal', type: 'paused', payload: { waitingFor: 'user-input' } },
+  { channel: 'internal', type: 'custom', payload: { name: 'metric', data: { ms: 12 } } },
+  { channel: 'internal', type: 'turn-end', payload: {} },
+  { channel: 'client', type: 'done', payload: { sessionId: 'sess-1' } },
 ];
 
 describe('harnessToUIMessageStream', () => {
@@ -211,10 +220,10 @@ describe('harnessToUIMessageStream', () => {
   it('emits sessionId as UIMessage message metadata when opts.sessionId is provided', async () => {
     const stream = harnessToUIMessageStream(
       partsSource([
-        { type: 'text-start', id: 't1' },
-        { type: 'text-delta', id: 't1', delta: 'Hi' },
-        { type: 'text-end', id: 't1' },
-        { type: 'done', sessionId: 'sess-from-done' },
+        { channel: 'client', type: 'text-start', payload: { id: 't1' } },
+        { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'Hi' } },
+        { channel: 'client', type: 'text-end', payload: { id: 't1' } },
+        { channel: 'client', type: 'done', payload: { sessionId: 'sess-from-done' } },
       ]),
       { sessionId: 'sess-meta' },
     );
@@ -236,8 +245,8 @@ describe('harnessToUIMessageStream', () => {
   it('surfaces harness error parts as UI message error chunks', async () => {
     const stream = harnessToUIMessageStream(
       partsSource([
-        { type: 'text-start', id: 't1' },
-        { type: 'error', error: 'model unavailable' },
+        { channel: 'client', type: 'text-start', payload: { id: 't1' } },
+        { channel: 'client', type: 'error', payload: { error: 'model unavailable' } },
       ]),
     );
 
@@ -257,10 +266,10 @@ describe('harnessToUIMessageStream', () => {
       run: async () => ({ text: 'ok', toolResults: [] }),
     });
 
-    bus.emit({ type: 'text-start', id: 't1' });
-    bus.emit({ type: 'text-delta', id: 't1', delta: 'Hi' });
-    bus.emit({ type: 'text-end', id: 't1' });
-    bus.emit({ type: 'done', sessionId: 'sess-2' });
+    bus.emit({ channel: 'client', type: 'text-start', payload: { id: 't1' } });
+    bus.emit({ channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'Hi' } });
+    bus.emit({ channel: 'client', type: 'text-end', payload: { id: 't1' } });
+    bus.emit({ channel: 'client', type: 'done', payload: { sessionId: 'sess-2' } });
     bus.close();
 
     const response = handle.toUIMessageStreamResponse({ sessionId: 'sess-2' });

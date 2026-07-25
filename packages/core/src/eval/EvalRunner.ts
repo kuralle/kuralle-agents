@@ -31,16 +31,16 @@ export class EvalRunner {
       const handle = runtime.run({ input: turn.input, sessionId });
       for await (const part of handle.events) {
         if (part.type === 'text-delta') {
-          response += part.delta;
+          response += part.payload.delta;
         }
         if (part.type === 'tool-call') {
-          toolsCalled.push(part.toolName);
+          toolsCalled.push(part.payload.toolName);
         }
         if (part.type === 'flow-transition') {
-          transitions.push({ from: part.from, to: part.to });
+          transitions.push({ from: part.payload.from, to: part.payload.to });
         }
         if (part.type === 'done') {
-          sessionId = part.sessionId;
+          sessionId = part.payload.sessionId;
         }
       }
       await handle;

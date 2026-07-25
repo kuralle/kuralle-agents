@@ -12,7 +12,7 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { liveModel } from '../helpers/liveModel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 
 const lm = liveModel();
@@ -86,7 +86,7 @@ describeLive(`core-v2 durable approval smoke (${lm?.label ?? 'no live key'})`, (
       hostSelect,
     });
 
-    const parts1: HarnessStreamPart[] = [];
+    const parts1: StreamPart[] = [];
     const handle1 = runtime.run({
       sessionId,
       input: 'Yes, please charge ten dollars to my account.',
@@ -102,12 +102,12 @@ describeLive(`core-v2 durable approval smoke (${lm?.label ?? 'no live key'})`, (
     expect(pausedState?.status).toBe('paused');
     expect(pausedState?.waitingFor?.signalName).toBe('__approval');
     expect(chargeSpy.count).toBe(0);
-    expect(parts1.some((part) => part.type === 'paused' && part.waitingFor === '__approval')).toBe(true);
+    expect(parts1.some((part) => part.type === 'paused' && part.payload.waitingFor === '__approval')).toBe(true);
 
     const stepsBeforeResume = await runStore.getSteps(runId);
     expect(stepsBeforeResume.filter((step) => step.kind === 'tool' && step.name === 'charge')).toHaveLength(0);
 
-    const parts2: HarnessStreamPart[] = [];
+    const parts2: StreamPart[] = [];
     const handle2 = runtime.run({
       sessionId,
       signalDelivery: {
@@ -133,8 +133,8 @@ describeLive(`core-v2 durable approval smoke (${lm?.label ?? 'no live key'})`, (
     expect(chargeSteps).toHaveLength(1);
 
     const transcript = [...parts1, ...parts2]
-      .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
-      .map((part) => part.delta)
+      .filter((part): part is Extract<StreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
+      .map((part) => part.payload.delta)
       .join('');
     expect(transcript.length).toBeGreaterThan(0);
   });

@@ -15,7 +15,7 @@ Provides the `PlatformClient` interface that every messaging vendor package impl
 - **`createMessagingRouter`** — creates a Hono router with webhook endpoints for each platform. Routes inbound messages to a `Runtime` turn, streams responses back as text or interactive messages, and handles deduplication and messaging window tracking automatically.
 - **`PlatformClient`** — interface that normalizes sending, receiving, media, webhooks, and format conversion across vendors. Implement this to add any messaging platform.
 - **`SessionResolver`** — maps inbound messages to Kuralle session IDs. Default: `{platform}:{threadId}`. Swap in `ThreadIdResolver`, `PhoneLookupResolver`, or a custom `SessionResolverChain`.
-- **`StreamMapper`** — consumes `AsyncIterable<HarnessStreamPart>`, sends typing indicators during streaming, delegates final output to a `ResponseMapper`.
+- **`StreamMapper`** — consumes `AsyncIterable<StreamPart>`, sends typing indicators during streaming, delegates final output to a `ResponseMapper`.
 - **`InboundLedger`** — async claim/append/complete ledger for tenant-scoped inbound idempotency and ordering.
 - **`WindowTracker`** / **`WindowStore`** — tracks 24-hour messaging windows per thread; used by `createMessagingRouter` to detect expired windows.
 - **`OutboundPipeline`** + **`windowGuard`** — window-safe outbound path (see below).

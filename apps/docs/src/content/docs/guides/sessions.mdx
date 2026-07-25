@@ -68,7 +68,7 @@ let sessionId: string | undefined;
 async function chat(input: string) {
   const handle = runtime.run({ input, sessionId });
   for await (const part of handle.events) {
-    if (part.type === 'done') sessionId = part.sessionId;
+    if (part.type === 'done') sessionId = part.payload.sessionId;
   }
   await handle;
 }

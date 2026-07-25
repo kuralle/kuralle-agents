@@ -1,7 +1,7 @@
 import type { ModelMessage } from 'ai';
 import type { TurnControl } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
-import type { SourceRef } from '../../types/voice.js';
+import type { SourceRef } from '../../types/knowledge.js';
 import type { RunContext } from '../../types/run-context.js';
 import type { ValidateDecision } from '../../capabilities/ValidationCapability.js';
 import { appendConversationAudit } from '../../audit/record.js';

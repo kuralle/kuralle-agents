@@ -335,8 +335,8 @@ export async function runFlow(
   if (!run.activeNode) {
     run.activeNode = node.id;
     run.activeFlow = flow.name;
-    ctx.emit({ type: 'flow-enter', flow: flow.name });
-    ctx.emit({ type: 'node-enter', nodeName: node.id });
+    ctx.emit({ channel: 'internal', type: 'flow-enter', payload: { flow: flow.name } });
+    ctx.emit({ channel: 'internal', type: 'node-enter', payload: { nodeName: node.id } });
     emitInteractiveOnNodeEnter(node, run.state, ctx.emit);
   }
 
@@ -352,7 +352,7 @@ export async function runFlow(
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);
-      ctx.emit({ type: 'error', error: message });
+      ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
       return degradeFlowError(flow, registry, run, driver, ctx, (n, r, d, c) =>
         dispatchNode(n, r, d, c, agent, flow),
       );
@@ -373,16 +373,28 @@ export async function runFlow(
           run.activeFlow = park.flow;
           run.activeNode = park.node;
           await ctx.runStore.putRunState(run);
-          ctx.emit({ type: 'flow-end', flow: flow.name, reason: transition.reason });
+          ctx.emit({
+            channel: 'internal',
+            type: 'flow-end',
+            payload: { flow: flow.name, reason: transition.reason },
+          });
           return runFlow(parkedFlow, run, driver, ctx, agent);
         }
       }
-      ctx.emit({ type: 'flow-end', flow: flow.name, reason: transition.reason });
+      ctx.emit({
+        channel: 'internal',
+        type: 'flow-end',
+        payload: { flow: flow.name, reason: transition.reason },
+      });
       return { kind: 'ended', reason: transition.reason };
     }
 
     if (transition.kind === 'handoff') {
-      ctx.emit({ type: 'handoff', targetAgent: transition.to, reason: transition.reason });
+      ctx.emit({
+        channel: 'internal',
+        type: 'handoff',
+        payload: { targetAgent: transition.to, reason: transition.reason },
+      });
       return { kind: 'handoff', to: transition.to, reason: transition.reason };
     }
 
@@ -416,7 +428,7 @@ export async function runFlow(
       });
     } catch (error) {
       if (error instanceof VerifyBlockedError) {
-        ctx.emit({ type: 'error', error: error.message });
+        ctx.emit({ channel: 'client', type: 'error', payload: { error: error.message } });
         return { kind: 'awaitingUser' };
       }
       throw error;
@@ -424,7 +436,11 @@ export async function runFlow(
 
     const oscillation = bumpOscillation(edgeCounts, node.id, target.id);
     if (oscillation > maxOscillations) {
-      ctx.emit({ type: 'error', error: `Flow oscillation blocked: ${node.id} -> ${target.id}` });
+      ctx.emit({
+        channel: 'client',
+        type: 'error',
+        payload: { error: `Flow oscillation blocked: ${node.id} -> ${target.id}` },
+      });
       const escalateNode = findEscalateNode(registry);
       if (escalateNode) {
         appendSafeAssistantMessage(run, ctx);
@@ -443,7 +459,11 @@ export async function runFlow(
         continue;
       }
       appendSafeAssistantMessage(run, ctx);
-      ctx.emit({ type: 'flow-end', flow: flow.name, reason: 'error_degraded' });
+      ctx.emit({
+        channel: 'internal',
+        type: 'flow-end',
+        payload: { flow: flow.name, reason: 'error_degraded' },
+      });
       return { kind: 'ended', reason: 'error_degraded' };
     }
 

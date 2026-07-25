@@ -19,7 +19,7 @@ import {
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { InMemoryMemoryService } from '../../src/memory/stores/InMemoryMemoryService.js';
 import { resetMissingUserIdWarningsForTests } from '../../src/runtime/grounding/memory.js';
-import type { KnowledgeRetrieverAdapter } from '../../src/types/voice.js';
+import type { KnowledgeRetrieverAdapter } from '../../src/types/knowledge.js';
 import * as preloadMemory from '../../src/memory/preloadMemory.js';
 
 afterEach(() => {

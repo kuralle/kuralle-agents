@@ -1,4 +1,4 @@
-import type { KnowledgeRetrievalResult, RetrievalCacheAdapter } from '../types/voice.js';
+import type { KnowledgeRetrievalResult, RetrievalCacheAdapter } from '../types/knowledge.js';
 
 /**
  * Zero-config, in-process session retrieval cache (G6). Keyed by the query

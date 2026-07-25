@@ -69,8 +69,8 @@ not a method) and you can `await handle` for the final result:
 const handle = runtime.run({ input: 'Hi, do you sell ibuprofen?' });
 
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.delta);
-  if (part.type === 'done') console.log('\nsession:', part.sessionId);
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+  if (part.type === 'done') console.log('\nsession:', part.payload.sessionId);
 }
 await handle;
 ```
@@ -493,5 +493,5 @@ You now have the whole map. Each stop has a guide that goes deeper than this tou
 - [Sessions & State](/guides/sessions) · [Memory](/guides/memory) — persistence and recall.
 - [Skills](/guides/skills) — bundled procedural playbooks.
 - [Multimodal Input](/guides/multimodal) — images, files, and voice notes end to end.
-- [Voice Agents](/guides/voice) · [Engagement & Messaging](/guides/engagement) — realtime voice and WhatsApp/Instagram.
+- [Engagement & Messaging](/guides/engagement) — WhatsApp/Instagram delivery.
 - [Deployment](/guides/deployment) — the full endpoint set and production wiring.

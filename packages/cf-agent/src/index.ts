@@ -61,6 +61,6 @@ export { DEFAULT_STREAM_CONFIG } from './types.js';
 export type {
   HarnessConfig,
   HarnessHooks,
-  HarnessStreamPart,
+  StreamPart,
   Session,
 } from '@kuralle-agents/core';

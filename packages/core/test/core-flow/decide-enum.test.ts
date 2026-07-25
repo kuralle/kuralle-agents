@@ -10,13 +10,11 @@ import {
   matchChoiceFromInput,
 } from '../../src/flow/choiceMatch.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
-import { VoiceDriver } from '../../src/runtime/channels/VoiceDriver.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { selectHostTarget } from '../../src/runtime/select.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
-import type { RealtimeAudioClient } from '../../src/realtime/RealtimeAudioClient.js';
 
 afterEach(() => {
   mock.restore();
@@ -201,42 +199,6 @@ describe('H4 choice-decide constrained enum + code-first', () => {
     const structured = await new TextDriver().runStructured(node, ctx);
     const branch = await node.decide!(structured, runState.state);
     expect(branch).toBe('stay');
-  });
-
-  it('VoiceDriver runStructured matches TextDriver code-first + enum', async () => {
-    let llmCalled = false;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          llmCalled = true;
-          throw new Error('LLM should not run');
-        },
-      };
-    });
-
-    const { session, runStore, runState } = await setupDurableHarness('voice-code', 'voice-code-run');
-    runState.messages = [{ role: 'user', content: 'checkout' }];
-    const ctx = await createRunContext({
-      session,
-      runState,
-      runStore,
-      steps: [],
-      toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as LanguageModel,
-      emit: () => {},
-    });
-
-    const client = {
-      on: () => {},
-      off: () => {},
-      updateConfig: async () => {},
-    } as unknown as RealtimeAudioClient;
-
-    const result = await new VoiceDriver({ client }).runStructured(choiceDecideNode(), ctx);
-    expect(result).toEqual({ choice: 'checkout' });
-    expect(llmCalled).toBe(false);
   });
 
   it('custom non-choice schema keeps legacy unconstrained generateObject', async () => {

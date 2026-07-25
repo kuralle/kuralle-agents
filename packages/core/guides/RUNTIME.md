@@ -11,7 +11,7 @@
 
 ## Stream Events
 
-`runtime.run()` returns a `TurnHandle` with an `.events` async iterable of `HarnessStreamPart` items.
+`runtime.run()` returns a `TurnHandle` with an `.events` async iterable of `StreamPart` items.
 
 ### Web UI (AI SDK native, 0.5.0+)
 
@@ -24,29 +24,29 @@ return handle.toUIMessageStreamResponse({ sessionId });
 
 Kuralle orchestration events map to typed `data-kuralle-*` parts (see `docs/adr/0005-ai-sdk-native-uimessage-default.md`). Import `KuralleUIMessage` for compile-time-safe `message.parts`.
 
-With `@kuralle-agents/hono-server`, `POST /api/chat/sse` defaults to this native wire. Append `?format=raw` for legacy `HarnessStreamPart` JSON-SSE.
+With `@kuralle-agents/hono-server`, `POST /api/chat/sse` defaults to this native wire. Append `?format=raw` for legacy `StreamPart` JSON-SSE.
 
-### Direct `HarnessStreamPart` consumption
+### Direct `StreamPart` consumption
 
-For CLI scripts, cascaded voice, messaging, or custom transports, iterate `handle.events` directly. Typical usage renders `text-delta` chunks via `part.delta`.
+For CLI scripts, messaging, or custom transports, iterate `handle.events` directly. Every part has `{ channel, type, payload }`; render `text-delta` chunks via `part.payload.delta`.
 
 Common types:
-- `text-delta`
-- `tool-call`, `tool-result`, `tool-error`
+- `text-start`, `text-delta`, `text-end`, `text-cancel`
+- `tool-call`, `tool-result`
 - `handoff`
-- `node-enter`, `flow-transition`, `flow-end`
+- `flow-enter`, `node-enter`, `node-exit`, `flow-transition`, `flow-end`
 - `custom` (flow/runtime emitted app events)
-- `agent-start`, `agent-end`
 - `turn-end`, `done`, `error`
+- `knowledge-citation`, `knowledge-cache-hit`, `knowledge-cache-miss`, `knowledge-search`
 
-Internal events can expose operational details. Treat them as privileged data.
+Use `PART_CHANNEL` or the envelope's `channel` field to distinguish client events from privileged internal events.
 
 ## Stream Callback (Persistence Defaults)
 
 Use `streamCallback` when sending runtime events to file/webhook/DB/queue sinks.
 
 Default behavior is message-oriented:
-- emits: `input`, `done`, `error`, `tripwire`, `tool-call`, `tool-result`, `tool-error`, `flow-transition`, `handoff`
+- emits terminal events plus configured tool and transition events
 - does not emit `text-delta` tokens unless enabled
 - attaches final assistant text as `fullText` on terminal events
 - if no sink is configured, adapter is a no-op
@@ -95,7 +95,6 @@ To prevent internal runtime state from leaking into the model's context window:
 
 Runtime checkpoints session state automatically on critical events:
 - `tool-result`
-- `tool-error`
 - `flow-transition`
 - handoff state updates (after `activeAgentId` mutation)
 
@@ -135,7 +134,7 @@ const runtime = createRuntime({
   ],
   hooks: {
     onStreamPart: async (ctx, part) => {
-      if (part.type === 'error') console.error(part.error);
+      if (part.type === 'error') console.error(part.payload.error);
     },
   },
 });

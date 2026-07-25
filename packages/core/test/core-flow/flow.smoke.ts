@@ -13,7 +13,7 @@ import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setPendingUserInput } from '../../src/runtime/channels/inputBuffer.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import { liveModel } from '../helpers/liveModel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 const lm = liveModel();
 const describeLive = lm ? describe : describe.skip;
@@ -52,7 +52,7 @@ describeLive(`core-v2 flow live smoke (${lm?.label ?? 'no live key'})`, () => {
     const { session, runStore, runState } = await setupDurableHarness('flow-live-sess', 'flow-live-run');
 
     const transcript: string[] = [];
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
 
     const seedUser = (text: string) => {
       setPendingUserInput(session, text);
@@ -74,9 +74,9 @@ describeLive(`core-v2 flow live smoke (${lm?.label ?? 'no live key'})`, () => {
         if (part.type === 'text-delta') {
           const last = transcript[transcript.length - 1];
           if (last?.startsWith('assistant: ')) {
-            transcript[transcript.length - 1] = `assistant: ${last.slice('assistant: '.length)}${part.delta}`;
+            transcript[transcript.length - 1] = `assistant: ${last.slice('assistant: '.length)}${part.payload.delta}`;
           } else {
-            transcript.push(`assistant: ${part.delta}`);
+            transcript.push(`assistant: ${part.payload.delta}`);
           }
         }
       },
@@ -85,15 +85,15 @@ describeLive(`core-v2 flow live smoke (${lm?.label ?? 'no live key'})`, () => {
     const result = await runFlow(flow, runState, driver, ctx);
 
     expect(result.kind).toBe('ended');
-    expect(parts.some((part) => part.type === 'flow-enter' && part.flow === 'name-intake')).toBe(true);
-    expect(parts.some((part) => part.type === 'node-enter' && part.nodeName === 'name')).toBe(true);
-    expect(parts.some((part) => part.type === 'flow-transition' && part.from === 'name' && part.to === 'confirm')).toBe(
+    expect(parts.some((part) => part.type === 'flow-enter' && part.payload.flow === 'name-intake')).toBe(true);
+    expect(parts.some((part) => part.type === 'node-enter' && part.payload.nodeName === 'name')).toBe(true);
+    expect(parts.some((part) => part.type === 'flow-transition' && part.payload.from === 'name' && part.payload.to === 'confirm')).toBe(
       true,
     );
 
     const assistantText = parts
-      .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
-      .map((part) => part.delta)
+      .filter((part): part is Extract<StreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
+      .map((part) => part.payload.delta)
       .join('');
 
     expect(assistantText.length).toBeGreaterThan(0);

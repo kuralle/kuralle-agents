@@ -13,7 +13,7 @@ import { createRuntime } from '../src/runtime/Runtime.js';
 import { MemoryStore } from '../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../src/runtime/openRun.js';
 import { createInMemoryKnowledgeConfig } from '../src/runtime/grounding/inMemoryKnowledge.js';
-import type { HarnessStreamPart } from '../src/types/stream.js';
+import type { StreamPart } from '../src/types/stream.js';
 import type { Session } from '../src/types/session.js';
 import { loadExampleEnv } from './_shared/v2Runner.js';
 
@@ -29,7 +29,7 @@ interface TimedEvent {
   idx: number;
   type: string;
   elapsed: number;
-  part: HarnessStreamPart;
+  part: StreamPart;
 }
 
 interface StreamMetrics {
@@ -67,8 +67,8 @@ async function collectStreamTimed(
   const firstTextDelta = events.find((e) => e.type === 'text-delta');
   const doneEvent = events.find((e) => e.type === 'done');
   const fullText = events
-    .filter((e): e is TimedEvent & { part: Extract<HarnessStreamPart, { type: 'text-delta' }> } => e.type === 'text-delta')
-    .map((e) => e.part.delta)
+    .filter((e): e is TimedEvent & { part: Extract<StreamPart, { type: 'text-delta' }> } => e.type === 'text-delta')
+    .map((e) => e.part.payload.delta)
     .join('');
 
   return {

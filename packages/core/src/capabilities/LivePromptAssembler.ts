@@ -7,7 +7,7 @@
  * CapabilityHost with Runtime context (working memory, long-term memory,
  * policy injections) and structures the output per audio-model best practices.
  *
- * Adapters (Gemini, OpenAI Realtime, LiveKit) can extend or replace
+ * Adapters can extend or replace
  * the default with backend-specific voice rules and guardrails.
  *
  * Prompt structure follows Google's Live API best practices and

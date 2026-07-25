@@ -38,18 +38,24 @@ describe('DefaultConversationEventLog', () => {
     return new DefaultConversationEventLog({ sessionStore: new MemoryStore() });
   }
 
-  it('records user input event', () => {
+  it('records flow-transition event', () => {
     const log = createLog();
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'input', text: 'hello', userId: 'user-1' });
+    log.record(ctx, {
+      channel: 'internal',
+      type: 'flow-transition',
+      payload: { from: 'collect-name', to: 'confirm-name' },
+    });
 
     const events = session.workingMemory['runtimeEventLog'];
     assert.ok(Array.isArray(events));
     assert.equal(events.length, 1);
-    assert.equal(events[0].type, 'user');
-    assert.equal(events[0].text, 'hello');
+    assert.equal(events[0].type, 'transition');
+    assert.equal(events[0].kind, 'flow');
+    assert.equal(events[0].from, 'collect-name');
+    assert.equal(events[0].to, 'confirm-name');
   });
 
   it('accumulates text-delta into assistant text', () => {
@@ -57,8 +63,8 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'text-delta', id: 't1', delta: 'hello ' });
-    log.record(ctx, { type: 'text-delta', id: 't1', delta: 'world' });
+    log.record(ctx, { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'hello ' } });
+    log.record(ctx, { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'world' } });
 
     assert.equal(session.workingMemory['__ariaAssistantText'], 'hello world');
     // No event log entry yet (text-delta is accumulated)
@@ -70,8 +76,8 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'text-delta', id: 't1', delta: 'hello world' });
-    log.record(ctx, { type: 'turn-end' });
+    log.record(ctx, { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'hello world' } });
+    log.record(ctx, { channel: 'internal', type: 'turn-end', payload: {} });
 
     const events = session.workingMemory['runtimeEventLog'];
     assert.ok(Array.isArray(events));
@@ -87,7 +93,11 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'tool-call', toolCallId: 'tc-1', toolName: 'search', args: { query: 'test' } });
+    log.record(ctx, {
+      channel: 'internal',
+      type: 'tool-call',
+      payload: { toolCallId: 'tc-1', toolName: 'search', args: { query: 'test' } },
+    });
 
     const events = session.workingMemory['runtimeEventLog'];
     assert.equal(events.length, 1);
@@ -101,23 +111,29 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'tool-result', toolCallId: 'tc-1', toolName: 'search', result: { items: [1, 2] } });
+    log.record(ctx, {
+      channel: 'internal',
+      type: 'tool-result',
+      payload: { toolCallId: 'tc-1', toolName: 'search', result: { items: [1, 2] } },
+    });
 
     const events = session.workingMemory['runtimeEventLog'];
     assert.equal(events[0].type, 'tool_result');
     assert.deepEqual(events[0].result, { items: [1, 2] });
   });
 
-  it('records tool-error event', () => {
+  it('flushes assistant text on error', () => {
     const log = createLog();
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'tool-error', toolCallId: 'tc-1', toolName: 'search', error: 'not found' });
+    log.record(ctx, { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'partial answer' } });
+    log.record(ctx, { channel: 'client', type: 'error', payload: { error: 'not found' } });
 
     const events = session.workingMemory['runtimeEventLog'];
-    assert.equal(events[0].type, 'tool_error');
-    assert.equal(events[0].error, 'not found');
+    assert.equal(events[0].type, 'assistant_final');
+    assert.equal(events[0].trigger, 'error');
+    assert.equal(events[0].text, 'partial answer');
   });
 
   it('records handoff event', () => {
@@ -125,7 +141,11 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    log.record(ctx, { type: 'handoff', from: 'agent-1', to: 'agent-2', reason: 'routing' });
+    log.record(ctx, {
+      channel: 'internal',
+      type: 'handoff',
+      payload: { targetAgent: 'agent-2', reason: 'routing' },
+    });
 
     const events = session.workingMemory['runtimeEventLog'];
     assert.equal(events[0].type, 'transition');
@@ -137,25 +157,36 @@ describe('DefaultConversationEventLog', () => {
     const session = makeSession();
     const ctx = makeContext(session);
 
-    // Add 2001 events
+    // Add 2001 events.
     for (let i = 0; i < 2001; i++) {
-      log.record(ctx, { type: 'input', text: `msg-${i}` });
+      log.record(ctx, {
+        channel: 'internal',
+        type: 'tool-call',
+        payload: { toolCallId: `tc-${i}`, toolName: 'search', args: { index: i } },
+      });
     }
 
     const events = session.workingMemory['runtimeEventLog'];
     assert.equal(events.length, 2000);
-    // First event should be msg-1 (msg-0 was evicted)
-    assert.equal(events[0].text, 'msg-1');
+    assert.equal(events[0].toolCallId, 'tc-1');
   });
 
   it('shouldCheckpoint returns true for tool-result', () => {
     const log = createLog();
-    assert.equal(log.shouldCheckpoint({ type: 'tool-result', toolCallId: 'tc', toolName: 't', result: {} }), true);
+    assert.equal(log.shouldCheckpoint({
+      channel: 'internal',
+      type: 'tool-result',
+      payload: { toolCallId: 'tc', toolName: 't', result: {} },
+    }), true);
   });
 
   it('shouldCheckpoint returns false for text-delta', () => {
     const log = createLog();
-    assert.equal(log.shouldCheckpoint({ type: 'text-delta', id: 't', delta: 'hi' }), false);
+    assert.equal(log.shouldCheckpoint({
+      channel: 'client',
+      type: 'text-delta',
+      payload: { id: 't', delta: 'hi' },
+    }), false);
   });
 
   it('cleanup removes assistant text key', () => {

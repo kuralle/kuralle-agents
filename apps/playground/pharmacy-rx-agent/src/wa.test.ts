@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createHmac } from 'node:crypto';
 import { Database } from 'bun:sqlite';
-import type { HarnessStreamPart, Session, UserInputContent } from '@kuralle-agents/core';
+import type { StreamPart, Session, UserInputContent } from '@kuralle-agents/core';
 import { verifySignature, normalizeWebhook } from '@kuralle-agents/messaging-meta/webhooks';
 import {
   claimAndAppend,
@@ -193,12 +193,12 @@ function inputText(input: UserInputContent): string {
     .join('\n');
 }
 
-function textParts(text: string): HarnessStreamPart[] {
+function textParts(text: string): StreamPart[] {
   return [
-    { type: 'text-start', id: 't' },
-    { type: 'text-delta', id: 't', delta: text },
-    { type: 'text-end', id: 't' },
-    { type: 'turn-end' },
+    { channel: 'client', type: 'text-start', payload: { id: 't' } },
+    { channel: 'client', type: 'text-delta', payload: { id: 't', delta: text } },
+    { channel: 'client', type: 'text-end', payload: { id: 't' } },
+    { channel: 'internal', type: 'turn-end', payload: {} },
   ];
 }
 
@@ -226,8 +226,8 @@ class FakeSender implements OutboundSender {
 
   async send(_ctx: InboundContext, result: TurnResult): Promise<void> {
     const text = result.parts
-      .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
-      .map((part) => part.delta)
+      .filter((part): part is Extract<StreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
+      .map((part) => part.payload.delta)
       .join('');
     if (text) this.texts.push(text);
   }
@@ -312,7 +312,10 @@ describe('DO inbound pipeline adversarial cases', () => {
       async runTurn(args: Parameters<TurnRunner['runTurn']>[0]): Promise<TurnResult> {
         const text = inputText(args.input);
         this.turns.push(text);
-        return { parts: [{ type: 'paused', waitingFor: 'sig-checkout' }], suspended: { signalId: 'sig-checkout' } };
+        return {
+          parts: [{ channel: 'internal', type: 'paused', payload: { waitingFor: 'sig-checkout' } }],
+          suspended: { signalId: 'sig-checkout' },
+        };
       }
     }
 

@@ -77,10 +77,13 @@ describe('interactiveRenderer', () => {
           ...baseReq.meta,
           parts: [
             {
+              channel: 'internal',
               type: 'interactive',
-              nodeId: 'pick',
-              options: opts(2),
-              prompt: 'Select',
+              payload: {
+                nodeId: 'pick',
+                options: opts(2),
+                prompt: 'Select',
+              },
             },
           ],
         },
@@ -123,10 +126,13 @@ describe('interactiveRenderer', () => {
             ...baseReq.meta,
             parts: [
               {
+                channel: 'internal',
                 type: 'interactive',
-                nodeId: 'pick',
-                options: opts(11),
-                prompt: 'Too many',
+                payload: {
+                  nodeId: 'pick',
+                  options: opts(11),
+                  prompt: 'Too many',
+                },
               },
             ],
           },

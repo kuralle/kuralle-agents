@@ -10,7 +10,7 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { makeRunState, makeTestSession, stubModel } from '../core-durable/helpers.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 const driver: ChannelDriver = {
   async runAgentTurn() {
@@ -155,7 +155,7 @@ describe('G12: handoff inputFilter', () => {
       hostSelect,
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const handle = runtime.run({ sessionId, input: 'start', driver });
     for await (const part of handle.events) {
       parts.push(part);

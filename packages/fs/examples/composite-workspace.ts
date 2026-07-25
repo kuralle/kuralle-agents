@@ -72,8 +72,8 @@ async function main() {
   const toolCalls: string[] = [];
   let text = '';
   for await (const event of handle.events) {
-    if (event.type === 'text-delta') text += event.delta;
-    if (event.type === 'tool-call') toolCalls.push(event.toolName);
+    if (event.type === 'text-delta') text += event.payload.delta;
+    if (event.type === 'tool-call') toolCalls.push(event.payload.toolName);
   }
   await handle;
 

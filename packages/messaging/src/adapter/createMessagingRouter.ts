@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { HarnessStreamPart, Session } from '@kuralle-agents/core';
+import type { StreamPart, Session } from '@kuralle-agents/core';
 import type { MessagingRouterConfig, ErrorContext } from '../types.js';
 import type { InboundMessage, ReactionData, StatusUpdate } from '../types/messages.js';
 import type { OutboundMiddleware } from '../types/outbound.js';
@@ -260,27 +260,29 @@ class PipelineOutboundSender implements OutboundSender {
   }
 }
 
-async function collectParts(stream: AsyncIterable<HarnessStreamPart>): Promise<HarnessStreamPart[]> {
-  const parts: HarnessStreamPart[] = [];
+async function collectParts(stream: AsyncIterable<StreamPart>): Promise<StreamPart[]> {
+  const parts: StreamPart[] = [];
   for await (const part of stream) {
     parts.push(part);
   }
   return parts;
 }
 
-function turnResult(parts: HarnessStreamPart[]): TurnResult {
+function turnResult(parts: StreamPart[]): TurnResult {
   return {
     parts,
     suspended: suspendedPart(parts),
-    handoffToHuman: parts.some((part) => part.type === 'handoff' && part.targetAgent === 'human'),
+    handoffToHuman: parts.some(
+      (part) => part.type === 'handoff' && part.payload.targetAgent === 'human',
+    ),
   };
 }
 
-function suspendedPart(parts: HarnessStreamPart[]): { signalId: string } | undefined {
+function suspendedPart(parts: StreamPart[]): { signalId: string } | undefined {
   const paused = parts.find(
-    (part): part is Extract<HarnessStreamPart, { type: 'paused' }> => part.type === 'paused',
+    (part): part is Extract<StreamPart, { type: 'paused' }> => part.type === 'paused',
   );
-  return paused ? { signalId: paused.waitingFor } : undefined;
+  return paused ? { signalId: paused.payload.waitingFor } : undefined;
 }
 
 async function sendFallback(args: {

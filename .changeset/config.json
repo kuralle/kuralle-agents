@@ -9,7 +9,6 @@
       "@kuralle-agents/tools",
       "@kuralle-agents/rag",
       "@kuralle-agents/eval",
-      "@kuralle-agents/realtime-audio",
       "@kuralle-agents/cf-agent",
       "@kuralle-agents/redis-store",
       "@kuralle-agents/postgres-store",
@@ -31,10 +30,6 @@
     "agent-starter-node",
     "cag-demo",
     "langfuse-demo",
-    "rag-demo",
-    "cf-voice-realtime-gemini",
-    "cf-voice-realtime-gemini-flow",
-    "cf-voice-realtime-grok",
-    "cf-voice-realtime-openai"
+    "rag-demo"
   ]
 }

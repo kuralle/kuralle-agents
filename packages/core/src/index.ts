@@ -331,14 +331,6 @@ export type {
   ConversationAuditLog,
 } from './audit/types.js';
 
-export type {
-  RealtimeAudioClient,
-  RealtimeSessionConfig,
-  RealtimeAudioConfig,
-  RealtimeToolResponse,
-  RealtimeEventMap,
-  RealtimeSessionHandle,
-} from './realtime/index.js';
 export type { Hooks } from './types/hooks.js';
 export type { HarnessHooks } from './types/runtime.js';
 
@@ -390,8 +382,45 @@ export type {
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
 export type { Route } from './types/route.js';
-export type { TurnHandle } from './types/stream.js';
-export type { HarnessStreamPart } from './types/stream.js';
+export { PART_CHANNEL } from './types/stream.js';
+export type {
+  StreamChannel,
+  StreamPartBase,
+  TextStartPayload,
+  TextDeltaPayload,
+  TextEndPayload,
+  TextCancelPayload,
+  ToolCallPayload,
+  ToolResultPayload,
+  FlowEnterPayload,
+  FlowEndPayload,
+  NodeEnterPayload,
+  NodeExitPayload,
+  FlowTransitionPayload,
+  HandoffPayload,
+  InterruptedPayload,
+  PausedPayload,
+  ConversationOutcomePayload,
+  InteractivePayload,
+  TurnEndPayload,
+  PipelineValidationBlockPayload,
+  SafetyBlockedPayload,
+  WakePayload,
+  EscalationPayload,
+  ContextCompactedPayload,
+  CompactionSkippedPayload,
+  ContextOverflowRecoveredPayload,
+  ErrorPayload,
+  CustomPayload,
+  DonePayload,
+  KnowledgeCacheHitPayload,
+  KnowledgeCacheMissPayload,
+  KnowledgeSearchPayload,
+  KnowledgeQualityCheckPayload,
+  KnowledgeReformulationPayload,
+  StreamPart,
+  TurnHandle,
+} from './types/stream.js';
 export type { AgentSpan, AgentTrace, SpanKind } from './types/trace.js';
 export {
   MemoryTraceStore,
@@ -426,8 +455,6 @@ export type {
 } from './runtime/durable/types.js';
 export { DURABLE_RUNS_KEY } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
-// Text is the primary channel. The realtime VoiceDriver is PAUSED and lives off
-// the headline API behind `@kuralle-agents/core/runtime` (see realtime-audio).
 export type { ChannelDriver, TextDriver } from './runtime/channels/index.js';
 export type { TurnResult } from './types/channel.js';
 export type { RunContext, ToolContext, ActionContext } from './types/run-context.js';

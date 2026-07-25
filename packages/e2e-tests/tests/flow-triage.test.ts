@@ -7,15 +7,15 @@ import {
   defineFlow,
   reply,
 } from '@kuralle-agents/core';
-import type { ChannelDriver, HarnessStreamPart } from '@kuralle-agents/core';
+import type { ChannelDriver, StreamPart } from '@kuralle-agents/core';
 import { MemoryStore } from '@kuralle-agents/core';
 
 const stubModel = {} as import('ai').LanguageModel;
 
 async function collectEvents(
   run: ReturnType<ReturnType<typeof createRuntime>['run']>,
-): Promise<HarnessStreamPart[]> {
-  const parts: HarnessStreamPart[] = [];
+): Promise<StreamPart[]> {
+  const parts: StreamPart[] = [];
   for await (const part of run.events) {
     parts.push(part);
   }
@@ -70,16 +70,25 @@ describe('v2 offline flow + triage (text Runtime)', () => {
 
   it('progresses a flow across two nodes over multiple turns', async () => {
     let agentTurn = 0;
+    let extractionTurn = 0;
+    let userTurn = 0;
     const hostSelect = async () => ({ kind: 'enterFlow' as const, flow: nameFlow });
 
     const driver: ChannelDriver = {
       async runAgentTurn() {
         agentTurn += 1;
         if (agentTurn === 1) {
-          return { text: 'What is your name?', toolResults: [] };
+          return { text: '', toolResults: [] };
+        }
+        return { text: 'Thanks, Jordan.', toolResults: [] };
+      },
+      async runExtraction() {
+        extractionTurn += 1;
+        if (extractionTurn === 1) {
+          return { text: '', toolResults: [] };
         }
         return {
-          text: 'Thanks, Jordan.',
+          text: '',
           toolResults: [
             {
               name: 'submit_name_data',
@@ -90,7 +99,11 @@ describe('v2 offline flow + triage (text Runtime)', () => {
         };
       },
       async awaitUser() {
-        return { type: 'message', input: 'Jordan' };
+        userTurn += 1;
+        return {
+          type: 'message',
+          input: userTurn === 1 ? 'I want to update my name' : 'Jordan',
+        };
       },
     };
 
@@ -110,8 +123,12 @@ describe('v2 offline flow + triage (text Runtime)', () => {
       }),
     );
 
-    expect(turn1Parts.some((p) => p.type === 'flow-enter' && p.flow === 'name-intake')).toBe(true);
-    expect(turn1Parts.some((p) => p.type === 'node-enter' && p.nodeName === 'name')).toBe(true);
+    expect(
+      turn1Parts.some(
+        (p) => p.type === 'flow-enter' && p.payload.flow === 'name-intake',
+      ),
+    ).toBe(true);
+    expect(turn1Parts.some((p) => p.type === 'node-enter' && p.payload.nodeName === 'name')).toBe(true);
     expect(turn1Parts.some((p) => p.type === 'flow-transition')).toBe(false);
 
     const turn2Parts = await collectEvents(
@@ -123,14 +140,15 @@ describe('v2 offline flow + triage (text Runtime)', () => {
     );
 
     const transitions = turn2Parts.filter(
-      (p): p is Extract<HarnessStreamPart, { type: 'flow-transition' }> => p.type === 'flow-transition',
+      (p): p is Extract<StreamPart, { type: 'flow-transition' }> => p.type === 'flow-transition',
     );
-    expect(transitions.some((p) => p.from === 'name' && p.to === 'confirm')).toBe(true);
-    expect(turn2Parts.some((p) => p.type === 'node-enter' && p.nodeName === 'confirm')).toBe(true);
+    expect(transitions.some((p) => p.payload.from === 'name' && p.payload.to === 'confirm')).toBe(true);
+    expect(turn2Parts.some((p) => p.type === 'node-enter' && p.payload.nodeName === 'confirm')).toBe(true);
   });
 
   it('routes to a billing specialist via handoff', async () => {
     let calls = 0;
+    let agentTurns = 0;
     const hostSelect = async () => {
       calls += 1;
       return { kind: 'route' as const, agentId: 'billing', reason: 'billing question' };
@@ -138,7 +156,11 @@ describe('v2 offline flow + triage (text Runtime)', () => {
 
     const driver: ChannelDriver = {
       async runAgentTurn() {
-        return { text: 'billing help here', toolResults: [] };
+        agentTurns += 1;
+        return {
+          text: agentTurns === 1 ? '' : 'billing help here',
+          toolResults: [],
+        };
       },
       async awaitUser() {
         return { type: 'message', input: 'more' };
@@ -164,7 +186,10 @@ describe('v2 offline flow + triage (text Runtime)', () => {
 
     expect(
       parts.some(
-        (p) => p.type === 'handoff' && p.targetAgent === 'billing' && p.reason === 'billing question',
+        (p) =>
+          p.type === 'handoff' &&
+          p.payload.targetAgent === 'billing' &&
+          p.payload.reason === 'billing question',
       ),
     ).toBe(true);
     expect(calls).toBe(1);

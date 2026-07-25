@@ -20,9 +20,9 @@ export function appendSafeAssistantMessage(run: RunState, ctx: RunContext, text 
   const message: ModelMessage = { role: 'assistant', content: text };
   run.messages = [...run.messages, message];
   const id = crypto.randomUUID();
-  ctx.emit({ type: 'text-start', id });
-  ctx.emit({ type: 'text-delta', id, delta: text });
-  ctx.emit({ type: 'text-end', id });
+  ctx.emit({ channel: 'client', type: 'text-start', payload: { id } });
+  ctx.emit({ channel: 'client', type: 'text-delta', payload: { id, delta: text } });
+  ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
 }
 
 export async function degradeFlowError(
@@ -56,6 +56,10 @@ export async function degradeFlowError(
     }
   }
 
-  ctx.emit({ type: 'flow-end', flow: flow.name, reason: 'error_degraded' });
+  ctx.emit({
+    channel: 'internal',
+    type: 'flow-end',
+    payload: { flow: flow.name, reason: 'error_degraded' },
+  });
   return { kind: 'ended', reason: 'error_degraded' };
 }

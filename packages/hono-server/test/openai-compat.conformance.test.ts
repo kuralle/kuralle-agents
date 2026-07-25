@@ -8,8 +8,8 @@ describe('OpenAI compat platform body conformance', () => {
     const app = createOpenAICompatRouter({
       runtime: mockRuntime(
         [
-          { type: 'text-delta', id: 't0', delta: 'Hello from Vapi path.' },
-          { type: 'done', sessionId: 'vapi-call-99' },
+          { channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'Hello from Vapi path.' } },
+          { channel: 'client', type: 'done', payload: { sessionId: 'vapi-call-99' } },
         ],
         { onRun: (call) => runs.push(call) },
       ),
@@ -50,7 +50,7 @@ describe('OpenAI compat platform body conformance', () => {
     const runs: RecordedRun[] = [];
     const app = createOpenAICompatRouter({
       runtime: mockRuntime(
-        [{ type: 'text-delta', id: 't0', delta: 'Hi ElevenLabs.' }, { type: 'done', sessionId: 'el-conv-42' }],
+        [{ channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'Hi ElevenLabs.' } }, { channel: 'client', type: 'done', payload: { sessionId: 'el-conv-42' } }],
         { onRun: (call) => runs.push(call) },
       ),
     });
@@ -75,9 +75,9 @@ describe('OpenAI compat platform body conformance', () => {
   it('does not surface internal tools; only clientTools appear as tool_calls', async () => {
     const app = createOpenAICompatRouter({
       runtime: mockRuntime([
-        { type: 'tool-call', toolName: 'lookup_order', args: { id: '1' }, toolCallId: 'call_int' },
-        { type: 'tool-call', toolName: 'end_call', args: { reason: 'done' }, toolCallId: 'call_ext' },
-        { type: 'done', sessionId: 's1' },
+        { channel: 'internal', type: 'tool-call', payload: { toolName: 'lookup_order', args: { id: '1' }, toolCallId: 'call_int' } },
+        { channel: 'internal', type: 'tool-call', payload: { toolName: 'end_call', args: { reason: 'done' }, toolCallId: 'call_ext' } },
+        { channel: 'client', type: 'done', payload: { sessionId: 's1' } },
       ]),
       clientTools: ['end_call'],
     });

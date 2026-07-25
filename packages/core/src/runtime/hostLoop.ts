@@ -79,7 +79,7 @@ export async function hostLoop(options: HostLoopOptions): Promise<HostLoopResult
       return { kind: 'paused' };
     }
     if (error instanceof LimitsExceededError) {
-      ctx.emit({ type: 'error', error: error.message });
+      ctx.emit({ channel: 'client', type: 'error', payload: { error: error.message } });
       return { kind: 'ended', reason: error.message };
     }
     throw error;
@@ -260,7 +260,11 @@ function emitHostGuardTelemetry(
     verdict?: HostGuardTelemetryVerdict;
   },
 ): void {
-  ctx.emit({ type: 'custom', name: 'host-guard', data });
+  ctx.emit({
+    channel: 'internal',
+    type: 'custom',
+    payload: { name: 'host-guard', data },
+  });
 }
 
 function guardVerdictToControl(
@@ -285,7 +289,11 @@ async function executeHostControl(
   control: TurnControl | undefined,
 ): Promise<HostLoopResult> {
   if (!control) {
-    ctx.emit({ type: 'error', error: 'No valid host control target resolved' });
+    ctx.emit({
+      channel: 'client',
+      type: 'error',
+      payload: { error: 'No valid host control target resolved' },
+    });
     return { kind: 'ended', reason: 'dispatch_failed' };
   }
 
@@ -294,12 +302,20 @@ async function executeHostControl(
     if (flow) {
       return await runActiveFlow(flow, run, driver, ctx, agent);
     }
-    ctx.emit({ type: 'error', error: `Flow not found: ${control.flowName}` });
+    ctx.emit({
+      channel: 'client',
+      type: 'error',
+      payload: { error: `Flow not found: ${control.flowName}` },
+    });
     return { kind: 'ended', reason: 'flow_not_found' };
   }
 
   if (control.type === 'handoff') {
-    ctx.emit({ type: 'handoff', targetAgent: control.target, reason: control.reason });
+    ctx.emit({
+      channel: 'internal',
+      type: 'handoff',
+      payload: { targetAgent: control.target, reason: control.reason },
+    });
     return { kind: 'handoff', to: control.target, reason: control.reason };
   }
 
@@ -308,7 +324,11 @@ async function executeHostControl(
   }
 
   if (control.type === 'escalate') {
-    ctx.emit({ type: 'handoff', targetAgent: 'human', reason: control.reason });
+    ctx.emit({
+      channel: 'internal',
+      type: 'handoff',
+      payload: { targetAgent: 'human', reason: control.reason },
+    });
     return { kind: 'handoff', to: 'human', reason: control.reason, category: control.category };
   }
 

@@ -53,10 +53,10 @@ Global processors can also attach at runtime config when loading from packs.
 const handle = runtime.run({ input, sessionId });
 for await (const part of handle.events()) {
   if (part.type === 'tripwire') {
-    console.log(`[BLOCKED] ${part.reason} — message sent: "${part.message}"`);
+    console.log(`[BLOCKED] ${part.payload.reason} — message sent: "${part.message}"`);
   }
   if (part.type === 'text-delta') {
-    process.stdout.write(part.delta);
+    process.stdout.write(part.payload.delta);
   }
 }
 ```

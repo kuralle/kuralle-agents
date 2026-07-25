@@ -93,7 +93,11 @@ export async function speakWithHostControl(args: {
   toolControl = getToolControl();
   if (toolControl) {
     if (spoken.text) {
-      ctx.emit({ type: 'text-cancel', id: turnId, reason: 'host-control' });
+      ctx.emit({
+        channel: 'client',
+        type: 'text-cancel',
+        payload: { id: turnId, reason: 'host-control' },
+      });
     }
     return { text: '', control: toolControl };
   }

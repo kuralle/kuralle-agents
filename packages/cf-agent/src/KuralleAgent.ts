@@ -29,7 +29,7 @@ import type {
   Scheduler,
   WakeJobPayload,
 } from '@kuralle-agents/core';
-import type { HarnessHooks, HarnessStreamPart } from '@kuralle-agents/core';
+import type { HarnessHooks, StreamPart } from '@kuralle-agents/core';
 import type { StreamTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
 import { BridgeSessionStore } from './BridgeSessionStore.js';
@@ -181,7 +181,7 @@ export abstract class KuralleAgent<
       ...this.getStreamConfig(),
     };
 
-    async function* parts(): AsyncGenerator<HarnessStreamPart> {
+    async function* parts(): AsyncGenerator<StreamPart> {
       for await (const part of handle.events) {
         yield part;
       }
@@ -236,7 +236,7 @@ export abstract class KuralleAgent<
 
     let text = '';
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') text += part.delta;
+      if (part.type === 'text-delta') text += part.payload.delta;
     }
     await handle;
 
@@ -339,7 +339,7 @@ export abstract class KuralleAgent<
 
     let text = '';
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') text += part.delta;
+      if (part.type === 'text-delta') text += part.payload.delta;
     }
     await handle;
 

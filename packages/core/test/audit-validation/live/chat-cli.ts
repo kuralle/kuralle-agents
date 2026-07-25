@@ -23,7 +23,7 @@ import { newSessionId } from '../../../src/runtime/openRun.js';
 import type { AgentConfig } from '../../../src/authoring/defineAgent.js';
 import { defineAgent } from '../../../src/authoring/defineAgent.js';
 import { reply, defineFlow } from '../../../src/authoring/nodes.js';
-import type { HarnessStreamPart, TurnHandle } from '../../../src/types/stream.js';
+import type { StreamPart, TurnHandle } from '../../../src/types/stream.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 config({ path: join(here, '../../../.env') });
@@ -54,14 +54,14 @@ export interface TurnObs {
 async function driveTurn(user: string, handle: TurnHandle, print: boolean): Promise<TurnObs> {
   const o: TurnObs = { user, text: '', toolCalls: [], toolResults: [], flowEnters: [], flowEnds: [], handoffs: [], nodes: [], errors: [], types: [] };
   try {
-    for await (const part of handle.events as AsyncIterable<HarnessStreamPart>) {
+    for await (const part of handle.events as AsyncIterable<StreamPart>) {
       o.types.push(part.type);
-      if (part.type === 'text-delta') o.text += part.delta;
-      else if (part.type === 'tool-call') { o.toolCalls.push(part.toolName); if (print) console.log(`   [tool-call] ${part.toolName}`); }
-      else if (part.type === 'tool-result') o.toolResults.push({ name: part.toolName, result: part.result });
-      else if (part.type === 'flow-enter') { o.flowEnters.push(part.flow); if (print) console.log(`   [flow-enter] ${part.flow}`); }
-      else if (part.type === 'flow-end') { o.flowEnds.push(part.flow); if (print) console.log(`   [flow-end] ${part.flow}`); }
-      else if (part.type === 'handoff') { o.handoffs.push(part.targetAgent); if (print) console.log(`   [handoff → ${part.targetAgent}] ${(part as { reason?: string }).reason ?? ''}`); }
+      if (part.type === 'text-delta') o.text += part.payload.delta;
+      else if (part.type === 'tool-call') { o.toolCalls.push(part.payload.toolName); if (print) console.log(`   [tool-call] ${part.payload.toolName}`); }
+      else if (part.type === 'tool-result') o.toolResults.push({ name: part.payload.toolName, result: part.payload.result });
+      else if (part.type === 'flow-enter') { o.flowEnters.push(part.payload.flow); if (print) console.log(`   [flow-enter] ${part.payload.flow}`); }
+      else if (part.type === 'flow-end') { o.flowEnds.push(part.payload.flow); if (print) console.log(`   [flow-end] ${part.payload.flow}`); }
+      else if (part.type === 'handoff') { o.handoffs.push(part.payload.targetAgent); if (print) console.log(`   [handoff → ${part.payload.targetAgent}] ${part.payload.reason ?? ''}`); }
       else if (part.type === 'node-enter') o.nodes.push((part as { nodeName?: string }).nodeName ?? '');
       else if (part.type === 'error') { o.errors.push(String((part as { error?: unknown }).error)); if (print) console.log(`   [error] ${o.errors[o.errors.length - 1]}`); }
     }

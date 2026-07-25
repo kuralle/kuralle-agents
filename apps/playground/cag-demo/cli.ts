@@ -36,12 +36,12 @@ for await (const line of console) {
   if (!sessionId) sessionId = crypto.randomUUID();
   const handle = runtime.run({ input: line, sessionId });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') process.stdout.write(part.delta);
+    if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
     if (part.type === 'tool-call') {
-      console.log(`\n  [CAG search] query="${(part.args as { query?: string })?.query}"`);
+      console.log(`\n  [CAG search] query="${(part.payload.args as { query?: string })?.query}"`);
     }
     if (part.type === 'tool-result') {
-      const chunks = (part.result as { chunks?: unknown[] })?.chunks ?? [];
+      const chunks = (part.payload.result as { chunks?: unknown[] })?.chunks ?? [];
       console.log(`  [results] ${chunks.length} chunks ranked by LLM`);
     }
   }

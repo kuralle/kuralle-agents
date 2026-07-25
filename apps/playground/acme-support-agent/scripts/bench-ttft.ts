@@ -81,40 +81,48 @@ async function measureQuery(label: string, input: string, sessionId?: string): P
           ttftMs = offset;
           events.push({ type: 'TTFT', offsetMs: offset });
         }
-        responseText += event.text;
+        responseText += event.payload.delta;
         break;
       case 'turn-end':
         events.push({ type: 'turn-end', offsetMs: offset });
         break;
       case 'handoff':
-        events.push({ type: 'handoff', offsetMs: offset, detail: `→ ${(event as { targetAgent?: string }).targetAgent}` });
-        break;
-      case 'knowledge-retrieval-start':
-        events.push({ type: 'retrieval-start', offsetMs: offset, detail: event.message });
+        events.push({
+          type: 'handoff',
+          offsetMs: offset,
+          detail: `→ ${event.payload.targetAgent}`,
+        });
         break;
       case 'knowledge-cache-hit':
-        events.push({ type: 'cache-hit', offsetMs: offset, detail: `${event.resultCount} results` });
+        events.push({
+          type: 'cache-hit',
+          offsetMs: offset,
+          detail: `${event.payload.resultCount} results`,
+        });
         break;
       case 'knowledge-cache-miss':
         events.push({ type: 'cache-miss', offsetMs: offset });
         break;
       case 'knowledge-search':
-        events.push({ type: `search(${event.layer})`, offsetMs: offset, detail: `${event.resultCount} results` });
+        events.push({
+          type: `search(${event.payload.layer})`,
+          offsetMs: offset,
+          detail: `${event.payload.resultCount} results`,
+        });
         break;
       case 'knowledge-quality-check':
-        events.push({ type: `quality(${event.quality})`, offsetMs: offset, detail: `top=${event.topScore.toFixed(3)}` });
+        events.push({
+          type: `quality(${event.payload.quality})`,
+          offsetMs: offset,
+          detail: `top=${event.payload.topScore.toFixed(3)}`,
+        });
         break;
       case 'knowledge-reformulation':
-        events.push({ type: `reformulate(${event.trigger})`, offsetMs: offset, detail: `${event.latencyMs}ms` });
-        break;
-      case 'knowledge-compiled':
-        events.push({ type: 'compiled', offsetMs: offset, detail: `${event.tokenCount} tokens` });
-        break;
-      case 'step-start':
-        events.push({ type: 'step-start', offsetMs: offset, detail: event.agentId });
-        break;
-      case 'agent-start':
-        events.push({ type: 'agent-start', offsetMs: offset, detail: event.agentId });
+        events.push({
+          type: `reformulate(${event.payload.trigger})`,
+          offsetMs: offset,
+          detail: `${event.payload.latencyMs}ms`,
+        });
         break;
     }
   }

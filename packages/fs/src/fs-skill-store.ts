@@ -3,60 +3,38 @@ import { parseSkillFrontmatter } from './skill-frontmatter.js';
 
 const DEFAULT_ROOT = '/skills';
 
-export function fsSkillStore(fs: FileSystem, opts?: { root?: string }): SkillStoreLike {
-  const root = opts?.root ?? DEFAULT_ROOT;
+interface SkillLocation {
+  root: string;
+  folder: string;
+  meta: SkillMeta;
+  body: string;
+}
+
+export function fsSkillStore(
+  fs: FileSystem,
+  orderedRoots: readonly string[] = [DEFAULT_ROOT],
+): SkillStoreLike {
+  const roots = [...orderedRoots];
 
   return {
     async list(): Promise<SkillMeta[]> {
-      const metas: SkillMeta[] = [];
-      let entries: string[];
-      try {
-        entries = await fs.readdir(root);
-      } catch {
-        return metas;
-      }
-
-      for (const entry of entries) {
-        const entryPath = fs.resolvePath(root, entry);
-        let stat;
-        try {
-          stat = await fs.stat(entryPath);
-        } catch {
-          continue;
-        }
-        if (stat.type !== 'directory') continue;
-
-        const skillPath = fs.resolvePath(root, `${entry}/SKILL.md`);
-        if (!(await fs.exists(skillPath))) continue;
-
-        try {
-          const content = await fs.readFile(skillPath);
-          const parsed = parseSkillFrontmatter(content, { path: skillPath });
-          metas.push({ name: parsed.name, description: parsed.description });
-        } catch (err) {
-          console.warn(
-            `[skills] Skipping ${skillPath}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-
-      return metas.sort((a, b) => a.name.localeCompare(b.name));
+      const skills = await discoverSkills(fs, roots, true);
+      return [...skills.values()]
+        .map((skill) => skill.meta)
+        .sort((a, b) => a.name.localeCompare(b.name));
     },
 
     async loadBody(name: string): Promise<string> {
-      const folder = await findSkillFolder(fs, root, name);
-      if (!folder) {
+      const skill = (await discoverSkills(fs, roots, false)).get(name);
+      if (!skill) {
         throw new Error(`[skills] Skill "${name}" not found.`);
       }
-      const skillPath = fs.resolvePath(root, `${folder}/SKILL.md`);
-      const content = await fs.readFile(skillPath);
-      const parsed = parseSkillFrontmatter(content, { path: skillPath });
-      return parsed.body;
+      return skill.body;
     },
 
     async loadResource(name: string, path: string): Promise<string | Uint8Array> {
-      const folder = await findSkillFolder(fs, root, name);
-      if (!folder) {
+      const skill = (await discoverSkills(fs, roots, false)).get(name);
+      if (!skill) {
         throw new Error(`[skills] Skill "${name}" not found.`);
       }
 
@@ -65,7 +43,7 @@ export function fsSkillStore(fs: FileSystem, opts?: { root?: string }): SkillSto
         throw new Error(`[skills] Invalid resource path "${path}".`);
       }
 
-      const resourcePath = fs.resolvePath(root, `${folder}/${normalized}`);
+      const resourcePath = fs.resolvePath(skill.root, `${skill.folder}/${normalized}`);
       if (!(await fs.exists(resourcePath))) {
         const err = new Error(
           `ENOENT: [skills] Resource "${normalized}" not found for skill "${name}".`,
@@ -78,39 +56,52 @@ export function fsSkillStore(fs: FileSystem, opts?: { root?: string }): SkillSto
   };
 }
 
-async function findSkillFolder(
+async function discoverSkills(
   fs: FileSystem,
-  root: string,
-  name: string,
-): Promise<string | null> {
-  let entries: string[];
-  try {
-    entries = await fs.readdir(root);
-  } catch {
-    return null;
-  }
+  roots: readonly string[],
+  warnInvalid: boolean,
+): Promise<Map<string, SkillLocation>> {
+  const skills = new Map<string, SkillLocation>();
 
-  for (const entry of entries) {
-    const entryPath = fs.resolvePath(root, entry);
-    let stat;
+  for (const root of roots) {
+    let entries: string[];
     try {
-      stat = await fs.stat(entryPath);
+      entries = await fs.readdir(root);
     } catch {
       continue;
     }
-    if (stat.type !== 'directory') continue;
 
-    const skillPath = fs.resolvePath(root, `${entry}/SKILL.md`);
-    if (!(await fs.exists(skillPath))) continue;
+    for (const entry of entries.sort()) {
+      const entryPath = fs.resolvePath(root, entry);
+      let stat;
+      try {
+        stat = await fs.stat(entryPath);
+      } catch {
+        continue;
+      }
+      if (stat.type !== 'directory') continue;
 
-    try {
-      const content = await fs.readFile(skillPath);
-      const parsed = parseSkillFrontmatter(content, { path: skillPath });
-      if (parsed.name === name) return entry;
-    } catch {
-      continue;
+      const skillPath = fs.resolvePath(root, `${entry}/SKILL.md`);
+      if (!(await fs.exists(skillPath))) continue;
+
+      try {
+        const content = await fs.readFile(skillPath);
+        const parsed = parseSkillFrontmatter(content, { path: skillPath });
+        skills.set(parsed.name, {
+          root,
+          folder: entry,
+          meta: { name: parsed.name, description: parsed.description },
+          body: parsed.body,
+        });
+      } catch (err) {
+        if (warnInvalid) {
+          console.warn(
+            `[skills] Skipping ${skillPath}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
     }
   }
 
-  return null;
+  return skills;
 }

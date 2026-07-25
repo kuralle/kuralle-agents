@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { createHmac } from 'node:crypto';
-import type { ChoiceOption, HarnessStreamPart, Runtime } from '@kuralle-agents/core';
+import type { ChoiceOption, StreamPart, Runtime } from '@kuralle-agents/core';
 import {
   MemoryStore,
   createWakeJobRunner,
@@ -315,14 +315,14 @@ const streamResponseMapper: ResponseMapper = {
   async mapResponse(parts, ctx) {
     let text = '';
     for (const part of parts) {
-      if (part.type === 'text-delta') text += part.delta;
+      if (part.type === 'text-delta') text += part.payload.delta;
     }
     if (text.trim()) await ctx.sendText(text);
     for (const part of parts) {
       if (part.type === 'interactive') {
         await ctx.sendInteractive({
           type: 'buttons',
-          body: part.prompt,
+          body: part.payload.prompt,
           action: { type: 'buttons', buttons: [{ id: 'trigger', title: 'trigger' }] },
         });
       }
@@ -390,8 +390,8 @@ function buildOutboundPipeline(
   return new OutboundPipeline([...(bridge.outbound ?? []), windowGuard], client);
 }
 
-async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', id: 't', delta: text };
+async function* textStream(text: string): AsyncGenerator<StreamPart> {
+  yield { channel: 'client', type: 'text-delta', payload: { id: 't', delta: text } };
 }
 
 const threeChoices: ChoiceOption[] = [
@@ -400,12 +400,15 @@ const threeChoices: ChoiceOption[] = [
   { id: 'c', label: 'Charlie' },
 ];
 
-async function* interactiveStream(): AsyncGenerator<HarnessStreamPart> {
+async function* interactiveStream(): AsyncGenerator<StreamPart> {
   yield {
+    channel: 'internal',
     type: 'interactive',
-    nodeId: 'pick',
-    prompt: 'Pick one',
-    options: threeChoices,
+    payload: {
+      nodeId: 'pick',
+      prompt: 'Pick one',
+      options: threeChoices,
+    },
   };
 }
 

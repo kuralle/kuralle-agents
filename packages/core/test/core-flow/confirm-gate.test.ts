@@ -9,7 +9,7 @@ import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import { setPendingUserInput, consumePendingUserInput } from '../../src/runtime/channels/inputBuffer.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { RunContext } from '../../src/types/run-context.js';
 
@@ -278,7 +278,7 @@ describe('confirm gate events', () => {
     runState.state['__collect_budget'] = { amount: '1' };
     runState.messages = [{ role: 'user', content: 'what desserts do you have?' }];
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const ctx = await createRunContext({
       session,
       runState,

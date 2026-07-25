@@ -4,8 +4,8 @@ import { mockRuntime } from './openai-compat.helpers.ts';
 
 describe('OpenAI compat auth', () => {
   const runtime = mockRuntime([
-    { type: 'text-delta', id: 't0', delta: 'ok' },
-    { type: 'done', sessionId: 's1' },
+    { channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'ok' } },
+    { channel: 'client', type: 'done', payload: { sessionId: 's1' } },
   ]);
 
   it('returns 401 OpenAI envelope when apiKey configured and Bearer missing', async () => {

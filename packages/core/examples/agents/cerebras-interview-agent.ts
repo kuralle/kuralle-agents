@@ -139,11 +139,11 @@ async function main() {
     let response = '';
     const handle = runtime.run({ sessionId, input });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') response += part.delta;
-      if (part.type === 'tool-call') console.log(`[Tool call] ${part.toolName}`);
+      if (part.type === 'text-delta') response += part.payload.delta;
+      if (part.type === 'tool-call') console.log(`[Tool call] ${part.payload.toolName}`);
       if (part.type === 'tool-result') {
-        console.log(`[Tool result] ${part.toolName} => ${JSON.stringify(part.result)}`);
-        if (part.toolName === 'end_call' && (part.result as { endCall?: boolean })?.endCall) shouldStop = true;
+        console.log(`[Tool result] ${part.payload.toolName} => ${JSON.stringify(part.payload.result)}`);
+        if (part.payload.toolName === 'end_call' && (part.payload.result as { endCall?: boolean })?.endCall) shouldStop = true;
       }
     }
     await handle;

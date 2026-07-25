@@ -2,7 +2,7 @@ import type {
   KnowledgeProviderConfig,
   KnowledgeRetrievalResult,
   KnowledgeRetrieverAdapter,
-} from '../../types/voice.js';
+} from '../../types/knowledge.js';
 
 export interface InMemoryKnowledgeDocument {
   id?: string;

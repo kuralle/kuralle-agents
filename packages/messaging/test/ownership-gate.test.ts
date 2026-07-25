@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { createMessagingRouter } from '../src/adapter/createMessagingRouter.js';
 import type { OwnershipStore } from '../src/adapter/ownership-store.js';
 import type { InboundMessage, PlatformClient, SendResult } from '../src/types.js';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import { createMockRuntime, createMockSession } from '@kuralle-agents/core/testing';
 
 function makeMessage(overrides: Partial<InboundMessage> = {}): InboundMessage {
@@ -68,13 +68,17 @@ function mutableOwnership(initial: 'bot' | 'human' = 'bot'): OwnershipStore {
   };
 }
 
-async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', id: 't', delta: text };
+async function* textStream(text: string): AsyncGenerator<StreamPart> {
+  yield { channel: 'client', type: 'text-delta', payload: { id: 't', delta: text } };
 }
 
-async function* humanHandoffStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'handoff', targetAgent: 'human', reason: 'escalate' };
-  yield { type: 'done', sessionId: 'thread-own-1' };
+async function* humanHandoffStream(): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'internal',
+    type: 'handoff',
+    payload: { targetAgent: 'human', reason: 'escalate' },
+  };
+  yield { channel: 'client', type: 'done', payload: { sessionId: 'thread-own-1' } };
 }
 
 describe('ownership inbound gate', () => {

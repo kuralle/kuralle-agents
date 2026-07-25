@@ -8,9 +8,9 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
-function classifyStreamPart(part: HarnessStreamPart): 'text' | 'flow' | 'other' {
+function classifyStreamPart(part: StreamPart): 'text' | 'flow' | 'other' {
   switch (part.type) {
     case 'text-start':
     case 'text-delta':
@@ -42,16 +42,19 @@ const driverWithStructured: ChannelDriver = {
 
 describe('interactive stream part', () => {
   it('interactive_part_is_additive', () => {
-    const existing: HarnessStreamPart[] = [
-      { type: 'text-delta', id: 't0', delta: 'hi' },
-      { type: 'node-enter', nodeName: 'n' },
-      { type: 'done', sessionId: 's' },
+    const existing: StreamPart[] = [
+      { channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'hi' } },
+      { channel: 'internal', type: 'node-enter', payload: { nodeName: 'n' } },
+      { channel: 'client', type: 'done', payload: { sessionId: 's' } },
     ];
-    const interactive: HarnessStreamPart = {
+    const interactive: StreamPart = {
+      channel: 'internal',
       type: 'interactive',
-      nodeId: 'pick',
-      options: [{ id: 'a', label: 'A' }],
-      prompt: 'Choose',
+      payload: {
+        nodeId: 'pick',
+        options: [{ id: 'a', label: 'A' }],
+        prompt: 'Choose',
+      },
     };
     for (const part of [...existing, interactive]) {
       expect(['text', 'flow', 'other']).toContain(classifyStreamPart(part));
@@ -125,7 +128,7 @@ describe('interactive stream part', () => {
     });
 
     const withChoicesId = 'interactive-with-choices';
-    const partsWithChoices: HarnessStreamPart[] = [];
+    const partsWithChoices: StreamPart[] = [];
     const handle1 = runtime.run({
       sessionId: withChoicesId,
       input: 'start',
@@ -139,17 +142,20 @@ describe('interactive stream part', () => {
     const interactiveParts = partsWithChoices.filter((p) => p.type === 'interactive');
     expect(interactiveParts.length).toBeGreaterThanOrEqual(1);
     expect(interactiveParts[0]).toMatchObject({
+      channel: 'internal',
       type: 'interactive',
-      nodeId: 'pick',
-      prompt: 'Choose one',
-      options: [
-        { id: 'a', label: 'Option A' },
-        { id: 'b', label: 'Option B' },
-      ],
+      payload: {
+        nodeId: 'pick',
+        prompt: 'Choose one',
+        options: [
+          { id: 'a', label: 'Option A' },
+          { id: 'b', label: 'Option B' },
+        ],
+      },
     });
 
     const withoutChoicesId = 'interactive-without-choices';
-    const partsWithout: HarnessStreamPart[] = [];
+    const partsWithout: StreamPart[] = [];
     const handle2 = runtimePlain.run({
       sessionId: withoutChoicesId,
       input: 'start',

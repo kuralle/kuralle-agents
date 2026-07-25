@@ -18,8 +18,8 @@ import {
   runGatherPhase,
 } from '../../src/runtime/grounding/index.js';
 import { createInMemoryKnowledgeConfig } from '../../src/runtime/grounding/inMemoryKnowledge.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
-import type { SourceRef } from '../../src/types/voice.js';
+import type { StreamPart } from '../../src/types/stream.js';
+import type { SourceRef } from '../../src/types/knowledge.js';
 
 afterEach(() => {
   mock.restore();
@@ -123,7 +123,7 @@ describe('H6 confidence/grounding gate', () => {
       validationPolicies: [policy],
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push((part as { delta: string }).delta);
+          emitted.push(part.payload.delta);
         }
       },
     });
@@ -305,7 +305,7 @@ describe('H6 confidence/grounding gate', () => {
       model: stubModel,
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push((part as { delta: string }).delta);
+          emitted.push(part.payload.delta);
         }
       },
     });

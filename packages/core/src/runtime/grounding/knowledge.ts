@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import type { AgentConfig } from '../../types/agentConfig.js';
 import type { AutoRetrieveProvider, RunContext } from '../../types/run-context.js';
-import type { HarnessStreamPart } from '../../types/stream.js';
 import type { AnyTool } from '../../types/effectTool.js';
-import type { AgentKnowledgeOverrides, KnowledgeProviderConfig } from '../../types/voice.js';
+import type { AgentKnowledgeOverrides, KnowledgeProviderConfig } from '../../types/knowledge.js';
 import { defineTool } from '../../tools/effect/defineTool.js';
 import { normalizeCitations } from '../citations/index.js';
 import { KnowledgeProvider } from '../KnowledgeProvider.js';
@@ -64,7 +63,7 @@ export function buildAutoRetrieveProvider(
         false,
       );
 
-      for (const event of events as HarnessStreamPart[]) {
+      for (const event of events) {
         ctx.emit(event);
       }
 
@@ -115,7 +114,7 @@ export function buildKnowledgeTool(
 
       if (ctx?.emit) {
         for (const event of events) {
-          ctx.emit(event as HarnessStreamPart);
+          ctx.emit(event);
         }
       }
 

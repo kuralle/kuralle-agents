@@ -10,7 +10,7 @@ import { getCollectData, schemaSatisfied } from '../../src/flow/extraction.js';
 import { getFlowPark, looksLikeOffScriptQuestion } from '../../src/flow/collectDigression.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import { setPendingUserInput } from '../../src/runtime/channels/inputBuffer.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 function makeCollectFlow(id = 'name') {
   const done = reply({ id: 'done', instructions: 'Thanks.', next: () => ({ end: 'done' }) });
@@ -49,16 +49,16 @@ function emitAnswerLifecycle(
   text: string,
 ): void {
   const id = crypto.randomUUID();
-  ctx.emit({ type: 'text-start', id });
-  ctx.emit({ type: 'text-delta', id, delta: text });
-  ctx.emit({ type: 'text-end', id });
-  ctx.emit({ type: 'turn-end' });
+  ctx.emit({ channel: 'client', type: 'text-start', payload: { id } });
+  ctx.emit({ channel: 'client', type: 'text-delta', payload: { id, delta: text } });
+  ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
+  ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
 }
 
 describe('H5 in-flow digression (outOfBandControl)', () => {
   it('flag-OFF: off-script at collect re-asks without answer turn or route', async () => {
     const { ask, flow } = makeCollectFlow();
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     let answerTurns = 0;
 
     const driver = {
@@ -90,10 +90,10 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     expect(result).toEqual({ kind: 'awaitingUser' });
     expect(answerTurns).toBe(0);
-    expect(parts.some((p) => p.type === 'text-delta' && /hours|open 9-5/i.test(String((p as { delta?: string }).delta)))).toBe(
+    expect(parts.some((p) => p.type === 'text-delta' && /hours|open 9-5/i.test(p.payload.delta))).toBe(
       false,
     );
-    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(String((p as { delta?: string }).delta)))).toBe(true);
+    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(p.payload.delta))).toBe(true);
     expect(runState.activeNode).toBe(ask.id);
   });
 
@@ -216,7 +216,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
   it('flag-ON answer-then-resume: answers off-script question then re-asks collect', async () => {
     const { ask, flow } = makeCollectFlow();
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     let answerTurns = 0;
 
     const driver = {
@@ -263,10 +263,10 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     expect(result).toEqual({ kind: 'awaitingUser' });
     expect(answerTurns).toBe(1);
-    expect(parts.some((p) => p.type === 'text-delta' && /9am|5pm/i.test(String((p as { delta?: string }).delta)))).toBe(
+    expect(parts.some((p) => p.type === 'text-delta' && /9am|5pm/i.test(p.payload.delta))).toBe(
       true,
     );
-    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(String((p as { delta?: string }).delta)))).toBe(true);
+    expect(parts.some((p) => p.type === 'text-delta' && /name/i.test(p.payload.delta))).toBe(true);
     expect(runState.activeNode).toBe(ask.id);
 
     setPendingUserInput(session, 'My name is Riley');
@@ -359,7 +359,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
   it('flag-ON digression: runAgentTurn owns answer lifecycle — no double emit', async () => {
     const { ask, flow } = makeCollectFlow();
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     let answerTurns = 0;
 
     const driver = {
@@ -408,17 +408,18 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
     expect(answerTurns).toBe(1);
 
     const digressionDeltas = parts.filter(
-      (p) => p.type === 'text-delta' && /9am|5pm/i.test(String((p as { delta?: string }).delta)),
+      (p): p is Extract<StreamPart, { type: 'text-delta' }> =>
+        p.type === 'text-delta' && /9am|5pm/i.test(p.payload.delta),
     );
     const digressionStarts = parts.filter(
       (p) =>
         p.type === 'text-start' &&
-        digressionDeltas.some((d) => (d as { id?: string }).id === (p as { id?: string }).id),
+        digressionDeltas.some((d) => d.payload.id === p.payload.id),
     );
     const digressionEnds = parts.filter(
       (p) =>
         p.type === 'text-end' &&
-        digressionDeltas.some((d) => (d as { id?: string }).id === (p as { id?: string }).id),
+        digressionDeltas.some((d) => d.payload.id === p.payload.id),
     );
 
     expect(digressionDeltas).toHaveLength(1);
@@ -426,7 +427,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
     expect(digressionEnds).toHaveLength(1);
 
     const reAskDeltas = parts.filter(
-      (p) => p.type === 'text-delta' && /name/i.test(String((p as { delta?: string }).delta)),
+      (p) => p.type === 'text-delta' && /name/i.test(p.payload.delta),
     );
     expect(reAskDeltas).toHaveLength(1);
     expect(runState.activeNode).toBe(ask.id);

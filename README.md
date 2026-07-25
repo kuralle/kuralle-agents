@@ -16,7 +16,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 - **Flows** — node graphs (`reply`, `collect`, `action`, `decide`) where each node returns its next transition. Your SOP becomes a typed state machine you didn't have to hand-write.
 - **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
 - **Routing / Handoffs** — model-reasoned routing (`routes`/`agents`, derived from agent shape) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
-- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `HarnessStreamPart` JSON-SSE.
+- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `StreamPart` JSON-SSE.
 - **Observability** — every run is captured as a structured `AgentTrace`. `runtime.runOnce()` returns one complete trace for evals; tracing is on by default (`MemoryTraceStore`), durable on Redis/Postgres/Cloudflare DO-SQLite, exportable to OTLP/Langfuse, and inspectable via `kuralle trace` or the embeddable `@kuralle-agents/trace-ui` viewer.
 
 ## Why Kuralle
@@ -70,8 +70,8 @@ let sessionId: string | undefined;
 async function chat(input: string) {
   const handle = runtime.run({ input, sessionId });
   for await (const part of handle.events) {           // events is a property, not a method
-    if (part.type === 'text-delta') process.stdout.write(part.delta);
-    if (part.type === 'done') sessionId = part.sessionId;
+    if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+    if (part.type === 'done') sessionId = part.payload.sessionId;
   }
   await handle;
 }
@@ -87,11 +87,7 @@ OPENAI_API_KEY=sk-... npx tsx agent.ts
 
 More examples: `packages/core/examples/agents/` — form-filler, transfer-agent, basic-chat, sales-with-leads.
 
-## Text and voice, one agent
-
-The same agent config runs over voice. **Provider-native realtime** (speech-to-speech) lives in `@kuralle-agents/realtime-audio` (`VoiceEngine`, the realtime `VoiceDriver`) — kept intact but paused off the headline API while we harden text as the primary primitive.
-
-> **Cascaded voice (STT → Kuralle text runtime → TTS) and telephony transports** (LiveKit, WebSocket, SIP, Twilio, SmartPBX) now live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)** — extracted so voice can version independently.
+> **Voice is out of scope.** Cascaded voice and telephony transports (LiveKit, WebSocket, SIP, Twilio, SmartPBX) live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)**. Provider-native speech-to-speech has been removed from this repo; Kuralle is text-first. Inbound **voice notes** are still supported as multimodal audio input — see the Multimodal guide.
 
 ## Packages
 
@@ -106,7 +102,6 @@ The same agent config runs over voice. **Provider-native realtime** (speech-to-s
 | [`@kuralle-agents/trace-ui`](https://www.npmjs.com/package/@kuralle-agents/trace-ui) | Embeddable read-only trace waterfall and span detail viewer |
 | [`@kuralle-agents/postgres-store`](https://www.npmjs.com/package/@kuralle-agents/postgres-store) | Postgres-backed session persistence |
 | [`@kuralle-agents/cli`](https://www.npmjs.com/package/@kuralle-agents/cli) | `kuralle` CLI — interactive chat, adaptive send, simulation, trace inspection |
-| [`@kuralle-agents/realtime-audio`](https://www.npmjs.com/package/@kuralle-agents/realtime-audio) | Provider-native speech-to-speech (paused; kept intact) |
 
 ## Documentation
 

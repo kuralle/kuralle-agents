@@ -10,7 +10,7 @@ import {
   createRuntime,
   MemoryStore,
 } from '@kuralle-agents/core';
-import type { HarnessStreamPart, ChannelDriver } from '@kuralle-agents/core';
+import type { StreamPart, ChannelDriver } from '@kuralle-agents/core';
 
 const stubModel = {} as LanguageModel;
 import { OutboundPipeline, windowGuard, defaultInboundChain } from '@kuralle-agents/messaging';
@@ -127,7 +127,7 @@ describe('interactive_end_to_end', () => {
       hostSelect,
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const handle = runtime.run({
       sessionId: 's3-04-e2e',
       input: 'start',
@@ -142,10 +142,13 @@ describe('interactive_end_to_end', () => {
     expect(interactiveParts.length).toBeGreaterThanOrEqual(1);
     const emitted = interactiveParts[0]!;
     expect(emitted).toMatchObject({
+      channel: 'internal',
       type: 'interactive',
-      nodeId: 'pick',
-      prompt: 'Pick one',
-      options: threeChoices,
+      payload: {
+        nodeId: 'pick',
+        prompt: 'Pick one',
+        options: threeChoices,
+      },
     });
 
     const sink = recordingSink();

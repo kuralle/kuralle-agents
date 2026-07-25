@@ -9,7 +9,7 @@ import {
   setupDurableHarness,
   stubModel,
 } from '../core-durable/helpers.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import type { ValidationCapability } from '../../src/capabilities/ValidationCapability.js';
 import { z } from 'zod';
 
@@ -57,7 +57,7 @@ describe('TextDriver unit', () => {
     });
 
     const { session, runStore, runState } = await setupDurableHarness();
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const toolExecutor = new CoreToolExecutor({ tools: {} });
 
     const ctx = await createRunContext({
@@ -75,7 +75,7 @@ describe('TextDriver unit', () => {
     const result = await driver.runAgentTurn(resolveReplyNode(node, {}), ctx);
 
     expect(result.text).toBe('Hello world');
-    expect(parts.filter((p) => p.type === 'text-delta').map((p) => p.delta).join('')).toBe('Hello world');
+    expect(parts.filter((p) => p.type === 'text-delta').map((p) => p.payload.delta).join('')).toBe('Hello world');
     expect(parts.some((p) => p.type === 'turn-end')).toBe(true);
   });
 
@@ -195,7 +195,7 @@ describe('TextDriver unit', () => {
       },
     });
 
-    const collected: HarnessStreamPart[] = [];
+    const collected: StreamPart[] = [];
     for await (const part of handle.events) {
       collected.push(part);
     }
@@ -212,7 +212,7 @@ describe('TextDriver unit', () => {
       const chunks = ['Hello', ' world', '. How', ' are you?'];
       mockMultiChunkStream(chunks);
 
-      const parts: HarnessStreamPart[] = [];
+      const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
       const ctx = await createRunContext({
         session,
@@ -247,7 +247,7 @@ describe('TextDriver unit', () => {
         validate: async () => ({ decision: 'continue', confidence: 1 }),
       };
 
-      const parts: HarnessStreamPart[] = [];
+      const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
       const ctx = await createRunContext({
         session,
@@ -285,7 +285,7 @@ describe('TextDriver unit', () => {
         },
       };
 
-      const parts: HarnessStreamPart[] = [];
+      const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
       const ctx = await createRunContext({
         session,
@@ -304,7 +304,7 @@ describe('TextDriver unit', () => {
       expect(result.text).toBe('safe only');
       const streamText = parts
         .filter((p) => p.type === 'text-delta')
-        .map((p) => (p as { delta: string }).delta)
+        .map((p) => p.payload.delta)
         .join('');
       expect(streamText).not.toContain('LEAKED');
       expect(streamText).toBe('safe only');
@@ -326,7 +326,7 @@ describe('TextDriver unit', () => {
         };
       });
 
-      const parts: HarnessStreamPart[] = [];
+      const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
       const ctx = await createRunContext({
         session,

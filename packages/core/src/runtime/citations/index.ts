@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
   AgentKnowledgeOverrides,
-  HarnessStreamPart,
+  StreamPart,
   KnowledgeRetrievalResult,
   RetrievalCacheAdapter,
   SourceRef,
@@ -16,14 +16,14 @@ export interface CitationRetrievalProvider {
   ): Promise<{
     results: KnowledgeRetrievalResult[];
     citations?: SourceRef[];
-    events: HarnessStreamPart[];
+    events: StreamPart[];
   }>;
 }
 
 export interface CitationRetrievalResult {
   results: KnowledgeRetrievalResult[];
   citations: SourceRef[];
-  events: HarnessStreamPart[];
+  events: StreamPart[];
 }
 
 export async function retrieveWithCitations(

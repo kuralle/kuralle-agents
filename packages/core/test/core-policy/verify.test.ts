@@ -5,7 +5,7 @@ import { runFlow } from '../../src/flow/runFlow.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 describe('flow verify contract', () => {
   it('blocks transition when outputSchema check fails against real state', async () => {
@@ -32,7 +32,7 @@ describe('flow verify contract', () => {
     };
 
     const { session, runStore, runState } = await setupDurableHarness('verify-fail', 'verify-fail-run');
-    const errors: HarnessStreamPart[] = [];
+    const errors: StreamPart[] = [];
     const ctx = await createRunContext({
       session,
       runState,
@@ -45,7 +45,7 @@ describe('flow verify contract', () => {
 
     const result = await runFlow(flow, runState, driver, ctx);
     expect(result).toEqual({ kind: 'awaitingUser' });
-    expect(errors.some((part) => part.type === 'error' && part.error.includes('Verify blocked'))).toBe(true);
+    expect(errors.some((part) => part.type === 'error' && part.payload.error.includes('Verify blocked'))).toBe(true);
     expect(runState.activeNode).toBe('gate');
   });
 

@@ -116,7 +116,6 @@ const runtime = createRuntime({
 });
 ```
 
-See `docs/skills/kuralle-voice-agents/rules/extraction-model-required.md` for why this is critical.
 
 ## Run the demo
 

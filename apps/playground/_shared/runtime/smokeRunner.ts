@@ -2,7 +2,7 @@ import {
 	createRuntime,
 	MemoryStore,
 	type AgentConfig,
-	type HarnessStreamPart,
+	type StreamPart,
 	type KnowledgeProviderConfig,
 	type MemoryService,
 } from '@kuralle-agents/core';
@@ -43,7 +43,7 @@ export async function runPlaygroundConversation(opts: {
 
 		for await (const part of handle.events) {
 			logPart(part);
-			if (part.type === 'text-delta') response += part.delta;
+			if (part.type === 'text-delta') response += part.payload.delta;
 		}
 
 		await handle;
@@ -57,11 +57,11 @@ export async function runPlaygroundConversation(opts: {
 	return { sessionId, transcript };
 }
 
-function logPart(part: HarnessStreamPart): void {
-	if (part.type === 'node-enter') console.log(`[Node] ${part.nodeName}`);
-	if (part.type === 'flow-transition') console.log(`[Transition] ${part.from} -> ${part.to}`);
-	if (part.type === 'flow-enter') console.log(`[Flow] ${part.flow}`);
-	if (part.type === 'handoff') console.log(`[Handoff] ${part.targetAgent} (${part.reason ?? ''})`);
-	if (part.type === 'tool-call') console.log(`[Tool call] ${part.toolName}`);
-	if (part.type === 'tool-result') console.log(`[Tool result] ${part.toolName}`);
+function logPart(part: StreamPart): void {
+	if (part.type === 'node-enter') console.log(`[Node] ${part.payload.nodeName}`);
+	if (part.type === 'flow-transition') console.log(`[Transition] ${part.payload.from} -> ${part.payload.to}`);
+	if (part.type === 'flow-enter') console.log(`[Flow] ${part.payload.flow}`);
+	if (part.type === 'handoff') console.log(`[Handoff] ${part.payload.targetAgent} (${part.payload.reason ?? ''})`);
+	if (part.type === 'tool-call') console.log(`[Tool call] ${part.payload.toolName}`);
+	if (part.type === 'tool-result') console.log(`[Tool result] ${part.payload.toolName}`);
 }

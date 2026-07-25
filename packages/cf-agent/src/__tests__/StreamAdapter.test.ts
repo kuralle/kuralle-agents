@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import { convertToSSELines } from '../StreamAdapter.js';
 import { DEFAULT_STREAM_CONFIG } from '../types.js';
 
@@ -9,7 +9,7 @@ function parseSSELines(lines: string[]): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line.slice(6)) as Record<string, unknown>);
 }
 
-function collect(parts: HarnessStreamPart[]) {
+function collect(parts: StreamPart[]) {
   const textState = { open: false, canceledIds: new Set<string>() };
   const events: Array<Record<string, unknown>> = [];
   for (const part of parts) {
@@ -22,10 +22,10 @@ function collect(parts: HarnessStreamPart[]) {
 describe('StreamAdapter convertToSSELines', () => {
   test('text-start through multi-delta to text-end', () => {
     const events = collect([
-      { type: 'text-start', id: 't1' },
-      { type: 'text-delta', id: 't1', delta: 'Hel' },
-      { type: 'text-delta', id: 't1', delta: 'lo' },
-      { type: 'text-end', id: 't1' },
+      { channel: 'client', type: 'text-start', payload: { id: 't1' } },
+      { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'Hel' } },
+      { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'lo' } },
+      { channel: 'client', type: 'text-end', payload: { id: 't1' } },
     ]);
 
     expect(events.map((e) => e.type)).toEqual([
@@ -44,13 +44,17 @@ describe('StreamAdapter convertToSSELines', () => {
 
   test('text-cancel closes segment and drops post-cancel deltas for that turn', () => {
     const events = collect([
-      { type: 'text-start', id: 'turn-1' },
-      { type: 'text-delta', id: 'turn-1', delta: 'pre' },
-      { type: 'text-cancel', id: 'turn-1', reason: 'policy-block' },
-      { type: 'text-delta', id: 'turn-1', delta: 'leak' },
-      { type: 'text-start', id: 'safe-1' },
-      { type: 'text-delta', id: 'safe-1', delta: 'safe' },
-      { type: 'text-end', id: 'safe-1' },
+      { channel: 'client', type: 'text-start', payload: { id: 'turn-1' } },
+      { channel: 'client', type: 'text-delta', payload: { id: 'turn-1', delta: 'pre' } },
+      {
+        channel: 'client',
+        type: 'text-cancel',
+        payload: { id: 'turn-1', reason: 'policy-block' },
+      },
+      { channel: 'client', type: 'text-delta', payload: { id: 'turn-1', delta: 'leak' } },
+      { channel: 'client', type: 'text-start', payload: { id: 'safe-1' } },
+      { channel: 'client', type: 'text-delta', payload: { id: 'safe-1', delta: 'safe' } },
+      { channel: 'client', type: 'text-end', payload: { id: 'safe-1' } },
     ]);
 
     const types = events.map((e) => e.type);

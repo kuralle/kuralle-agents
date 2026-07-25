@@ -2,7 +2,7 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import { createRuntime } from '@kuralle-agents/core';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import { createOpenAI } from '@ai-sdk/openai';
 import { TurnQueue } from 'agents/chat';
 import { createWhatsAppClient } from '@kuralle-agents/messaging-meta/whatsapp';
@@ -53,10 +53,10 @@ function toWhatsAppText(input: string): string {
     .trim();
 }
 
-function textFromParts(parts: HarnessStreamPart[]): string {
+function textFromParts(parts: StreamPart[]): string {
   return parts
-    .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
-    .map((part) => part.delta)
+    .filter((part): part is Extract<StreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
+    .map((part) => part.payload.delta)
     .join('')
     .trim();
 }

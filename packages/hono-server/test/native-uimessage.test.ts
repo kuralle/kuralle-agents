@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
-import type { UserInputContent } from '@kuralle-agents/core';
+import type { StreamPart, UserInputContent } from '@kuralle-agents/core';
 import { createKuralleChatRouter, createKuralleRouter } from '../src/index.ts';
 
 type StreamChunk = { type: string; [key: string]: unknown };
@@ -53,11 +53,11 @@ function sessionIdFromUiStream(chunks: StreamChunk[]): string | undefined {
 describe('native UIMessageStream default', () => {
   it('POST /api/chat/sse returns native text-* chunks for useChat-shaped body', async () => {
     const runtime = createMockRuntime([
-      { type: 'text-start', id: 't1' },
-      { type: 'text-delta', id: 't1', delta: 'Hello' },
-      { type: 'text-end', id: 't1' },
-      { type: 'node-enter', nodeName: 'greet' },
-      { type: 'done', sessionId: 'sess-ui' },
+      { channel: 'client', type: 'text-start', payload: { id: 't1' } },
+      { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'Hello' } },
+      { channel: 'client', type: 'text-end', payload: { id: 't1' } },
+      { channel: 'internal', type: 'node-enter', payload: { nodeName: 'greet' } },
+      { channel: 'client', type: 'done', payload: { sessionId: 'sess-ui' } },
     ]);
 
     const app = createKuralleChatRouter({ runtime, streamFilter: 'all' });
@@ -83,10 +83,10 @@ describe('native UIMessageStream default', () => {
     let capturedInput: UserInputContent | undefined;
     const runtime = createMockRuntime(
       [
-        { type: 'text-start', id: 't1' },
-        { type: 'text-delta', id: 't1', delta: 'ok' },
-        { type: 'text-end', id: 't1' },
-        { type: 'done', sessionId: 'sess-inbound' },
+        { channel: 'client', type: 'text-start', payload: { id: 't1' } },
+        { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'ok' } },
+        { channel: 'client', type: 'text-end', payload: { id: 't1' } },
+        { channel: 'client', type: 'done', payload: { sessionId: 'sess-inbound' } },
       ],
       {
         onRun: (call) => {
@@ -118,10 +118,10 @@ describe('native UIMessageStream default', () => {
 
   it('native default exposes server sessionId in message metadata for useChat clients', async () => {
     const runtime = createMockRuntime([
-      { type: 'text-start', id: 't1' },
-      { type: 'text-delta', id: 't1', delta: 'Hello' },
-      { type: 'text-end', id: 't1' },
-      { type: 'done', sessionId: 'sess-ui' },
+      { channel: 'client', type: 'text-start', payload: { id: 't1' } },
+      { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'Hello' } },
+      { channel: 'client', type: 'text-end', payload: { id: 't1' } },
+      { channel: 'client', type: 'done', payload: { sessionId: 'sess-ui' } },
     ]);
 
     const app = createKuralleChatRouter({ runtime, streamFilter: 'all' });
@@ -139,10 +139,10 @@ describe('native UIMessageStream default', () => {
     expect(sessionIdFromUiStream(chunks)).toBe('sess-ui');
   });
 
-  it('POST /api/chat/sse?format=raw returns legacy HarnessStreamPart JSON-SSE', async () => {
+  it('POST /api/chat/sse?format=raw returns legacy StreamPart JSON-SSE', async () => {
     const runtime = createMockRuntime([
-      { type: 'text-delta', id: 't1', delta: 'raw' },
-      { type: 'done', sessionId: 'sess-raw' },
+      { channel: 'client', type: 'text-delta', payload: { id: 't1', delta: 'raw' } },
+      { channel: 'client', type: 'done', payload: { sessionId: 'sess-raw' } },
     ]);
 
     const app = createKuralleChatRouter({ runtime, streamFilter: 'all' });
@@ -154,8 +154,18 @@ describe('native UIMessageStream default', () => {
 
     expect(res.status).toBe(200);
     const parts = await parseRawHarnessSse(await res.text());
-    expect(parts.some((p) => p.type === 'text-delta' && p.delta === 'raw')).toBe(true);
-    expect(parts.some((p) => p.type === 'done' && p.sessionId === 'sess-raw')).toBe(true);
+    expect(parts).toContainEqual(
+      expect.objectContaining({
+        type: 'text-delta',
+        payload: expect.objectContaining({ delta: 'raw' }),
+      }),
+    );
+    expect(parts).toContainEqual(
+      expect.objectContaining({
+        type: 'done',
+        payload: expect.objectContaining({ sessionId: 'sess-raw' }),
+      }),
+    );
   });
 
   it('POST /api/flow/sse defaults to native UIMessageStream', async () => {
@@ -164,10 +174,10 @@ describe('native UIMessageStream default', () => {
       nodeHistory: ['start'],
       hasEnded: false,
       collectedData: {},
-      process: async function* () {
-        yield { type: 'text-start', id: 'f1' };
-        yield { type: 'text-delta', id: 'f1', delta: 'flow' };
-        yield { type: 'text-end', id: 'f1' };
+      process: async function* (): AsyncGenerator<StreamPart> {
+        yield { channel: 'client', type: 'text-start', payload: { id: 'f1' } };
+        yield { channel: 'client', type: 'text-delta', payload: { id: 'f1', delta: 'flow' } };
+        yield { channel: 'client', type: 'text-end', payload: { id: 'f1' } };
       },
     };
 
@@ -191,8 +201,8 @@ describe('native UIMessageStream default', () => {
       nodeHistory: ['start'],
       hasEnded: false,
       collectedData: {},
-      process: async function* () {
-        yield { type: 'text-delta', id: 'f1', delta: 'legacy' };
+      process: async function* (): AsyncGenerator<StreamPart> {
+        yield { channel: 'client', type: 'text-delta', payload: { id: 'f1', delta: 'legacy' } };
       },
     };
 
@@ -205,6 +215,11 @@ describe('native UIMessageStream default', () => {
 
     expect(res.status).toBe(200);
     const parts = await parseRawHarnessSse(await res.text());
-    expect(parts.some((p) => p.type === 'text-delta' && p.delta === 'legacy')).toBe(true);
+    expect(parts).toContainEqual(
+      expect.objectContaining({
+        type: 'text-delta',
+        payload: expect.objectContaining({ delta: 'legacy' }),
+      }),
+    );
   });
 });

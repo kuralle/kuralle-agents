@@ -38,8 +38,8 @@ const runtime = new Runtime({
 ```ts
 let sessionId: string | undefined;
 for await (const part of runtime.stream({ input: 'Hello', sessionId })) {
-  if (part.type === 'text-delta') process.stdout.write(part.delta);
-  if (part.type === 'done') sessionId = part.sessionId;
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+  if (part.type === 'done') sessionId = part.payload.sessionId;
 }
 ```
 
@@ -54,7 +54,7 @@ const runtime = new Runtime({
   defaultModel: openai('gpt-4o-mini') as any,
   hooks: {
     onStreamPart: async (ctx, part) => {
-      if (part.type === 'error') console.error(part.error);
+      if (part.type === 'error') console.error(part.payload.error);
     },
   },
 });

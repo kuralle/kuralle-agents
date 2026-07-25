@@ -6,7 +6,7 @@ import { harnessToUIMessageStream, userInputToText } from '@kuralle-agents/core'
 import type {
   ConversationOutcome,
   CsatRecord,
-  HarnessStreamPart,
+  StreamPart,
   RunOptions,
   RuntimeLike,
   Session,
@@ -37,15 +37,8 @@ import {
 } from './streamFilter.js';
 import { debug } from './debug.js';
 
-type FlowStreamPart = {
-  type: string;
-  id?: string;
-  delta?: string;
-  error?: string;
-};
-
 type FlowRouterManager = {
-  process: (input: string) => AsyncGenerator<FlowStreamPart>;
+  process: (input: string) => AsyncGenerator<StreamPart>;
   currentNodeName: string;
   nodeHistory: string[];
   hasEnded: boolean;
@@ -152,8 +145,8 @@ export type KuralleChatRouterOptions = {
    */
   widgetWelcomeSuggestions?: string[];
   /**
-   * Controls which HarnessStreamPart events are sent to external clients (SSE + widget/flow WebSockets).
-   * - `'safe'`: only user-facing events (text-delta, done, sanitized error, suggested-questions, input).
+   * Controls which StreamPart events are sent to external clients (SSE + widget/flow WebSockets).
+   * - `'safe'`: events classified as `client` by core, with errors sanitized.
    * - `'all'`: full stream (Studio / dev tooling).
    * - function: custom predicate; return true to emit.
    * @default 'safe'
@@ -253,7 +246,7 @@ const coerceToString = (data: unknown): string => {
 async function* iterateRuntimeParts(
   runtime: RuntimeLike,
   opts: RunOptions,
-): AsyncGenerator<HarnessStreamPart> {
+): AsyncGenerator<StreamPart> {
   const handle = runtime.run({
     ...opts,
     sessionId: opts.sessionId ?? crypto.randomUUID(),
@@ -273,15 +266,15 @@ const collectResponse = async (
 
   for await (const part of iterateRuntimeParts(runtime, { input: message, sessionId, userId })) {
     if (part.type === 'text-delta') {
-      response += part.delta;
+      response += part.payload.delta;
     }
 
     if (part.type === 'error') {
-      throw new Error(part.error);
+      throw new Error(part.payload.error);
     }
 
     if (part.type === 'done') {
-      resolvedSessionId = part.sessionId;
+      resolvedSessionId = part.payload.sessionId;
     }
   }
 
@@ -293,7 +286,7 @@ const collectResponse = async (
 
 const sendSSEPart = async (
   stream: { writeSSE: (data: { event: string; data: string }) => Promise<void> },
-  part: HarnessStreamPart,
+  part: StreamPart,
   filter: StreamEventFilter,
 ) => {
   if (!shouldEmit(part, filter)) return;
@@ -384,7 +377,7 @@ export const createKuralleChatRouter = ({
     widgetWelcomeMessage
   );
 
-  const sendHarnessPartToWs = (ws: KuralleWebSocket, part: HarnessStreamPart) => {
+  const sendHarnessPartToWs = (ws: KuralleWebSocket, part: StreamPart) => {
     if (!shouldEmit(part, streamFilter)) return;
     ws.send(JSON.stringify(sanitizeForClient(part)));
   };
@@ -437,7 +430,7 @@ export const createKuralleChatRouter = ({
             userId: body.userId as string | undefined,
           })) {
             if (part.type === 'text-delta') {
-              controller.enqueue(encoder.encode(part.delta));
+              controller.enqueue(encoder.encode(part.payload.delta));
             }
           }
         } catch (error) {
@@ -873,7 +866,7 @@ export const createKuralleChatRouter = ({
   return app;
 };
 
-export type { HarnessStreamPart };
+export type { StreamPart };
 
 // ═══════════════════════════════════════════════════════════════
 // Flow Support
@@ -881,7 +874,7 @@ export type { HarnessStreamPart };
 
 const sendFlowSSEPart = async (
   stream: { writeSSE: (data: { event: string; data: string }) => Promise<void> },
-  part: FlowStreamPart
+  part: StreamPart
 ) => {
   await stream.writeSSE({ event: part.type, data: JSON.stringify(part) });
 };
@@ -894,11 +887,11 @@ const collectFlowResponse = async (
 
   for await (const part of flowManager.process(message)) {
     if (part.type === 'text-delta') {
-      response += part.delta;
+      response += part.payload.delta;
     }
 
     if (part.type === 'error') {
-      throw new Error(part.error);
+      throw new Error(part.payload.error);
     }
   }
 
@@ -979,7 +972,7 @@ export const createKuralleRouter = ({
         try {
           for await (const part of flowManager.process(input)) {
             if (part.type === 'text-delta') {
-              controller.enqueue(encoder.encode(part.delta));
+              controller.enqueue(encoder.encode(part.payload.delta));
             }
           }
         } catch (error) {
@@ -1025,39 +1018,8 @@ export const createKuralleRouter = ({
       });
     }
 
-    async function* flowHarnessParts(): AsyncGenerator<HarnessStreamPart> {
-      for await (const part of flowManager.process(input)) {
-        if (
-          part.type === 'text-start' ||
-          part.type === 'text-delta' ||
-          part.type === 'text-end' ||
-          part.type === 'text-cancel' ||
-          part.type === 'tool-call' ||
-          part.type === 'tool-result' ||
-          part.type === 'node-enter' ||
-          part.type === 'node-exit' ||
-          part.type === 'flow-enter' ||
-          part.type === 'flow-transition' ||
-          part.type === 'flow-end' ||
-          part.type === 'handoff' ||
-          part.type === 'interactive' ||
-          part.type === 'safety-blocked' ||
-          part.type === 'pipeline-validation-block' ||
-          part.type === 'conversation-outcome' ||
-          part.type === 'interrupted' ||
-          part.type === 'paused' ||
-          part.type === 'custom' ||
-          part.type === 'error' ||
-          part.type === 'done' ||
-          part.type === 'turn-end'
-        ) {
-          yield part as HarnessStreamPart;
-        }
-      }
-    }
-
     return createUIMessageStreamResponse({
-      stream: harnessToUIMessageStream(flowHarnessParts(), {
+      stream: harnessToUIMessageStream(flowManager.process(input), {
         sessionId: bodySessionId ?? sessionId,
       }),
     });

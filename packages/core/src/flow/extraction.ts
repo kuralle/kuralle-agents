@@ -1,7 +1,7 @@
 import type { StandardSchemaV1 } from '../types/standard-schema.js';
 import type { CollectNode, FlowState } from '../types/flow.js';
 import type { Tool } from '../types/effectTool.js';
-import type { HarnessStreamPart } from '../types/stream.js';
+import type { StreamPart } from '../types/stream.js';
 import { defineTool } from '../tools/effect/defineTool.js';
 import { z } from 'zod';
 
@@ -165,7 +165,7 @@ export function emitExtractionTelemetry(
   node: CollectNode,
   state: FlowState,
   incoming: Record<string, unknown>,
-  emit: (part: HarnessStreamPart) => void,
+  emit: (part: StreamPart) => void,
 ): void {
   const fieldsAccepted: string[] = [];
   const fieldsRejected: string[] = [];
@@ -177,16 +177,22 @@ export function emitExtractionTelemetry(
     }
   }
   emit({
+    channel: 'internal',
     type: 'custom',
-    name: 'flow.extraction.submission',
-    data: { node: node.id, fieldsAccepted, fieldsRejected },
+    payload: {
+      name: 'flow.extraction.submission',
+      data: { node: node.id, fieldsAccepted, fieldsRejected },
+    },
   });
   const collected = getCollectData(state, node.id);
   const missing = computeMissingFields(node, collected);
   emit({
+    channel: 'internal',
     type: 'custom',
-    name: 'flow.extraction.update',
-    data: { nodeId: node.id, collected, missing },
+    payload: {
+      name: 'flow.extraction.update',
+      data: { nodeId: node.id, collected, missing },
+    },
   });
 }
 

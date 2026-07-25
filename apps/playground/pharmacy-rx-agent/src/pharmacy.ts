@@ -5,7 +5,7 @@ import {
   defineTool,
   DURABLE_RUNS_KEY,
   type FlowState,
-  type HarnessStreamPart,
+  type StreamPart,
   type AgentConfig,
   type Session,
   type SessionStore,
@@ -71,11 +71,11 @@ async function searchFlexible(commerce: PorulleClient, query: string, limit = 6)
   return head.length >= 4 ? commerce.searchCatalog(head.slice(0, 5), limit) : exact;
 }
 
-function emitText(emit: (part: HarnessStreamPart) => void, text: string): void {
+function emitText(emit: (part: StreamPart) => void, text: string): void {
   const id = crypto.randomUUID();
-  emit({ type: 'text-start', id });
-  emit({ type: 'text-delta', id, delta: text });
-  emit({ type: 'text-end', id });
+  emit({ channel: 'client', type: 'text-start', payload: { id } });
+  emit({ channel: 'client', type: 'text-delta', payload: { id, delta: text } });
+  emit({ channel: 'client', type: 'text-end', payload: { id } });
 }
 
 // ---------------------------------------------------------------------------

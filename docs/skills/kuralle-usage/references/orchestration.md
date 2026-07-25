@@ -12,7 +12,7 @@ hostLoop → route → runFlow → free converse → handoff loop
 closeRun → persist RunState, memory ingest, emit done
 ```
 
-`runtime.run()` returns a **`TurnHandle`**: await for `TurnResult`, iterate `.events`, pipe `toUIMessageStreamResponse()` for web (`useChat`, no bridge), or `toResponseStream('sse')` for raw `HarnessStreamPart` JSON-SSE.
+`runtime.run()` returns a **`TurnHandle`**: await for `TurnResult`, iterate `.events`, pipe `toUIMessageStreamResponse()` for web (`useChat`, no bridge), or `toResponseStream('sse')` for raw `StreamPart` JSON-SSE.
 
 ## hostLoop composition
 
@@ -113,4 +113,3 @@ const runtime = createRuntime({
 });
 ```
 
-See `docs/skills/kuralle-voice-agents/rules/extraction-model-required.md`.

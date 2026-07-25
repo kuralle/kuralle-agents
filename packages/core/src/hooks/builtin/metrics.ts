@@ -60,12 +60,16 @@ export function createMetricsHooks(metrics: Metrics): HarnessHooks {
 
     onStreamPart: async (_context, part) => {
       // Capture flow-level metrics emitted as custom stream events
-      if (part.type === 'custom' && typeof part.name === 'string' && part.name.startsWith('flow.')) {
-        const data = part.data as Record<string, unknown> | undefined;
+      if (
+        part.type === 'custom' &&
+        typeof part.payload.name === 'string' &&
+        part.payload.name.startsWith('flow.')
+      ) {
+        const data = part.payload.data as Record<string, unknown> | undefined;
         if (data && typeof data.durationMs === 'number') {
-          metrics.timing(part.name, data.durationMs);
+          metrics.timing(part.payload.name, data.durationMs);
         } else {
-          metrics.increment(part.name);
+          metrics.increment(part.payload.name);
         }
       }
     },

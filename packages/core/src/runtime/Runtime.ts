@@ -10,7 +10,7 @@ import type { ChannelDriver } from '../types/channel.js';
 import type { Hooks } from '../types/hooks.js';
 import type { Tool, AnyTool } from '../types/effectTool.js';
 import type { TurnResult } from '../types/channel.js';
-import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
+import type { StreamPart, TurnHandle } from '../types/stream.js';
 import type { SignalDelivery } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import type { ConversationOutcome, ConversationOutcomeMarkedBy } from '../outcomes/types.js';
@@ -38,7 +38,7 @@ import { SessionRunStore } from './durable/SessionRunStore.js';
 import { loadRecordedSteps } from './durable/replay.js';
 import { markSessionOutcome } from './outcomeMarking.js';
 import { resolveAgentPolicies } from './policies/resolvePolicies.js';
-import type { KnowledgeProviderConfig } from '../types/voice.js';
+import type { KnowledgeProviderConfig } from '../types/knowledge.js';
 import type { MemoryService as V1MemoryService } from '../memory/MemoryService.js';
 import {
   buildAutoRetrieveProvider,
@@ -208,7 +208,7 @@ export class Runtime {
 
     const execute = async (): Promise<TurnResult> => {
       let runCtx!: import('../types/run-context.js').RunContext;
-      const emit = (part: HarnessStreamPart) => {
+      const emit = (part: StreamPart) => {
         recorder?.record(part);
         if (part.type === 'done') this.flushTraceSinks();
         bus.emit(part);
@@ -247,9 +247,9 @@ export class Runtime {
         agentId: opened.agent.id,
         onInterim: (message) => {
           const id = crypto.randomUUID();
-          emit({ type: 'text-start', id });
-          emit({ type: 'text-delta', id, delta: message });
-          emit({ type: 'text-end', id });
+          emit({ channel: 'client', type: 'text-start', payload: { id } });
+          emit({ channel: 'client', type: 'text-delta', payload: { id, delta: message } });
+          emit({ channel: 'client', type: 'text-end', payload: { id } });
         },
       });
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
@@ -308,7 +308,7 @@ export class Runtime {
       await this.hooks?.onStart?.(runCtx);
 
       if (opts.wake) {
-        emit({ type: 'wake', reason: opts.wake.reason });
+        emit({ channel: 'internal', type: 'wake', payload: { reason: opts.wake.reason } });
       }
 
       const driver = opts.driver ?? new TextDriver();
@@ -343,7 +343,11 @@ export class Runtime {
 
           if (loopResult.kind === 'handoff') {
             if (this.terminalHandoffTargets.has(loopResult.to)) {
-              emit({ type: 'handoff', targetAgent: loopResult.to, reason: loopResult.reason });
+              emit({
+                channel: 'internal',
+                type: 'handoff',
+                payload: { targetAgent: loopResult.to, reason: loopResult.reason },
+              });
               runCtx.runState.status = 'paused';
               await runCtx.runStore.putRunState(runCtx.runState);
               await this.dispatchEscalation(
@@ -451,9 +455,13 @@ export class Runtime {
               agentId: target.id,
               onInterim: (message) => {
                 const id = crypto.randomUUID();
-                emit({ type: 'text-start', id });
-                emit({ type: 'text-delta', id, delta: message });
-                emit({ type: 'text-end', id });
+                emit({ channel: 'client', type: 'text-start', payload: { id } });
+                emit({
+                  channel: 'client',
+                  type: 'text-delta',
+                  payload: { id, delta: message },
+                });
+                emit({ channel: 'client', type: 'text-end', payload: { id } });
               },
             });
 
@@ -493,11 +501,15 @@ export class Runtime {
         await this.hooks?.onError?.(runCtx, error as Error);
         if (isDegradableRuntimeError(error)) {
           const message = error instanceof Error ? error.message : String(error);
-          emit({ type: 'error', error: message });
+          emit({ channel: 'client', type: 'error', payload: { error: message } });
           const degradedId = crypto.randomUUID();
-          emit({ type: 'text-start', id: degradedId });
-          emit({ type: 'text-delta', id: degradedId, delta: SAFE_DEGRADED_MESSAGE });
-          emit({ type: 'text-end', id: degradedId });
+          emit({ channel: 'client', type: 'text-start', payload: { id: degradedId } });
+          emit({
+            channel: 'client',
+            type: 'text-delta',
+            payload: { id: degradedId, delta: SAFE_DEGRADED_MESSAGE },
+          });
+          emit({ channel: 'client', type: 'text-end', payload: { id: degradedId } });
           runCtx.runState.messages = [
             ...runCtx.runState.messages,
             { role: 'assistant', content: SAFE_DEGRADED_MESSAGE },
@@ -531,9 +543,12 @@ export class Runtime {
         });
         await this.hooks?.onEnd?.(runCtx);
         emit({
+          channel: 'client',
           type: 'done',
-          sessionId: opened.session.id,
-          usage: computeTurnTraceUsage(usageBaseline, runCtx.runState.state),
+          payload: {
+            sessionId: opened.session.id,
+            usage: computeTurnTraceUsage(usageBaseline, runCtx.runState.state),
+          },
         });
       }
 
@@ -680,7 +695,7 @@ export class Runtime {
   private async applyCompaction(
     runCtx: RunContext,
     agent: AgentConfig,
-    emit: (part: HarnessStreamPart) => void,
+    emit: (part: StreamPart) => void,
     force: boolean,
   ): Promise<boolean> {
     const config = this.config.compaction;
@@ -702,7 +717,11 @@ export class Runtime {
 
     if (!result.compacted) {
       if (force) {
-        emit({ type: 'compaction-skipped', reason: result.reason });
+        emit({
+          channel: 'internal',
+          type: 'compaction-skipped',
+          payload: { reason: result.reason },
+        });
       }
       return false;
     }
@@ -717,10 +736,13 @@ export class Runtime {
     runCtx.session.messages = [...result.messages];
 
     emit({
+      channel: 'internal',
       type: 'context-compacted',
-      beforeTokens: result.beforeTokens,
-      afterTokens: result.afterTokens,
-      summarizedCount: result.summarizedCount,
+      payload: {
+        beforeTokens: result.beforeTokens,
+        afterTokens: result.afterTokens,
+        summarizedCount: result.summarizedCount,
+      },
     });
     return true;
   }
@@ -733,7 +755,7 @@ export class Runtime {
   private async recoverFromOverflow(
     runCtx: RunContext,
     agent: AgentConfig,
-    emit: (part: HarnessStreamPart) => void,
+    emit: (part: StreamPart) => void,
   ): Promise<void> {
     runCtx.session.messages = runCtx.runState.messages;
     const recovery = await recoverFromContextOverflow(runCtx.session);
@@ -742,9 +764,12 @@ export class Runtime {
     const compacted = await this.applyCompaction(runCtx, agent, emit, true);
 
     emit({
+      channel: 'internal',
       type: 'context-overflow-recovered',
-      strippedCount: recovery.strippedCount,
-      compacted,
+      payload: {
+        strippedCount: recovery.strippedCount,
+        compacted,
+      },
     });
   }
 
@@ -764,7 +789,7 @@ export class Runtime {
     runCtx: RunContext,
     agent: AgentConfig,
     info: { reason: string; category?: EscalationReason },
-    emit: (part: HarnessStreamPart) => void,
+    emit: (part: StreamPart) => void,
     opts: { setLatch: boolean },
   ): Promise<void> {
     const config = this.config.escalation;
@@ -815,11 +840,14 @@ export class Runtime {
     runCtx.session.metadata = latestSession.metadata;
 
     emit({
+      channel: 'internal',
       type: 'escalation',
-      reason: info.reason,
-      category: info.category,
-      outcome: outcome.status,
-      summary: request.summary,
+      payload: {
+        reason: info.reason,
+        category: info.category,
+        outcome: outcome.status,
+        summary: request.summary,
+      },
     });
   }
 

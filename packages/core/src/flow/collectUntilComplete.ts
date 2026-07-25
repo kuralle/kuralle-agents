@@ -156,10 +156,10 @@ export function emitCollectAsk(node: CollectNode, run: RunState, ctx: RunContext
     return;
   }
   const id = crypto.randomUUID();
-  ctx.emit({ type: 'text-start', id });
-  ctx.emit({ type: 'text-delta', id, delta: text });
-  ctx.emit({ type: 'text-end', id });
-  ctx.emit({ type: 'turn-end' });
+  ctx.emit({ channel: 'client', type: 'text-start', payload: { id } });
+  ctx.emit({ channel: 'client', type: 'text-delta', payload: { id, delta: text } });
+  ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
+  ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
   appendAssistantMessage(run, text);
 }
 

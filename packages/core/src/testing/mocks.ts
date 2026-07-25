@@ -1,6 +1,6 @@
 import { createUIMessageStreamResponse } from 'ai';
 import { harnessToUIMessageStream } from '../ai-sdk/uiMessageStream.js';
-import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
+import type { StreamPart, TurnHandle } from '../types/stream.js';
 import type { TurnResult } from '../types/channel.js';
 import type { Session } from '../types/session.js';
 import type { SessionStore } from '../session/SessionStore.js';
@@ -21,7 +21,7 @@ export interface CreateMockRuntimeOptions {
 }
 
 export function createMockTurnHandle(
-  events: AsyncIterable<HarnessStreamPart>,
+  events: AsyncIterable<StreamPart>,
   settled: TurnResult = { text: '', toolResults: [] },
 ): TurnHandle {
   return Object.assign(Promise.resolve(settled), {
@@ -63,9 +63,15 @@ export function createMockSession(partial: Partial<Session> = {}): Session {
 }
 
 type MockRuntimeEvents =
-  | HarnessStreamPart[]
-  | AsyncIterable<HarnessStreamPart>
+  | StreamPart[]
+  | AsyncIterable<StreamPart>
   | (() => never);
+
+function isAsyncIterable(
+  value: StreamPart[] | AsyncIterable<StreamPart>,
+): value is AsyncIterable<StreamPart> {
+  return Symbol.asyncIterator in value;
+}
 
 export function createMockRuntime(
   parts: MockRuntimeEvents,
@@ -77,6 +83,7 @@ export function createMockRuntime(
     if (typeof parts === 'function') {
       throw parts();
     }
+    const eventSource = parts;
 
     options.onRun?.({
       sessionId: opts.sessionId,
@@ -85,14 +92,14 @@ export function createMockRuntime(
       seedMessages: opts.seedMessages,
     });
 
-    async function* events(): AsyncGenerator<HarnessStreamPart> {
-      if (Symbol.asyncIterator in Object(parts)) {
-        for await (const part of parts as AsyncIterable<HarnessStreamPart>) {
+    async function* events(): AsyncGenerator<StreamPart> {
+      if (isAsyncIterable(eventSource)) {
+        for await (const part of eventSource) {
           yield part;
         }
         return;
       }
-      for (const part of parts as HarnessStreamPart[]) {
+      for (const part of eventSource) {
         yield part;
       }
     }

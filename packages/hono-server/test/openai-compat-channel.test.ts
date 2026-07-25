@@ -7,7 +7,7 @@ describe('OpenAI compat session mapping', () => {
     const runs: RecordedRun[] = [];
     const app = createOpenAICompatRouter({
       runtime: mockRuntime(
-        [{ type: 'text-delta', id: 't0', delta: 'ok' }, { type: 'done', sessionId: 'vapi-call-1' }],
+        [{ channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'ok' } }, { channel: 'client', type: 'done', payload: { sessionId: 'vapi-call-1' } }],
         { onRun: (call) => runs.push(call) },
       ),
     });
@@ -30,7 +30,7 @@ describe('OpenAI compat session mapping', () => {
     const runs: RecordedRun[] = [];
     const app = createOpenAICompatRouter({
       runtime: mockRuntime(
-        [{ type: 'text-delta', id: 't0', delta: 'ok' }, { type: 'done', sessionId: 'custom-sid' }],
+        [{ channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'ok' } }, { channel: 'client', type: 'done', payload: { sessionId: 'custom-sid' } }],
         { onRun: (call) => runs.push(call) },
       ),
       sessionKey: () => 'custom-sid',

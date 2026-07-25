@@ -8,34 +8,25 @@
   },
   "version": "0.12.0",
   "private": true,
-  "description": "End-to-end tests for Kuralle voice/realtime pipelines",
+  "description": "End-to-end tests for Kuralle text agents — flows, durability, post-run audit",
   "type": "module",
   "scripts": {
-    "test:agentsession-direct": "npx tsx tests/agentsession-e2e.ts",
-    "test:agentsession-tools": "npx tsx tests/agentsession-tools-e2e.ts",
-    "test:agentsession-flow": "npx tsx tests/agentsession-flow-e2e.ts",
-    "test:ws-native": "npx tsx tests/ws-native-audio.ts",
-    "test:gemini-audio": "npx tsx tests/gemini-audio-pipeline.ts",
-    "test:cf-smoke-gemini": "npx tsx tests/cf-smoke-gemini.ts",
-    "test:cf-smoke-openai": "npx tsx tests/cf-smoke-openai.ts",
-    "test:parallel-durability": "npx tsx tests/parallel-tools-durability-e2e.ts"
+    "test": "bun test tests/flow-triage.test.ts",
+    "test:parallel-durability": "npx tsx tests/parallel-tools-durability-e2e.ts",
+    "test:postcall-audit": "npx tsx tests/postcall-audit/02-runtime-stream-on-session-end.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^2.0.0",
     "@ai-sdk/openai": "^3.0.0",
     "@kuralle-agents/analytics-sdk": "workspace:*",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/eval": "workspace:*",
-    "@google/genai": "^1.0.0",
     "@vercel/sandbox": "^1.9.3",
     "ai": "^6.0.0",
     "dotenv": "^16.4.0",
-    "ws": "^8.19.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "@types/ws": "^8.5.13",
     "typescript": "^5.3.0"
   }
 }

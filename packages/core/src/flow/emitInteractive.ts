@@ -1,6 +1,6 @@
 import type { Instructions } from '../types/agentConfig.js';
 import type { CollectNode, DecideNode, FlowNode, FlowState } from '../types/flow.js';
-import type { HarnessStreamPart } from '../types/stream.js';
+import type { StreamPart } from '../types/stream.js';
 import { resolveInstructions } from './nodeBuilders.js';
 import { isCollectNode, isDecideNode } from './nodeKinds.js';
 
@@ -40,15 +40,18 @@ function interactivePrompt(node: CollectNode | DecideNode, state: FlowState): st
 export function emitInteractiveOnNodeEnter(
   node: FlowNode,
   state: FlowState,
-  emit: (part: HarnessStreamPart) => void,
+  emit: (part: StreamPart) => void,
 ): void {
   if (!(isCollectNode(node) || isDecideNode(node)) || !node.choices?.length) {
     return;
   }
   emit({
+    channel: 'internal',
     type: 'interactive',
-    nodeId: node.id,
-    options: node.choices,
-    prompt: interactivePrompt(node, state),
+    payload: {
+      nodeId: node.id,
+      options: node.choices,
+      prompt: interactivePrompt(node, state),
+    },
   });
 }

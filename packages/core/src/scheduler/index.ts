@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineTool } from '../tools/effect/defineTool.js';
 import type { Tool } from '../types/effectTool.js';
-import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
+import type { StreamPart, TurnHandle } from '../types/stream.js';
 
 /**
  * Deferred-work scheduling for proactive (agent-initiated) turns.
@@ -95,7 +95,7 @@ export interface WakeDelivery {
   reason: string;
   payload?: Record<string, unknown>;
   /** Full stream of the wake turn (text, tool events, interactive parts…). */
-  parts: HarnessStreamPart[];
+  parts: StreamPart[];
   /** Concatenated assistant text of the wake turn. */
   text: string;
 }
@@ -125,12 +125,12 @@ export function createWakeJobRunner(
     const { sessionId, reason, payload } = job.payload as unknown as WakeJobPayload;
     try {
       const handle = runtime.run({ sessionId, wake: { reason, payload } });
-      const parts: HarnessStreamPart[] = [];
+      const parts: StreamPart[] = [];
       let text = '';
       for await (const part of handle.events) {
         parts.push(part);
         if (part.type === 'text-delta') {
-          text += part.delta;
+          text += part.payload.delta;
         }
       }
       const result = await handle;

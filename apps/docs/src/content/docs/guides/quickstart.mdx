@@ -59,8 +59,8 @@ import firstAgentExample from '../../../examples/quickstart/first-agent.ts?raw';
 
    const handle = runtime.run({ input: 'Use echo to say "hello"' });
    for await (const part of handle.events) {
-     if (part.type === 'text-delta') process.stdout.write(part.delta);
-     if (part.type === 'done') console.log('\nSession:', part.sessionId);
+     if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+     if (part.type === 'done') console.log('\nSession:', part.payload.sessionId);
    }
    await handle;
    ```
@@ -85,19 +85,19 @@ OPENAI_API_KEY=sk-... npx tsx agent.ts
 
 ## Streaming events
 
-The `handle.events` async iterable emits `HarnessStreamPart` events. The most common:
+The `handle.events` async iterable emits `StreamPart` events. The most common:
 
 | Event type | When | Key fields |
 |---|---|---|
-| `text-start` | Assistant message begins | `part.id: string` |
-| `text-delta` | Each text chunk from the model | `part.id: string`, `part.delta: string` |
-| `text-end` | Assistant message complete | `part.id: string` |
-| `text-cancel` | Partial message retracted (gate block) | `part.id: string`, `part.reason: string` |
-| `tool-call` | Before a tool executes | `part.toolName`, `part.args` |
-| `tool-result` | After a tool executes | `part.toolName`, `part.result` |
-| `done` | Turn complete | `part.sessionId` |
+| `text-start` | Assistant message begins | `part.payload.id: string` |
+| `text-delta` | Each text chunk from the model | `part.payload.id: string`, `part.payload.delta: string` |
+| `text-end` | Assistant message complete | `part.payload.id: string` |
+| `text-cancel` | Partial message retracted (gate block) | `part.payload.id: string`, `part.payload.reason: string` |
+| `tool-call` | Before a tool executes | `part.payload.toolName`, `part.payload.args` |
+| `tool-result` | After a tool executes | `part.payload.toolName`, `part.payload.result` |
+| `done` | Turn complete | `part.payload.sessionId` |
 
-Save `part.sessionId` and pass it back on subsequent turns to continue in the same session.
+Save `part.payload.sessionId` and pass it back on subsequent turns to continue in the same session.
 
 ## Session continuity
 
@@ -107,8 +107,8 @@ let sessionId: string | undefined;
 async function chat(input: string) {
   const handle = runtime.run({ input, sessionId });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') process.stdout.write(part.delta);
-    if (part.type === 'done') sessionId = part.sessionId;
+    if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+    if (part.type === 'done') sessionId = part.payload.sessionId;
   }
   await handle;
 }
@@ -118,7 +118,7 @@ The runtime auto-assigns a session ID on the first turn and persists conversatio
 
 ## Web UI with `useChat` (no bridge)
 
-As of 0.5.0, `@kuralle-agents/hono-server` returns a native AI SDK `UIMessageStream` from `POST /api/chat/sse` by default. Point `useChat` at that endpoint — no hand-rolled `HarnessStreamPart` → `UIMessageChunk` bridge.
+As of 0.5.0, `@kuralle-agents/hono-server` returns a native AI SDK `UIMessageStream` from `POST /api/chat/sse` by default. Point `useChat` at that endpoint — no hand-rolled `StreamPart` → `UIMessageChunk` bridge.
 
 ```tsx
 'use client';
@@ -157,7 +157,7 @@ Kuralle orchestration events arrive as typed `data-kuralle-*` parts:
 | `data-kuralle-node`, `data-kuralle-flow`, `data-kuralle-control` | transient (`onData` only) | flow/node telemetry |
 | `data-kuralle-interactive`, `data-kuralle-safety`, `data-kuralle-handoff`, `data-kuralle-outcome` | persistent (`message.parts`) | UI controls, safety blocks, handoffs |
 
-For non-UI consumers that need raw `HarnessStreamPart` JSON-SSE (curl, Studio), append `?format=raw` to `/api/chat/sse`. See [Deployment](/guides/deployment).
+For non-UI consumers that need raw `StreamPart` JSON-SSE (curl, Studio), append `?format=raw` to `/api/chat/sse`. See [Deployment](/guides/deployment).
 
 ## Next steps
 

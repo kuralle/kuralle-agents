@@ -6,13 +6,12 @@ import { evaluateReplyControl } from '../../src/flow/controlEvaluator.js';
 import { FLOW_TRANSITION_CONTROL_TOOL_NAMES } from '../../src/flow/flowControlTools.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
-import { resolveVoiceGeminiTools } from '../../src/runtime/channels/voiceTools.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { hostLoop } from '../../src/runtime/hostLoop.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { CoreToolExecutor, defineTool, wrapAiSdkTool, buildToolSet } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import { tool as aiTool } from 'ai';
 
 afterEach(() => {
@@ -137,7 +136,7 @@ describe('H1 out-of-band control (flag-gated)', () => {
     const flow = defineFlow({ name: 'parity', description: 'x', start: greet, nodes: [greet, nextNode] });
 
     const { session, runStore, runState } = await setupDurableHarness('h1-off', 'h1-off-run');
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const ctx = await createRunContext({
       session,
       runStore,
@@ -322,26 +321,6 @@ describe('H1 out-of-band control (flag-gated)', () => {
     });
 
     await hostLoop({ agent, run: runState, driver, ctx });
-
-    const resolved = resolveReplyNode(
-      { kind: 'reply', id: 'free-agent__host', instructions: 'help', tools: agent.tools ? buildToolSet(agent.tools) : undefined },
-      runState.state,
-      { freeConversation: true },
-    );
-    const oobSilo = (free: boolean) => ({ siloFlowControl: !free });
-    const freeTools = resolveVoiceGeminiTools(
-      resolved,
-      { handoff: handoffEffect },
-      oobSilo(!!resolved.freeConversation),
-    );
-    const flowResolved = resolveReplyNode(reply({ id: 'n', instructions: 'x' }), {});
-    const flowTools = resolveVoiceGeminiTools(
-      flowResolved,
-      { handoff: handoffEffect },
-      oobSilo(!!flowResolved.freeConversation),
-    );
-    expect(freeTools.map((t) => t.name)).toContain('handoff');
-    expect(flowTools.map((t) => t.name)).not.toContain('handoff');
 
     if (captured.length > 0) {
       const toolNames = Object.keys((captured[0]?.tools as Record<string, unknown>) ?? {});

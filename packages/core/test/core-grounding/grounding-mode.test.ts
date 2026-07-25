@@ -18,6 +18,7 @@ import {
   runGatherPhase,
 } from '../../src/runtime/grounding/index.js';
 import { createInMemoryKnowledgeConfig } from '../../src/runtime/grounding/inMemoryKnowledge.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 const SEED_DOC = { text: 'Free shipping on orders over $50.', id: 'shipping' };
 
@@ -184,7 +185,7 @@ describe('declared grounding contract', () => {
       knowledge: createInMemoryKnowledgeConfig([SEED_DOC]),
     });
 
-    const parts: Array<{ type: string; [key: string]: unknown }> = [];
+    const parts: StreamPart[] = [];
     const handle = runtime.run({
       sessionId: 'handoff-on-demand-knowledge',
       input: 'I need shipping help',
@@ -199,10 +200,16 @@ describe('declared grounding contract', () => {
     expect(seenToolSets[0]).toContain('transfer_to_agent');
     expect(seenToolSets.some((toolNames) => toolNames.includes('knowledge_search'))).toBe(true);
     expect(parts).toContainEqual(
-      expect.objectContaining({ type: 'tool-result', toolName: 'knowledge_search' }),
+      expect.objectContaining({
+        type: 'tool-result',
+        payload: expect.objectContaining({ toolName: 'knowledge_search' }),
+      }),
     );
     expect(parts).toContainEqual(
-      expect.objectContaining({ type: 'knowledge-search', query: 'shipping' }),
+      expect.objectContaining({
+        type: 'knowledge-search',
+        payload: expect.objectContaining({ query: 'shipping' }),
+      }),
     );
   });
 
@@ -349,7 +356,7 @@ describe('declared grounding contract', () => {
       knowledge: createInMemoryKnowledgeConfig([SEED_DOC]),
     });
 
-    const parts: Array<{ type: string; [key: string]: unknown }> = [];
+    const parts: StreamPart[] = [];
     const handle = runtime.run({
       sessionId: 'handoff-full-surface',
       input: 'I need shipping help',
@@ -373,16 +380,24 @@ describe('declared grounding contract', () => {
     expect(hostMarker.seen).toBe(false);
     expect(specialistMarker.seen).toBe(true);
     expect(parts).toContainEqual(
-      expect.objectContaining({ type: 'tool-result', toolName: 'knowledge_search' }),
-    );
-    expect(parts).toContainEqual(
-      expect.objectContaining({ type: 'tool-result', toolName: 'memory_block' }),
+      expect.objectContaining({
+        type: 'tool-result',
+        payload: expect.objectContaining({ toolName: 'knowledge_search' }),
+      }),
     );
     expect(parts).toContainEqual(
       expect.objectContaining({
         type: 'tool-result',
-        toolName: 'workspace',
-        result: expect.objectContaining({ content: 'SPECIALIST_FS' }),
+        payload: expect.objectContaining({ toolName: 'memory_block' }),
+      }),
+    );
+    expect(parts).toContainEqual(
+      expect.objectContaining({
+        type: 'tool-result',
+        payload: expect.objectContaining({
+          toolName: 'workspace',
+          result: expect.objectContaining({ content: 'SPECIALIST_FS' }),
+        }),
       }),
     );
   });

@@ -1,5 +1,5 @@
 import type { ModelMessage } from 'ai';
-import type { RetrievalCacheAdapter } from './voice.js';
+import type { RetrievalCacheAdapter } from './knowledge.js';
 import type { RefinementStageResult } from './runtime.js';
 import type { EscalationReason, EscalationOutcome } from '../escalation/types.js';
 import type { ConversationOutcomeRecord, CsatRecord } from '../outcomes/types.js';

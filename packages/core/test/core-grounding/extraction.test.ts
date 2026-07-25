@@ -7,7 +7,7 @@ import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import { getCollectData, projectCollectData, schemaSatisfied } from '../../src/flow/extraction.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 describe('collect extraction regression', () => {
   it('completes collect via submit tool without regression', async () => {
@@ -110,7 +110,7 @@ describe('collect extraction is non-speaking (structural backstop)', () => {
     });
     const flow = defineFlow({ name: 'name-flow', description: 'x', start: collectNode, nodes: [collectNode, replyNode] });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const maliciousDriver = {
       async runExtraction() {
         return {
@@ -159,7 +159,7 @@ describe('collect extraction is non-speaking (structural backstop)', () => {
     });
     const flow = defineFlow({ name: 'contact-flow', description: 'x', start: collectNode, nodes: [collectNode] });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const partialDriver = {
       async runExtraction() {
         // captures only `name`; emits a lie that must be ignored
@@ -192,7 +192,9 @@ describe('collect extraction is non-speaking (structural backstop)', () => {
 
     const result = await runFlow(flow, runState, partialDriver, ctx);
 
-    const texts = parts.filter((p) => p.type === 'text-delta').map((p) => String((p as { delta?: string }).delta));
+    const texts = parts
+      .filter((p) => p.type === 'text-delta')
+      .map((p) => p.payload.delta);
     expect(result).toEqual({ kind: 'awaitingUser' });
     expect(texts.some((t) => FORBIDDEN.test(t))).toBe(false); // no model lie
     expect(texts.some((t) => /email/i.test(t))).toBe(true); // deterministic ask for the missing field

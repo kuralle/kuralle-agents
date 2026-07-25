@@ -10,7 +10,7 @@ import { defineAgent } from '../src/authoring/defineAgent.js';
 import { createRuntime } from '../src/runtime/Runtime.js';
 import { MemoryStore } from '../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../src/runtime/openRun.js';
-import type { HarnessStreamPart } from '../src/types/stream.js';
+import type { StreamPart } from '../src/types/stream.js';
 
 const CHUNKS = ['Hello', ' there.', ' How', ' can I help?'];
 const STREAM_ID = 'mock-stream';
@@ -58,7 +58,7 @@ const runtime = createRuntime({
 const handle = runtime.run({ sessionId: newSessionId(), input: 'Hi' });
 
 for await (const part of handle.events) {
-  console.log(JSON.stringify(part satisfies HarnessStreamPart));
+  console.log(JSON.stringify(part satisfies StreamPart));
 }
 
 await handle;

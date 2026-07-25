@@ -44,8 +44,7 @@ execute: async (input, options) => {
 Use message-level observability by default.
 
 Recommended:
-- `input`
-- `tool-call` / `tool-result` / `tool-error`
+- `tool-call` / `tool-result`
 - `flow-transition` / `handoff`
 - terminal `done`/`error` with final text
 
@@ -68,7 +67,7 @@ For every turn, keep replayable event history.
 In Aria:
 - `session.workingMemory.runtimeEventLog` stores:
   `user`, `assistant_final`, `tool_call`, `tool_result`, `tool_error`, `transition`.
-- Runtime checkpoints on `tool-result`, `tool-error`, `flow-transition`, and handoff state changes.
+- Runtime checkpoints on tool completion, flow transitions, and handoff state changes.
 
 ## 6) Routing discipline for multi-agent systems
 

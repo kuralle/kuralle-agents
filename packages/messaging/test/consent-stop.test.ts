@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import { createMessagingRouter } from '../src/adapter/createMessagingRouter.js';
 import type { ConsentStore } from '../src/adapter/consent-store.js';
 import type { InboundMessage, PlatformClient, SendResult } from '../src/types.js';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
 
 function makeMessage(overrides: Partial<InboundMessage> = {}): InboundMessage {
@@ -55,8 +55,8 @@ function createMockPlatform(): MockPlatform {
   };
 }
 
-async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', id: 't', delta: text };
+async function* textStream(text: string): AsyncGenerator<StreamPart> {
+  yield { channel: 'client', type: 'text-delta', payload: { id: 't', delta: text } };
 }
 
 function trackingConsent(): ConsentStore & { optedOut: string[]; runOptOut: boolean } {

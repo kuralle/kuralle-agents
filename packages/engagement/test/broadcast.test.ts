@@ -13,7 +13,7 @@ import type {
   PlatformClient,
   SendResult,
 } from '@kuralle-agents/messaging';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
 import { sessionConsentStore } from '../src/consent.js';
 import { createBroadcasts, type Campaign } from '../src/broadcast.js';
@@ -184,8 +184,8 @@ function createMockPlatform(): MockPlatform {
   };
 }
 
-async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', id: 't', delta: text };
+async function* textStream(text: string): AsyncGenerator<StreamPart> {
+  yield { channel: 'client', type: 'text-delta', payload: { id: 't', delta: text } };
 }
 
 describe('broadcast reply routing', () => {

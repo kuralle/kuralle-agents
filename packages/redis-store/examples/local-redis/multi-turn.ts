@@ -136,19 +136,24 @@ const run = async () => {
     const handle = runtime.run({ input: message, sessionId });
     for await (const part of handle.events) {
       if (part.type === 'text-delta') {
-        response += part.delta;
+        response += part.payload.delta;
       }
 
       if (part.type === 'handoff') {
-        logEvent({ event: 'handoff', turn, targetAgent: part.targetAgent, reason: part.reason });
+        logEvent({
+          event: 'handoff',
+          turn,
+          targetAgent: part.payload.targetAgent,
+          reason: part.payload.reason,
+        });
       }
 
       if (part.type === 'done') {
-        sessionId = part.sessionId;
+        sessionId = part.payload.sessionId;
       }
 
       if (part.type === 'error') {
-        logEvent({ event: 'error', turn, error: part.error });
+        logEvent({ event: 'error', turn, error: part.payload.error });
       }
     }
     await handle;

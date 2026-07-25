@@ -33,8 +33,8 @@ export function interactiveRenderer(policies?: ChannelPolicy[]): OutboundMiddlew
       if (!part) return next(req);
       const policy = policies ? policyFor(policies, req.platform) : undefined;
       const interactive = policy
-        ? policy.renderInteractive(part.options, part.prompt)
-        : renderChoices(part.options, part.prompt);
+        ? policy.renderInteractive(part.payload.options, part.payload.prompt)
+        : renderChoices(part.payload.options, part.payload.prompt);
       return next({ ...req, payload: { kind: 'interactive', interactive } });
     },
   };

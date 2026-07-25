@@ -62,7 +62,6 @@ Fallback (monorepo):
 | `@kuralle-agents/cf-agent` | `packages/cf-agent/` |
 | `@kuralle-agents/redis-store` | `packages/redis-store/` |
 | `@kuralle-agents/postgres-store` | `packages/postgres-store/` |
-| `@kuralle-agents/livekit-plugin` | `packages/livekit-plugin/` |
 
 ## Key directories by concern
 
@@ -182,7 +181,8 @@ npx tsx examples/agents/form-filler.ts
 
 Never change event structure without a major version:
 
-- `text-start`, `text-delta{id,delta}`, `text-end`, `text-cancel`, `tool-call`, `tool-result`, `tool-error`
+- Every event is `{ channel, type, payload }`; variant fields belong in the named payload
+- `text-start`, `text-delta`, `text-end`, `text-cancel`, `tool-call`, `tool-result`
 - `node-enter`, `node-exit`, `flow-transition`, `flow-end`
 - `handoff`, `paused`, `done`, `error`, `interrupted`
 

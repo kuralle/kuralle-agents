@@ -195,11 +195,11 @@ async function chat(sessionId: string, input: string): Promise<string> {
   console.log(`\n  User: ${input}`);
   const handle = runtime.run({ sessionId, input, userId: USER_ID });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') response += part.delta;
-    if (part.type === 'node-enter') console.log(`  [Node] ${part.nodeName}`);
-    if (part.type === 'flow-transition') console.log(`  [Transition] ${part.from} → ${part.to}`);
-    if (part.type === 'tool-call') console.log(`  [Tool call] ${part.toolName}`);
-    if (part.type === 'tool-result') console.log(`  [Tool result] ${part.toolName}`);
+    if (part.type === 'text-delta') response += part.payload.delta;
+    if (part.type === 'node-enter') console.log(`  [Node] ${part.payload.nodeName}`);
+    if (part.type === 'flow-transition') console.log(`  [Transition] ${part.payload.from} → ${part.payload.to}`);
+    if (part.type === 'tool-call') console.log(`  [Tool call] ${part.payload.toolName}`);
+    if (part.type === 'tool-result') console.log(`  [Tool result] ${part.payload.toolName}`);
   }
   await handle;
   console.log(`  Assistant: ${response.trim()}`);

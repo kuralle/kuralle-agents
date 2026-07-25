@@ -207,17 +207,21 @@ function createFlowRouterManager(rt: Runtime) {
       const handle = rt.run({ sessionId, input });
       for await (const part of handle.events) {
         if (part.type === 'node-enter') {
-          currentNodeName = part.nodeName;
-          nodeHistory.push(part.nodeName);
+          currentNodeName = part.payload.nodeName;
+          nodeHistory.push(part.payload.nodeName);
         }
         if (part.type === 'flow-end') {
           hasEnded = true;
         }
         if (part.type === 'text-delta') {
-          yield { type: part.type, id: part.id, delta: part.delta };
+          yield {
+            channel: part.channel,
+            type: part.type,
+            payload: part.payload,
+          };
         }
         if (part.type === 'error') {
-          yield { type: part.type, error: part.error };
+          yield { channel: part.channel, type: part.type, payload: part.payload };
         }
       }
       await handle;
