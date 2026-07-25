@@ -1,6 +1,6 @@
 # Runtime Internals: `openRun` → `hostLoop` → `closeRun`
 
-These are the internals shared by both `TextDriver` and `VoiceDriver`. You rarely call them directly — `createRuntime` wires them — but understanding them is essential for voice agents, custom hooks, and advanced observability.
+These are the internals behind `TextDriver`. You rarely call them directly — `createRuntime` wires them — but understanding them is essential for custom `ChannelDriver` implementations, custom hooks, and advanced observability.
 
 ## Turn lifecycle
 
@@ -63,18 +63,15 @@ Recorded effects replay on crash, reconnect, or channel switch — handlers shor
 
 ## ChannelDriver
 
-Same agent definition, different drivers:
-
 ```ts
 // Text (default)
 runtime.run({ sessionId, input: 'Hello' });
 
-// Voice
-import { VoiceDriver } from '@kuralle-agents/core';
-runtime.run({ sessionId, input: transcript, driver: new VoiceDriver({ ... }) });
+// Custom driver — implement ChannelDriver and pass it explicitly
+runtime.run({ sessionId, input, driver: myCustomDriver });
 ```
 
-Both paths use the same `hostLoop`, `runFlow`, `tools`, session store, and hooks.
+Every driver runs through the same `hostLoop`, `runFlow`, `tools`, session store, and hooks.
 
 ## Derivation from field presence
 
@@ -92,24 +89,25 @@ No type tag — populate fields, behavior follows.
 
 | Hook | Fires |
 |------|-------|
-| `onStart` | Session opened |
-| `onToolCall` / `onToolResult` | Tool execution |
+| `onStart` | Turn started |
 | `onStreamPart` | Every stream event |
-| `onHandoff` | Agent transfer |
-| `onEnd` | Session closed |
+| `onConversationEnd` | Session-level outcome recorded |
+| `onError` | Turn threw |
+| `onEnd` | Turn finished |
 
 Attach via `createRuntime({ hooks })` or per-agent `hooks`.
 
-## Voice note: extractionModel
+## Voice notes: transcriptionModel
 
-When using `collect` nodes in voice, set `extractionModel` on `createRuntime` so post-turn verification runs against the actual user transcript:
+Set `transcriptionModel` on `createRuntime` so inbound audio `FilePart`s (voice notes) are
+transcribed to text before the model turn — this lets `collect` nodes and post-turn verification
+run against the actual transcript even on text-only models:
 
 ```ts
 const runtime = createRuntime({
   agents: [agent],
   defaultAgentId: agent.id,
-  extractionModel: openai('gpt-4o-mini'),
-  voiceMode: true,
+  transcriptionModel: openai.transcription('whisper-1'),
 });
 ```
 

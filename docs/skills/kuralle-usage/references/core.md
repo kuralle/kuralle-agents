@@ -12,7 +12,7 @@
 - `defineTool`, `buildToolSet`, `tools` — durable tool execution
 - `runFlow`, `hostLoop` — flow dispatch and turn composition
 - `TurnHandle` — await result, iterate events, pipe to response stream
-- `TextDriver`, `VoiceDriver` — channel drivers (same agent definition)
+- `TextDriver` — channel driver
 - hooks + guardrails
 
 ## Minimal runtime example

@@ -95,7 +95,7 @@ packages/core/src/
 ├── runtime/openRun.ts        # Session + RunState load, replay entry
 ├── runtime/closeRun.ts       # Persist, memory, outcome
 ├── runtime/durable/          # Effect log, RunStore, replay
-├── runtime/channels/         # TextDriver, VoiceDriver
+├── runtime/channels/         # TextDriver
 └── events/TurnHandle.ts      # Event bus, TurnHandle
 ```
 
@@ -173,7 +173,7 @@ npx tsx examples/agents/form-filler.ts
 
 1. Update `types/effectTool.ts` and `ToolExecutor.ts`
 2. Ensure replay short-circuits in `runtime/durable/replay.ts`
-3. Verify text and voice paths (`TextDriver`, `VoiceDriver`)
+3. Verify the text path (`TextDriver`)
 
 ## Guardrails (non-negotiable)
 
@@ -201,7 +201,6 @@ Side effects go through `ctx.*` and the effect log. Do not add ad-hoc session mu
 ### Performance
 
 - No O(n²) on hot paths
-- Voice: effect log appends async at turn boundaries — never on audio path
 - Streaming must stay low-latency
 
 ### Testing

@@ -25,7 +25,6 @@ This skill is a map. Read only the sections you need and follow the checklists.
 | Runtime | `createRuntime({ agents, defaultAgentId })` |
 | Turn | `runtime.run({ sessionId, input, driver? })` → `TurnHandle` |
 | Text channel | default `TextDriver` |
-| Voice channel | `VoiceDriver` (same agent definition) |
 
 Behavior is **derived from field presence** — no agent type tag, no `routing.mode`. A routes/agents-only agent (no answering surface) is a silent pure dispatcher; an answering agent folds host-control tools (`enter_flow`/`transfer_to_agent`) + a guard into its turn.
 
@@ -62,7 +61,7 @@ Read only what you need:
 
 **Capabilities:**
 - `references/agent-prompt.md` - structured prompts, voice rules, token budgeting
-- `references/guardrails.md` - input/output processors, tripwire events
+- `references/guardrails.md` - input/output processors, safety-blocked events
 - `references/memory.md` - cross-session memory, `userId` requirement
 
 **Retrieval:**
@@ -83,8 +82,6 @@ Read only what you need:
 - `references/tools-guide.md` - tools package 80/20
 - `references/skills.md` - Skills (knowledge base for agents)
 - `references/examples.md` - examples index and commands
-
-**Voice (separate skill):**
 
 Rules:
 
@@ -130,7 +127,6 @@ Rules:
 7) **Run + debug**
    - Verify streaming (`text-delta` … `done`)
    - Confirm `sessionId` persists across turns
-   - For voice: same agent, pass `VoiceDriver`
 
 ## Code-first minimal example
 
@@ -186,7 +182,6 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'demo' });
 - Grounding must be explicit if you promise it.
 - Side-effecting tools go through `tools` / `ctx.tool` for exactly-once-modulo-idempotency (finished steps replay without re-executing; a crash mid-effect re-runs it, deduped by the idempotency key).
 - `userId` required for MemoryService.
-- Same `defineAgent` for text and voice — channel is the driver, not a separate config.
 
 ## When to stop
 

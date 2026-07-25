@@ -1,6 +1,6 @@
 # Kuralle
 
-Kuralle is a TypeScript framework for building conversational AI agents — text and voice — with structured flows, routing, and durable tool execution.
+Kuralle is a TypeScript framework for building conversational AI agents with structured flows, routing, and durable tool execution.
 
 ## Why flows?
 
@@ -22,8 +22,6 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 ## Why Kuralle
 
 **Procedures belong in flows, not prompts.** The form-filler example in `packages/core/examples/agents/form-filler.ts` replaces a 584-line v1 state machine with ~60 lines.
-
-**One agent config, text and voice.** The same `defineAgent` runs over chat text and over provider-native realtime voice. You don't maintain two stacks.
 
 **Durable tool execution.** Every `defineTool` call is logged in an append-only effect log. Retries replay against the log — a payment tool doesn't charge twice, a booking tool doesn't double-book.
 
