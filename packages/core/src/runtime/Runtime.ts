@@ -67,6 +67,7 @@ import type { AgentSpan, AgentTrace } from '../types/trace.js';
 import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
+import { runHookSafely } from './runHookSafely.js';
 
 export interface TracingConfig {
   enabled?: boolean;
@@ -213,7 +214,7 @@ export class Runtime {
         recorder?.record(part);
         if (part.type === 'done') this.flushTraceSinks();
         bus.emit(part);
-        void this.hooks?.onStreamPart?.(runCtx, part);
+        void runHookSafely('onStreamPart', () => this.hooks?.onStreamPart?.(runCtx, part));
       };
 
       const opened = await openRun(this.agentsById, {
@@ -307,7 +308,7 @@ export class Runtime {
       );
       runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
 
-      await this.hooks?.onStart?.(runCtx);
+      await runHookSafely('onStart', () => this.hooks?.onStart?.(runCtx));
 
       if (opts.wake) {
         emit({ channel: 'internal', type: 'wake', payload: { reason: opts.wake.reason } });
@@ -500,7 +501,7 @@ export class Runtime {
         // is off the user's latency path; the NEXT turn starts compact.
         await this.applyCompaction(runCtx, activeAgent, emit, false);
       } catch (error) {
-        await this.hooks?.onError?.(runCtx, error as Error);
+        await runHookSafely('onError', () => this.hooks?.onError?.(runCtx, error as Error));
         if (isDegradableRuntimeError(error)) {
           const message = error instanceof Error ? error.message : String(error);
           emit({ channel: 'client', type: 'error', payload: { error: message } });
@@ -543,7 +544,7 @@ export class Runtime {
             }
           },
         });
-        await this.hooks?.onEnd?.(runCtx);
+        await runHookSafely('onEnd', () => this.hooks?.onEnd?.(runCtx));
         emit({
           channel: 'client',
           type: 'done',
