@@ -97,8 +97,8 @@ async function sendSSE(message, sessionId) {
       if (!line.startsWith('data: ')) continue;
       try {
         const data = JSON.parse(line.slice(6));
-        if (data.type === 'text-delta') text += data.delta;
-        if (data.type === 'done') sid = data.sessionId;
+        if (data.type === 'text-delta') text += data.payload?.delta ?? '';
+        if (data.type === 'done') sid = data.payload?.sessionId;
       } catch {}
     }
   }

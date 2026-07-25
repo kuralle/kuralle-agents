@@ -139,7 +139,6 @@ createKuralleChatRouter({
   upgradeWebSocket,
   widgetWelcomeMode: 'static',
   widgetWelcomeMessage: "Hello, how can I help you today?",
-  widgetWelcomeSuggestions: ['Check order status', 'Request a refund'],
 });
 ```
 

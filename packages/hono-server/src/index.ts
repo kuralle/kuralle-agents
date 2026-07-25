@@ -101,6 +101,11 @@ export type KuralleWebSocket = {
   send: (data: string) => void;
 };
 
+export type WebSocketTransportFrame =
+  | { type: 'connected'; sessionId: string; timestamp: string }
+  | { type: 'cancelled'; sessionId: string; timestamp: string }
+  | { type: 'pong' };
+
 export type WebSocketEvent = {
   data?: unknown;
 };
@@ -141,10 +146,6 @@ export type KuralleChatRouterOptions = {
    */
   widgetWelcomeMessage?: string;
   /**
-   * Optional static quick-reply suggestions for the initial widget state.
-   */
-  widgetWelcomeSuggestions?: string[];
-  /**
    * Controls which StreamPart events are sent to external clients (SSE + widget/flow WebSockets).
    * - `'safe'`: events classified as `client` by core, with errors sanitized.
    * - `'all'`: full stream (Studio / dev tooling).
@@ -158,6 +159,7 @@ export type KuralleRouterOptions = {
   flowManager: FlowRouterManager;
   sessionId: string;
   upgradeWebSocket?: UpgradeWebSocket;
+  streamFilter?: StreamEventFilter;
 };
 
 const parseJsonBody = async <T>(c: Context): Promise<T | null> => {
@@ -294,6 +296,28 @@ const sendSSEPart = async (
   await stream.writeSSE({ event: safe.type, data: JSON.stringify(safe) });
 };
 
+const sendStreamPartToWs = (
+  ws: KuralleWebSocket,
+  part: StreamPart,
+  filter: StreamEventFilter,
+) => {
+  if (!shouldEmit(part, filter)) return;
+  ws.send(JSON.stringify(sanitizeForClient(part)));
+};
+
+const sendTransportFrameToWs = (
+  ws: KuralleWebSocket,
+  frame: WebSocketTransportFrame,
+) => {
+  ws.send(JSON.stringify(frame));
+};
+
+const errorPart = (message: string): StreamPart => ({
+  channel: 'client',
+  type: 'error',
+  payload: { error: message },
+});
+
 const formatSessionResponse = (session: Session) => ({
   sessionId: session.id,
   currentAgent: session.currentAgent ?? session.activeAgentId,
@@ -366,7 +390,6 @@ export const createKuralleChatRouter = ({
   widgetWelcomeMode,
   sendWidgetWelcomeMessage = true,
   widgetWelcomeMessage,
-  widgetWelcomeSuggestions,
   streamFilter: streamFilterOption,
 }: KuralleChatRouterOptions): Hono => {
   const streamFilter: StreamEventFilter = streamFilterOption ?? 'safe';
@@ -377,10 +400,8 @@ export const createKuralleChatRouter = ({
     widgetWelcomeMessage
   );
 
-  const sendHarnessPartToWs = (ws: KuralleWebSocket, part: StreamPart) => {
-    if (!shouldEmit(part, streamFilter)) return;
-    ws.send(JSON.stringify(sanitizeForClient(part)));
-  };
+  const sendHarnessPartToWs = (ws: KuralleWebSocket, part: StreamPart) =>
+    sendStreamPartToWs(ws, part, streamFilter);
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
 
@@ -686,45 +707,39 @@ export const createKuralleChatRouter = ({
           debug(`[Kuralle] New widget connection: ${sessionId}`);
 
           // Send connected message
-          ws.send(
-            JSON.stringify({
-              type: 'connected',
-              sessionId,
-              timestamp: new Date().toISOString(),
-            })
-          );
+          sendTransportFrameToWs(ws, {
+            type: 'connected',
+            sessionId,
+            timestamp: new Date().toISOString(),
+          });
 
           if (effectiveWelcomeMode !== 'off') {
             const staticWelcome = widgetWelcomeMessage?.trim();
             if (effectiveWelcomeMode === 'static') {
               const welcomeId = crypto.randomUUID();
-              ws.send(JSON.stringify({ type: 'text-start', id: welcomeId }));
-              ws.send(JSON.stringify({
+              sendHarnessPartToWs(ws, {
+                channel: 'client',
+                type: 'text-start',
+                payload: { id: welcomeId },
+              });
+              sendHarnessPartToWs(ws, {
+                channel: 'client',
                 type: 'text-delta',
-                id: welcomeId,
-                delta: staticWelcome || 'Hello! How can I help you today?',
-              }));
-              ws.send(JSON.stringify({ type: 'text-end', id: welcomeId }));
-
-              const suggestions = (widgetWelcomeSuggestions ?? [])
-                .filter((item): item is string => typeof item === 'string')
-                .map((item) => item.trim())
-                .filter(Boolean)
-                .slice(0, 3);
-
-              if (suggestions.length > 0) {
-                ws.send(JSON.stringify({
-                  type: 'suggested-questions',
-                  suggestions,
-                  isPartial: false,
-                }));
-              }
-
-              ws.send(JSON.stringify({
+                payload: {
+                  id: welcomeId,
+                  delta: staticWelcome || 'Hello! How can I help you today?',
+                },
+              });
+              sendHarnessPartToWs(ws, {
+                channel: 'client',
+                type: 'text-end',
+                payload: { id: welcomeId },
+              });
+              sendHarnessPartToWs(ws, {
+                channel: 'client',
                 type: 'done',
-                sessionId,
-                timestamp: new Date().toISOString(),
-              }));
+                payload: { sessionId },
+              });
             } else {
               // Optionally start conversation with a generated greeting.
               try {
@@ -741,18 +756,29 @@ export const createKuralleChatRouter = ({
                 console.error(`[Kuralle] Failed to send greeting for session ${sessionId}:`, error);
                 // Send a simple greeting if streaming fails
                 const fallbackId = crypto.randomUUID();
-                ws.send(JSON.stringify({ type: 'text-start', id: fallbackId }));
-                ws.send(JSON.stringify({
+                sendHarnessPartToWs(ws, {
+                  channel: 'client',
+                  type: 'text-start',
+                  payload: { id: fallbackId },
+                });
+                sendHarnessPartToWs(ws, {
+                  channel: 'client',
                   type: 'text-delta',
-                  id: fallbackId,
-                  delta: 'Hello! How can I help you today?',
-                }));
-                ws.send(JSON.stringify({ type: 'text-end', id: fallbackId }));
-                ws.send(JSON.stringify({
+                  payload: {
+                    id: fallbackId,
+                    delta: 'Hello! How can I help you today?',
+                  },
+                });
+                sendHarnessPartToWs(ws, {
+                  channel: 'client',
+                  type: 'text-end',
+                  payload: { id: fallbackId },
+                });
+                sendHarnessPartToWs(ws, {
+                  channel: 'client',
                   type: 'done',
-                  sessionId,
-                  timestamp: new Date().toISOString(),
-                }));
+                  payload: { sessionId },
+                });
               }
             }
           }
@@ -765,7 +791,7 @@ export const createKuralleChatRouter = ({
             // Handle the widget's message format
             const input = payload.message;
             if (typeof input !== 'string' || !input.trim()) {
-              ws.send(JSON.stringify({ type: 'error', error: 'message content required' }));
+              sendHarnessPartToWs(ws, errorPart('message content required'));
               return;
             }
 
@@ -778,14 +804,13 @@ export const createKuralleChatRouter = ({
             }
           } catch (error) {
             console.error('[Kuralle] Widget WebSocket error:', error);
-            ws.send(
-              JSON.stringify({
-                type: 'error',
-                error:
-                  streamFilter === 'all'
-                    ? (error as Error).message
-                    : 'An error occurred. Please try again.',
-              })
+            sendHarnessPartToWs(
+              ws,
+              errorPart(
+                streamFilter === 'all'
+                  ? (error as Error).message
+                  : 'An error occurred. Please try again.',
+              ),
             );
           }
         },
@@ -799,13 +824,11 @@ export const createKuralleChatRouter = ({
 
       return {
         onOpen(_event, ws) {
-          ws.send(
-            JSON.stringify({
-              type: 'connected',
-              sessionId,
-              timestamp: new Date().toISOString(),
-            })
-          );
+          sendTransportFrameToWs(ws, {
+            type: 'connected',
+            sessionId,
+            timestamp: new Date().toISOString(),
+          });
         },
 
         async onMessage(event, ws) {
@@ -815,13 +838,11 @@ export const createKuralleChatRouter = ({
             // Handle cancellation (barge-in)
             if (payload.type === 'cancel') {
               runtime.abortSession(sessionId, payload.reason ?? 'User interrupted');
-              ws.send(
-                JSON.stringify({
-                  type: 'cancelled',
-                  sessionId,
-                  timestamp: new Date().toISOString(),
-                })
-              );
+              sendTransportFrameToWs(ws, {
+                type: 'cancelled',
+                sessionId,
+                timestamp: new Date().toISOString(),
+              });
               return;
             }
 
@@ -829,7 +850,7 @@ export const createKuralleChatRouter = ({
 
             if (payload.type === 'message') {
               if (typeof input !== 'string' || !input.trim()) {
-                ws.send(JSON.stringify({ type: 'error', error: 'message content required' }));
+                sendHarnessPartToWs(ws, errorPart('message content required'));
                 return;
               }
               for await (const part of iterateRuntimeParts(runtime, {
@@ -844,18 +865,17 @@ export const createKuralleChatRouter = ({
             }
 
             if (payload.type === 'ping') {
-              ws.send(JSON.stringify({ type: 'pong' }));
+              sendTransportFrameToWs(ws, { type: 'pong' });
             }
           } catch (error) {
             console.error('[Kuralle] Flow WebSocket error:', error);
-            ws.send(
-              JSON.stringify({
-                type: 'error',
-                error:
-                  streamFilter === 'all'
-                    ? (error as Error).message
-                    : 'An error occurred. Please try again.',
-              })
+            sendHarnessPartToWs(
+              ws,
+              errorPart(
+                streamFilter === 'all'
+                  ? (error as Error).message
+                  : 'An error occurred. Please try again.',
+              ),
             );
           }
         },
@@ -905,8 +925,10 @@ export const createKuralleRouter = ({
   flowManager,
   sessionId,
   upgradeWebSocket,
+  streamFilter: streamFilterOption,
 }: KuralleRouterOptions): Hono => {
   const app = new Hono();
+  const streamFilter: StreamEventFilter = streamFilterOption ?? 'safe';
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
 
@@ -1031,13 +1053,11 @@ export const createKuralleRouter = ({
         // Generate sessionId for this connection
         const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        ws.send(
-          JSON.stringify({
-            type: 'connected',
-            sessionId,
-            timestamp: new Date().toISOString(),
-          })
-        );
+        sendTransportFrameToWs(ws, {
+          type: 'connected',
+          sessionId,
+          timestamp: new Date().toISOString(),
+        });
 
         // Note: Automatic greeting would require async, but this is sync
         // The greeting will be sent on first message instead
@@ -1050,7 +1070,7 @@ export const createKuralleRouter = ({
 
           if (payload.type === 'message') {
             if (typeof input !== 'string' || !input.trim()) {
-              ws.send(JSON.stringify({ type: 'error', error: 'message content required' }));
+              sendStreamPartToWs(ws, errorPart('message content required'), streamFilter);
               return;
             }
 
@@ -1062,22 +1082,17 @@ export const createKuralleRouter = ({
             }
 
             for await (const part of flowManager.process(fullInput)) {
-              ws.send(JSON.stringify(part));
+              sendStreamPartToWs(ws, part, streamFilter);
             }
 
             return;
           }
 
           if (payload.type === 'ping') {
-            ws.send(JSON.stringify({ type: 'pong' }));
+            sendTransportFrameToWs(ws, { type: 'pong' });
           }
         } catch (error) {
-          ws.send(
-            JSON.stringify({
-              type: 'error',
-              error: (error as Error).message,
-            })
-          );
+          sendStreamPartToWs(ws, errorPart((error as Error).message), streamFilter);
         }
       }
     })));
