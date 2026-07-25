@@ -49,8 +49,16 @@ test('every exported Hooks method has a source invocation site', () => {
       }
     });
 
+  // Must match a dispatch off a *hooks* holder — `this.hooks?.onX?.(`, `hooks?.onX?.(`,
+  // `config.hooks.onX(` — not any same-named callback. Without this scoping the guard is
+  // satisfiable by unrelated code: `opts.onError(error, job)` in scheduler/index.ts and
+  // an onError callback in messaging both "prove" Hooks.onError is wired, so deleting the
+  // real dispatch in Runtime.ts would leave this test green.
   const unwired = methods.filter((method) => {
-    const invocation = new RegExp(`(?:\\.|\\?\\.)${method}(?:\\?\\.)?\\s*\\(`);
+    const invocation = new RegExp(
+      `\\bhooks(?:\\?)?\\.\\s*${method}(?:\\?\\.)?\\s*\\(`,
+      'i',
+    );
     return !sources.some((source) => invocation.test(source));
   });
 
