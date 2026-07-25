@@ -4,6 +4,8 @@
  * ALL events that reach the client. Asserts no internal events leak.
  */
 
+import { PART_CHANNEL } from '@kuralle-agents/core';
+
 const SERVER = process.env.SERVER_URL || 'http://127.0.0.1:3333';
 
 async function captureSSEEvents(message) {
@@ -48,16 +50,11 @@ async function captureSSEEvents(message) {
   return events;
 }
 
-const INTERNAL_TYPES = new Set([
-  'tool-call', 'tool-result', 'tool-error', 'tool-start', 'tool-done',
-  'node-enter', 'node-exit',
-  'flow-transition', 'flow-end',
-  'handoff',
-  'agent-start', 'agent-end',
-  'step-start', 'step-end',
-  'context-compacted', 'result-evicted',
-  'tripwire', 'interrupted', 'turn-end', 'custom',
-]);
+const INTERNAL_TYPES = new Set(
+  Object.entries(PART_CHANNEL)
+    .filter(([, channel]) => channel === 'internal')
+    .map(([type]) => type),
+);
 
 console.log('Stream Event Filter — E2E Leak Test');
 console.log('='.repeat(50));
@@ -86,14 +83,14 @@ if (leaked1.length > 0) {
 // Check error sanitization
 const errors1 = events1.filter(e => e.type === 'error');
 for (const err of errors1) {
-  if (err.error !== 'An error occurred. Please try again.') {
-    console.log(`  FAIL: Unsanitized error: ${err.error}`);
+  if (err.payload?.error !== 'An error occurred. Please try again.') {
+    console.log(`  FAIL: Unsanitized error: ${err.payload?.error}`);
   }
 }
 
 // Check text content was received
 const textParts = events1.filter(e => e.type === 'text-delta');
-const fullText = textParts.map(e => e.delta).join('');
+const fullText = textParts.map(e => e.payload?.delta ?? '').join('');
 console.log(`  Agent response: "${fullText.slice(0, 80)}${fullText.length > 80 ? '...' : ''}"`);
 
 if (textParts.length === 0) {
@@ -103,7 +100,7 @@ if (textParts.length === 0) {
 // Test 2: Check done event has sessionId
 const doneEvents = events1.filter(e => e.type === 'done');
 if (doneEvents.length > 0) {
-  console.log(`  Session ID: ${doneEvents[0].sessionId}`);
+  console.log(`  Session ID: ${doneEvents[0].payload?.sessionId}`);
   console.log('  PASS: done event received');
 } else {
   console.log('  WARN: No done event received');

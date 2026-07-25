@@ -34,6 +34,7 @@
     "nanoid": "^5.0.9"
   },
   "devDependencies": {
+    "@kuralle-agents/core": "workspace:*",
     "@preact/preset-vite": "^2.9.0",
     "preact": "^10.23.2",
     "preact-custom-element": "^4.3.0",

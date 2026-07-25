@@ -21,7 +21,7 @@ npm install @kuralle-agents/widget
 Registers a `<kuralle-widget>` custom element backed by a Preact component. The widget resolves agent configuration from an HTTP endpoint, opens a WebSocket connection to the agent, and renders a floating chat UI with streaming, message queuing, and auto-reconnect.
 
 - **`<kuralle-widget>`** — HTML custom element. Accepts HTML attributes for agent endpoint, theme, position, and colors.
-- **`WidgetClient`** — programmatic client class. Fetches agent config from `GET /api/agent/:agentId`, connects via WebSocket, and exposes callback-based APIs for messages, streaming state, connection state, and suggestions.
+- **`WidgetClient`** — programmatic client class. Fetches agent config from `GET /api/agent/:agentId`, connects via WebSocket, and exposes callback-based APIs for messages, streaming state, connection state, and queue state.
 - **`AgentConfig`** / **`Message`** — types for the resolved agent configuration and chat messages.
 
 ## Usage

@@ -63,7 +63,6 @@ export function Widget({
   const [isAgentStreaming, setIsAgentStreaming] = useState(false);
   const [isAgentProcessing, setIsAgentProcessing] = useState(false);
   const [queuedMessageCount, setQueuedMessageCount] = useState(0);
-  const [activeSuggestions, setActiveSuggestions] = useState<string[]>([]);
 
   const clientRef = useRef<WidgetClient | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -93,7 +92,6 @@ export function Widget({
           client.onQueueChange((count) => setQueuedMessageCount(count));
 
           client.onProcessingChange((processing) => setIsAgentProcessing(processing));
-          client.onSuggestionsChange((suggestions) => setActiveSuggestions(suggestions));
 
           const agentConfig = await client.initWidget();
 
@@ -152,11 +150,6 @@ export function Widget({
       e.preventDefault();
       handleSendMessage();
     }
-  };
-
-  const handleChipClick = (chip: string) => {
-    if (!isConnected || isAgentStreaming) return;
-    clientRef.current?.sendMessage(chip);
   };
 
   // Always show launcher button for better UX
@@ -325,27 +318,6 @@ export function Widget({
               </>
             )}
           </div>
-
-          {/* Floating Suggestions */}
-          {!isAgentStreaming && activeSuggestions.length > 0 && (
-            <div className="kuralle-widget-suggestions">
-              {activeSuggestions.map((chip) => (
-                <button
-                  key={chip}
-                  className="kuralle-widget-chip"
-                  onClick={() => handleChipClick(chip)}
-                  style={{
-                    borderColor: accentColor,
-                    color: accentColor,
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                    backdropFilter: 'blur(4px)'
-                  }}
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-          )}
 
           {/* Input */}
           <div className="kuralle-widget-input">
