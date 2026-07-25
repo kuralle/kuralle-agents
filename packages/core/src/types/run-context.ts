@@ -46,17 +46,12 @@ export interface MemoryService {
   ingest?(ctx: RunContext): Promise<void>;
 }
 
-export interface HookRunner {
-  onStreamPart?(ctx: RunContext, part: StreamPart): void | Promise<void>;
-}
-
 export interface RunContext {
   session: Session;
   runState: RunState;
   runStore: RunStore;
   emit: (part: StreamPart) => void;
   toolExecutor: EffectToolExecutor;
-  hookRunner: HookRunner;
   model: LanguageModel;
   /** Control-path model (routing, decide, extraction) at temperature 0. */
   controlModel: LanguageModel;

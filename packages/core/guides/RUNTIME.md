@@ -140,15 +140,21 @@ const runtime = createRuntime({
 });
 ```
 
-## Hooks
+## Tracing
 
-Use hooks for logging, metrics, and audit trails without polluting prompts.
+Use a trace sink for logging, metrics, and audit trails without polluting prompts.
 
 ```ts
+const loggingSink: TraceSink = {
+  write(span) {
+    console.log(JSON.stringify(span));
+  },
+};
+
 const runtime = createRuntime({
   agents,
   defaultAgentId: 'router',
-  hooks: loggingHooks(),
+  tracing: { sinks: [loggingSink] },
 });
 ```
 

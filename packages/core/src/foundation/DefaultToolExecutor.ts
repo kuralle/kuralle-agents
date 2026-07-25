@@ -3,13 +3,11 @@ import type { ToolExecutionOptions as AIToolExecutionOptions } from 'ai';
 import type { Session, ToolCallRecord, EnforcementContext } from '../types/index.js';
 import type { ToolExecutor, ExecutableTool } from './ToolExecutor.js';
 import type { ToolEnforcer } from '../guards/ToolEnforcer.js';
-import type { HookRunner } from '../hooks/HookRunner.js';
 import type { MemoryService } from '../memory/MemoryService.js';
 import { isRecord } from '../utils/isRecord.js';
 
 export interface DefaultToolExecutorConfig {
   enforcer: ToolEnforcer;
-  hookRunner: HookRunner;
   memoryService?: MemoryService;
   /** Default timeout in milliseconds for tool execution. Defaults to 30000 (30s). */
   defaultToolTimeoutMs?: number;
@@ -37,17 +35,14 @@ export class ToolTimeoutError extends Error {
  * - Enforcement checks via ToolEnforcer
  * - Idempotency key generation
  * - Context enrichment (experimental_context)
- * - Error propagation via HookRunner
  */
 export class DefaultToolExecutor implements ToolExecutor {
   private enforcer: ToolEnforcer;
-  private hookRunner: HookRunner;
   private memoryService?: MemoryService;
   private defaultToolTimeoutMs?: number;
 
   constructor(config: DefaultToolExecutorConfig) {
     this.enforcer = config.enforcer;
-    this.hookRunner = config.hookRunner;
     this.memoryService = config.memoryService;
     this.defaultToolTimeoutMs = config.defaultToolTimeoutMs;
   }
@@ -107,17 +102,6 @@ export class DefaultToolExecutor implements ToolExecutor {
       callRecord.error = new Error(reason);
       toolCallHistory.push(callRecord);
 
-      const runContext = {
-        session,
-        agentId,
-        stepCount: step,
-        totalTokens: 0,
-        handoffStack: [],
-        startTime: Date.now(),
-        consecutiveErrors: 0,
-        toolCallHistory,
-      };
-      await this.hookRunner.onToolError(runContext, callRecord, callRecord.error);
       throw callRecord.error;
     }
 

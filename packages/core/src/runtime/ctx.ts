@@ -3,7 +3,6 @@ import type { LanguageModel } from 'ai';
 import type { Session } from '../types/session.js';
 import type {
   EffectToolExecutor,
-  HookRunner,
   MemoryService,
   AutoRetrieveProvider,
   RunContext,
@@ -40,7 +39,6 @@ export interface CtxDeps {
   runStore: RunStore;
   steps: StepRecord[];
   toolExecutor: EffectToolExecutor;
-  hookRunner?: HookRunner;
   model: LanguageModel;
   controlModel?: LanguageModel;
   outOfBandControl?: boolean;
@@ -247,7 +245,6 @@ function makeCtx(deps: CtxDeps): RunContext {
     set toolExecutor(executor: EffectToolExecutor) {
       toolExecutorHolder.executor = executor;
     },
-    hookRunner: deps.hookRunner ?? {},
     model: deps.model,
     controlModel: deps.controlModel ?? deps.model,
     outOfBandControl: deps.outOfBandControl ?? false,

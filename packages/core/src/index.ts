@@ -105,12 +105,6 @@ export type {
   PersonaVoice,
 } from './persona/index.js';
 
-export { HookRunner, createHookRunner } from './hooks/HookRunner.js';
-export { loggingHooks, createLoggingHooks } from './hooks/builtin/logging.js';
-export { createMetricsHooks, InMemoryMetrics } from './hooks/builtin/metrics.js';
-export type { Metrics } from './hooks/builtin/metrics.js';
-export { createObservabilityHooks } from './hooks/builtin/observability.js';
-export type { ObservabilityConfig } from './hooks/builtin/observability.js';
 export type { SessionTrace, TraceStreamEvent } from './types/telemetry.js';
 
 export { createPromptInjectionGuard } from './processors/builtin/promptInjectionGuard.js';
@@ -246,19 +240,11 @@ export type {
 
 export {
   DefaultToolExecutor,
-  DefaultConversationState,
-  DefaultConversationEventLog,
   DefaultAgentStateController,
-  createFoundation,
 } from './foundation/index.js';
 export type {
   ToolExecutor,
-  ConversationState,
-  ConversationEventLog,
-  ConversationEvent,
   AgentStateController,
-  Foundation,
-  FoundationConfig,
 } from './foundation/index.js';
 
 export type * from './types/index.js';
@@ -332,7 +318,6 @@ export type {
 } from './audit/types.js';
 
 export type { Hooks } from './types/hooks.js';
-export type { HarnessHooks } from './types/runtime.js';
 
 export {
   defineAgent,

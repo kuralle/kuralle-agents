@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import { DefaultToolExecutor } from '../../dist/foundation/DefaultToolExecutor.js';
 import { ToolEnforcer } from '../../dist/guards/ToolEnforcer.js';
-import { HookRunner } from '../../dist/hooks/HookRunner.js';
 
 function makeSession(overrides = {}) {
   const now = new Date();
@@ -35,7 +34,6 @@ describe('DefaultToolExecutor', () => {
   it('executes a tool and returns result', async () => {
     const executor = new DefaultToolExecutor({
       enforcer: new ToolEnforcer([]),
-      hookRunner: new HookRunner(),
     });
 
     const result = await executor.execute({
@@ -57,14 +55,8 @@ describe('DefaultToolExecutor', () => {
       check: () => ({ allowed: false, reason: 'denied' }),
     };
 
-    const hookErrors = [];
-    const hookRunner = new HookRunner({
-      onToolError: async (_ctx, call, err) => { hookErrors.push({ call, err }); },
-    });
-
     const executor = new DefaultToolExecutor({
       enforcer: new ToolEnforcer([blockRule]),
-      hookRunner,
     });
 
     await assert.rejects(
@@ -77,15 +69,11 @@ describe('DefaultToolExecutor', () => {
       }),
       { message: 'denied' },
     );
-
-    assert.equal(hookErrors.length, 1);
-    assert.equal(hookErrors[0].err.message, 'denied');
   });
 
   it('generates correct idempotency key format', () => {
     const executor = new DefaultToolExecutor({
       enforcer: new ToolEnforcer([]),
-      hookRunner: new HookRunner(),
     });
 
     const key = executor.buildIdempotencyKey({
@@ -102,7 +90,6 @@ describe('DefaultToolExecutor', () => {
   it('throws if tool has no execute function', async () => {
     const executor = new DefaultToolExecutor({
       enforcer: new ToolEnforcer([]),
-      hookRunner: new HookRunner(),
     });
 
     await assert.rejects(
@@ -120,7 +107,6 @@ describe('DefaultToolExecutor', () => {
   it('propagates tool execution errors', async () => {
     const executor = new DefaultToolExecutor({
       enforcer: new ToolEnforcer([]),
-      hookRunner: new HookRunner(),
     });
 
     await assert.rejects(
