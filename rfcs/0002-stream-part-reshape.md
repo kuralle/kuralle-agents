@@ -71,9 +71,10 @@ interface StreamPartBase {
 
 export type StreamPart =
   | (StreamPartBase & { type: 'text-delta';        payload: TextDeltaPayload })
-  | (StreamPartBase & { type: 'knowledge-citation'; payload: KnowledgeCitationPayload })
-  | (StreamPartBase & { type: 'knowledge-search';   payload: KnowledgeSearchPayload })
+  | (StreamPartBase & { type: 'knowledge-search';  payload: KnowledgeSearchPayload })
   | …
+// NOTE: `knowledge-citation` deliberately absent — see §5. An earlier draft of this
+// sketch listed it here, contradicting §5's own table. It is a ConversationAuditEntry.
 
 /** Classification is compulsory: a missing key is a compile error. */
 export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = { … };
