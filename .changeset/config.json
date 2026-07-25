@@ -27,7 +27,6 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "acme-support-agent",
-    "agent-starter-node",
     "cag-demo",
     "langfuse-demo",
     "rag-demo"
