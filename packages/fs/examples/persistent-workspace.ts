@@ -17,7 +17,8 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
-import { sqlFileSystem, fsSkillStore, type SqlBackend } from '@kuralle-agents/fs';
+import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
+import { fsSkillStore } from '@kuralle-agents/core';
 
 // One tiny adapter turns any SQLite handle into the two-method SqlBackend.
 function bunSqliteBackend(db: Database): SqlBackend {

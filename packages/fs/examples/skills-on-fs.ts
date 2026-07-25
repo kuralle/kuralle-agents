@@ -7,7 +7,8 @@
  * Run:  bun run packages/fs/examples/skills-on-fs.ts
  */
 import { defineAgent } from '@kuralle-agents/core';
-import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';
+import { InMemoryFs } from '@kuralle-agents/fs';
+import { fsSkillStore } from '@kuralle-agents/core';
 
 const REFUNDS_SKILL = `---
 name: refunds

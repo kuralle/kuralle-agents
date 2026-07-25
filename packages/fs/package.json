@@ -60,7 +60,8 @@
     "test:inmemoryfs": "bun test test/in-memory-fs.test.ts",
     "test:fs-tool": "bun test test/fs-tool.test.ts",
     "test:fs-workers": "vitest run --config vitest.config.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json"
   },
   "publishConfig": {
     "access": "public"

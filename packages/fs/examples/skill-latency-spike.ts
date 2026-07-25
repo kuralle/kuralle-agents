@@ -13,7 +13,7 @@ import {
   createShellTool,
 } from '@kuralle-agents/core';
 import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
-import { fsSkillStore } from '@kuralle-agents/fs';
+import { fsSkillStore } from '@kuralle-agents/core';
 import { virtualShell } from '@kuralle-agents/fs/shell';
 
 const RUNS = Number(process.env.SPIKE_RUNS ?? 4);
@@ -50,10 +50,12 @@ async function collect(handle: TurnHandle) {
 }
 
 function correct(text: string, parts: StreamPart[]): boolean {
-  const bash = parts.find(
-    (p) => p.type === 'tool-result' && (p as { toolName: string }).toolName === 'bash',
-  ) as { result?: { stdout?: string } } | undefined;
-  return /ahoy there/i.test(text) && /\bsam\b/i.test(text) && (bash?.result?.stdout ?? '').includes('3');
+  const bash = parts
+    .filter((p) => p.type === 'tool-result')
+    .map((p) => p.payload)
+    .find((r) => r.toolName === 'bash');
+  const stdout = (bash?.result as { stdout?: string } | undefined)?.stdout ?? '';
+  return /ahoy there/i.test(text) && /\bsam\b/i.test(text) && stdout.includes('3');
 }
 
 async function runOnce(withSkills: boolean, model: unknown, label: string) {

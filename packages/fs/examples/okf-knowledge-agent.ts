@@ -11,7 +11,8 @@
  */
 import { createRuntime, defineAgent, createFsTool } from '@kuralle-agents/core';
 import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
-import { okfBundleToFs, fsSkillStore } from '@kuralle-agents/fs';
+import { okfBundleToFs } from '@kuralle-agents/fs';
+import { fsSkillStore } from '@kuralle-agents/core';
 import { SALES_BUNDLE, EXPECTED } from './_okf-bundle.js';
 
 const NAVIGATOR_SKILL = `---
@@ -84,8 +85,10 @@ async function main() {
     }),
   );
 
-  const toolCalls = (parts.filter((p) => p.type === 'tool-call') as Array<{ toolName: string; args: unknown }>);
-  const reads = toolCalls.filter((c) => c.toolName === 'workspace').map((c) => (c.args as { op?: string; path?: string }));
+  const toolCalls = parts.filter((p) => p.type === 'tool-call').map((p) => p.payload);
+  const reads = toolCalls
+    .filter((c) => c.toolName === 'workspace')
+    .map((c) => c.args as { op?: string; path?: string });
   console.log('--- skill loaded:', toolCalls.some((c) => c.toolName === 'load_skill'));
   console.log('--- workspace ops:', reads.map((r) => `${r.op}:${r.path ?? ''}`).join(', '));
   console.log('--- answer:', text.replace(/\s+/g, ' ').trim(), '\n');

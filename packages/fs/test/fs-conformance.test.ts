@@ -8,6 +8,7 @@ import type { FileSystem } from '@kuralle-agents/core';
 import type { SqlBackend } from '../src/sql/types.js';
 import { InMemoryFs } from '../src/in-memory-fs.js';
 import { SqlFileSystem } from '../src/sql/sql-fs.js';
+import { virtualShell } from '../src/shell.js';
 
 function bunSqlBackend(db: Database): SqlBackend {
   return {
@@ -21,6 +22,9 @@ function bunSqlBackend(db: Database): SqlBackend {
 const backends: Array<[string, () => FileSystem]> = [
   ['InMemoryFs', () => new InMemoryFs()],
   ['SqlFileSystem', () => new SqlFileSystem({ backend: bunSqlBackend(new Database(':memory:')) })],
+  // The just-bash-backed adapter is publicly exported from `@kuralle-agents/fs/shell`
+  // and is what `virtualShell()` hands back, so it owes the same 19-method contract.
+  ['justBashFsToFileSystem', () => virtualShell().fs],
 ];
 
 for (const [name, make] of backends) {

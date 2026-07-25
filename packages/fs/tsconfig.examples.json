@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "types": [
+      "node",
+      "bun-types"
+    ]
+  },
+  "include": [
+    "src/**/*",
+    "examples/**/*"
+  ]
+}

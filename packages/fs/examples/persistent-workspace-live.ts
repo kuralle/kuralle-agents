@@ -69,8 +69,10 @@ async function main() {
     input: "Save the user's favorite color, which is INDIGO, by writing the file /memory/color.md with exactly the content: INDIGO",
     sessionId: 'p1',
   }));
-  const wrote = (w.parts.filter((p) => p.type === 'tool-call') as Array<{ toolName: string; args: { op?: string } }>)
-    .some((c) => c.toolName === 'workspace' && c.args?.op === 'write');
+  const wrote = w.parts
+    .filter((p) => p.type === 'tool-call')
+    .map((p) => p.payload)
+    .some((c) => c.toolName === 'workspace' && (c.args as { op?: string })?.op === 'write');
   const onDisk = await fs1.readFile('/memory/color.md').catch(() => '');
   db1.close();
   console.log(`process 1: model called workspace write = ${wrote}; file on disk = ${JSON.stringify(onDisk)}`);
@@ -82,8 +84,10 @@ async function main() {
     input: 'Read the file /memory/color.md using the workspace tool and tell me the favorite color it contains.',
     sessionId: 'p2',
   }));
-  const readCall = (r.parts.filter((p) => p.type === 'tool-call') as Array<{ toolName: string; args: { op?: string } }>)
-    .some((c) => c.toolName === 'workspace' && c.args?.op === 'read');
+  const readCall = r.parts
+    .filter((p) => p.type === 'tool-call')
+    .map((p) => p.payload)
+    .some((c) => c.toolName === 'workspace' && (c.args as { op?: string })?.op === 'read');
   console.log(`process 2: model called workspace read = ${readCall}`);
   console.log(`process 2 answer: ${r.text.replace(/\s+/g, ' ').trim()}\n`);
 

@@ -16,7 +16,7 @@ import {
   createShellTool,
 } from '@kuralle-agents/core';
 import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
-import { fsSkillStore } from '@kuralle-agents/fs';
+import { fsSkillStore } from '@kuralle-agents/core';
 import { virtualShell } from '@kuralle-agents/fs/shell';
 
 async function resolveModel() {
@@ -83,21 +83,23 @@ async function main() {
   });
   const { parts, text } = await collect(handle);
 
-  const toolCalls = parts.filter((p) => p.type === 'tool-call') as Array<{ toolName: string }>;
+  const toolCalls = parts.filter((p) => p.type === 'tool-call').map((p) => p.payload);
   const calledLoadSkill = toolCalls.some((c) => c.toolName === 'load_skill');
   const calledBash = toolCalls.some((c) => c.toolName === 'bash');
-  const bashResult = parts.find(
-    (p) => p.type === 'tool-result' && (p as { toolName: string }).toolName === 'bash',
-  ) as { result?: { stdout?: string } } | undefined;
+  const bashResult = parts
+    .filter((p) => p.type === 'tool-result')
+    .map((p) => p.payload)
+    .find((r) => r.toolName === 'bash');
+  const bashStdout = (bashResult?.result as { stdout?: string } | undefined)?.stdout;
 
   console.log('--- tool calls:', toolCalls.map((c) => c.toolName).join(', ') || '(none)');
-  console.log('--- bash stdout:', JSON.stringify(bashResult?.result?.stdout));
+  console.log('--- bash stdout:', JSON.stringify(bashStdout));
   console.log('--- final text:', text, '\n');
 
   const failures: string[] = [];
   if (!calledLoadSkill) failures.push('model did not call load_skill');
   if (!calledBash) failures.push('model did not call bash');
-  if (!(bashResult?.result?.stdout ?? '').includes('3')) failures.push('bash did not return the order count (3)');
+  if (!(bashStdout ?? '').includes('3')) failures.push('bash did not return the order count (3)');
   if (!/ahoy there/i.test(text)) failures.push('final reply did not use the greeter skill phrase');
 
   if (failures.length) {
