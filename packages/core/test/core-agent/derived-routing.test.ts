@@ -8,11 +8,9 @@ import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { HostGuardVerdict } from '../../src/runtime/select.js';
 import type { HarnessStreamPart } from '../../src/types/stream.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
-import { VoiceDriver } from '../../src/runtime/channels/VoiceDriver.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { buildAgentReplyNode } from '../../src/runtime/agentReply.js';
 import { resolveHostControl } from '../../src/runtime/hostControlGuard.js';
-import { FakeRealtimeAudioClient } from '../helpers/fakeRealtimeClient.js';
 
 describe('derived host routing', () => {
   it('answering keep turn does not call classifier when no host targets need guard-only path', async () => {
@@ -347,36 +345,3 @@ describe('strict dispatch flush-on-keep', () => {
   });
 });
 
-// RR-01: native realtime must not drop a host-control tool result. The post-hoc
-// gate previously clobbered out.control, silently dropping enter_flow/transfer.
-describe('native realtime host control', () => {
-  it('preserves an enter_flow tool control through the post-hoc gate', async () => {
-    const flowNode = reply({ id: 'e', instructions: 'x', next: () => ({ end: 'ok' }) });
-    const flow = defineFlow({ name: 'book', description: 'Book an advisor appointment', start: flowNode, nodes: [flowNode] });
-    const agent = defineAgent({ id: 'host', instructions: 'help', flows: [flow], model: stubModel });
-
-    const { session, runStore, runState } = await setupDurableHarness('nrt-ctrl', 'nrt-ctrl');
-    const fakeClient = new FakeRealtimeAudioClient({ responses: {} });
-    fakeClient.stallResponse = true; // emit the tool call manually below
-    await fakeClient.connect({ systemInstruction: '', tools: [] });
-    const ctx = await createRunContext({
-      session,
-      runStore,
-      runState,
-      steps: [],
-      toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
-      emit: () => {},
-    });
-
-    const resolved = resolveReplyNode(buildAgentReplyNode(agent, runState), {}, { freeConversation: true });
-    const driver = new VoiceDriver({ client: fakeClient });
-    const turnPromise = driver.runAgentTurn(resolved, ctx);
-    await new Promise((r) => setTimeout(r, 5));
-    fakeClient.emitToolCallTurn('enter_flow', { flowName: 'book', reason: 'user asked to book' });
-    const turn = await turnPromise;
-
-    expect(turn.control?.type).toBe('enterFlow');
-    expect((turn.control as { flowName?: string }).flowName).toBe('book');
-  });
-});

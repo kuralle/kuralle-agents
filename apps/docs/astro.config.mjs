@@ -86,7 +86,6 @@ const sidebar = [
       { label: 'Knowledge & Retrieval', link: '/guides/knowledge' },
       { label: 'Skills', link: '/guides/skills' },
       { label: 'Workspace (Filesystem & Shell)', link: '/guides/workspace' },
-      { label: 'Voice Agents', link: '/guides/voice' },
       { label: 'Engagement & Messaging', link: '/guides/engagement' },
       { label: 'Deployment', link: '/guides/deployment' },
       { label: 'Observability', link: '/guides/observability' },

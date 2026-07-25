@@ -90,7 +90,7 @@
 ## Competitor Landscape
 - **OpenAI Agents SDK (JS):** voice anchor + closest peer. Differentiate on **flows** (typed procedure graphs) and **durable tool execution**, not just an agent loop. Never copy their copy verbatim; match the polish, keep our own claims.
 - **LangChain / deepagents:** "batteries-included harness." We're lighter and procedure-first; we don't require a graph runtime to start.
-- **Voice stacks (LiveKit, Pipecat):** we keep agent authority (tools/flows/handoffs) while using provider-native realtime. Position as "your agent logic, over voice," not a transport library.
+- **Voice stacks (LiveKit, Pipecat):** out of scope. Kuralle is text-first; never position it as a voice or transport framework.
 - **Voices to NOT mimic:** enterprise "conversational AI platform" marketing; over-hyped launch threads.
 
 ## Proof Points
@@ -112,7 +112,7 @@
 - Never document an internal `src/` import path or an unexported symbol as public (see fact-sheet §5).
 - Never ship a code sample you haven't typechecked/run.
 - Never pad. If a sentence adds no information, cut it.
-- Never claim LiveKit native realtime authority (deleted) or any capability not in the code.
+- Never claim any voice/realtime capability: provider-native speech-to-speech and cascaded/telephony voice have been removed from this repo. Inbound voice notes (multimodal audio input) are the only audio claim that holds.
 
 ### Compliance
 - Open-source project: no customer names/metrics we can't cite. MIT-style licensing tone — welcoming, not salesy.

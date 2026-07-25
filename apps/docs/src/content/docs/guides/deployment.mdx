@@ -146,7 +146,7 @@ app.post('/chat', async (c) => {
 });
 ```
 
-For raw `HarnessStreamPart` JSON-SSE (voice adapters, curl, custom transports):
+For raw `HarnessStreamPart` JSON-SSE (curl, custom transports):
 
 ```typescript
 return new Response(handle.toResponseStream('sse'), {

@@ -331,14 +331,6 @@ export type {
   ConversationAuditLog,
 } from './audit/types.js';
 
-export type {
-  RealtimeAudioClient,
-  RealtimeSessionConfig,
-  RealtimeAudioConfig,
-  RealtimeToolResponse,
-  RealtimeEventMap,
-  RealtimeSessionHandle,
-} from './realtime/index.js';
 export type { Hooks } from './types/hooks.js';
 export type { HarnessHooks } from './types/runtime.js';
 
@@ -426,8 +418,6 @@ export type {
 } from './runtime/durable/types.js';
 export { DURABLE_RUNS_KEY } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
-// Text is the primary channel. The realtime VoiceDriver is PAUSED and lives off
-// the headline API behind `@kuralle-agents/core/runtime` (see realtime-audio).
 export type { ChannelDriver, TextDriver } from './runtime/channels/index.js';
 export type { TurnResult } from './types/channel.js';
 export type { RunContext, ToolContext, ActionContext } from './types/run-context.js';

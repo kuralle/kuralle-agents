@@ -5,10 +5,6 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "packages/cf-agent/examples/cf-voice-realtime-gemini",
-    "packages/cf-agent/examples/cf-voice-realtime-gemini-flow",
-    "packages/cf-agent/examples/cf-voice-realtime-openai",
-    "packages/cf-agent/examples/cf-voice-realtime-grok",
     "apps/playground/rag-demo",
     "apps/playground/cag-demo",
     "apps/playground/_shared",

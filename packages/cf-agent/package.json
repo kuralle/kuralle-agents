@@ -9,10 +9,6 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    },
-    "./voice": {
-      "import": "./dist/voice/index.js",
-      "types": "./dist/voice/index.d.ts"
     }
   },
   "files": [
@@ -22,7 +18,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "bun test src/voice/__tests__ src/__tests__ && vitest run --config vitest.config.ts",
+    "test": "bun test src/__tests__ && vitest run --config vitest.config.ts",
     "test:sql-memory-workers": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
@@ -30,19 +26,16 @@
   "dependencies": {
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/messaging": "workspace:*",
-    "@kuralle-agents/realtime-audio": "workspace:*",
     "@cloudflare/ai-chat": "^0.8.4",
     "ai": "^6.0.90"
   },
   "peerDependencies": {
-    "@kuralle-agents/voice-protocol": "workspace:*",
     "agents": ">=0.14.0 <1.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.7",
     "@cloudflare/workers-types": "^4.0.0",
-    "@kuralle-agents/voice-protocol": "workspace:*",
     "agents": "^0.15.0",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"

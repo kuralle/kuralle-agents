@@ -23,7 +23,6 @@ Use this skill when prompts are the bottleneck: hallucinations, weak tool usage,
 
 **Cross-skill references:**
 - `docs/skills/kuralle-usage/references/agent-prompt.md` - Full AgentPrompt API (security profiles, token budgeting, `.voiceRules()`)
-- `docs/skills/kuralle-voice-agents/rules/voice-prompt-rules.md` - Voice-specific prompt rules
 - `docs/skills/kuralle-flow-agents/references/prompt-best-practices.md` - Why plain strings beat PromptBuilder for tool-heavy nodes
 
 Rules:

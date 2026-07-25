@@ -4,7 +4,7 @@ import type { ZodTypeAny } from 'zod';
 
 /**
  * Backend-agnostic tool declaration. Produced by capabilities,
- * consumed by adapters (Gemini, AI SDK, LiveKit).
+ * consumed by adapters (AI SDK and others).
  */
 export interface ToolDeclaration<TInput = unknown, TOutput = unknown> {
   name: string;

@@ -41,26 +41,11 @@ cd packages/core && npm run build
 bun run test
 ```
 
-### Voice pipeline tests
+### End-to-end tests
 
-Two modes: offline (no API keys, <1s) and live (real Gemini, 30-60s per turn).
-
-**Offline — FakeRealtimeAudioClient (CI-safe, deterministic):**
 ```bash
-bun test packages/e2e-tests/tests/fake-client.test.ts
-```
-
-**Live API — real Gemini audio (needs `GOOGLE_GENERATIVE_AI_API_KEY`):**
-```bash
-npx tsx packages/e2e-tests/tests/livekit-model-ws-bridge.ts    # single-turn
-npx tsx packages/e2e-tests/tests/bridge-adapter-debug.ts        # multi-turn
-npx tsx packages/e2e-tests/tests/head-to-head-benchmark.ts      # 3-path benchmark
-```
-
-**AgentSession + Kuralle (needs `DEEPGRAM_API_KEY` + `GOOGLE_GENERATIVE_AI_API_KEY`):**
-```bash
-npx tsx packages/e2e-tests/tests/agentsession-kuralle-direct-e2e.ts
-npx tsx packages/e2e-tests/tests/agentsession-kuralle-e2e.ts
+bun test packages/e2e-tests/tests/flow-triage.test.ts             # offline, deterministic
+cd packages/e2e-tests && npm run test:parallel-durability          # live OPENAI_API_KEY
 ```
 
 See `packages/e2e-tests/README.md` for the full test catalog.

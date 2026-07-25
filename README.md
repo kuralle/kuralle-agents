@@ -87,11 +87,7 @@ OPENAI_API_KEY=sk-... npx tsx agent.ts
 
 More examples: `packages/core/examples/agents/` — form-filler, transfer-agent, basic-chat, sales-with-leads.
 
-## Text and voice, one agent
-
-The same agent config runs over voice. **Provider-native realtime** (speech-to-speech) lives in `@kuralle-agents/realtime-audio` (`VoiceEngine`, the realtime `VoiceDriver`) — kept intact but paused off the headline API while we harden text as the primary primitive.
-
-> **Cascaded voice (STT → Kuralle text runtime → TTS) and telephony transports** (LiveKit, WebSocket, SIP, Twilio, SmartPBX) now live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)** — extracted so voice can version independently.
+> **Voice is out of scope.** Cascaded voice and telephony transports (LiveKit, WebSocket, SIP, Twilio, SmartPBX) live in **[kuralle/kuralle-livekit](https://github.com/kuralle/kuralle-livekit)**. Provider-native speech-to-speech has been removed from this repo; Kuralle is text-first. Inbound **voice notes** are still supported as multimodal audio input — see the Multimodal guide.
 
 ## Packages
 
@@ -106,7 +102,6 @@ The same agent config runs over voice. **Provider-native realtime** (speech-to-s
 | [`@kuralle-agents/trace-ui`](https://www.npmjs.com/package/@kuralle-agents/trace-ui) | Embeddable read-only trace waterfall and span detail viewer |
 | [`@kuralle-agents/postgres-store`](https://www.npmjs.com/package/@kuralle-agents/postgres-store) | Postgres-backed session persistence |
 | [`@kuralle-agents/cli`](https://www.npmjs.com/package/@kuralle-agents/cli) | `kuralle` CLI — interactive chat, adaptive send, simulation, trace inspection |
-| [`@kuralle-agents/realtime-audio`](https://www.npmjs.com/package/@kuralle-agents/realtime-audio) | Provider-native speech-to-speech (paused; kept intact) |
 
 ## Documentation
 

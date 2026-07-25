@@ -53,7 +53,7 @@ const agent = defineAgent({
 
 `defineTool` returns a Kuralle **effect tool** — `{ name, description, input, execute }`, where `input` is a Standard Schema and `execute` is your durable handler. The model, however, speaks the [Vercel AI SDK](https://sdk.vercel.ai/) tool format, so the runtime derives an AI SDK `ToolSet` from your `tools` record automatically — you don't call anything to make a tool model-visible.
 
-`buildToolSet` is that bridge, exported for the cases where you need the `ToolSet` yourself — most commonly a **flow node's** `tools` field (which takes an AI SDK `ToolSet`), or handing tools directly to a realtime/voice model:
+`buildToolSet` is that bridge, exported for the cases where you need the `ToolSet` yourself — most commonly a **flow node's** `tools` field (which takes an AI SDK `ToolSet`):
 
 ```typescript
 import { buildToolSet } from '@kuralle-agents/core';

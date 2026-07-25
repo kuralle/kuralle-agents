@@ -95,7 +95,7 @@ Then call the tool.
 
 **No markdown.** Bullet points, bold text, and headers become spoken literally or as pauses. Instruct the model to never use them.
 
-**Extraction context.** In voice extraction nodes, the `extractionModel` runs on transcribed text — not the audio model. Set `extractionModel` on the authority (see `docs/skills/kuralle-voice-agents/rules/extraction-model-required.md`). The voice model's prompt still needs to ask naturally.
+**Extraction context.** Extraction nodes run the `extractionModel` on text. Set it explicitly rather than relying on the speaking model.
 
 **Use `.voiceRules()` on AgentPrompt** to inject all these constraints programmatically instead of writing them manually every time:
 ```ts

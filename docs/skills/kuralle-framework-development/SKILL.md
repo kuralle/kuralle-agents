@@ -62,7 +62,6 @@ Fallback (monorepo):
 | `@kuralle-agents/cf-agent` | `packages/cf-agent/` |
 | `@kuralle-agents/redis-store` | `packages/redis-store/` |
 | `@kuralle-agents/postgres-store` | `packages/postgres-store/` |
-| `@kuralle-agents/livekit-plugin` | `packages/livekit-plugin/` |
 
 ## Key directories by concern
 

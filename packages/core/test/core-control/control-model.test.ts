@@ -4,14 +4,12 @@ import { z } from 'zod';
 import { decide, reply } from '../../src/types/flow.js';
 import { defineFlow } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
-import { VoiceDriver } from '../../src/runtime/channels/VoiceDriver.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { selectHostTarget } from '../../src/runtime/select.js';
 import { hostLoop } from '../../src/runtime/hostLoop.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
-import type { RealtimeAudioClient } from '../../src/realtime/RealtimeAudioClient.js';
 
 afterEach(() => {
   mock.restore();
@@ -92,52 +90,6 @@ describe('control model channel (H2)', () => {
     });
 
     await new TextDriver().runStructured(node, ctx);
-    expect(captured.model).toBe(control);
-    expect(captured.temperature).toBe(0);
-  });
-
-  it('VoiceDriver runStructured uses controlModel at temperature 0', async () => {
-    const speaker = taggedModel('speaker');
-    const control = taggedModel('control');
-    let captured: { model?: LanguageModel; temperature?: number } = {};
-
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async (opts: { model?: LanguageModel; temperature?: number }) => {
-          captured = opts;
-          return { object: { choice: 'a' } };
-        },
-      };
-    });
-
-    const { session, runStore, runState } = await setupDurableHarness('ctrl-voice-decide', 'ctrl-voice-decide-run');
-    const ctx = await createRunContext({
-      session,
-      runState,
-      runStore,
-      steps: [],
-      toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: speaker,
-      controlModel: control,
-      emit: () => {},
-    });
-
-    const node = decide({
-      id: 'pick',
-      instructions: 'Choose',
-      schema: z.object({ choice: z.string() }),
-      decide: () => 'stay',
-    });
-
-    const client = {
-      on: () => {},
-      off: () => {},
-      updateConfig: async () => {},
-    } as unknown as RealtimeAudioClient;
-
-    await new VoiceDriver({ client }).runStructured(node, ctx);
     expect(captured.model).toBe(control);
     expect(captured.temperature).toBe(0);
   });
