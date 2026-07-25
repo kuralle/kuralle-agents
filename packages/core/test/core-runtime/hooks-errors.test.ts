@@ -89,6 +89,62 @@ describe('lifecycle hook error isolation', () => {
     }
   }
 
+  it('keeps onStreamPart fire-and-forget when the callback remains pending', async () => {
+    let started = false;
+    let release!: () => void;
+    const hooks: Hooks = {
+      onStreamPart: () => {
+        if (started) return;
+        started = true;
+        return new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      },
+    };
+
+    const result = await runtimeWithHooks(hooks, new MemoryStore()).run({
+      sessionId: 'onStreamPart-pending',
+      input: 'hello',
+      driver: successfulDriver,
+    });
+
+    expect(result.text).toBe('ok');
+    expect(started).toBe(true);
+    release();
+  });
+
+  it('reports the hook error details', async () => {
+    const reports: string[] = [];
+    spyOn(console, 'error').mockImplementation((...args) => reports.push(args.map(String).join(' ')));
+    const result = await runtimeWithHooks({ onStart: hookFailure('onStart', 'throw') }, new MemoryStore()).run({
+      sessionId: 'hook-error-details',
+      input: 'hello',
+      driver: successfulDriver,
+    });
+
+    expect(result.text).toBe('ok');
+    expect(reports.some((report) => report.includes('Hook onStart failed') && report.includes('onStart-throw'))).toBe(true);
+  });
+
+  it('continues closeRun persistence after onConversationEnd fails', async () => {
+    spyOn(console, 'error').mockImplementation(() => {});
+    const sessionId = 'onConversationEnd-persistence';
+    const sessionStore = new MemoryStore();
+    await sessionStore.save(makeTestSession(sessionId));
+    const session = await sessionStore.get(sessionId);
+    if (!session) throw new Error(`Missing test session ${sessionId}`);
+    await markSessionOutcome(sessionStore, session, 'resolved');
+
+    await runtimeWithHooks({ onConversationEnd: hookFailure('onConversationEnd', 'throw') }, sessionStore).run({
+      sessionId,
+      input: 'hello',
+      driver: successfulDriver,
+    });
+
+    const stored = await sessionStore.get(sessionId);
+    expect(stored?.messages.some((message) => message.role === 'user' && message.content === 'hello')).toBe(true);
+  });
+
   for (const mode of ['throw', 'reject'] as const) {
     it(`onError ${mode} preserves the original run error`, async () => {
       const reports: string[] = [];

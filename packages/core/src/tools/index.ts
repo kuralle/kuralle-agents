@@ -15,19 +15,6 @@ export type {
 } from './http.types.js';
 
 export {
-  withErrorHandling,
-  executeWithRetry,
-  createCircuitBreaker,
-  withTimeout,
-  isPermanentError,
-  isCircuitOpenError,
-  CircuitOpenError,
-  ToolTimeoutError,
-  type ToolErrorConfig,
-  type ToolResult,
-} from './errorHandling.js';
-
-export {
   DEFAULT_ERROR_MESSAGES,
   getUserFriendlyError,
   categorizeError,
