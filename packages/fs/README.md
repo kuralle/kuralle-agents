@@ -103,6 +103,13 @@ const agent = defineAgent({
 
 `defineSkill({ name, description, instructions, resources })` builds an inline skill without a filesystem.
 
+Pass ordered roots to layer shared and project skills. Later roots win when two `SKILL.md` files
+declare the same `name`, and the winning root owns both the body and its resources:
+
+```ts
+skills: fsSkillStore(fs, ['/skills/shared', '/skills/project'])
+```
+
 ## Persistent workspaces (`SqlFileSystem`, platform-chosen)
 
 `InMemoryFs` is ephemeral. For a workspace that survives restarts — so agent files, skills, and the durable tool journal agree across process boundaries — use `SqlFileSystem`, a drop-in `FileSystem` over any SQL handle (+ optional blob store for large files). Pick the backend your platform gives you:

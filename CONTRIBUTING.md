@@ -147,5 +147,10 @@ Use `pnpm publish -r` (not `changeset publish`) to correctly replace `workspace:
 4. **Grounding must be explicit** — use CAG tools + auto-retrieve when you promise grounded responses.
 5. **Source maps must not ship** in published packages — no `.map` files in npm tarballs.
 6. **Docs must be in sync with code** — never ship a feature without updating documentation.
+7. **Never bridge two shapes with a cast.** If a boundary genuinely needs both, name both types and
+   quarantine a typed adapter in one boundary file. RFC-0002 is the failure case: two public stream
+   unions were hidden behind `as HarnessStreamPart` / `as StreamPart`, so emitted knowledge events
+   bypassed the public contract. DeepAgents' versioned protocol plus one named adapter is the
+   acceptable pattern; see `docs/peer-patterns-stream-and-composition.md` §4.
 
 Full rules: `docs/skills/kuralle-usage/rules/`

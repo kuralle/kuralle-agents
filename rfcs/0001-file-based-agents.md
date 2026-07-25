@@ -254,7 +254,7 @@ generalises that move from knowledge to the whole agent.
 | Portable FS (20 methods) | `FileSystem` | `core/src/types/filesystem.ts` |
 | Backends | `InMemoryFs`, `SqlFileSystem` (DO-SQLite / D1 / R2 / Node / Bun), `libsqlHttpBackend`, `CompositeFileSystem` | `packages/fs` |
 | Agent reads files | `createFsTool` → the `workspace` tool | `fs/src/tool.ts:198` |
-| Skills from the FS | `fsSkillStore(fs)` → `/skills/<n>/SKILL.md` | `fs/src/fs-skill-store.ts:6` |
+| Skills from the FS | `fsSkillStore(fs, roots)` → ordered, last-one-wins skill layers | `fs/src/fs-skill-store.ts:13` |
 | Frontmatter parsers | `parseSkillFrontmatter`, `parseOkfConcept` | `packages/fs/src` |
 | Knowledge → FS | `okfBundleToFs`, `listOkfConcepts` | `fs/src/okf.ts` |
 | workerd-clean root export | shell deliberately at a subpath | `fs/src/index.ts` footer |
@@ -277,7 +277,7 @@ The build therefore has **three lanes**:
 
 With `prose: runtime` the generated config carries no instruction string and no skill bodies;
 `instructions` wires to a loader over the agent's `FileSystem` and `skills` to the already-shipped
-`fsSkillStore`. On CF that filesystem is `SqlFileSystem` over DO SQLite, so pushing a new `agent.md`
+`fsSkillStore`, layering shared roots before the agent root. On CF that filesystem is `SqlFileSystem` over DO SQLite, so pushing a new `agent.md`
 into the DO changes the prompt on the next turn with no deploy.
 
 ### 4.7 Identity is durable state

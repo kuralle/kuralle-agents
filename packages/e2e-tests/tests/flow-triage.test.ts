@@ -23,17 +23,7 @@ async function collectEvents(
   return parts;
 }
 
-// SKIPPED — stale since 0.5.0 (ADR-0005, AI SDK native UIMessageStream default).
-// `collectEvents` here asserts raw `StreamPart` types (`node-enter`, `handoff`,
-// `flow-transition`), but `runtime.run().events` now yields UIMessageStream parts —
-// the observed output is `["custom","done"]`, with kuralle events wrapped as custom
-// data parts. The assertions need rewriting against the current events contract (or
-// the raw-format escape hatch) before this can be un-skipped.
-//
-// It went unnoticed because `@kuralle-agents/e2e-tests` had no `test` script, so the
-// root `bun run --filter '*' test` never ran this file. The script exists now, so the
-// rot is visible rather than silent. Do not delete this suite — fix it.
-describe.skip('v2 offline flow + triage (text Runtime)', () => {
+describe('v2 offline flow + triage (text Runtime)', () => {
   const billing = defineAgent({
     id: 'billing',
     instructions: 'You are the billing specialist. Mention billing in your reply.',
@@ -80,16 +70,25 @@ describe.skip('v2 offline flow + triage (text Runtime)', () => {
 
   it('progresses a flow across two nodes over multiple turns', async () => {
     let agentTurn = 0;
+    let extractionTurn = 0;
+    let userTurn = 0;
     const hostSelect = async () => ({ kind: 'enterFlow' as const, flow: nameFlow });
 
     const driver: ChannelDriver = {
       async runAgentTurn() {
         agentTurn += 1;
         if (agentTurn === 1) {
-          return { text: 'What is your name?', toolResults: [] };
+          return { text: '', toolResults: [] };
+        }
+        return { text: 'Thanks, Jordan.', toolResults: [] };
+      },
+      async runExtraction() {
+        extractionTurn += 1;
+        if (extractionTurn === 1) {
+          return { text: '', toolResults: [] };
         }
         return {
-          text: 'Thanks, Jordan.',
+          text: '',
           toolResults: [
             {
               name: 'submit_name_data',
@@ -100,7 +99,11 @@ describe.skip('v2 offline flow + triage (text Runtime)', () => {
         };
       },
       async awaitUser() {
-        return { type: 'message', input: 'Jordan' };
+        userTurn += 1;
+        return {
+          type: 'message',
+          input: userTurn === 1 ? 'I want to update my name' : 'Jordan',
+        };
       },
     };
 
@@ -145,6 +148,7 @@ describe.skip('v2 offline flow + triage (text Runtime)', () => {
 
   it('routes to a billing specialist via handoff', async () => {
     let calls = 0;
+    let agentTurns = 0;
     const hostSelect = async () => {
       calls += 1;
       return { kind: 'route' as const, agentId: 'billing', reason: 'billing question' };
@@ -152,7 +156,11 @@ describe.skip('v2 offline flow + triage (text Runtime)', () => {
 
     const driver: ChannelDriver = {
       async runAgentTurn() {
-        return { text: 'billing help here', toolResults: [] };
+        agentTurns += 1;
+        return {
+          text: agentTurns === 1 ? '' : 'billing help here',
+          toolResults: [],
+        };
       },
       async awaitUser() {
         return { type: 'message', input: 'more' };

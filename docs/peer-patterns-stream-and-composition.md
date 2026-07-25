@@ -104,9 +104,9 @@ sources: [
 > "Sources are loaded in order, with later sources overriding earlier ones when skills have the same
 > name (last one wins). This enables layering: base -> user -> project -> team skills."
 
-Kuralle's `fsSkillStore(fs, { root })` supports **one** root, no layering, no override semantics.
-Layering is exactly what RFC 0001 needs — a project's `agents/<id>/skills/` should be able to
-override a shared base set without copying files. Cheap to add, directly applicable.
+Kuralle now follows this pattern: `fsSkillStore(fs, roots)` loads roots in order and later roots
+override earlier skills with the same frontmatter `name`. RFC 0001 can layer a project's
+`agents/<id>/skills/` over shared defaults without copying files.
 
 Also worth copying: the middleware "uses backend APIs exclusively (no direct filesystem access),
 making it portable across different storage backends." Kuralle's `fsSkillStore` already takes a
@@ -156,8 +156,8 @@ Recording these so the reshape doesn't regress them:
 | # | Action | Where |
 |---|---|---|
 | 1 | Adopt envelope + named payload types; keep the exhaustive channel map | **revise RFC 0002 §3** |
-| 2 | Layered skill sources (last-one-wins) | RFC 0001, `fsSkillStore` |
+| 2 | ~~Layered skill sources (last-one-wins)~~ — implemented | RFC 0001, `fsSkillStore` |
 | 3 | Never bridge shapes with a cast; name both sides and quarantine the adapter | convention → CONTRIBUTING |
 | 4 | `seq` + replay cursors on the stream | new RFC — real gap, own scope |
 | 5 | Provenance (`from` / `namespace`) on the envelope | new RFC — needed by RFC 0001 subagents |
-| 6 | Decide whether capabilities/processors/hooks stay three mechanisms | investigate **before** RFC 0001 freezes them into three files |
+| 6 | ~~Decide whether capabilities/processors/hooks stay three mechanisms~~ — ADR-0015 | fixed phases + one agent `policies.ts` |

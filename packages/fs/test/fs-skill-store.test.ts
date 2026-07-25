@@ -81,6 +81,51 @@ Beta body content.`,
 
       await expect(store.loadResource('alpha', '../etc')).rejects.toThrow(/Invalid resource path/);
     });
+
+    it('layers ordered roots with last-one-wins collisions', async () => {
+      const fs = new InMemoryFs({
+        '/skills/base/alpha/SKILL.md': `---
+name: alpha
+description: Base alpha.
+---
+
+Base alpha body.`,
+        '/skills/base/alpha/references/source.md': 'base source',
+        '/skills/base/beta/SKILL.md': `---
+name: beta
+description: Base beta.
+---
+
+Base beta body.`,
+        '/skills/project/alpha/SKILL.md': `---
+name: alpha
+description: Project alpha.
+---
+
+Project alpha body.`,
+        '/skills/project/alpha/references/source.md': 'project source',
+        '/skills/project/gamma/SKILL.md': `---
+name: gamma
+description: Project gamma.
+---
+
+Project gamma body.`,
+      });
+
+      const store = fsSkillStore(fs, ['/skills/base', '/skills/project']);
+
+      expect(await store.list()).toEqual([
+        { name: 'alpha', description: 'Project alpha.' },
+        { name: 'beta', description: 'Base beta.' },
+        { name: 'gamma', description: 'Project gamma.' },
+      ]);
+      expect(await store.loadBody('alpha')).toBe('Project alpha body.');
+      expect(await store.loadResource('alpha', 'references/source.md')).toBe('project source');
+      expect(await store.loadBody('beta')).toBe('Base beta body.');
+
+      const reversed = fsSkillStore(fs, ['/skills/project', '/skills/base']);
+      expect(await reversed.loadBody('alpha')).toBe('Base alpha body.');
+    });
   });
 
   describe('defineSkill', () => {
