@@ -1,11 +1,21 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreBinaries": ["napi"],
+  "ignoreBinaries": [
+    "napi"
+  ],
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.{ts,mjs,js}"],
-      "project": ["scripts/**/*.{ts,mjs,js}"],
-      "ignoreDependencies": ["wrangler", "@eslint/js", "ws"]
+      "entry": [
+        "scripts/*.{ts,mjs,js}"
+      ],
+      "project": [
+        "scripts/**/*.{ts,mjs,js}"
+      ],
+      "ignoreDependencies": [
+        "wrangler",
+        "@eslint/js",
+        "ws"
+      ]
     },
     "packages/*": {
       "entry": [
@@ -25,11 +35,18 @@
         "**/*.test.{ts,mjs}",
         "**/*.bench.{ts,mjs}"
       ],
-      "project": ["**/*.{ts,tsx,mjs,js}"]
+      "project": [
+        "**/*.{ts,tsx,mjs,js}"
+      ]
     },
     "packages/cf-agent/examples/*": {
-      "entry": ["src/**/*.{ts,tsx}", "*.config.{ts,js,mjs}"],
-      "project": ["**/*.{ts,tsx}"]
+      "entry": [
+        "src/**/*.{ts,tsx}",
+        "*.config.{ts,js,mjs}"
+      ],
+      "project": [
+        "**/*.{ts,tsx}"
+      ]
     },
     "apps/docs": {
       "entry": [
@@ -38,16 +55,30 @@
         "src/**/*.astro",
         "src/examples/**/*.{ts,tsx}"
       ],
-      "project": ["src/**/*.{ts,tsx}"],
-      "ignoreDependencies": ["typedoc-plugin-zod", "typedoc-plugin-frontmatter", "tailwindcss"]
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ],
+      "ignoreDependencies": [
+        "typedoc-plugin-zod",
+        "typedoc-plugin-frontmatter",
+        "tailwindcss"
+      ]
     },
     "apps/playground/_shared": {
-      "entry": ["**/*.{ts,mjs,js}"],
-      "project": ["**/*.{ts,mjs,js}"]
+      "entry": [
+        "**/*.{ts,mjs,js}"
+      ],
+      "project": [
+        "**/*.{ts,mjs,js}"
+      ]
     },
     "apps/playground/*": {
-      "entry": ["**/*.{ts,tsx,mjs,js}"],
-      "project": ["**/*.{ts,tsx,mjs,js}"],
+      "entry": [
+        "**/*.{ts,tsx,mjs,js}"
+      ],
+      "project": [
+        "**/*.{ts,tsx,mjs,js}"
+      ],
       "ignoreDependencies": [
         "@ai-sdk/google",
         "@ai-sdk/openai",
@@ -57,5 +88,9 @@
         "ai"
       ]
     }
-  }
+  },
+  "ignoreDependencies": [
+    "bun-types",
+    "cloudflare"
+  ]
 }
