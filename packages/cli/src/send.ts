@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import type { StreamPart } from '@kuralle-agents/core';
 import type { BuildRuntime } from './agentRuntime.js';
 import { fileSessionStore } from './fileStore.js';
+import { fileTraceStore } from './fileTraceStore.js';
 
 function flag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name);
@@ -25,7 +26,12 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
     .trim();
 
   const store = fileSessionStore(storePath);
-  const demo = buildRuntime(sessionId, store);
+  // Traces must be file-backed too. `send` is one turn per process, so a MemoryTraceStore
+  // (what the loader defaults to whenever a session store is supplied) is discarded on
+  // exit and `kuralle trace --store` finds nothing — the exact sidecar `chat --store`
+  // writes and the CLI guide promises for both commands.
+  const traces = fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json');
+  const demo = buildRuntime(sessionId, store, traces);
 
   async function readState() {
     const s = await store.get(sessionId);

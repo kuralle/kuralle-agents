@@ -12,7 +12,35 @@
  * `virtualShell()` returns { fs, shell } over one JustBashFs, so the shell and the
  * FileSystem are the same tree — a file written by the agent is visible to `cat`.
  *
- * Run: KURALLE_EXAMPLE_PROVIDER=openai bun run packages/fs/examples/okf-over-bash.ts
+ * ## Run it standalone (self-verifying smoke)
+ *
+ *     OPENAI_API_KEY=... bun run packages/fs/examples/okf-over-bash.ts
+ *
+ * Prints the mount check, runs one live turn, and exits non-zero if the agent fails
+ * to answer from the bundle.
+ *
+ * ## Run it with the `kuralle` CLI
+ *
+ * This module default-exports the agent, so the CLI can drive it with `--agent`. The
+ * CLI supplies the model (`--model`, or `OPENAI_MODEL`), which is why no model is set
+ * here. Use `bun` — plain node cannot `import()` a `.ts` file.
+ *
+ *     # interactive TUI with the live trace panel
+ *     bun packages/cli/dist/cli.js chat \
+ *       --agent packages/fs/examples/okf-over-bash.ts \
+ *       --model gpt-4o-mini --trace --store runs/okf.json
+ *
+ *     # multi-turn, one shell command per turn, against a persisted session
+ *     bun packages/cli/dist/cli.js send --agent packages/fs/examples/okf-over-bash.ts \
+ *       --model gpt-4o-mini --session okf --store runs/okf.json "What is in this bundle?"
+ *     bun packages/cli/dist/cli.js send ... "How is WAU defined?"
+ *
+ *     # inspect what the turns actually did
+ *     bun packages/cli/dist/cli.js trace okf --store runs/okf.json --last
+ *     bun packages/cli/dist/cli.js trace okf --store runs/okf.json --web --port 4319
+ *
+ * See the CLI guide: apps/docs/src/content/docs/guides/cli.mdx
+ *
  * Spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
  */
 import { createRuntime, defineAgent, createShellTool } from '@kuralle-agents/core';
@@ -51,10 +79,22 @@ async function collect(handle: TurnHandle): Promise<{ text: string; parts: Strea
   return { text, parts };
 }
 
+// The whole mount: an OKF bundle is a Record<path, markdown>, which is exactly what
+// just-bash seeds from. Nothing OKF-aware happens here. Module scope so the CLI gets
+// the same tree the standalone run verifies.
+const { fs, shell } = virtualShell({ initialFiles: SALES_BUNDLE });
+
+/**
+ * Default export = the agent, the shape `kuralle --agent` resolves first. No `model`:
+ * the CLI fills it from `--model` / `OPENAI_MODEL`, and `main()` supplies one directly.
+ */
+export default defineAgent({
+  id: 'okf-bash',
+  instructions: INSTRUCTIONS,
+  tools: { bash: createShellTool({ shell }) },
+});
+
 async function main(): Promise<void> {
-  // The whole mount: an OKF bundle is a Record<path, markdown>, which is exactly
-  // what just-bash seeds from. Nothing OKF-aware happens here.
-  const { fs, shell } = virtualShell({ initialFiles: SALES_BUNDLE });
 
   // Sanity: the same tree is readable both ways before the model sees it.
   const viaShell = await shell.exec('ls /tables');
@@ -107,4 +147,5 @@ async function main(): Promise<void> {
   console.log('\nPASS: an OKF bundle answered a real question through nothing but bash.');
 }
 
-await main();
+// Only self-run when executed directly — the CLI imports this module for its export.
+if (import.meta.main) await main();
