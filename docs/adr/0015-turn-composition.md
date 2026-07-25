@@ -29,9 +29,16 @@ security and persistence order implicit. Hooks are not a subset of either becaus
 lifecycle events rather than decide content.
 
 The source audit also found two hook types. `Runtime` and `HarnessConfig` use the five-method
-`types/hooks.ts#Hooks`. The 21-method `types/runtime.ts#HarnessHooks` is used by the older
-`createFoundation`/`HookRunner` surface; most of those methods are not invoked by `Runtime`.
+`types/hooks.ts#Hooks`. The 21-method `types/runtime.ts#HarnessHooks` **was** used by the older
+`createFoundation`/`HookRunner` surface; most of those methods were never invoked by `Runtime`.
 RFC-0001 must not present that legacy interface as runtime turn composition.
+
+> **Update (2026-07-25, after this ADR was accepted).** That legacy surface has since been
+> **deleted**: `HarnessHooks`, `HookRunner`, `hooks/helpers.ts`, the three `hooks/builtin/*`
+> implementations and five zero-consumer `foundation/` files are gone as of the 1.0.0 major.
+> Measurement showed 5 of its 21 methods could ever fire and nothing constructed a `HookRunner`.
+> Observation now belongs to `TraceSink`/`TraceStore`. The decision below is unchanged — this
+> paragraph is preserved as the reasoning that led to it, not as a description of current code.
 
 ## Decision
 
