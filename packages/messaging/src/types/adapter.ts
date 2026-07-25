@@ -5,7 +5,7 @@
  * router config, and stream mapper options.
  */
 
-import type { RuntimeLike, HarnessStreamPart, ResolvedSelection, UserInputContent, InjectableTimer } from '@kuralle-agents/core';
+import type { RuntimeLike, StreamPart, ResolvedSelection, UserInputContent, InjectableTimer } from '@kuralle-agents/core';
 import type { OutboundPipeline } from '../adapter/outbound-pipeline.js';
 import type { WindowStore } from '../adapter/window-store.js';
 import type { ConsentStore } from '../adapter/consent-store.js';
@@ -38,7 +38,7 @@ export interface ResponseContext {
  * Custom mapper that controls how Kuralle stream output is sent to the platform.
  */
 export interface ResponseMapper {
-  mapResponse(parts: HarnessStreamPart[], context: ResponseContext): Promise<void>;
+  mapResponse(parts: StreamPart[], context: ResponseContext): Promise<void>;
 }
 
 /** Error context provided to the onError callback. */

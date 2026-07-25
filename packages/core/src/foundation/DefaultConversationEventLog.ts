@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { HarnessStreamPart, RunContext, Session } from '../types/index.js';
+import type { StreamPart, RunContext, Session } from '../types/index.js';
 import type { SessionStore } from '../session/SessionStore.js';
 import type { ConversationEventLog } from './ConversationEventLog.js';
 import { isRecord } from '../utils/isRecord.js';
@@ -14,9 +14,8 @@ const SESSION_TURN_KEY = '__ariaSessionTurn';
 const MAX_ENTRIES = 2000;
 
 /** Stream part types that trigger a checkpoint save. */
-const CHECKPOINT_TYPES = new Set<HarnessStreamPart['type']>([
+const CHECKPOINT_TYPES = new Set<StreamPart['type']>([
   'tool-result',
-  'tool-error',
   'flow-transition',
 ]);
 
@@ -40,12 +39,12 @@ export class DefaultConversationEventLog implements ConversationEventLog {
     this.sessionStore = config.sessionStore;
   }
 
-  record(context: RunContext, part: HarnessStreamPart): void {
+  record(context: RunContext, part: StreamPart): void {
     // Fast path: text-delta only accumulates text — no UUID, no base object
     if (part.type === 'text-delta') {
       const prevRaw = context.session.workingMemory[ASSISTANT_TEXT_KEY];
       const prev = typeof prevRaw === 'string' ? prevRaw : '';
-      context.session.workingMemory[ASSISTANT_TEXT_KEY] = prev + part.delta;
+      context.session.workingMemory[ASSISTANT_TEXT_KEY] = prev + part.payload.delta;
       return;
     }
 
@@ -58,34 +57,22 @@ export class DefaultConversationEventLog implements ConversationEventLog {
     };
 
     switch (part.type) {
-      case 'input':
-        this.appendEvent(context, { ...base, type: 'user', text: part.text, userId: part.userId });
-        return;
       case 'tool-call':
         this.appendEvent(context, {
           ...base,
           type: 'tool_call',
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          args: this.toEventLogValue(part.args),
+          toolCallId: part.payload.toolCallId,
+          toolName: part.payload.toolName,
+          args: this.toEventLogValue(part.payload.args),
         });
         return;
       case 'tool-result':
         this.appendEvent(context, {
           ...base,
           type: 'tool_result',
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          result: this.toEventLogValue(part.result),
-        });
-        return;
-      case 'tool-error':
-        this.appendEvent(context, {
-          ...base,
-          type: 'tool_error',
-          toolCallId: part.toolCallId,
-          toolName: part.toolName,
-          error: part.error,
+          toolCallId: part.payload.toolCallId,
+          toolName: part.payload.toolName,
+          result: this.toEventLogValue(part.payload.result),
         });
         return;
       case 'flow-transition':
@@ -93,8 +80,8 @@ export class DefaultConversationEventLog implements ConversationEventLog {
           ...base,
           type: 'transition',
           kind: 'flow',
-          from: part.from,
-          to: part.to,
+          from: part.payload.from,
+          to: part.payload.to,
         });
         return;
       case 'handoff':
@@ -102,9 +89,9 @@ export class DefaultConversationEventLog implements ConversationEventLog {
           ...base,
           type: 'transition',
           kind: 'handoff',
-          from: part.from,
-          to: part.to,
-          reason: part.reason,
+          from: context.agentId,
+          to: part.payload.targetAgent,
+          reason: part.payload.reason,
         });
         return;
       case 'turn-end':
@@ -115,9 +102,6 @@ export class DefaultConversationEventLog implements ConversationEventLog {
         return;
       case 'error':
         this.flushAssistantText(context, 'error');
-        return;
-      case 'text-clear':
-        delete context.session.workingMemory[ASSISTANT_TEXT_KEY];
         return;
       default:
         return;
@@ -141,7 +125,7 @@ export class DefaultConversationEventLog implements ConversationEventLog {
     }
   }
 
-  shouldCheckpoint(part: HarnessStreamPart): boolean {
+  shouldCheckpoint(part: StreamPart): boolean {
     return CHECKPOINT_TYPES.has(part.type);
   }
 

@@ -48,7 +48,7 @@ See `packages/messaging-meta/examples/whatsapp-server/README.md` and the [Engage
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/chat` | Single-turn JSON response |
-| `POST` | `/api/chat/sse` | AI SDK `UIMessageStream` (default, `useChat`-compatible). `?format=raw` for legacy `HarnessStreamPart` JSON-SSE |
+| `POST` | `/api/chat/sse` | AI SDK `UIMessageStream` (default, `useChat`-compatible). `?format=raw` for legacy `StreamPart` JSON-SSE |
 | `POST` | `/api/chat/stream` | Chunked text stream |
 | `GET` | `/agents/chat/:sessionId` | WebSocket widget endpoint |
 | `GET` | `/ws/:sessionId` | WebSocket turn endpoint |
@@ -124,7 +124,7 @@ Kuralle flow/safety/interactive events arrive as `data-kuralle-*` parts — read
 
 ### Raw JSON-SSE (`?format=raw`)
 
-Non-UI consumers that parsed `HarnessStreamPart` JSON from 0.4.x append `?format=raw`:
+Non-UI consumers that parsed `StreamPart` JSON from 0.4.x append `?format=raw`:
 
 ```bash
 curl -N -X POST 'http://localhost:3000/api/chat/sse?format=raw' \
@@ -146,7 +146,7 @@ app.post('/chat', async (c) => {
 });
 ```
 
-For raw `HarnessStreamPart` JSON-SSE (curl, custom transports):
+For raw `StreamPart` JSON-SSE (curl, custom transports):
 
 ```typescript
 return new Response(handle.toResponseStream('sse'), {

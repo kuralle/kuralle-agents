@@ -43,8 +43,8 @@ async function runTurn(sessionId: string, input: string): Promise<string> {
   let text = '';
   const handle = runtime.run({ sessionId, input, userId });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') text += part.delta;
-    if (part.type === 'tool-call') console.log(`  [tool] ${part.toolName}`);
+    if (part.type === 'text-delta') text += part.payload.delta;
+    if (part.type === 'tool-call') console.log(`  [tool] ${part.payload.toolName}`);
   }
   await handle;
   return text.trim();

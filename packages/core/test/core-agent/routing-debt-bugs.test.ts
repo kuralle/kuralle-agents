@@ -12,7 +12,7 @@ import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { HostGuardVerdict } from '../../src/runtime/select.js';
 import type { ChannelDriver, TurnControl } from '../../src/types/channel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import { buildAgentReplyNode } from '../../src/runtime/agentReply.js';
 import { buildHostControlTools } from '../../src/runtime/hostControlTools.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
@@ -35,7 +35,7 @@ function fakeDriver(turn: { text: string; control?: TurnControl }): ChannelDrive
   } as ChannelDriver;
 }
 
-async function makeCtx(slug: string, emit: (p: HarnessStreamPart) => void = () => {}) {
+async function makeCtx(slug: string, emit: (p: StreamPart) => void = () => {}) {
   const { session, runStore, runState } = await setupDurableHarness(slug, slug);
   runState.messages = [{ role: 'user', content: 'I want to book an appointment' }];
   const ctx = await createRunContext({
@@ -50,10 +50,10 @@ async function makeCtx(slug: string, emit: (p: HarnessStreamPart) => void = () =
   return { ctx, runState };
 }
 
-function hostGuardEvents(parts: HarnessStreamPart[]) {
+function hostGuardEvents(parts: StreamPart[]) {
   return parts.filter(
-    (p): p is Extract<HarnessStreamPart, { type: 'custom' }> =>
-      p.type === 'custom' && p.name === 'host-guard',
+    (p): p is Extract<StreamPart, { type: 'custom' }> =>
+      p.type === 'custom' && p.payload.name === 'host-guard',
   );
 }
 
@@ -65,7 +65,7 @@ describe('routing guard debt fixes', () => {
       classifyCalls += 1;
       return { action: 'keep' };
     };
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const { ctx, runState } = await makeCtx('rd01', (p) => parts.push(p));
 
     const result = await hostLoop({
@@ -81,7 +81,7 @@ describe('routing guard debt fixes', () => {
     const assistant = runState.messages.filter((m) => m.role === 'assistant');
     expect(assistant.at(-1)?.content).toContain('Friday');
     const guardEvt = hostGuardEvents(parts)[0];
-    expect(guardEvt?.data).toMatchObject({ invoked: false, reason: 'answered' });
+    expect(guardEvt?.payload.data).toMatchObject({ invoked: false, reason: 'answered' });
   });
 
   it('RD-01: main-control turn makes ZERO classifier calls', async () => {
@@ -91,7 +91,7 @@ describe('routing guard debt fixes', () => {
       classifyCalls += 1;
       return { action: 'enterFlow', flowName: 'book' };
     };
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const { ctx, runState } = await makeCtx('rd01b', (p) => parts.push(p));
 
     await hostLoop({
@@ -107,7 +107,7 @@ describe('routing guard debt fixes', () => {
 
     expect(classifyCalls).toBe(0);
     const guardEvt = hostGuardEvents(parts)[0];
-    expect(guardEvt?.data).toMatchObject({ invoked: false, reason: 'main-control' });
+    expect(guardEvt?.payload.data).toMatchObject({ invoked: false, reason: 'main-control' });
   });
 
   it('RD-01: empty turn calls classifier once and routes', async () => {
@@ -117,7 +117,7 @@ describe('routing guard debt fixes', () => {
       classifyCalls += 1;
       return { action: 'enterFlow', flowName: 'book', confidence: 1 };
     };
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const { ctx, runState } = await makeCtx('rd01c', (p) => parts.push(p));
 
     const result = await hostLoop({
@@ -132,7 +132,7 @@ describe('routing guard debt fixes', () => {
     expect(result.kind).toBe('turnComplete');
     expect(runState.state.__completedFlows).toContain('book');
     const guardEvt = hostGuardEvents(parts)[0];
-    expect(guardEvt?.data).toMatchObject({
+    expect(guardEvt?.payload.data).toMatchObject({
       invoked: true,
       reason: 'empty-routed',
       verdict: 'enterFlow',

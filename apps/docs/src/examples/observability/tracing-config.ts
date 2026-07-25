@@ -27,7 +27,7 @@ const runtime = createRuntime({
 
 const handle = runtime.run({ input: 'Where is my order?', sessionId: 'session-42' });
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.delta);
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
 }
 await handle;
 

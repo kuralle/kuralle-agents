@@ -40,13 +40,13 @@ async function main() {
   if (!sessionId) sessionId = crypto.randomUUID();
     const handle = runtime.run({ input: line, sessionId });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') process.stdout.write(part.delta);
+      if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
       if (part.type === 'tool-call') {
-        const args = part.args as { query?: string; filter?: unknown };
+        const args = part.payload.args as { query?: string; filter?: unknown };
         console.log(`\n  [search] query="${args?.query}" filter=${JSON.stringify(args?.filter ?? null)}`);
       }
       if (part.type === 'tool-result') {
-        const results = (part.result as { results?: { score?: number }[] })?.results ?? [];
+        const results = (part.payload.result as { results?: { score?: number }[] })?.results ?? [];
         console.log(`  [results] ${results.length} chunks found (top score: ${results[0]?.score?.toFixed(3) ?? 'n/a'})`);
       }
     }

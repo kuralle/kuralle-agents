@@ -10,7 +10,7 @@ import type {
   Session,
   Span,
   ToolCallRecord,
-  HarnessStreamPart,
+  StreamPart,
 } from '../../types/index.js';
 import type { Metrics, SessionEndMetadata, SessionTrace, TraceStreamEvent, TurnUsage } from '../../types/telemetry.js';
 
@@ -512,7 +512,7 @@ export function createObservabilityHooks(config?: ObservabilityConfig): HarnessH
       );
     },
 
-    onStreamPart: async (ctx: RunContext, part: HarnessStreamPart) => {
+    onStreamPart: async (ctx: RunContext, part: StreamPart) => {
       if (!ctx?.session?.id) return;
       const root = sessionRoots.get(ctx.session.id);
       if (!root) return;
@@ -521,14 +521,19 @@ export function createObservabilityHooks(config?: ObservabilityConfig): HarnessH
       if (part.type === 'flow-transition') {
         const ts = Date.now();
         st.flowTransitions.push({
-          from: part.from,
-          to: part.to,
+          from: part.payload.from,
+          to: part.payload.to,
           timestamp: ts,
         });
-        emitTrace({ type: 'flow:transition', from: part.from, to: part.to, timestamp: ts });
+        emitTrace({
+          type: 'flow:transition',
+          from: part.payload.from,
+          to: part.payload.to,
+          timestamp: ts,
+        });
         const span = tracer.startSpan(
           'flow.transition',
-          { from: part.from, to: part.to },
+          { from: part.payload.from, to: part.payload.to },
           root.id,
         );
         pushSpan(ctx.session.id, span);
@@ -538,7 +543,7 @@ export function createObservabilityHooks(config?: ObservabilityConfig): HarnessH
           parentId: root.id,
           name: span.name,
           timestamp: span.startTime,
-          attributes: { from: part.from, to: part.to },
+          attributes: { from: part.payload.from, to: part.payload.to },
         });
         tracer.endSpan(span, 'success');
         const flowDur = Math.max(0, (span.endTime ?? Date.now()) - span.startTime);
@@ -547,28 +552,47 @@ export function createObservabilityHooks(config?: ObservabilityConfig): HarnessH
 
       if (part.type === 'interrupted') {
         st.voice.bargeInCount += 1;
-        tracer.addSpanEvent(root, 'voice.barge_in', { reason: part.reason });
+        tracer.addSpanEvent(root, 'voice.barge_in', { reason: part.payload.reason });
       }
 
       if (part.type === 'custom') {
-        if (part.name === 'voice.reconfigure' || part.name === 'realtime.reconfigure') {
+        if (
+          part.payload.name === 'voice.reconfigure' ||
+          part.payload.name === 'realtime.reconfigure'
+        ) {
           st.voice.reconfigureCount += 1;
           tracer.addSpanEvent(root, 'voice.reconfigure', {});
         }
-        if (part.name === 'voice.audio_in' && part.data && typeof part.data === 'object') {
-          const bytes = (part.data as { bytes?: number }).bytes;
+        if (
+          part.payload.name === 'voice.audio_in' &&
+          part.payload.data &&
+          typeof part.payload.data === 'object'
+        ) {
+          const bytes = (part.payload.data as { bytes?: number }).bytes;
           if (typeof bytes === 'number') st.voice.totalAudioInBytes += bytes;
         }
-        if (part.name === 'voice.audio_out' && part.data && typeof part.data === 'object') {
-          const bytes = (part.data as { bytes?: number }).bytes;
+        if (
+          part.payload.name === 'voice.audio_out' &&
+          part.payload.data &&
+          typeof part.payload.data === 'object'
+        ) {
+          const bytes = (part.payload.data as { bytes?: number }).bytes;
           if (typeof bytes === 'number') st.voice.totalAudioOutBytes += bytes;
         }
-        if (part.name === 'voice.time_to_first_audio' && part.data && typeof part.data === 'object') {
-          const ms = (part.data as { ms?: number }).ms;
+        if (
+          part.payload.name === 'voice.time_to_first_audio' &&
+          part.payload.data &&
+          typeof part.payload.data === 'object'
+        ) {
+          const ms = (part.payload.data as { ms?: number }).ms;
           if (typeof ms === 'number') st.voice.timeToFirstAudioMs.push(ms);
         }
-        if (part.name === 'flow.extraction.submission' && part.data && typeof part.data === 'object') {
-          const d = part.data as {
+        if (
+          part.payload.name === 'flow.extraction.submission' &&
+          part.payload.data &&
+          typeof part.payload.data === 'object'
+        ) {
+          const d = part.payload.data as {
             node?: string;
             fieldsAccepted?: string[];
             fieldsRejected?: string[];
@@ -579,8 +603,12 @@ export function createObservabilityHooks(config?: ObservabilityConfig): HarnessH
             fieldsRejected: Array.isArray(d.fieldsRejected) ? d.fieldsRejected.map(String) : [],
           });
         }
-        if (part.name === 'flow.extraction.update' && part.data && typeof part.data === 'object') {
-          const d = part.data as {
+        if (
+          part.payload.name === 'flow.extraction.update' &&
+          part.payload.data &&
+          typeof part.payload.data === 'object'
+        ) {
+          const d = part.payload.data as {
             nodeId?: string;
             collected?: Record<string, unknown>;
             missing?: unknown[];

@@ -14,7 +14,7 @@ Peers: `@kuralle-agents/core`, `ai@^6`.
 
 `createKuralleChatRouter` mounts a complete set of endpoints onto a Hono app — HTTP chat, SSE streaming, WebSocket widget, session management, audit, CSAT, and a manual compression trigger — wired to any `RuntimeLike` instance.
 
-**As of 0.5.0, `POST /api/chat/sse` defaults to an AI SDK `UIMessageStream`** — a `useChat` client works with zero bridge code. Raw `HarnessStreamPart` JSON-SSE is opt-in via `?format=raw`.
+**As of 0.5.0, `POST /api/chat/sse` defaults to an AI SDK `UIMessageStream`** — a `useChat` client works with zero bridge code. Raw `StreamPart` JSON-SSE is opt-in via `?format=raw`.
 
 **Key exports:**
 
@@ -98,11 +98,11 @@ const server = serve({ fetch: app.fetch, port: 3000 });
 injectWebSocket(server);
 ```
 
-`POST /api/chat/sse` accepts `useChat`-shaped bodies (`{ messages: UIMessage[] }`) and returns a native `UIMessageStream`. No `HarnessStreamPart` → `UIMessageChunk` bridge required.
+`POST /api/chat/sse` accepts `useChat`-shaped bodies (`{ messages: UIMessage[] }`) and returns a native `UIMessageStream`. No `StreamPart` → `UIMessageChunk` bridge required.
 
 ## Raw JSON-SSE (`?format=raw`)
 
-Non-UI consumers (curl, Studio, custom transports) that parsed raw `HarnessStreamPart` JSON from 0.4.x should append `?format=raw`:
+Non-UI consumers (curl, Studio, custom transports) that parsed raw `StreamPart` JSON from 0.4.x should append `?format=raw`:
 
 ```bash
 curl -N -X POST 'http://localhost:3000/api/chat/sse?format=raw' \
@@ -117,7 +117,7 @@ Or use `createKuralleSseChatRouter` for a router that always emits raw JSON-SSE 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/chat` | Single-turn JSON response |
-| `POST` | `/api/chat/sse` | **Default:** AI SDK `UIMessageStream` (`useChat`). **`?format=raw`:** legacy `HarnessStreamPart` JSON-SSE |
+| `POST` | `/api/chat/sse` | **Default:** AI SDK `UIMessageStream` (`useChat`). **`?format=raw`:** legacy `StreamPart` JSON-SSE |
 | `POST` | `/api/chat/stream` | Chunked plain-text stream |
 | `GET`  | `/agents/chat/:sessionId` | WebSocket widget endpoint |
 | `GET`  | `/ws/:sessionId` | WebSocket turn endpoint |

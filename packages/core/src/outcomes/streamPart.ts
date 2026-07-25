@@ -1,12 +1,10 @@
-import type { HarnessStreamPart } from '../types/voice.js';
+import type { StreamPart } from '../types/stream.js';
 import type { ConversationOutcomeRecord } from './types.js';
 
-export function toConversationOutcomeStreamPart(record: ConversationOutcomeRecord): HarnessStreamPart {
+export function toConversationOutcomeStreamPart(record: ConversationOutcomeRecord): StreamPart {
   return {
+    channel: 'client',
     type: 'conversation-outcome',
-    outcome: record.outcome,
-    ...(record.reason ? { reason: record.reason } : {}),
-    markedBy: record.markedBy,
+    payload: { outcome: record.outcome },
   };
 }
-

@@ -69,8 +69,8 @@ not a method) and you can `await handle` for the final result:
 const handle = runtime.run({ input: 'Hi, do you sell ibuprofen?' });
 
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.delta);
-  if (part.type === 'done') console.log('\nsession:', part.sessionId);
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+  if (part.type === 'done') console.log('\nsession:', part.payload.sessionId);
 }
 await handle;
 ```

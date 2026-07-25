@@ -6,7 +6,7 @@ import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { HostGuardVerdict } from '../../src/runtime/select.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { buildAgentReplyNode } from '../../src/runtime/agentReply.js';
@@ -166,7 +166,7 @@ describe('guard does not override a substantive answer', () => {
   }
 
   async function runWithGuard(answerText: string) {
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness();
     const ctx = await createRunContext({
       session,
@@ -279,7 +279,7 @@ describe('strict dispatch flush-on-keep', () => {
         }),
       };
     });
-    const events: HarnessStreamPart[] = [];
+    const events: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness('strict-route', 'strict-route');
     const ctx = await createRunContext({
       session,

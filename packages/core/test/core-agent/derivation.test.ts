@@ -154,7 +154,7 @@ describe('defineAgent derivation by field presence', () => {
       model: stubModel,
       emit: (part) => {
         if (part.type === 'flow-enter') {
-          parts.push(part.flow);
+          parts.push(part.payload.flow);
         }
       },
     });

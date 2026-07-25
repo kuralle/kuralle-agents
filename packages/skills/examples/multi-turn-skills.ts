@@ -56,8 +56,8 @@ async function turn(n: number, input: string) {
   const toolCalls: string[] = [];
   let text = '';
   for await (const ev of handle.events) {
-    if (ev.type === 'text-delta') text += ev.delta;
-    if (ev.type === 'tool-call') toolCalls.push(ev.toolName);
+    if (ev.type === 'text-delta') text += ev.payload.delta;
+    if (ev.type === 'tool-call') toolCalls.push(ev.payload.toolName);
   }
   await handle;
   const session = await store.get(sessionId);

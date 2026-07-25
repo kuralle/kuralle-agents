@@ -1,16 +1,16 @@
 import { createUIMessageStreamResponse } from 'ai';
 import { harnessToUIMessageStream } from '../ai-sdk/uiMessageStream.js';
-import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
+import type { StreamPart, TurnHandle } from '../types/stream.js';
 
 export interface EventBus {
-  emit(part: HarnessStreamPart): void;
-  events(): AsyncIterable<HarnessStreamPart>;
+  emit(part: StreamPart): void;
+  events(): AsyncIterable<StreamPart>;
   close(): void;
 }
 
 export function createEventBus(): EventBus {
-  const events: HarnessStreamPart[] = [];
-  const waiters: Array<(part: HarnessStreamPart | null) => void> = [];
+  const events: StreamPart[] = [];
+  const waiters: Array<(part: StreamPart | null) => void> = [];
   let closed = false;
 
   const wakeAll = (): void => {
@@ -19,14 +19,14 @@ export function createEventBus(): EventBus {
     }
   };
 
-  const emit = (part: HarnessStreamPart): void => {
+  const emit = (part: StreamPart): void => {
     events.push(part);
     for (const wake of waiters.splice(0)) {
       wake(part);
     }
   };
 
-  async function* eventsIterator(): AsyncIterable<HarnessStreamPart> {
+  async function* eventsIterator(): AsyncIterable<StreamPart> {
     let index = 0;
     while (true) {
       while (index < events.length) {
@@ -36,7 +36,7 @@ export function createEventBus(): EventBus {
       if (closed) {
         break;
       }
-      await new Promise<HarnessStreamPart | null>((resolve) => {
+      await new Promise<StreamPart | null>((resolve) => {
         waiters.push(resolve);
       });
     }
@@ -86,7 +86,7 @@ export function createTurnHandle(options: TurnHandleOptions): TurnHandle {
 }
 
 function createResponseStream(
-  events: AsyncIterable<HarnessStreamPart>,
+  events: AsyncIterable<StreamPart>,
   format: 'sse' | 'ndjson',
 ): ReadableStream {
   const encoder = new TextEncoder();

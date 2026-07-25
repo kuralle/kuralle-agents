@@ -43,7 +43,7 @@ const runtime = createRuntime({
 
 const handle = runtime.run({ input: 'Hello', sessionId: 'demo' });
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.delta);
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
 }
 await handle;
 ```
@@ -221,7 +221,7 @@ const handle = runtime.run({
   sessionId: 'demo',
 });
 for await (const part of handle.events) {
-  if (part.type === 'text-delta') process.stdout.write(part.delta);
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
 }
 await handle;
 ```
@@ -260,7 +260,7 @@ See [standalone-agent.ts](../examples/agents/standalone-agent.ts) (Example 4) fo
 - `AgentConfig` — Agent configuration returned by `defineAgent`
 - `Route`, `RoutingPolicy` — Routing declarations on an agent
 - `Flow`, `FlowNode` — Flow graph types from `defineFlow` and node builders
-- `HarnessStreamPart` — Stream event union (`text-delta`, `handoff`, `flow-transition`, etc.)
+- `StreamPart` — Stream event union (`text-delta`, `handoff`, `flow-transition`, etc.)
 - `TurnHandle` — Return value of `runtime.run`; async iterable via `.events`
 - `ToolExecutionOptions`, `ToolExecutionContext` — Tool execution context
 - `getRuntimeFromContext()` — Read runtime from tool context when available

@@ -9,7 +9,7 @@ import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
 import type { AgentConfig } from '../../src/authoring/defineAgent.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 export function loadExampleEnv(importMetaUrl: string): void {
   const dir = dirname(fileURLToPath(importMetaUrl));
@@ -105,7 +105,7 @@ export async function runV2Conversation(opts: {
   prompts: string[];
   model?: LanguageModel;
   expectTerminal?: boolean;
-  onPart?: (part: HarnessStreamPart) => void;
+  onPart?: (part: StreamPart) => void;
 }): Promise<{ sessionId: string; transcript: string[]; flowEnded: boolean }> {
   const lm = opts.model ? { model: opts.model, label: 'custom' } : requireLiveModel();
   const agents = opts.agents ?? [opts.agent];
@@ -135,20 +135,20 @@ export async function runV2Conversation(opts: {
 
     for await (const part of handle.events) {
       opts.onPart?.(part);
-      if (part.type === 'text-delta') response += part.delta;
-      if (part.type === 'node-enter') console.log(`[Node] ${part.nodeName}`);
-      if (part.type === 'flow-transition') console.log(`[Transition] ${part.from} -> ${part.to}`);
-      if (part.type === 'flow-enter') console.log(`[Flow] ${part.flow}`);
-      if (part.type === 'handoff') console.log(`[Handoff] ${part.targetAgent} (${part.reason ?? ''})`);
+      if (part.type === 'text-delta') response += part.payload.delta;
+      if (part.type === 'node-enter') console.log(`[Node] ${part.payload.nodeName}`);
+      if (part.type === 'flow-transition') console.log(`[Transition] ${part.payload.from} -> ${part.payload.to}`);
+      if (part.type === 'flow-enter') console.log(`[Flow] ${part.payload.flow}`);
+      if (part.type === 'handoff') console.log(`[Handoff] ${part.payload.targetAgent} (${part.payload.reason ?? ''})`);
       if (part.type === 'flow-end') {
-        flowTerminal = { flow: part.flow, reason: part.reason };
-        console.log(`[Flow end] ${part.flow} (${part.reason})`);
+        flowTerminal = { flow: part.payload.flow, reason: part.payload.reason };
+        console.log(`[Flow end] ${part.payload.flow} (${part.payload.reason})`);
       }
-      if (part.type === 'tool-call') console.log(`[Tool call] ${part.toolName}`);
+      if (part.type === 'tool-call') console.log(`[Tool call] ${part.payload.toolName}`);
       if (part.type === 'tool-result') {
-        console.log(`[Tool result] ${part.toolName}`);
-        const result = part.result as { endCall?: boolean } | null;
-        if (part.toolName === 'end_call' && result?.endCall) shouldStop = true;
+        console.log(`[Tool result] ${part.payload.toolName}`);
+        const result = part.payload.result as { endCall?: boolean } | null;
+        if (part.payload.toolName === 'end_call' && result?.endCall) shouldStop = true;
       }
     }
 

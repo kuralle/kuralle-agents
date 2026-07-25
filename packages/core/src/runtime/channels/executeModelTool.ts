@@ -46,7 +46,7 @@ export async function executeModelToolCall(
     return { result: toolResult, control: classifyControl(toolResult), failed: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    ctx.emit({ type: 'error', error: message });
+    ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
     return { result: toolErrorResult(error), failed: true };
   }
 }
@@ -66,18 +66,24 @@ export async function dispatchModelToolCalls(
 ): Promise<void> {
   const runOne = async (call: ModelToolCall, durableOpts?: { callsite?: string; index?: number }) => {
     ctx.emit({
+      channel: 'internal',
       type: 'tool-call',
-      toolName: call.toolName,
-      args: call.input,
-      toolCallId: call.toolCallId,
+      payload: {
+        toolName: call.toolName,
+        args: call.input,
+        toolCallId: call.toolCallId,
+      },
     });
     const outcome = await executeModelToolCall(ctx, call, localTools, durableOpts);
     onEach({ call, outcome });
     ctx.emit({
+      channel: 'internal',
       type: 'tool-result',
-      toolName: call.toolName,
-      result: outcome.result,
-      toolCallId: call.toolCallId,
+      payload: {
+        toolName: call.toolName,
+        result: outcome.result,
+        toolCallId: call.toolCallId,
+      },
     });
   };
 

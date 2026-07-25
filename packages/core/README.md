@@ -54,8 +54,8 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
 
 const handle = runtime.run({ input: 'Hello', sessionId: 'demo' });
 for await (const part of handle.events) {           // events is a property, not a method
-  if (part.type === 'text-delta') process.stdout.write(part.delta);
-  if (part.type === 'done') console.log('\nSession:', part.sessionId);
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+  if (part.type === 'done') console.log('\nSession:', part.payload.sessionId);
 }
 await handle;   // resolves to TurnResult once the stream is consumed
 ```
@@ -230,7 +230,7 @@ return handle.toUIMessageStreamResponse({ sessionId: 'demo' });
 
 Kuralle orchestration events (flow telemetry, safety blocks, interactive choices) arrive as typed `data-kuralle-*` parts. Import `KuralleUIMessage` and `KuralleDataParts` for compile-time-safe `message.parts` and `useChat({ onData })` handlers.
 
-For non-UI consumers (curl, custom transports), use `handle.toResponseStream('sse')` to emit raw `HarnessStreamPart` JSON-SSE. Or use `@kuralle-agents/hono-server` — `POST /api/chat/sse` defaults to native `UIMessageStream`; append `?format=raw` for the legacy wire.
+For non-UI consumers (curl, custom transports), use `handle.toResponseStream('sse')` to emit raw `StreamPart` JSON-SSE. Or use `@kuralle-agents/hono-server` — `POST /api/chat/sse` defaults to native `UIMessageStream`; append `?format=raw` for the legacy wire.
 
 ## Related
 

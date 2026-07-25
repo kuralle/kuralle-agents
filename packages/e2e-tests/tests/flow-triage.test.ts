@@ -7,15 +7,15 @@ import {
   defineFlow,
   reply,
 } from '@kuralle-agents/core';
-import type { ChannelDriver, HarnessStreamPart } from '@kuralle-agents/core';
+import type { ChannelDriver, StreamPart } from '@kuralle-agents/core';
 import { MemoryStore } from '@kuralle-agents/core';
 
 const stubModel = {} as import('ai').LanguageModel;
 
 async function collectEvents(
   run: ReturnType<ReturnType<typeof createRuntime>['run']>,
-): Promise<HarnessStreamPart[]> {
-  const parts: HarnessStreamPart[] = [];
+): Promise<StreamPart[]> {
+  const parts: StreamPart[] = [];
   for await (const part of run.events) {
     parts.push(part);
   }
@@ -24,7 +24,7 @@ async function collectEvents(
 }
 
 // SKIPPED — stale since 0.5.0 (ADR-0005, AI SDK native UIMessageStream default).
-// `collectEvents` here asserts raw `HarnessStreamPart` types (`node-enter`, `handoff`,
+// `collectEvents` here asserts raw `StreamPart` types (`node-enter`, `handoff`,
 // `flow-transition`), but `runtime.run().events` now yields UIMessageStream parts —
 // the observed output is `["custom","done"]`, with kuralle events wrapped as custom
 // data parts. The assertions need rewriting against the current events contract (or
@@ -120,8 +120,12 @@ describe.skip('v2 offline flow + triage (text Runtime)', () => {
       }),
     );
 
-    // Flow entry is observable as the first node-enter; there is no `flow-enter` part.
-    expect(turn1Parts.some((p) => p.type === 'node-enter' && p.nodeName === 'name')).toBe(true);
+    expect(
+      turn1Parts.some(
+        (p) => p.type === 'flow-enter' && p.payload.flow === 'name-intake',
+      ),
+    ).toBe(true);
+    expect(turn1Parts.some((p) => p.type === 'node-enter' && p.payload.nodeName === 'name')).toBe(true);
     expect(turn1Parts.some((p) => p.type === 'flow-transition')).toBe(false);
 
     const turn2Parts = await collectEvents(
@@ -133,10 +137,10 @@ describe.skip('v2 offline flow + triage (text Runtime)', () => {
     );
 
     const transitions = turn2Parts.filter(
-      (p): p is Extract<HarnessStreamPart, { type: 'flow-transition' }> => p.type === 'flow-transition',
+      (p): p is Extract<StreamPart, { type: 'flow-transition' }> => p.type === 'flow-transition',
     );
-    expect(transitions.some((p) => p.from === 'name' && p.to === 'confirm')).toBe(true);
-    expect(turn2Parts.some((p) => p.type === 'node-enter' && p.nodeName === 'confirm')).toBe(true);
+    expect(transitions.some((p) => p.payload.from === 'name' && p.payload.to === 'confirm')).toBe(true);
+    expect(turn2Parts.some((p) => p.type === 'node-enter' && p.payload.nodeName === 'confirm')).toBe(true);
   });
 
   it('routes to a billing specialist via handoff', async () => {
@@ -174,7 +178,10 @@ describe.skip('v2 offline flow + triage (text Runtime)', () => {
 
     expect(
       parts.some(
-        (p) => p.type === 'handoff' && p.targetAgent === 'billing' && p.reason === 'billing question',
+        (p) =>
+          p.type === 'handoff' &&
+          p.payload.targetAgent === 'billing' &&
+          p.payload.reason === 'billing question',
       ),
     ).toBe(true);
     expect(calls).toBe(1);

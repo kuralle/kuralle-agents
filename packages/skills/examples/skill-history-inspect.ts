@@ -18,8 +18,8 @@ async function turn(input: string) {
   const tools: string[] = [];
   let text = '';
   for await (const ev of h.events) {
-    if (ev.type === 'tool-call') tools.push(ev.toolName);
-    if (ev.type === 'text-delta') text += ev.delta;
+    if (ev.type === 'tool-call') tools.push(ev.payload.toolName);
+    if (ev.type === 'text-delta') text += ev.payload.delta;
   }
   await h;
   return { tools, text };

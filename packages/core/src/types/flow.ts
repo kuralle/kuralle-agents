@@ -1,6 +1,6 @@
 import type { LanguageModel, ModelMessage, ToolSet } from 'ai';
 import type { Instructions } from './agentConfig.js';
-import type { AgentKnowledgeOverrides } from './voice.js';
+import type { AgentKnowledgeOverrides } from './knowledge.js';
 import type { StandardSchemaV1 } from './standard-schema.js';
 import type { ContextStrategy } from './context.js';
 import type { TurnResult } from './channel.js';

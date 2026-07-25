@@ -3,7 +3,7 @@ import type {
   RunContext,
   StepResult,
   ToolCallRecord,
-  HarnessStreamPart,
+  StreamPart,
   Session,
   TurnUsage,
   ConversationOutcomeRecord,
@@ -111,7 +111,7 @@ export class HookRunner {
     await this.run('onMessage', context, message);
   }
 
-  async onStreamPart(context: RunContext, part: HarnessStreamPart): Promise<void> {
+  async onStreamPart(context: RunContext, part: StreamPart): Promise<void> {
     await this.run('onStreamPart', context, part);
   }
 

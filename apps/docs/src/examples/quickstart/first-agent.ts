@@ -27,8 +27,8 @@ let sessionId: string | undefined;
 async function chat(input: string) {
   const handle = runtime.run({ input, sessionId });
   for await (const part of handle.events) {   // events is a property, not a method
-    if (part.type === 'text-delta') process.stdout.write(part.delta);
-    if (part.type === 'done') sessionId = part.sessionId;
+    if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+    if (part.type === 'done') sessionId = part.payload.sessionId;
   }
   await handle;
 }

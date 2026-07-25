@@ -14,7 +14,7 @@ import { buildToolSet, defineTool } from '../../src/tools/effect/defineTool.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import type { Hooks } from '../../src/types/hooks.js';
 import { loadExampleEnv } from '../_shared/v2Runner.js';
 
@@ -40,7 +40,7 @@ async function logHook(name: string, payload: unknown) {
   );
 }
 
-async function logStream(part: HarnessStreamPart) {
+async function logStream(part: StreamPart) {
   await appendFile(
     streamPath,
     JSON.stringify({ ts: new Date().toISOString(), part }) + '\n',
@@ -56,25 +56,25 @@ const hooks: Hooks = {
     if (part.type === 'tool-call') {
       await logHook('onToolCall', {
         sessionId: ctx.session.id,
-        toolName: part.toolName,
-        args: part.args,
+        toolName: part.payload.toolName,
+        args: part.payload.args,
       });
     }
     if (part.type === 'tool-result') {
       await logHook('onToolResult', {
         sessionId: ctx.session.id,
-        toolName: part.toolName,
-        output: part.result,
+        toolName: part.payload.toolName,
+        output: part.payload.result,
       });
     }
     if (part.type === 'error') {
-      await logHook('onError', { sessionId: ctx.session.id, error: part.error });
+      await logHook('onError', { sessionId: ctx.session.id, error: part.payload.error });
     }
     if (part.type === 'handoff') {
       await logHook('onHandoff', {
         sessionId: ctx.session.id,
-        to: part.targetAgent,
-        reason: part.reason,
+        to: part.payload.targetAgent,
+        reason: part.payload.reason,
       });
     }
   },
@@ -176,7 +176,7 @@ for (const input of prompts) {
   let response = '';
   const handle = runtime.run({ sessionId, input });
   for await (const part of handle.events) {
-    if (part.type === 'text-delta') response += part.delta;
+    if (part.type === 'text-delta') response += part.payload.delta;
   }
   await handle;
   console.log('Assistant: ' + response.trim());

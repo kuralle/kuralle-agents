@@ -11,7 +11,7 @@ import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { createEventBus } from '../../src/events/TurnHandle.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import { liveModel } from '../helpers/liveModel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import type { ModelMessage } from 'ai';
 
 const lm = liveModel();
@@ -28,7 +28,7 @@ describeLive(`TextDriver live smoke (${lm?.label ?? 'no live key'})`, () => {
 
     const bus = createEventBus();
     const toolExecutor = new CoreToolExecutor({ tools: {} });
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
 
     const ctx = await createRunContext({
       session,
@@ -49,8 +49,8 @@ describeLive(`TextDriver live smoke (${lm?.label ?? 'no live key'})`, () => {
     const result = await driver.runAgentTurn(resolveReplyNode(node, runState.state), ctx);
 
     const streamedText = parts
-      .filter((p): p is Extract<HarnessStreamPart, { type: 'text-delta' }> => p.type === 'text-delta')
-      .map((p) => p.delta)
+      .filter((p): p is Extract<StreamPart, { type: 'text-delta' }> => p.type === 'text-delta')
+      .map((p) => p.payload.delta)
       .join('');
 
     expect(streamedText.length).toBeGreaterThan(0);

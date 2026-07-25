@@ -45,16 +45,19 @@ export class TextDriver implements ChannelDriver {
     if (!preTurn.proceed) {
       const blocked = preTurn.blockedMessage ?? 'Input blocked by guardrails';
       ctx.emit({
+        channel: 'internal',
         type: 'safety-blocked',
-        moderator: preTurn.blockedBy ?? 'input-guardrails',
-        rationale: preTurn.blockedReason ?? 'input blocked',
-        userFacingMessage: blocked,
+        payload: {
+          moderator: preTurn.blockedBy ?? 'input-guardrails',
+          rationale: preTurn.blockedReason ?? 'input blocked',
+          userFacingMessage: blocked,
+        },
       });
       const id = crypto.randomUUID();
-      ctx.emit({ type: 'text-start', id });
-      ctx.emit({ type: 'text-delta', id, delta: blocked });
-      ctx.emit({ type: 'text-end', id });
-      ctx.emit({ type: 'turn-end' });
+      ctx.emit({ channel: 'client', type: 'text-start', payload: { id } });
+      ctx.emit({ channel: 'client', type: 'text-delta', payload: { id, delta: blocked } });
+      ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
+      ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
       return { text: blocked, toolResults: [] };
     }
 
@@ -100,7 +103,7 @@ export class TextDriver implements ChannelDriver {
             if (part.type === 'error') {
               const err = (part as { error?: unknown }).error;
               const message = err instanceof Error ? err.message : String(err);
-              ctx.emit({ type: 'error', error: message });
+              ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
               throw err instanceof Error ? err : new Error(message);
             }
           }
@@ -195,7 +198,7 @@ export class TextDriver implements ChannelDriver {
       out.usage = turnUsage;
     }
 
-    ctx.emit({ type: 'turn-end' });
+    ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
     return out;
   }
 

@@ -7,7 +7,7 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import { createPiiInputGuard } from '../../src/processors/builtin/piiGuard.js';
 import { createPromptInjectionGuard } from '../../src/processors/builtin/promptInjectionGuard.js';
-import type { HarnessStreamPart, TurnHandle } from '../../src/types/stream.js';
+import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
 
 afterEach(() => {
   mock.restore();
@@ -36,7 +36,7 @@ function mockModelReply(text = 'noted!') {
 }
 
 async function collect(handle: TurnHandle) {
-  const parts: HarnessStreamPart[] = [];
+  const parts: StreamPart[] = [];
   for await (const part of handle.events) parts.push(part);
   await handle;
   return parts;
@@ -113,7 +113,7 @@ describe('input guards on multimodal turns (loop fixes)', () => {
     const blocked = parts.find((part) => part.type === 'safety-blocked');
     expect(blocked).toBeDefined();
     if (blocked?.type === 'safety-blocked') {
-      expect(blocked.moderator).toBe('prompt-injection-guard');
+      expect(blocked.payload.moderator).toBe('prompt-injection-guard');
     }
   });
 

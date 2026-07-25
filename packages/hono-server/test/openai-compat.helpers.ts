@@ -1,11 +1,11 @@
-import type { HarnessStreamPart, RunOptions, RuntimeLike } from '@kuralle-agents/core';
+import type { StreamPart, RunOptions, RuntimeLike } from '@kuralle-agents/core';
 import { createMockRuntime, type MockRuntimeRunCall } from '@kuralle-agents/core/testing';
 import type { Session } from '@kuralle-agents/core';
 
 export type RecordedRun = MockRuntimeRunCall;
 
 export function mockRuntime(
-  parts: HarnessStreamPart[],
+  parts: StreamPart[],
   options: {
     sessions?: Map<string, Session>;
     onRun?: (call: RecordedRun) => void;

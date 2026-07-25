@@ -6,7 +6,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { render, Box, Text, useApp, useInput, Static } from 'ink';
 import TextInput from 'ink-text-input';
-import type { AgentSpan, AgentTrace, HarnessStreamPart, SessionStore, TraceStore } from '@kuralle-agents/core';
+import type { AgentSpan, AgentTrace, StreamPart, SessionStore, TraceStore } from '@kuralle-agents/core';
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
 import { newSessionId } from './sessionId.js';
 import { fileSessionStore } from './fileStore.js';
@@ -83,14 +83,14 @@ async function runTurn(
   const handle = demo.runtime.run({ sessionId: demo.sessionId, input });
   let text = '';
   try {
-    for await (const part of handle.events as AsyncIterable<HarnessStreamPart>) {
-      if (part.type === 'text-delta') { text += part.delta; onText(text); }
-      else if (part.type === 'tool-call') onEvent(`⚙ tool ${part.toolName}`);
-      else if (part.type === 'flow-enter') onEvent(`▸ enter flow ${part.flow}`);
-      else if (part.type === 'flow-end') onEvent(`■ end flow ${part.flow}`);
-      else if (part.type === 'handoff') onEvent(`→ handoff ${part.targetAgent}`);
-      else if (part.type === 'paused') onEvent(`⏸ paused ${(part as { waitingFor?: string }).waitingFor ?? ''}`);
-      else if (part.type === 'error') onEvent(`✖ ${(part as { error?: unknown }).error}`);
+    for await (const part of handle.events as AsyncIterable<StreamPart>) {
+      if (part.type === 'text-delta') { text += part.payload.delta; onText(text); }
+      else if (part.type === 'tool-call') onEvent(`⚙ tool ${part.payload.toolName}`);
+      else if (part.type === 'flow-enter') onEvent(`▸ enter flow ${part.payload.flow}`);
+      else if (part.type === 'flow-end') onEvent(`■ end flow ${part.payload.flow}`);
+      else if (part.type === 'handoff') onEvent(`→ handoff ${part.payload.targetAgent}`);
+      else if (part.type === 'paused') onEvent(`⏸ paused ${part.payload.waitingFor}`);
+      else if (part.type === 'error') onEvent(`✖ ${part.payload.error}`);
     }
     const res = await handle;
     if (!text && typeof (res as { text?: string }).text === 'string') text = (res as { text: string }).text;

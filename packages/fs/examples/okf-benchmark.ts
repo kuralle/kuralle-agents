@@ -14,7 +14,7 @@
  * Run:  KURALLE_EXAMPLE_PROVIDER=openai bun run packages/fs/examples/okf-benchmark.ts
  */
 import { createRuntime, defineAgent, createFsTool } from '@kuralle-agents/core';
-import type { HarnessStreamPart, TurnHandle } from '@kuralle-agents/core';
+import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
 import { okfBundleToFs, listOkfConcepts } from '@kuralle-agents/fs';
 import { SALES_BUNDLE, EXPECTED } from './_okf-bundle.js';
 
@@ -30,11 +30,11 @@ async function resolveModel() {
 }
 
 async function collect(handle: TurnHandle) {
-  const parts: HarnessStreamPart[] = [];
+  const parts: StreamPart[] = [];
   let text = '';
   for await (const part of handle.events) {
     parts.push(part);
-    if (part.type === 'text-delta') text += part.delta;
+    if (part.type === 'text-delta') text += part.payload.delta;
   }
   const result = await handle;
   return { parts, text: text || result.text };

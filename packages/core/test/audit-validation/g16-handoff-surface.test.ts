@@ -10,7 +10,7 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 const driver: ChannelDriver = {
   async runAgentTurn() {
@@ -97,7 +97,7 @@ describe('G16: handoff rebuilds full agent surface', () => {
       hostSelect,
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const handle = runtime.run({ sessionId, input: 'start', driver });
     for await (const part of handle.events) {
       parts.push(part);
@@ -109,7 +109,7 @@ describe('G16: handoff rebuilds full agent surface', () => {
     expect(state?.activeAgentId).toBe('B');
     expect(bToolRan).toBe(true);
     expect(
-      parts.some((part) => part.type === 'error' && String(part.error).includes('Unknown tool')),
+      parts.some((part) => part.type === 'error' && String(part.payload.error).includes('Unknown tool')),
     ).toBe(false);
   });
 });

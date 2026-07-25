@@ -11,7 +11,7 @@ import { hostLoop } from '../../src/runtime/hostLoop.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { CoreToolExecutor, defineTool, wrapAiSdkTool, buildToolSet } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import { tool as aiTool } from 'ai';
 
 afterEach(() => {
@@ -136,7 +136,7 @@ describe('H1 out-of-band control (flag-gated)', () => {
     const flow = defineFlow({ name: 'parity', description: 'x', start: greet, nodes: [greet, nextNode] });
 
     const { session, runStore, runState } = await setupDurableHarness('h1-off', 'h1-off-run');
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const ctx = await createRunContext({
       session,
       runStore,

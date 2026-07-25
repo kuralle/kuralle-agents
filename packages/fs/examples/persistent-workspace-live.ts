@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
 import { createRuntime, defineAgent, createFsTool } from '@kuralle-agents/core';
-import type { HarnessStreamPart, TurnHandle } from '@kuralle-agents/core';
+import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
 import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
 
 function bunSqliteBackend(db: Database): SqlBackend {
@@ -33,11 +33,11 @@ async function resolveModel() {
 }
 
 async function collect(handle: TurnHandle) {
-  const parts: HarnessStreamPart[] = [];
+  const parts: StreamPart[] = [];
   let text = '';
   for await (const part of handle.events) {
     parts.push(part);
-    if (part.type === 'text-delta') text += part.delta;
+    if (part.type === 'text-delta') text += part.payload.delta;
   }
   await handle;
   return { parts, text };

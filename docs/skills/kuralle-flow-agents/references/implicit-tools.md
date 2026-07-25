@@ -73,7 +73,7 @@ Log tool calls and transitions from `TurnHandle` events:
 ```ts
 const handle = runtime.run({ sessionId, input: 'I need to book' });
 for await (const part of handle.events()) {
-  if (part.type === 'tool-call') console.log('TOOL:', part.toolName);
+  if (part.type === 'tool-call') console.log('TOOL:', part.payload.toolName);
   if (part.type === 'flow-transition') console.log('TRANSITION:', part);
 }
 ```

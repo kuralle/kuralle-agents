@@ -61,7 +61,7 @@ export async function buildCtx(
     toolExecutor: EffectToolExecutor;
     fs?: import('../../src/types/filesystem.js').FileSystem;
     clock?: { now(): number; uuid(): string };
-    emit?: (part: import('../../src/types/stream.js').HarnessStreamPart) => void;
+    emit?: (part: import('../../src/types/stream.js').StreamPart) => void;
   },
 ) {
   const steps = await loadRecordedSteps(args.runStore, args.runState.runId);

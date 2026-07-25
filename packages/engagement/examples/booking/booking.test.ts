@@ -340,7 +340,7 @@ describe('booking_example', () => {
       const handle = runtime.run({ sessionId, input });
       const errors: string[] = [];
       for await (const part of handle.events) {
-        if (part.type === 'error') errors.push(part.error);
+        if (part.type === 'error') errors.push(part.payload.error);
       }
       await handle;
       expect(errors.some((e) => e.includes('Flow oscillation'))).toBe(false);

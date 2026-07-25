@@ -23,7 +23,7 @@ constructor_hits="$(grep -rnE "type:[[:space:]]*['\"]text-delta['\"][[:space:]]*
   "$ROOT"/packages/*/src 2>/dev/null | grep -Ev "$exclude" || true)"
 report "stale text-delta constructor in package src" "$constructor_hits"
 
-# Shipped guides must use part.delta (R-02 class)
+# Shipped guides must use the canonical envelope payload.
 guide_hits="$(grep -rn "part\.text" "$ROOT"/packages/*/guides 2>/dev/null || true)"
 report "part.text in shipped guides" "$guide_hits"
 
@@ -50,7 +50,7 @@ report "stale text-delta .text consumer in docs/READMEs" "${consumer_hits%$'\n'}
 
 if [ "$fail" -ne 0 ]; then
   echo ""
-  echo "Refusing: migrate text-delta consumers to part.delta and lifecycle events (text-start/text-end)."
+  echo "Refusing: migrate text-delta consumers to part.payload.delta and lifecycle events (text-start/text-end)."
   exit 1
 fi
 

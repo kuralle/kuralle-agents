@@ -58,7 +58,7 @@ describe('core-v2 durable pause', () => {
       runState,
       toolExecutor,
       emit: (part) => {
-        if (part.type === 'paused') pausedEvents.push(part.waitingFor);
+        if (part.type === 'paused') pausedEvents.push(part.payload.waitingFor);
       },
     });
 

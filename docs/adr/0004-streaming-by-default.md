@@ -35,21 +35,20 @@ The single-shot `{ type: 'text-delta'; text: string }` is **removed**. No alias,
 New lifecycle (one `text-start` / `text-end` pair per speaking turn; all deltas share the same `id`):
 
 ```ts
-| { type: 'text-start'; id: string }
-| { type: 'text-delta'; id: string; delta: string }
-| { type: 'text-end'; id: string }
-| { type: 'text-cancel'; id: string; reason: string }
+| { channel: 'client'; type: 'text-start'; payload: { id: string } }
+| { channel: 'client'; type: 'text-delta'; payload: { id: string; delta: string } }
+| { channel: 'client'; type: 'text-end'; payload: { id: string } }
+| { channel: 'client'; type: 'text-cancel'; payload: { id: string; reason: string } }
 ```
 
-Applied to all three public unions:
+The public runtime contract is:
 
-- `HarnessStreamPart` (`types/stream.ts`) — authoritative runtime/SSE stream
-- Voice union (`types/voice.ts`) — native realtime events
-- `AgentStreamPart` (`types/processors.ts`) — `Hook.onStreamPart` callback contract
+- `StreamPart` (`types/stream.ts`) — authoritative runtime/SSE stream and `Hook.onStreamPart` callback contract
+- Native realtime provider events remain a separate, provider-specific protocol
 
-**Consumer migration:** `part.text` → `part.delta`; handle `text-start` / `text-end` for message boundaries; on `text-cancel`, stop accumulating for that `id` and expect a fresh lifecycle for any safe replacement message.
+**Consumer migration:** `part.text` → `part.payload.delta`; handle `text-start` / `text-end` for message boundaries; on `text-cancel`, stop accumulating for that `id` and expect a fresh lifecycle for any safe replacement message.
 
-`HarnessStreamPart` also gained `safety-blocked` and `pipeline-validation-block` variants (post-turn gate outcomes surfaced on the stream).
+`StreamPart` also includes `safety-blocked` and `pipeline-validation-block` variants (post-turn gate outcomes surfaced on the stream).
 
 ### 4. REQ-9 — native realtime honesty
 
@@ -64,13 +63,13 @@ Documentation and the `@kuralle-agents/realtime-audio` README state this explici
 
 ### 5. Versioning
 
-Shipped as **`0.4.0`**, unified across all packages in one `pnpm publish -r` release. Breaking-change note: `part.text` → `part.delta` + lifecycle. No runtime flag to toggle — rollback is at the release boundary.
+Shipped as **`0.4.0`**, unified across all packages in one `pnpm publish -r` release. Breaking-change note: `part.text` → `part.payload.delta` + lifecycle. No runtime flag to toggle — rollback is at the release boundary.
 
 ## Consequences
 
 - **Pro:** Ungated reply nodes emit multiple `text-delta` events with first-token latency; cascaded LiveKit TTS begins on the first delta (`aria_runtime_ttft` = first-token, not turn-end). Grounded nodes retain buffered behavior only where the gate requires it.
 - **Pro:** Text and voice share one gating implementation; sentence-mode gates never emit a blocked sentence's text on Kuralle-controlled paths.
-- **Con:** Breaking protocol change — every consumer of `HarnessStreamPart` / voice / `AgentStreamPart` must migrate `part.text` → `part.delta` and handle the lifecycle framing.
+- **Con:** Breaking protocol change — every consumer of `StreamPart` must use the envelope payload and handle the lifecycle framing.
 - **Con:** Native realtime whole-answer gates cannot claim preventive blocking; authors must not rely on them as the sole safety control for spoken audio.
 
 ## Acceptance

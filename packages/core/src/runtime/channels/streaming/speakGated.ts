@@ -17,9 +17,9 @@ export interface GateOutcome {
 }
 
 function emitMessage(ctx: RunContext, id: string, text: string): void {
-  ctx.emit({ type: 'text-start', id });
-  ctx.emit({ type: 'text-delta', id, delta: text });
-  ctx.emit({ type: 'text-end', id });
+  ctx.emit({ channel: 'client', type: 'text-start', payload: { id } });
+  ctx.emit({ channel: 'client', type: 'text-delta', payload: { id, delta: text } });
+  ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
 }
 
 async function emitBlockedSafeMessage(
@@ -30,9 +30,9 @@ async function emitBlockedSafeMessage(
 ): Promise<{ text: string; control?: TurnControl; confidence?: number }> {
   if (started) {
     ctx.emit({
+      channel: 'client',
       type: 'text-cancel',
-      id: turnId,
-      reason: outcome.reason ?? 'blocked',
+      payload: { id: turnId, reason: outcome.reason ?? 'blocked' },
     });
   }
   const safeId = randomUUID();
@@ -61,7 +61,7 @@ export async function speakGated(args: {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      ctx.emit({ type: 'error', error: message });
+      ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
       throw err instanceof Error ? err : new Error(message);
     }
     const decision = await runGate(full, true);
@@ -79,14 +79,18 @@ export async function speakGated(args: {
 
   const openOnce = () => {
     if (!started) {
-      ctx.emit({ type: 'text-start', id: turnId });
+      ctx.emit({ channel: 'client', type: 'text-start', payload: { id: turnId } });
       started = true;
     }
   };
 
   const emitCleared = (chunk: string) => {
     openOnce();
-    ctx.emit({ type: 'text-delta', id: turnId, delta: chunk });
+    ctx.emit({
+      channel: 'client',
+      type: 'text-delta',
+      payload: { id: turnId, delta: chunk },
+    });
     emitted += chunk;
   };
 
@@ -106,7 +110,11 @@ export async function speakGated(args: {
     for await (const { delta } of source) {
       if (mode === 'token') {
         openOnce();
-        ctx.emit({ type: 'text-delta', id: turnId, delta });
+        ctx.emit({
+          channel: 'client',
+          type: 'text-delta',
+          payload: { id: turnId, delta },
+        });
         emitted += delta;
         continue;
       }
@@ -126,14 +134,18 @@ export async function speakGated(args: {
     }
 
     if (started) {
-      ctx.emit({ type: 'text-end', id: turnId });
+      ctx.emit({ channel: 'client', type: 'text-end', payload: { id: turnId } });
     }
     return { text: emitted };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    ctx.emit({ type: 'error', error: message });
+    ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
     if (started) {
-      ctx.emit({ type: 'text-cancel', id: turnId, reason: message });
+      ctx.emit({
+        channel: 'client',
+        type: 'text-cancel',
+        payload: { id: turnId, reason: message },
+      });
     }
     throw err instanceof Error ? err : new Error(message);
   }

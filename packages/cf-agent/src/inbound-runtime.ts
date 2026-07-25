@@ -1,5 +1,5 @@
 import type {
-  HarnessStreamPart,
+  StreamPart,
   RuntimeLike,
 } from '@kuralle-agents/core';
 import { mergeUserInputContents } from '@kuralle-agents/core';
@@ -75,20 +75,22 @@ function defaultSessionId(key: ConversationKey): string {
   return conversationKeyToString(key);
 }
 
-async function collectParts(stream: AsyncIterable<HarnessStreamPart>): Promise<HarnessStreamPart[]> {
-  const parts: HarnessStreamPart[] = [];
+async function collectParts(stream: AsyncIterable<StreamPart>): Promise<StreamPart[]> {
+  const parts: StreamPart[] = [];
   for await (const part of stream) parts.push(part);
   return parts;
 }
 
-function turnResult(parts: HarnessStreamPart[]): TurnResult {
+function turnResult(parts: StreamPart[]): TurnResult {
   const paused = parts.find(
-    (part): part is Extract<HarnessStreamPart, { type: 'paused' }> => part.type === 'paused',
+    (part): part is Extract<StreamPart, { type: 'paused' }> => part.type === 'paused',
   );
   return {
     parts,
-    suspended: paused ? { signalId: paused.waitingFor } : undefined,
-    handoffToHuman: parts.some((part) => part.type === 'handoff' && part.targetAgent === 'human'),
+    suspended: paused ? { signalId: paused.payload.waitingFor } : undefined,
+    handoffToHuman: parts.some(
+      (part) => part.type === 'handoff' && part.payload.targetAgent === 'human',
+    ),
   };
 }
 

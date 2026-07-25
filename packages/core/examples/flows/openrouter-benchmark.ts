@@ -63,8 +63,8 @@ async function runBenchmark(
     try {
       const handle = runtime.run({ sessionId, input });
       for await (const part of handle.events) {
-        if (part.type === 'text-delta') response += part.delta;
-        if (part.type === 'error') response += `[ERROR: ${part.error}]`;
+        if (part.type === 'text-delta') response += part.payload.delta;
+        if (part.type === 'error') response += `[ERROR: ${part.payload.error}]`;
       }
       await handle;
     } catch (err: unknown) {

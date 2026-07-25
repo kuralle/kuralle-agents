@@ -6,9 +6,9 @@ describe('OpenAI compat SSE shape', () => {
   it('keeps chatcmpl id and created (seconds) stable; role only in first delta', async () => {
     const app = createOpenAICompatRouter({
       runtime: mockRuntime([
-        { type: 'text-delta', id: 't0', delta: 'Hello' },
-        { type: 'text-delta', id: 't0', delta: ' world' },
-        { type: 'done', sessionId: 's1' },
+        { channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'Hello' } },
+        { channel: 'client', type: 'text-delta', payload: { id: 't0', delta: ' world' } },
+        { channel: 'client', type: 'done', payload: { sessionId: 's1' } },
       ]),
     });
 
@@ -60,8 +60,8 @@ describe('OpenAI compat SSE shape', () => {
   it('emits tool_calls with string arguments in fragments and finish_reason tool_calls', async () => {
     const app = createOpenAICompatRouter({
       runtime: mockRuntime([
-        { type: 'tool-call', toolName: 'end_call', args: { reason: 'done' }, toolCallId: 'call_abc' },
-        { type: 'done', sessionId: 's1' },
+        { channel: 'internal', type: 'tool-call', payload: { toolName: 'end_call', args: { reason: 'done' }, toolCallId: 'call_abc' } },
+        { channel: 'client', type: 'done', payload: { sessionId: 's1' } },
       ]),
       clientTools: ['end_call'],
     });
@@ -105,8 +105,8 @@ describe('OpenAI compat SSE shape', () => {
 
   it('emits usage chunk only when stream_options.include_usage is true', async () => {
     const runtime = mockRuntime([
-      { type: 'text-delta', id: 't0', delta: 'ok' },
-      { type: 'done', sessionId: 's1' },
+      { channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'ok' } },
+      { channel: 'client', type: 'done', payload: { sessionId: 's1' } },
     ]);
 
     const withoutUsage = await appStream(runtime, false);

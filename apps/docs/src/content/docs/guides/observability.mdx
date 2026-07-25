@@ -151,7 +151,7 @@ It renders into a Shadow DOM root when available (`attachShadow`), so its styles
 
 - **One trace per run**, `traceId` generated fresh each time; `sessionId` stays a span attribute so a session's many runs are still independently addressable via `listTraces`.
 - **Spans nest by construction**: `turn` is the root, `flow`/`node` spans open and close as the run enters/exits them, and `tool`/`handoff` spans are leaves — this is exactly what the terminal waterfall and `trace-ui` render.
-- **Recording is a side-observer** (`TraceRecorder`) on the existing `HarnessStreamPart` event stream — it does not sit in the execution path, so a bug in trace recording can never change a turn's answer.
+- **Recording is a side-observer** (`TraceRecorder`) on the existing `StreamPart` event stream — it does not sit in the execution path, so a bug in trace recording can never change a turn's answer.
 - **IDs are OTLP-compatible hex** from the start, so native and exported traces share identifiers without remapping.
 - **Token usage rides the trace — strictly per turn.** The `turn` span carries `attributes.tokensIn` and `attributes.tokensOut` = **this turn's** consumed input/output tokens (deltas, not the running session total), plus `attributes.contextTokens` = the context-window occupancy (last prompt size). Per-turn scoping is deliberate: a trace is one run, so summing a session's traces gives the true total with no double-counting — the correct basis for **cost attribution**, and `contextTokens` is the signal for **window management**. All three flow everywhere the trace goes: `getTrace`/`listTraces`, the OTLP export (`kuralle.tokensIn` / `kuralle.tokensOut` / `kuralle.contextTokens`, so Langfuse shows them), and `kuralle trace` / `kuralle chat --trace`.
 

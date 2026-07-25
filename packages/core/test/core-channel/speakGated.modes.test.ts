@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 import {
   speakGated,
   type GateOutcome,
@@ -41,8 +41,8 @@ async function captureSpeakGated(args: {
   deltas: string[];
   runGate: (text: string, final: boolean) => Promise<GateOutcome>;
   turnId?: string;
-}): Promise<{ parts: HarnessStreamPart[]; result: Awaited<ReturnType<typeof speakGated>> }> {
-  const parts: HarnessStreamPart[] = [];
+}): Promise<{ parts: StreamPart[]; result: Awaited<ReturnType<typeof speakGated>> }> {
+  const parts: StreamPart[] = [];
   const session = makeTestSession('speakgated-test');
   const memoryStore = new MemoryStore();
   await memoryStore.save(session);
@@ -69,16 +69,16 @@ async function captureSpeakGated(args: {
   return { parts, result };
 }
 
-function textDeltas(parts: HarnessStreamPart[]): string[] {
+function textDeltas(parts: StreamPart[]): string[] {
   return parts
-    .filter((p): p is Extract<HarnessStreamPart, { type: 'text-delta' }> => p.type === 'text-delta')
-    .map((p) => p.delta);
+    .filter((p): p is Extract<StreamPart, { type: 'text-delta' }> => p.type === 'text-delta')
+    .map((p) => p.payload.delta);
 }
 
-function lifecycleCounts(parts: HarnessStreamPart[], id: string) {
+function lifecycleCounts(parts: StreamPart[], id: string) {
   return {
-    starts: parts.filter((p) => p.type === 'text-start' && p.id === id).length,
-    ends: parts.filter((p) => p.type === 'text-end' && p.id === id).length,
+    starts: parts.filter((p) => p.type === 'text-start' && p.payload.id === id).length,
+    ends: parts.filter((p) => p.type === 'text-end' && p.payload.id === id).length,
   };
 }
 
@@ -95,7 +95,7 @@ describe('speakGated modes', () => {
     const { starts, ends } = lifecycleCounts(parts, 'turn-1');
     expect(starts).toBe(1);
     expect(ends).toBe(1);
-    expect(parts.filter((p) => p.type === 'text-delta').every((p) => p.id === 'turn-1')).toBe(true);
+    expect(parts.filter((p) => p.type === 'text-delta').every((p) => p.payload.id === 'turn-1')).toBe(true);
   });
 
   it('turn mode: buffers until end then emits one lifecycle message', async () => {
@@ -164,15 +164,19 @@ describe('speakGated modes', () => {
     expect(result.text).toBe(safe);
 
     const cancelIdx = parts.findIndex(
-      (p) => p.type === 'text-cancel' && p.id === 'turn-1' && p.reason === 'policy-block',
+      (p) => p.type === 'text-cancel' && p.payload.id === 'turn-1' && p.payload.reason === 'policy-block',
     );
     expect(cancelIdx).toBeGreaterThanOrEqual(0);
 
     const safeStartIdx = parts.findIndex(
-      (p) => p.type === 'text-start' && p.id !== 'turn-1',
+      (p) => p.type === 'text-start' && p.payload.id !== 'turn-1',
     );
     expect(safeStartIdx).toBeGreaterThan(cancelIdx);
-    const safeId = (parts[safeStartIdx] as { id: string }).id;
+    const safeStart = parts[safeStartIdx];
+    if (safeStart?.type !== 'text-start') {
+      throw new Error('expected safe text-start');
+    }
+    const safeId = safeStart.payload.id;
     expect(deltas).toContain(safe);
     expect(lifecycleCounts(parts, 'turn-1')).toEqual({ starts: 1, ends: 0 });
     expect(lifecycleCounts(parts, safeId)).toEqual({ starts: 1, ends: 1 });
@@ -188,7 +192,7 @@ describe('speakGated modes', () => {
   });
 
   it('source error: emits error and text-cancel when lifecycle was started', async () => {
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const session = makeTestSession('speakgated-err');
     const memoryStore = new MemoryStore();
     await memoryStore.save(session);
@@ -215,9 +219,9 @@ describe('speakGated modes', () => {
       }),
     ).rejects.toThrow('boom');
 
-    expect(parts.some((p) => p.type === 'error' && p.error === 'boom')).toBe(true);
+    expect(parts.some((p) => p.type === 'error' && p.payload.error === 'boom')).toBe(true);
     expect(
-      parts.some((p) => p.type === 'text-cancel' && p.id === 'turn-err' && p.reason === 'boom'),
+      parts.some((p) => p.type === 'text-cancel' && p.payload.id === 'turn-err' && p.payload.reason === 'boom'),
     ).toBe(true);
     expect(lifecycleCounts(parts, 'turn-err').starts).toBe(1);
     expect(lifecycleCounts(parts, 'turn-err').ends).toBe(0);

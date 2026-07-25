@@ -53,10 +53,10 @@ async function runDemo() {
 
     const handle = runtime.run({ input, sessionId });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') process.stdout.write(part.delta);
-      if (part.type === 'tool-call') console.log(`\n[Tool] ${part.toolName}`);
-      if (part.type === 'handoff') console.log(`\n[Handoff → ${part.targetAgent}]`);
-      if (part.type === 'done') sessionId = part.sessionId;
+      if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+      if (part.type === 'tool-call') console.log(`\n[Tool] ${part.payload.toolName}`);
+      if (part.type === 'handoff') console.log(`\n[Handoff → ${part.payload.targetAgent}]`);
+      if (part.type === 'done') sessionId = part.payload.sessionId;
     }
     await handle;
     console.log('');

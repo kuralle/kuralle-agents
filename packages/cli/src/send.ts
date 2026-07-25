@@ -4,7 +4,7 @@
  * Flags: --session <id> · --store <file> · --state · --reset
  */
 import { join } from 'node:path';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import type { BuildRuntime } from './agentRuntime.js';
 import { fileSessionStore } from './fileStore.js';
 
@@ -47,14 +47,14 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const events: string[] = [];
   const handle = demo.runtime.run({ sessionId, input: message });
   let text = '';
-  for await (const part of handle.events as AsyncIterable<HarnessStreamPart>) {
-    if (part.type === 'text-delta') { text += part.delta; process.stdout.write(part.delta); }
-    else if (part.type === 'tool-call') events.push(`tool:${part.toolName}`);
-    else if (part.type === 'flow-enter') events.push(`enter:${part.flow}`);
-    else if (part.type === 'flow-end') events.push(`end:${part.flow}`);
-    else if (part.type === 'handoff') events.push(`handoff:${part.targetAgent}`);
-    else if (part.type === 'paused') events.push(`paused:${(part as { waitingFor?: string }).waitingFor ?? ''}`);
-    else if (part.type === 'error') events.push(`error:${(part as { error?: unknown }).error}`);
+  for await (const part of handle.events as AsyncIterable<StreamPart>) {
+    if (part.type === 'text-delta') { text += part.payload.delta; process.stdout.write(part.payload.delta); }
+    else if (part.type === 'tool-call') events.push(`tool:${part.payload.toolName}`);
+    else if (part.type === 'flow-enter') events.push(`enter:${part.payload.flow}`);
+    else if (part.type === 'flow-end') events.push(`end:${part.payload.flow}`);
+    else if (part.type === 'handoff') events.push(`handoff:${part.payload.targetAgent}`);
+    else if (part.type === 'paused') events.push(`paused:${part.payload.waitingFor}`);
+    else if (part.type === 'error') events.push(`error:${part.payload.error}`);
   }
   const res = await handle;
   if (!text && typeof (res as { text?: string }).text === 'string') text = (res as { text: string }).text;

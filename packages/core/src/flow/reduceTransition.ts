@@ -1,7 +1,7 @@
 import type { LanguageModel } from 'ai';
 import type { Flow, FlowNode } from '../types/flow.js';
 import type { RunState } from '../runtime/durable/types.js';
-import type { HarnessStreamPart } from '../types/stream.js';
+import type { StreamPart } from '../types/stream.js';
 import { applyContextStrategy, resolveContextStrategy } from './contextStrategy.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
 
@@ -12,7 +12,7 @@ export interface ReduceTransitionInput {
   flow: Flow;
   model: LanguageModel;
   data?: Record<string, unknown>;
-  emit: (part: HarnessStreamPart) => void;
+  emit: (part: StreamPart) => void;
   abortSignal?: AbortSignal;
 }
 
@@ -26,9 +26,13 @@ function resolveNodeContext(toNode: FlowNode, flow: Flow): ReturnType<typeof res
 export async function reduceTransition(input: ReduceTransitionInput): Promise<void> {
   const { fromNodeId, toNode, run, flow, model, data, emit, abortSignal } = input;
 
-  emit({ type: 'node-exit', nodeName: fromNodeId });
-  emit({ type: 'flow-transition', from: fromNodeId, to: toNode.id });
-  emit({ type: 'node-enter', nodeName: toNode.id });
+  emit({ channel: 'internal', type: 'node-exit', payload: { nodeName: fromNodeId } });
+  emit({
+    channel: 'internal',
+    type: 'flow-transition',
+    payload: { from: fromNodeId, to: toNode.id },
+  });
+  emit({ channel: 'internal', type: 'node-enter', payload: { nodeName: toNode.id } });
   emitInteractiveOnNodeEnter(toNode, run.state, emit);
 
   await applyContextStrategy({

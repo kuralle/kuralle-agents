@@ -1,4 +1,4 @@
-import type { SourceRef } from '../../types/voice.js';
+import type { SourceRef } from '../../types/knowledge.js';
 import type { GatherScope, RunContext } from '../../types/run-context.js';
 
 export type { GatherScope } from '../../types/run-context.js';

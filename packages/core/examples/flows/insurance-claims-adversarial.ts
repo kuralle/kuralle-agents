@@ -99,11 +99,11 @@ async function runScenario(scenario: Scenario): Promise<void> {
 
     const handle = runtime.run({ sessionId, input });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') response += part.delta;
-      if (part.type === 'node-enter') events.push(`[Node] ${part.nodeName}`);
-      if (part.type === 'flow-transition') events.push(`[Trans] ${part.from} -> ${part.to}`);
-      if (part.type === 'flow-end') events.push(`[End] ${part.reason}`);
-      if (part.type === 'error') events.push(`[ERR] ${part.error}`);
+      if (part.type === 'text-delta') response += part.payload.delta;
+      if (part.type === 'node-enter') events.push(`[Node] ${part.payload.nodeName}`);
+      if (part.type === 'flow-transition') events.push(`[Trans] ${part.payload.from} -> ${part.payload.to}`);
+      if (part.type === 'flow-end') events.push(`[End] ${part.payload.reason}`);
+      if (part.type === 'error') events.push(`[ERR] ${part.payload.error}`);
     }
     await handle;
 

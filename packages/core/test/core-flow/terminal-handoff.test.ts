@@ -8,7 +8,7 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 const driver: ChannelDriver = {
   async runAgentTurn() {
@@ -52,7 +52,7 @@ describe('terminal handoff targets', () => {
       hostSelect,
     });
 
-    const parts1: HarnessStreamPart[] = [];
+    const parts1: StreamPart[] = [];
     const handle1 = runtime.run({ sessionId, input: 'help', driver });
     for await (const part of handle1.events) {
       parts1.push(part);
@@ -63,9 +63,9 @@ describe('terminal handoff targets', () => {
     const paused = await runStore.getRunState(runId);
     expect(paused?.status).toBe('paused');
     expect(paused?.waitingFor?.signalName).toBe('__escalate');
-    expect(parts1.some((part) => part.type === 'paused' && part.waitingFor === '__escalate')).toBe(true);
+    expect(parts1.some((part) => part.type === 'paused' && part.payload.waitingFor === '__escalate')).toBe(true);
 
-    const parts2: HarnessStreamPart[] = [];
+    const parts2: StreamPart[] = [];
     const handle2 = runtime.run({
       sessionId,
       signalDelivery: {
@@ -87,9 +87,12 @@ describe('terminal handoff targets', () => {
     const handoffParts = parts2.filter((part) => part.type === 'handoff');
     expect(handoffParts).toHaveLength(1);
     expect(handoffParts[0]).toEqual({
+      channel: 'internal',
       type: 'handoff',
-      targetAgent: 'human',
-      reason: 'needs human help',
+      payload: {
+        targetAgent: 'human',
+        reason: 'needs human help',
+      },
     });
     expect(parts2.some((part) => part.type === 'done')).toBe(true);
   });
@@ -126,7 +129,7 @@ describe('terminal handoff targets', () => {
       hostSelect,
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const handle = runtime.run({ sessionId, input: 'hand off', driver });
     for await (const part of handle.events) {
       parts.push(part);
@@ -139,7 +142,7 @@ describe('terminal handoff targets', () => {
 
     const handoffParts = parts.filter((part) => part.type === 'handoff');
     expect(handoffParts.length).toBeGreaterThanOrEqual(1);
-    expect(handoffParts.some((part) => part.targetAgent === 'human' && part.reason === 'operator required')).toBe(
+    expect(handoffParts.some((part) => part.payload.targetAgent === 'human' && part.payload.reason === 'operator required')).toBe(
       true,
     );
 

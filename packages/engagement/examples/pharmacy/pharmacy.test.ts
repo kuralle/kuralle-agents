@@ -8,7 +8,7 @@ import {
   type Session,
 } from '@kuralle-agents/core';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import type {
   OutboundSink,
   OutboundTemplate,
@@ -228,9 +228,13 @@ function makeMessage(overrides: Partial<InboundMessage> = {}): InboundMessage {
   };
 }
 
-async function* humanHandoffStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'handoff', targetAgent: 'human', reason: 'escalate' };
-  yield { type: 'done', sessionId: 'thread-pharm-1' };
+async function* humanHandoffStream(): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'internal',
+    type: 'handoff',
+    payload: { targetAgent: 'human', reason: 'escalate' },
+  };
+  yield { channel: 'client', type: 'done', payload: { sessionId: 'thread-pharm-1' } };
 }
 
 describe('pharmacy_example', () => {

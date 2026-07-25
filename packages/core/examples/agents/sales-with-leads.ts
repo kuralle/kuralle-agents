@@ -177,7 +177,7 @@ runV2Conversation({
     'Thanks, that is enough for now. Bye.',
   ],
   onPart: (part) => {
-    if (part.type === 'tool-result') console.log(`[Tool result] ${part.toolName} => ${JSON.stringify(part.result)}`);
+    if (part.type === 'tool-result') console.log(`[Tool result] ${part.payload.toolName} => ${JSON.stringify(part.payload.result)}`);
   },
 }).then(() => {
   console.log('\nFinal leads state: ' + JSON.stringify(leads, null, 2));

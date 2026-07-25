@@ -17,7 +17,7 @@ import { defineFlow, reply } from '../../src/authoring/nodes.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 config({ path: join(dirname(fileURLToPath(import.meta.url)), '../../../../.env') });
 const apiKey = process.env.OPENAI_API_KEY;
@@ -100,15 +100,15 @@ async function runTurn(
   let handoffTo: string | null = null;
   let text = '';
   const handle = rt.run({ sessionId, input });
-  for await (const part of handle.events as AsyncIterable<HarnessStreamPart>) {
+  for await (const part of handle.events as AsyncIterable<StreamPart>) {
     if (part.type === 'text-delta') {
       if (ttft < 0) ttft = Date.now() - start;
-      text += part.delta;
+      text += part.payload.delta;
     }
-    if (part.type === 'flow-enter') enteredFlow = part.flow;
-    if (part.type === 'tool-call' && part.toolName === 'enter_flow') calledEnterFlow = true;
-    if (part.type === 'tool-call' && part.toolName === 'transfer_to_agent') calledTransfer = true;
-    if (part.type === 'handoff') handoffTo = part.targetAgent;
+    if (part.type === 'flow-enter') enteredFlow = part.payload.flow;
+    if (part.type === 'tool-call' && part.payload.toolName === 'enter_flow') calledEnterFlow = true;
+    if (part.type === 'tool-call' && part.payload.toolName === 'transfer_to_agent') calledTransfer = true;
+    if (part.type === 'handoff') handoffTo = part.payload.targetAgent;
   }
   await handle;
   return {

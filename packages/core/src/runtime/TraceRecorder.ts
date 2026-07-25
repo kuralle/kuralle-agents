@@ -1,5 +1,5 @@
 import type { TurnResult } from '../types/channel.js';
-import type { HarnessStreamPart, TurnHandle } from '../types/stream.js';
+import type { StreamPart, TurnHandle } from '../types/stream.js';
 import type { AgentSpan, AgentTrace } from '../types/trace.js';
 import type { RunOptions } from './Runtime.js';
 
@@ -48,22 +48,22 @@ export class TraceRecorder {
     };
   }
 
-  record(part: HarnessStreamPart): void {
+  record(part: StreamPart): void {
     try {
       const at = Date.now();
       switch (part.type) {
         case 'text-delta':
-          this.trace.answer += part.delta;
+          this.trace.answer += part.payload.delta;
           break;
         case 'flow-enter':
           this.closeNode(at);
           this.closeFlow(at);
           this.currentFlow = this.openSpan({
-            name: `flow:${part.flow}`,
+            name: `flow:${part.payload.flow}`,
             kind: 'flow',
             parentSpanId: this.root.spanId,
             at,
-            attributes: { activeFlow: part.flow },
+            attributes: { activeFlow: part.payload.flow },
           });
           break;
         case 'flow-end':
@@ -73,13 +73,13 @@ export class TraceRecorder {
         case 'node-enter':
           this.closeNode(at);
           this.currentNode = this.openSpan({
-            name: `node:${part.nodeName}`,
+            name: `node:${part.payload.nodeName}`,
             kind: 'node',
             parentSpanId: this.currentFlow?.spanId ?? this.root.spanId,
             at,
             attributes: {
               ...(this.currentFlow ? { activeFlow: activeFlowName(this.currentFlow) } : {}),
-              nodeId: part.nodeName,
+              nodeId: part.payload.nodeName,
             },
           });
           break;
@@ -88,37 +88,40 @@ export class TraceRecorder {
           break;
         case 'tool-call': {
           const span = this.openSpan({
-            name: `tool:${part.toolName}`,
+            name: `tool:${part.payload.toolName}`,
             kind: 'tool',
             parentSpanId: this.currentNode?.spanId ?? this.root.spanId,
             at,
             attributes: {
               ...(this.currentFlow ? { activeFlow: activeFlowName(this.currentFlow) } : {}),
               ...(this.currentNode ? { nodeId: nodeName(this.currentNode) } : {}),
-              toolName: part.toolName,
-              input: toJsonValue(part.args),
+              toolName: part.payload.toolName,
+              input: toJsonValue(part.payload.args),
             },
           });
-          this.toolCallIds.set(span, part.toolCallId);
+          this.toolCallIds.set(span, part.payload.toolCallId);
           this.openTools.push(span);
           this.trace.usedTool = true;
-          this.trace.toolCalls.push({ name: part.toolName, args: toJsonValue(part.args) });
+          this.trace.toolCalls.push({
+            name: part.payload.toolName,
+            args: toJsonValue(part.payload.args),
+          });
           break;
         }
         case 'tool-result': {
           this.trace.usedTool = true;
-          const result = toJsonValue(part.result);
-          this.trace.toolResults.push({ name: part.toolName, result });
-          const span = this.takeToolSpan(part.toolName, part.toolCallId) ??
+          const result = toJsonValue(part.payload.result);
+          this.trace.toolResults.push({ name: part.payload.toolName, result });
+          const span = this.takeToolSpan(part.payload.toolName, part.payload.toolCallId) ??
             this.openSpan({
-              name: `tool:${part.toolName}`,
+              name: `tool:${part.payload.toolName}`,
               kind: 'tool',
               parentSpanId: this.currentNode?.spanId ?? this.root.spanId,
               at,
               attributes: {
                 ...(this.currentFlow ? { activeFlow: activeFlowName(this.currentFlow) } : {}),
                 ...(this.currentNode ? { nodeId: nodeName(this.currentNode) } : {}),
-                toolName: part.toolName,
+                toolName: part.payload.toolName,
               },
             });
           span.attributes.output = result;
@@ -128,11 +131,11 @@ export class TraceRecorder {
         }
         case 'handoff': {
           const span = this.openSpan({
-            name: `handoff:${part.targetAgent}`,
+            name: `handoff:${part.payload.targetAgent}`,
             kind: 'handoff',
             parentSpanId: this.root.spanId,
             at,
-            attributes: { handoffTo: part.targetAgent },
+            attributes: { handoffTo: part.payload.targetAgent },
           });
           span.endTime = at;
           this.emitSpan(span);
@@ -141,18 +144,24 @@ export class TraceRecorder {
         case 'error': {
           const span = this.openTools.at(-1) ?? this.currentNode ?? this.currentFlow ?? this.root;
           span.status = 'error';
-          span.attributes.error = part.error;
+          span.attributes.error = part.payload.error;
           this.root.status = 'error';
-          this.root.attributes.error = part.error;
+          this.root.attributes.error = part.payload.error;
           break;
         }
         case 'done':
-          this.setSessionId(part.sessionId);
+          this.setSessionId(part.payload.sessionId);
           this.root.attributes.output = this.trace.answer;
-          if (part.usage) {
-            if (typeof part.usage.inputTokens === 'number') this.root.attributes.tokensIn = part.usage.inputTokens;
-            if (typeof part.usage.outputTokens === 'number') this.root.attributes.tokensOut = part.usage.outputTokens;
-            if (typeof part.usage.contextTokens === 'number') this.root.attributes.contextTokens = part.usage.contextTokens;
+          if (part.payload.usage) {
+            if (typeof part.payload.usage.inputTokens === 'number') {
+              this.root.attributes.tokensIn = part.payload.usage.inputTokens;
+            }
+            if (typeof part.payload.usage.outputTokens === 'number') {
+              this.root.attributes.tokensOut = part.payload.usage.outputTokens;
+            }
+            if (typeof part.payload.usage.contextTokens === 'number') {
+              this.root.attributes.contextTokens = part.payload.usage.contextTokens;
+            }
           }
           this.close(at);
           break;

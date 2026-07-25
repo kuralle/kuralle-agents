@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Stream envelope and explicit audience (BREAKING)
+
+- Renamed `HarnessStreamPart` to `StreamPart` and replaced flat variant fields with the `{ channel, type, payload }` envelope.
+- Removed the shadow stream union formerly exported from `types/voice.ts`; knowledge types now live in `types/knowledge.ts`, and all six emitted knowledge events narrow from the public `StreamPart` export.
+- Added the exhaustive `PART_CHANNEL` map. `@kuralle-agents/hono-server` uses it as the single owner of client-vs-internal filtering.
+
+Migration: rename imports to `StreamPart`, read variant fields through `part.payload`, and include both `channel` and `payload` when constructing test or custom stream parts.
+
 ## 0.10.0 — Retrieval hardening: embedder lock, incremental ingest, persistent keyword tier, multilingual keyword search
 
 Unified bump across the graph (0.9.0 → 0.10.0). Contains **breaking** `@kuralle-agents/rag` option renames (minor bump per repo convention). Grounded in a measured before/after benchmark plus live Cloudflare + Fly deployment verification (`packages/rag/bench/results/vecgrep-gap-report.md`).
@@ -236,8 +244,8 @@ See `docs/adr/0005-ai-sdk-native-uimessage-default.md`.
 Patch across the graph (0.4.0 -> 0.4.1). Backward-compatible fixes to the 0.4.0 streaming release; no API changes.
 
 - **Fix (behavioral):** off-script answers in the collect **digression** path were emitted **twice** — `runFlow`'s `collectDigression` re-emitted the assistant-text lifecycle on top of the one `ChannelDriver.runAgentTurn` already produces. The driver is now the single owner of the assistant-text lifecycle; the digression path only appends the answer to history. (Regression test added asserting a single answer emit + single re-ask.)
-- **Docs (shipped):** the published `@kuralle-agents/core` `guides/` (GETTING_STARTED / TOOLS / FLOWS / AGENTS) still showed `part.text` in streaming snippets — migrated to `part.delta` for the 0.4.0 lifecycle. Added `scripts/check-no-stale-text-delta.sh` to fail CI on stale `text-delta.text` reads/constructors in publishable files.
-- **Internal:** cleared pre-existing `typecheck:all` drift in test/example tsconfigs and the playground (`'a'`→`Transition`, optional-`decide` narrowing, dual hook-vs-wire `RunContext` in a test, `part.text`→`part.delta` in playground CLIs); the full `typecheck:all` gate (incl. playground + lint) is green again. No shipped-API change.
+- **Docs (shipped):** the published `@kuralle-agents/core` `guides/` (GETTING_STARTED / TOOLS / FLOWS / AGENTS) still showed `part.text` in streaming snippets — migrated to `part.payload.delta` for the 0.4.0 lifecycle. Added `scripts/check-no-stale-text-delta.sh` to fail CI on stale `text-delta.text` reads/constructors in publishable files.
+- **Internal:** cleared pre-existing `typecheck:all` drift in test/example tsconfigs and the playground (`'a'`→`Transition`, optional-`decide` narrowing, dual hook-vs-wire `RunContext` in a test, `part.text`→`part.payload.delta` in playground CLIs); the full `typecheck:all` gate (incl. playground + lint) is green again. No shipped-API change.
 
 ## 0.4.0 — Streaming-by-default (BREAKING: assistant-text event lifecycle)
 
@@ -252,7 +260,7 @@ Unified minor bump across the graph (0.3.20 -> 0.4.0). **Breaking event-protocol
 | { type: 'text-cancel'; id: string; reason: string }
 ```
 
-**Consumer migration:** read `part.delta` (not `part.text`); handle (or ignore) `text-start`/`text-end`/`text-cancel`. Mirrors AI SDK v6 `UIMessageChunk`.
+**Consumer migration:** read `part.payload.delta` (not `part.text`); handle (or ignore) `text-start`/`text-end`/`text-cancel`. Mirrors AI SDK v6 `UIMessageChunk`.
 
 **What's new:**
 - **Streaming-by-default.** Replies stream incrementally up to the smallest guardrail boundary each attached gate permits — `token` (no gate), `sentence` (per-utterance gate), `turn` (whole-answer grounding gate). An ungated reply now emits multiple `text-delta`s with the first before turn-end (was: one buffered delta at turn-end).
@@ -260,7 +268,7 @@ Unified minor bump across the graph (0.3.20 -> 0.4.0). **Breaking event-protocol
 - **Cascaded LiveKit TTFT** drops to first-token latency (`aria_runtime_ttft` fires on the first delta).
 - **Native realtime gate is advisory (REQ-9):** the provider speaks audio before any gate runs, so a whole-answer gate on native realtime emits a `safety-*` event + correction post-hoc but cannot un-speak audio. Preventive only on text/cascaded. See ADR 0004.
 
-See `docs/adr/0004-streaming-by-default.md`. Downstream consumers (e.g. external Studio `SSEChatTransport`) migrate `part.text` -> `part.delta`.
+See `docs/adr/0004-streaming-by-default.md`. Downstream consumers (e.g. external Studio `SSEChatTransport`) migrate `part.text` -> `part.payload.delta`.
 
 > Known (non-shipping): `bun run typecheck:all` reports pre-existing drift in 4 test/example tsconfigs (unrelated to streaming; not in published tarballs, which build from `src`). Tracked as a follow-up; the published packages build clean.
 

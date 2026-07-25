@@ -8,7 +8,7 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { EscalationRequest } from '../../src/escalation/types.js';
-import type { HarnessStreamPart, TurnHandle } from '../../src/types/stream.js';
+import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
 
 afterEach(() => {
   mock.restore();
@@ -25,7 +25,7 @@ function mockSummaryModel(summary = 'User Jane needs a refund for order #42.') {
 }
 
 async function collectParts(handle: TurnHandle) {
-  const parts: HarnessStreamPart[] = [];
+  const parts: StreamPart[] = [];
   for await (const part of handle.events) {
     parts.push(part);
   }
@@ -84,8 +84,8 @@ describe('escalation loop', () => {
     const escalationPart = parts.find((part) => part.type === 'escalation');
     expect(escalationPart).toBeDefined();
     if (escalationPart?.type === 'escalation') {
-      expect(escalationPart.outcome).toBe('queued');
-      expect(escalationPart.summary).toContain('refund');
+      expect(escalationPart.payload.outcome).toBe('queued');
+      expect(escalationPart.payload.summary).toContain('refund');
     }
 
     const session = await sessionStore.get('esc-sess');
@@ -126,7 +126,7 @@ describe('escalation loop', () => {
     const escalationPart = parts.find((part) => part.type === 'escalation');
     expect(escalationPart).toBeDefined();
     if (escalationPart?.type === 'escalation') {
-      expect(escalationPart.outcome).toBe('failed');
+      expect(escalationPart.payload.outcome).toBe('failed');
     }
     const session = await sessionStore.get('esc-fail');
     expect(session?.metadata?.lastEscalation?.handlerOutcome).toBe('failed');

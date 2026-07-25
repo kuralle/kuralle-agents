@@ -3,14 +3,14 @@ import type { Session } from './session.js';
 import type { InputProcessor, OutputProcessor } from './processors.js';
 import type { RunState } from '../runtime/durable/types.js';
 import type { RunStore } from '../runtime/durable/RunStore.js';
-import type { HarnessStreamPart } from './stream.js';
+import type { StreamPart } from './stream.js';
 import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { Limits } from './guardrails.js';
 import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
 import type { Instructions } from './agentConfig.js';
-import type { AgentKnowledgeOverrides, SourceRef, RetrievalCacheAdapter } from './voice.js';
+import type { AgentKnowledgeOverrides, SourceRef, RetrievalCacheAdapter } from './knowledge.js';
 
 export interface GatherScope {
   query?: string;
@@ -47,14 +47,14 @@ export interface MemoryService {
 }
 
 export interface HookRunner {
-  onStreamPart?(ctx: RunContext, part: HarnessStreamPart): void | Promise<void>;
+  onStreamPart?(ctx: RunContext, part: StreamPart): void | Promise<void>;
 }
 
 export interface RunContext {
   session: Session;
   runState: RunState;
   runStore: RunStore;
-  emit: (part: HarnessStreamPart) => void;
+  emit: (part: StreamPart) => void;
   toolExecutor: EffectToolExecutor;
   hookRunner: HookRunner;
   model: LanguageModel;

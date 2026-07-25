@@ -12,7 +12,7 @@ import type {
 } from '../src/types.js';
 import type { OutboundRequest, OutboundSink } from '../src/types/outbound.js';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 
 function makeSendResult(threadId = 'thread-1'): SendResult {
   return { messageId: 'mock', threadId, timestamp: new Date() };
@@ -126,8 +126,12 @@ function createMockPlatform(options?: {
   } as MockPlatform & { _sendTextCalls: number };
 }
 
-async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, id: 't', delta: text };
+async function* textStream(text: string): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'client',
+    type: 'text-delta' as const,
+    payload: { id: 't', delta: text },
+  };
 }
 
 describe('windowGuard', () => {
@@ -252,7 +256,7 @@ describe('router pipeline integration', () => {
 
     const customMapper = {
       mapResponse: async (
-        _parts: HarnessStreamPart[],
+        _parts: StreamPart[],
         ctx: { sendText: (text: string) => Promise<SendResult> },
       ) => {
         await ctx.sendText('from custom mapper');

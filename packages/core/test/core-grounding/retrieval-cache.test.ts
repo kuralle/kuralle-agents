@@ -5,7 +5,7 @@ import type {
   KnowledgeRetrievalResult,
   KnowledgeRetrieverAdapter,
   KnowledgeEmbedderAdapter,
-} from '../../src/types/voice.js';
+} from '../../src/types/knowledge.js';
 
 const RESULT: KnowledgeRetrievalResult = {
   id: 'doc-1',

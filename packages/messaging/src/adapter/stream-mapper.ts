@@ -1,4 +1,4 @@
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import type { PlatformClient, StreamMapperOptions } from '../types.js';
 import type { OutboundMeta, OutboundPayload, SendOutcome } from '../types/outbound.js';
 import type { SendResult } from '../types/responses.js';
@@ -18,12 +18,12 @@ function outcomeToSendResult(threadId: string, outcome: SendOutcome): SendResult
 
 export class StreamMapper {
   async mapStream(
-    stream: AsyncIterable<HarnessStreamPart>,
+    stream: AsyncIterable<StreamPart>,
     platform: PlatformClient,
     threadId: string,
     options: StreamMapperOptions,
-  ): Promise<HarnessStreamPart[]> {
-    const parts: HarnessStreamPart[] = [];
+  ): Promise<StreamPart[]> {
+    const parts: StreamPart[] = [];
     let textBuffer = '';
     const typingIntervalMs = options.typingIntervalMs ?? DEFAULT_TYPING_INTERVAL_MS;
 
@@ -47,7 +47,7 @@ export class StreamMapper {
       for await (const part of stream) {
         parts.push(part);
         if (part.type === 'text-delta') {
-          textBuffer += part.delta;
+          textBuffer += part.payload.delta;
         }
       }
 
@@ -64,7 +64,7 @@ export class StreamMapper {
   }
 
   async mapParts(
-    parts: HarnessStreamPart[],
+    parts: StreamPart[],
     platform: PlatformClient,
     threadId: string,
     options: StreamMapperOptions,
@@ -73,8 +73,8 @@ export class StreamMapper {
     const text =
       textOverride ??
       parts
-        .filter((part): part is Extract<HarnessStreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
-        .map((part) => part.delta)
+        .filter((part): part is Extract<StreamPart, { type: 'text-delta' }> => part.type === 'text-delta')
+        .map((part) => part.payload.delta)
         .join('');
     const meta = await this.buildMeta(
       options.windowStore,
@@ -116,7 +116,7 @@ export class StreamMapper {
   private async buildMeta(
     windowStore: WindowStore,
     threadId: string,
-    parts: HarnessStreamPart[],
+    parts: StreamPart[],
     sessionId: string,
     userId?: string,
   ): Promise<OutboundMeta> {
@@ -152,7 +152,7 @@ export class StreamMapper {
     threadId: string,
     text: string,
     meta: OutboundMeta,
-    parts: HarnessStreamPart[],
+    parts: StreamPart[],
   ): Promise<void> {
     // A turn that ends with an `interactive` part (flow choices) renders as a
     // native interactive message; its prompt IS the user-facing question, so
@@ -160,12 +160,12 @@ export class StreamMapper {
     const interactivePart = [...parts]
       .reverse()
       .find(
-        (part): part is Extract<HarnessStreamPart, { type: 'interactive' }> =>
+        (part): part is Extract<StreamPart, { type: 'interactive' }> =>
           part.type === 'interactive',
       );
     if (interactivePart) {
       const trimmed = text.trim();
-      if (trimmed.length > 0 && trimmed !== interactivePart.prompt.trim()) {
+      if (trimmed.length > 0 && trimmed !== interactivePart.payload.prompt.trim()) {
         await pipeline.send({
           threadId,
           platform: platform.platform,
@@ -178,7 +178,10 @@ export class StreamMapper {
         platform: platform.platform,
         payload: {
           kind: 'interactive',
-          interactive: renderChoices(interactivePart.options, interactivePart.prompt),
+          interactive: renderChoices(
+            interactivePart.payload.options,
+            interactivePart.payload.prompt,
+          ),
         },
         meta,
       });

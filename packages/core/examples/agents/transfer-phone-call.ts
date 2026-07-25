@@ -66,7 +66,7 @@ runV2Conversation({
     'Thanks bye.',
   ],
   onPart: (part) => {
-    if (part.type === 'tool-result') console.log(`[Tool result] ${part.toolName} => ${JSON.stringify(part.result)}`);
+    if (part.type === 'tool-result') console.log(`[Tool result] ${part.payload.toolName} => ${JSON.stringify(part.payload.result)}`);
   },
 }).catch((err) => {
   console.error(err);

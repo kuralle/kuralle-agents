@@ -9,10 +9,14 @@ describe('POST /api/chat/resume', () => {
     const runtime = {
       run: (opts: { sessionId?: string }) => {
         captured = opts;
+        const sessionId = opts.sessionId;
+        if (!sessionId) {
+          throw new Error('resume requires sessionId');
+        }
         return createMockTurnHandle(
           (async function* () {
-            yield { type: 'text-delta', id: 't', delta: 'resumed' };
-            yield { type: 'done', sessionId: opts.sessionId } as never;
+            yield { channel: 'client', type: 'text-delta', payload: { id: 't', delta: 'resumed' } };
+            yield { channel: 'client', type: 'done', payload: { sessionId } };
           })(),
         );
       },

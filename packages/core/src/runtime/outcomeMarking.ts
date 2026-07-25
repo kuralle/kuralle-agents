@@ -5,7 +5,7 @@ import type {
   ConversationOutcomeMarkedBy,
   ConversationOutcomeRecord,
 } from '../outcomes/types.js';
-import type { HarnessStreamPart } from '../types/stream.js';
+import type { StreamPart } from '../types/stream.js';
 
 export function isTerminalOutcome(outcome: ConversationOutcome): boolean {
   return outcome === 'resolved' || outcome === 'escalated' || outcome === 'abandoned';
@@ -16,7 +16,7 @@ export async function markSessionOutcome(
   session: Session,
   outcome: ConversationOutcome,
   opts: { reason?: string; markedBy?: ConversationOutcomeMarkedBy } = {},
-  emit?: (part: HarnessStreamPart) => void,
+  emit?: (part: StreamPart) => void,
 ): Promise<ConversationOutcomeRecord> {
   const now = new Date();
   session.metadata ??= {
@@ -41,8 +41,9 @@ export async function markSessionOutcome(
 
   if (emit) {
     emit({
+      channel: 'client',
       type: 'conversation-outcome',
-      outcome: record.outcome,
+      payload: { outcome: record.outcome },
     });
   }
 

@@ -9,7 +9,7 @@ import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import { SuspendError } from '../../src/runtime/durable/RunStore.js';
 import { SAFE_DEGRADED_MESSAGE } from '../../src/flow/degrade.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 afterEach(() => {
   mock.restore();
@@ -39,7 +39,7 @@ describe('W1 recovery boundary', () => {
       },
     };
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness('w1-throw-sess', 'w1-throw-run');
     const ctx = await createRunContext({
       session,
@@ -55,7 +55,7 @@ describe('W1 recovery boundary', () => {
 
     expect(result).toEqual({ kind: 'ended', reason: 'error_degraded' });
     expect(parts.some((p) => p.type === 'error')).toBe(true);
-    expect(parts.some((p) => p.type === 'text-delta' && p.delta === SAFE_DEGRADED_MESSAGE)).toBe(
+    expect(parts.some((p) => p.type === 'text-delta' && p.payload.delta === SAFE_DEGRADED_MESSAGE)).toBe(
       true,
     );
   });
@@ -144,7 +144,7 @@ describe('W1 recovery boundary', () => {
       };
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness('w1-bad-args-sess', 'w1-bad-args-run');
     const ctx = await createRunContext({
       session,
@@ -190,7 +190,7 @@ describe('W1 recovery boundary', () => {
       },
     };
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness('w1-osc-sess', 'w1-osc-run');
     const ctx = await createRunContext({
       session,

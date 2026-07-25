@@ -130,9 +130,12 @@ export async function simulateConversation(
     const handle = options.runtime.run({ sessionId, input: userMessage });
     let reply = '';
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') reply += part.delta;
-      if (part.type === 'tool-call') toolsCalled.push(part.toolName);
-      if (part.type === 'escalation' || (part.type === 'handoff' && part.targetAgent === 'human')) {
+      if (part.type === 'text-delta') reply += part.payload.delta;
+      if (part.type === 'tool-call') toolsCalled.push(part.payload.toolName);
+      if (
+        part.type === 'escalation' ||
+        (part.type === 'handoff' && part.payload.targetAgent === 'human')
+      ) {
         escalated = true;
       }
     }

@@ -9,7 +9,7 @@ import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
 import { liveModel } from '../helpers/liveModel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 const lm = liveModel();
 const describeLive = lm ? describe : describe.skip;
@@ -70,7 +70,7 @@ describeLive(`core-v2 agent live smoke (${lm?.label ?? 'no live key'})`, () => {
       defaultModel: model,
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const transcript: string[] = [];
 
     async function runTurn(userText: string) {
@@ -81,9 +81,9 @@ describeLive(`core-v2 agent live smoke (${lm?.label ?? 'no live key'})`, () => {
         if (part.type === 'text-delta') {
           const line = transcript[transcript.length - 1];
           if (line?.startsWith('assistant: ')) {
-            transcript[transcript.length - 1] = `${line}${part.delta}`;
+            transcript[transcript.length - 1] = `${line}${part.payload.delta}`;
           } else {
-            transcript.push(`assistant: ${part.delta}`);
+            transcript.push(`assistant: ${part.payload.delta}`);
           }
         }
       }
@@ -96,8 +96,8 @@ describeLive(`core-v2 agent live smoke (${lm?.label ?? 'no live key'})`, () => {
     await runTurn('My new name is Alex Rivera.');
     await runTurn('I would like to book a product demo for next week.');
 
-    const flowEnters = parts.filter((p) => p.type === 'flow-enter').map((p) => p.flow);
-    const flowEnds = parts.filter((p) => p.type === 'flow-end').map((p) => p.flow);
+    const flowEnters = parts.filter((p) => p.type === 'flow-enter').map((p) => p.payload.flow);
+    const flowEnds = parts.filter((p) => p.type === 'flow-end').map((p) => p.payload.flow);
 
     console.log('[smoke:agent] provider:', lm!.label);
     console.log('[smoke:agent] transcript:\n', transcript.join('\n'));

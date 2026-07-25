@@ -1,5 +1,5 @@
 import type {
-  HarnessStreamPart,
+  StreamPart,
   ResolvedSelection,
   SignalDelivery,
   UserInputContent,
@@ -32,7 +32,7 @@ export type InboundEvent =
     };
 
 export interface TurnResult {
-  parts: HarnessStreamPart[];
+  parts: StreamPart[];
   suspended?: { signalId: string };
   handoffToHuman?: boolean;
 }
@@ -80,7 +80,7 @@ export interface InboundRuntime {
 }
 
 export type InboundOutcome =
-  | { kind: 'ran'; parts: HarnessStreamPart[] }
+  | { kind: 'ran'; parts: StreamPart[] }
   | { kind: 'suspended'; signalId: string }
   | { kind: 'buffered' }
   | {

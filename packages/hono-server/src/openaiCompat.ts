@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { ModelMessage } from 'ai';
-import type { HarnessStreamPart, RuntimeLike, TurnHandle } from '@kuralle-agents/core';
+import type { StreamPart, RuntimeLike, TurnHandle } from '@kuralle-agents/core';
 import crypto from 'node:crypto';
 
 type SystemPromptMode = 'agent' | 'merge';
@@ -278,14 +278,16 @@ async function collectTurn(
   for await (const part of handle.events) {
     if (stopEarly) continue;
     if (part.type === 'text-delta') {
-      text += part.delta;
+      text += part.payload.delta;
     } else if (part.type === 'tool-call') {
-      if (!clientTools.has(part.toolName)) continue;
-      const argsStr = typeof part.args === 'string' ? part.args : JSON.stringify(part.args ?? {});
+      if (!clientTools.has(part.payload.toolName)) continue;
+      const argsStr = typeof part.payload.args === 'string'
+        ? part.payload.args
+        : JSON.stringify(part.payload.args ?? {});
       toolCalls.push({
         index: toolCalls.length,
-        id: part.toolCallId ?? `call_${crypto.randomBytes(6).toString('hex')}`,
-        name: part.toolName,
+        id: part.payload.toolCallId ?? `call_${crypto.randomBytes(6).toString('hex')}`,
+        name: part.payload.toolName,
         argsBuffer: argsStr,
         nameSent: false,
         argsSentLength: 0,
@@ -409,16 +411,18 @@ async function handleChatCompletions(
       for await (const part of handle.events) {
         if (stopEarly) continue;
         if (part.type === 'text-delta') {
-          if (!part.delta) continue;
-          completionText += part.delta;
-          await writeChunk({ content: part.delta });
+          if (!part.payload.delta) continue;
+          completionText += part.payload.delta;
+          await writeChunk({ content: part.payload.delta });
         } else if (part.type === 'tool-call') {
-          if (!clientToolSet.has(part.toolName)) continue;
-          const argsStr = typeof part.args === 'string' ? part.args : JSON.stringify(part.args ?? {});
+          if (!clientToolSet.has(part.payload.toolName)) continue;
+          const argsStr = typeof part.payload.args === 'string'
+            ? part.payload.args
+            : JSON.stringify(part.payload.args ?? {});
           const acc: ToolCallAccumulator = {
             index: pendingToolCalls.length,
-            id: part.toolCallId ?? `call_${crypto.randomBytes(6).toString('hex')}`,
-            name: part.toolName,
+            id: part.payload.toolCallId ?? `call_${crypto.randomBytes(6).toString('hex')}`,
+            name: part.payload.toolName,
             argsBuffer: argsStr,
             nameSent: false,
             argsSentLength: 0,

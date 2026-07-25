@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { ChoiceOption, HarnessStreamPart } from '@kuralle-agents/core';
+import type { ChoiceOption, StreamPart } from '@kuralle-agents/core';
 import type { Runtime } from '@kuralle-agents/core';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
 import { InMemoryWindowStore, OutboundPipeline, windowGuard } from '@kuralle-agents/messaging';
@@ -44,7 +44,7 @@ const mockSelector: TemplateSelector = {
   },
 };
 
-function mockRuntime(parts: HarnessStreamPart[]): Runtime {
+function mockRuntime(parts: StreamPart[]): Runtime {
   return createMockRuntime(parts) as unknown as Runtime;
 }
 
@@ -62,7 +62,7 @@ function buildPolicies(windowStore: InMemoryWindowStore, channels: string[]) {
 }
 
 function buildSimulator(
-  parts: HarnessStreamPart[],
+  parts: StreamPart[],
   channels: string[] = ['whatsapp', 'web'],
 ) {
   const windowStore = new InMemoryWindowStore();
@@ -80,9 +80,13 @@ function buildSimulator(
 
 describe('simulator_drives_multi_turn', () => {
   it('returns rendered sends per turn and accumulates history', async () => {
-    const parts: HarnessStreamPart[] = [
-      { type: 'text-delta', id: 't0', delta: 'Hello there' },
-      { type: 'done', sessionId: 'thread-1' },
+    const parts: StreamPart[] = [
+      {
+        channel: 'client',
+        type: 'text-delta',
+        payload: { id: 't0', delta: 'Hello there' },
+      },
+      { channel: 'client', type: 'done', payload: { sessionId: 'thread-1' } },
     ];
     const { sim } = buildSimulator(parts);
 
@@ -153,7 +157,10 @@ describe('simulator_renders_per_channel', () => {
 describe('simulator_reports_window_state', () => {
   it('reports an open window after an inbound turn on a windowed channel', async () => {
     const { sim } = buildSimulator(
-      [{ type: 'text-delta', id: 't0', delta: 'ok' }, { type: 'done', sessionId: 't-win' }],
+      [
+        { channel: 'client', type: 'text-delta', payload: { id: 't0', delta: 'ok' } },
+        { channel: 'client', type: 'done', payload: { sessionId: 't-win' } },
+      ],
       ['whatsapp'],
     );
 

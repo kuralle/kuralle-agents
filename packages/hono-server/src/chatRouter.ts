@@ -48,34 +48,18 @@ export function createKuralleSseChatRouter({
       userId: body.userId,
     });
 
-    const responseStream = handle.toResponseStream('sse');
-    const reader = responseStream.getReader();
     const encoder = new TextEncoder();
 
     const filtered = new ReadableStream({
       async start(controller) {
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = new TextDecoder().decode(value);
-            for (const line of chunk.split('\n\n')) {
-              if (!line.startsWith('data: ')) continue;
-              const raw = line.slice('data: '.length);
-              if (!raw.trim()) continue;
-              let part: { type: string };
-              try {
-                part = JSON.parse(raw) as { type: string };
-              } catch {
-                controller.enqueue(value);
-                continue;
-              }
-              if (!shouldEmit(part, streamFilter)) continue;
-              const safe = sanitizeForClient(part);
-              const payload = `data: ${JSON.stringify(safe)}\n\n`;
-              controller.enqueue(encoder.encode(payload));
-            }
+          for await (const part of handle.events) {
+            if (!shouldEmit(part, streamFilter)) continue;
+            const safe = sanitizeForClient(part);
+            const payload = `data: ${JSON.stringify(safe)}\n\n`;
+            controller.enqueue(encoder.encode(payload));
           }
+          await handle;
           controller.close();
         } catch (error) {
           const message =
@@ -83,7 +67,11 @@ export function createKuralleSseChatRouter({
               ? (error as Error).message
               : 'An error occurred. Please try again.';
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: 'error', error: message })}\n\n`),
+            encoder.encode(`data: ${JSON.stringify({
+              channel: 'client',
+              type: 'error',
+              payload: { error: message },
+            })}\n\n`),
           );
           controller.close();
         } finally {

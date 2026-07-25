@@ -4,7 +4,7 @@ import { OutboundPipeline } from '../src/adapter/outbound-pipeline.js';
 import { windowGuard } from '../src/adapter/middleware/window-guard.js';
 import { InMemoryWindowStore } from '../src/adapter/window-store.js';
 import type { PlatformClient } from '../src/types.js';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 
 function fakePlatform(sent: Array<{ kind: string; payload: unknown }>): PlatformClient {
   return {
@@ -29,7 +29,7 @@ function fakePlatform(sent: Array<{ kind: string; payload: unknown }>): Platform
   } as unknown as PlatformClient;
 }
 
-async function* stream(parts: HarnessStreamPart[]) {
+async function* stream(parts: StreamPart[]) {
   for (const part of parts) yield part;
 }
 
@@ -44,15 +44,18 @@ describe('StreamMapper default mapping — interactive parts', () => {
     await mapper.mapStream(
       stream([
         {
+          channel: 'internal',
           type: 'interactive',
-          nodeId: 'pick',
-          prompt: 'Which cake would you like?',
-          options: [
-            { id: 'choc', label: 'Chocolate' },
-            { id: 'van', label: 'Vanilla' },
-          ],
+          payload: {
+            nodeId: 'pick',
+            prompt: 'Which cake would you like?',
+            options: [
+              { id: 'choc', label: 'Chocolate' },
+              { id: 'van', label: 'Vanilla' },
+            ],
+          },
         },
-        { type: 'done', sessionId: 's1' },
+        { channel: 'client', type: 'done', payload: { sessionId: 's1' } },
       ]),
       platform,
       't1',
@@ -80,16 +83,23 @@ describe('StreamMapper default mapping — interactive parts', () => {
 
     await mapper.mapStream(
       stream([
-        { type: 'text-start', id: 'x' },
-        { type: 'text-delta', id: 'x', delta: 'Great news — those are in stock!' },
-        { type: 'text-end', id: 'x' },
+        { channel: 'client', type: 'text-start', payload: { id: 'x' } },
         {
-          type: 'interactive',
-          nodeId: 'pick',
-          prompt: 'Pick one:',
-          options: [{ id: 'a', label: 'A' }],
+          channel: 'client',
+          type: 'text-delta',
+          payload: { id: 'x', delta: 'Great news — those are in stock!' },
         },
-        { type: 'done', sessionId: 's2' },
+        { channel: 'client', type: 'text-end', payload: { id: 'x' } },
+        {
+          channel: 'internal',
+          type: 'interactive',
+          payload: {
+            nodeId: 'pick',
+            prompt: 'Pick one:',
+            options: [{ id: 'a', label: 'A' }],
+          },
+        },
+        { channel: 'client', type: 'done', payload: { sessionId: 's2' } },
       ]),
       platform,
       't2',

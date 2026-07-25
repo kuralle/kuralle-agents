@@ -62,7 +62,7 @@ runV2Conversation({
   agent,
   prompts: ['Hi there', "I'm ready to talk to myself", 'This should get echoed', 'Thanks bye'],
   onPart: (part) => {
-    if (part.type === 'tool-result') console.log(`[Tool result] ${part.toolName} => ${JSON.stringify(part.result)}`);
+    if (part.type === 'tool-result') console.log(`[Tool result] ${part.payload.toolName} => ${JSON.stringify(part.payload.result)}`);
   },
 }).catch((err) => {
   console.error(err);

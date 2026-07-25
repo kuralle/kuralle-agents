@@ -1,8 +1,7 @@
 import type { ModelMessage } from 'ai';
 import type { SessionEndMetadata, TurnUsage } from './telemetry.js';
-import type { AgentStreamPart } from './processors.js';
 import type { AgentContext, RunContext, Session, ToolCallRecord } from './session.js';
-import type { HarnessStreamPart } from './voice.js';
+import type { StreamPart } from './stream.js';
 import type { RefineDecision, ValidateDecision } from '../capabilities/index.js';
 import type { ConversationOutcome, ConversationOutcomeRecord } from '../outcomes/types.js';
 import type { ChannelId } from './session.js';
@@ -27,7 +26,7 @@ export interface Hook {
   name: string;
   onTurnStart?: (ctx: AgentContext, input: string) => Promise<void>;
   onTurnEnd?: (ctx: AgentContext) => Promise<void>;
-  onStreamPart?: (ctx: AgentContext, part: AgentStreamPart) => Promise<void>;
+  onStreamPart?: (ctx: AgentContext, part: StreamPart) => Promise<void>;
   onAgentSwitch?: (ctx: AgentContext, from: string, to: string) => Promise<void>;
   onError?: (ctx: AgentContext, error: Error) => Promise<void>;
 }
@@ -78,7 +77,7 @@ export interface HarnessHooks {
   onHandoff?: (context: RunContext, from: string, to: string, reason: string) => Promise<void>;
   onError?: (context: RunContext, error: Error) => Promise<void>;
   onMessage?: (context: RunContext, message: ModelMessage) => Promise<void>;
-  onStreamPart?: (context: RunContext, part: HarnessStreamPart) => Promise<void>;
+  onStreamPart?: (context: RunContext, part: StreamPart) => Promise<void>;
   onPersistenceError?: (session: Session, error: Error) => Promise<void>;
   onMemoryIngest?: (context: RunContext, session: Session) => Promise<boolean | void>;
   onMemoryIngested?: (context: RunContext, session: Session) => Promise<void>;

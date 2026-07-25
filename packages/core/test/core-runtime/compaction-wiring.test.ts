@@ -7,7 +7,7 @@ import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 afterEach(() => {
   mock.restore();
@@ -33,7 +33,7 @@ function seedHistory(turns: number, padding = 300): ModelMessage[] {
 }
 
 async function collectParts(handle: import('../../src/types/stream.js').TurnHandle) {
-  const parts: HarnessStreamPart[] = [];
+  const parts: StreamPart[] = [];
   for await (const part of handle.events) {
     parts.push(part);
   }
@@ -119,7 +119,7 @@ describe('Runtime compaction wiring', () => {
     const recoveredEvent = parts.find((part) => part.type === 'context-overflow-recovered');
     expect(recoveredEvent).toBeDefined();
     if (recoveredEvent?.type === 'context-overflow-recovered') {
-      expect(recoveredEvent.compacted).toBe(true);
+      expect(recoveredEvent.payload.compacted).toBe(true);
     }
     expect(parts.find((part) => part.type === 'context-compacted')).toBeDefined();
   });

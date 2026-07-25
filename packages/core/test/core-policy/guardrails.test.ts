@@ -51,7 +51,7 @@ describe('guardrails', () => {
       }],
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push(part.delta);
+          emitted.push(part.payload.delta);
         }
       },
     });
@@ -101,7 +101,7 @@ describe('guardrails', () => {
       outputProcessors: [scrubber],
       emit: (part) => {
         if (part.type === 'text-delta') {
-          emitted.push(part.delta);
+          emitted.push(part.payload.delta);
         }
       },
     });

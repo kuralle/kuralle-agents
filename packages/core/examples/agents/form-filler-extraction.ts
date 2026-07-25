@@ -118,8 +118,8 @@ runV2Conversation({
     'Yes that summary is correct, thanks bye.',
   ],
   onPart: (part) => {
-    if (part.type === 'tool-call') console.log(`[Tool call] ${part.toolName}`);
-    if (part.type === 'tool-result') console.log(`[Tool result] ${part.toolName}`);
+    if (part.type === 'tool-call') console.log(`[Tool call] ${part.payload.toolName}`);
+    if (part.type === 'tool-result') console.log(`[Tool result] ${part.payload.toolName}`);
   },
 }).catch((err) => {
   console.error(err);

@@ -17,7 +17,7 @@ import type {
   InteractiveMessage,
   StatusUpdate,
 } from '../src/types.js';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
 
 // ---------------------------------------------------------------------------
@@ -93,32 +93,56 @@ function createMockPlatform(options?: {
 
 // Stream generator helpers
 
-async function* emptyStream(): AsyncGenerator<HarnessStreamPart> {
+async function* emptyStream(): AsyncGenerator<StreamPart> {
   // yields nothing
 }
 
-async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, id: 't', delta: text };
+async function* textStream(text: string): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'client',
+    type: 'text-delta' as const,
+    payload: { id: 't', delta: text },
+  };
 }
 
-async function* errorStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, id: 't', delta: 'partial...' };
+async function* errorStream(): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'client',
+    type: 'text-delta' as const,
+    payload: { id: 't', delta: 'partial...' },
+  };
   throw new Error('stream crashed');
 }
 
-async function* emptyTextStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta' as const, id: 't', delta: '' };
-  yield { type: 'done' as const, sessionId: 'sess1' };
+async function* emptyTextStream(): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'client',
+    type: 'text-delta' as const,
+    payload: { id: 't', delta: '' },
+  };
+  yield { channel: 'client', type: 'done' as const, payload: { sessionId: 'sess1' } };
 }
 
-async function* errorPartStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'error' as const, error: 'something went wrong' };
+async function* errorPartStream(): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'client',
+    type: 'error' as const,
+    payload: { error: 'something went wrong' },
+  };
 }
 
-async function* nonTextStream(): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'node-enter' as const, nodeName: 'greeting' };
-  yield { type: 'node-exit' as const, nodeName: 'greeting' };
-  yield { type: 'done' as const, sessionId: 'sess1' };
+async function* nonTextStream(): AsyncGenerator<StreamPart> {
+  yield {
+    channel: 'internal',
+    type: 'node-enter' as const,
+    payload: { nodeName: 'greeting' },
+  };
+  yield {
+    channel: 'internal',
+    type: 'node-exit' as const,
+    payload: { nodeName: 'greeting' },
+  };
+  yield { channel: 'client', type: 'done' as const, payload: { sessionId: 'sess1' } };
 }
 
 async function openWindowMapperOptions(
@@ -424,9 +448,13 @@ describe('StreamMapper — unhappy paths', () => {
     const platform = createMockPlatform();
 
     // Use a very short typing interval to verify it fires
-    async function* slowStream(): AsyncGenerator<HarnessStreamPart> {
+    async function* slowStream(): AsyncGenerator<StreamPart> {
       await new Promise((r) => setTimeout(r, 100));
-      yield { type: 'text-delta' as const, id: 't', delta: 'hello' };
+      yield {
+        channel: 'client',
+        type: 'text-delta' as const,
+        payload: { id: 't', delta: 'hello' },
+      };
     }
 
     await mapper.mapStream(slowStream(), platform, 'thread-1', {

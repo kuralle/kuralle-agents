@@ -2,7 +2,7 @@ import { describe, it, expect } from 'bun:test';
 import type { ChoiceOption } from '@kuralle-agents/core';
 import { MemoryStore } from '@kuralle-agents/core';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import {
   createMessagingRouter,
   InMemoryWindowStore,
@@ -115,8 +115,8 @@ function stubPolicy(
   };
 }
 
-async function* textStream(text: string): AsyncGenerator<HarnessStreamPart> {
-  yield { type: 'text-delta', id: 't', delta: text };
+async function* textStream(text: string): AsyncGenerator<StreamPart> {
+  yield { channel: 'client', type: 'text-delta', payload: { id: 't', delta: text } };
 }
 
 describe('engagement_composes_bridge', () => {

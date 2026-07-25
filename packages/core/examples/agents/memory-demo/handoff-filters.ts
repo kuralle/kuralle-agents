@@ -117,9 +117,9 @@ async function main() {
     process.stdout.write('Agent: ');
     const handle = runtime.run({ sessionId, input });
     for await (const part of handle.events) {
-      if (part.type === 'text-delta') process.stdout.write(part.delta);
+      if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
       if (part.type === 'handoff') {
-        console.log(`\n  [Handoff] → ${part.targetAgent} (reason: ${part.reason ?? ''})`);
+        console.log(`\n  [Handoff] → ${part.payload.targetAgent} (reason: ${part.payload.reason ?? ''})`);
         process.stdout.write('Agent: ');
       }
     }

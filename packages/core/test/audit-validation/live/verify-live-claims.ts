@@ -25,7 +25,7 @@ import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { defineTool, buildToolSet } from '../../../src/tools/effect/defineTool.js';
 import { reply, collect, decide, action, defineFlow } from '../../../src/authoring/nodes.js';
 import { deriveAgentShape } from '../../../src/runtime/deriveAgent.js';
-import type { HarnessStreamPart, TurnHandle } from '../../../src/types/stream.js';
+import type { StreamPart, TurnHandle } from '../../../src/types/stream.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 config({ path: join(here, '../../../.env') }); // packages/core/.env
@@ -74,14 +74,14 @@ async function drive(handle: TurnHandle): Promise<TurnObs> {
     handoffs: [], nodes: [], errors: [], safetyBlocked: false, types: [],
   };
   try {
-    for await (const part of handle.events as AsyncIterable<HarnessStreamPart>) {
+    for await (const part of handle.events as AsyncIterable<StreamPart>) {
       o.types.push(part.type);
-      if (part.type === 'text-delta') o.text += part.delta;
-      else if (part.type === 'tool-call') o.toolCalls.push(part.toolName);
-      else if (part.type === 'tool-result') o.toolResults.push({ name: part.toolName, result: part.result });
-      else if (part.type === 'flow-enter') o.flowEnters.push(part.flow);
-      else if (part.type === 'flow-end') o.flowEnds.push(part.flow);
-      else if (part.type === 'handoff') o.handoffs.push(part.targetAgent);
+      if (part.type === 'text-delta') o.text += part.payload.delta;
+      else if (part.type === 'tool-call') o.toolCalls.push(part.payload.toolName);
+      else if (part.type === 'tool-result') o.toolResults.push({ name: part.payload.toolName, result: part.payload.result });
+      else if (part.type === 'flow-enter') o.flowEnters.push(part.payload.flow);
+      else if (part.type === 'flow-end') o.flowEnds.push(part.payload.flow);
+      else if (part.type === 'handoff') o.handoffs.push(part.payload.targetAgent);
       else if (part.type === 'node-enter') o.nodes.push((part as { nodeName?: string }).nodeName ?? '');
       else if (part.type === 'error') o.errors.push(String((part as { error?: unknown }).error));
       else if (part.type === 'safety-blocked') o.safetyBlocked = true;

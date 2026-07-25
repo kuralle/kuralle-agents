@@ -129,7 +129,7 @@ describe('approved approval round-trip', () => {
     const { recordSignalDelivery } = await import('../../src/runtime/durable/replay.js');
 
     // Turn 1: suspends on approve; the post-approval tool must NOT fire.
-    const parts1: import('../../src/types/stream.js').HarnessStreamPart[] = [];
+    const parts1: import('../../src/types/stream.js').StreamPart[] = [];
     const ctx1 = await createRunContext({
       session,
       runStore,
@@ -145,7 +145,7 @@ describe('approved approval round-trip', () => {
     expect(paused.status).toBe('paused');
     expect(paused.waitingFor?.signalName).toBe('__approval');
     expect(chargeSpy.count).toBe(0);
-    expect(parts1.some((part) => part.type === 'paused' && part.waitingFor === '__approval')).toBe(true);
+    expect(parts1.some((part) => part.type === 'paused' && part.payload.waitingFor === '__approval')).toBe(true);
     expect(
       (await runStore.getSteps(runState.runId)).filter((step) => step.kind === 'tool' && step.name === 'charge'),
     ).toHaveLength(0);

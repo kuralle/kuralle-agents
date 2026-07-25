@@ -7,7 +7,7 @@ import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness, reloadRunState } from '../core-durable/helpers.js';
 import { setPendingUserInput, consumePendingUserInput } from '../../src/runtime/channels/inputBuffer.js';
-import type { HarnessStreamPart } from '../../src/types/stream.js';
+import type { StreamPart } from '../../src/types/stream.js';
 
 describe('runFlow action exactly-once via effect log', () => {
   it('does not re-fire ctx.tool when re-entering the action node on resume', async () => {
@@ -106,7 +106,7 @@ describe('runFlow oscillation cap', () => {
     };
 
     const { session, runStore, runState } = await setupDurableHarness('osc-sess', 'osc-run');
-    const errors: HarnessStreamPart[] = [];
+    const errors: StreamPart[] = [];
     const ctx = await createRunContext({
       session,
       runState,
@@ -121,7 +121,7 @@ describe('runFlow oscillation cap', () => {
     expect(result).toEqual({ kind: 'ended', reason: 'error_degraded' });
     expect(errors.some((part) => part.type === 'error')).toBe(true);
     expect(
-      errors.some((part) => part.type === 'text-delta' && part.delta === SAFE_DEGRADED_MESSAGE),
+      errors.some((part) => part.type === 'text-delta' && part.payload.delta === SAFE_DEGRADED_MESSAGE),
     ).toBe(true);
   });
 });
@@ -138,7 +138,7 @@ describe('runFlow transition events', () => {
       nodes: [source, target],
     });
 
-    const parts: HarnessStreamPart[] = [];
+    const parts: StreamPart[] = [];
     const driver = {
       async runAgentTurn() {
         return { text: 'hi', toolResults: [] };
@@ -162,11 +162,11 @@ describe('runFlow transition events', () => {
     await runFlow(flow, runState, driver, ctx);
 
     expect(parts.some((part) => part.type === 'flow-enter')).toBe(true);
-    expect(parts.some((part) => part.type === 'node-enter' && part.nodeName === 'source')).toBe(true);
-    expect(parts.some((part) => part.type === 'flow-transition' && part.from === 'source' && part.to === 'target')).toBe(
+    expect(parts.some((part) => part.type === 'node-enter' && part.payload.nodeName === 'source')).toBe(true);
+    expect(parts.some((part) => part.type === 'flow-transition' && part.payload.from === 'source' && part.payload.to === 'target')).toBe(
       true,
     );
-    expect(parts.some((part) => part.type === 'node-exit' && part.nodeName === 'source')).toBe(true);
+    expect(parts.some((part) => part.type === 'node-exit' && part.payload.nodeName === 'source')).toBe(true);
   });
 });
 

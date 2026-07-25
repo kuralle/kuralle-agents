@@ -71,13 +71,21 @@ async function main() {
   const toolTrace: unknown[] = [];
   let text = '';
   for await (const event of handle.events) {
-    if (event.type === 'text-delta') text += event.delta;
+    if (event.type === 'text-delta') text += event.payload.delta;
     if (event.type === 'tool-call') {
-      toolCalls.push(event.toolName);
-      toolTrace.push({ kind: 'call', name: event.toolName, args: event.args });
+      toolCalls.push(event.payload.toolName);
+      toolTrace.push({
+        kind: 'call',
+        name: event.payload.toolName,
+        args: event.payload.args,
+      });
     }
     if (event.type === 'tool-result') {
-      toolTrace.push({ kind: 'result', name: event.toolName, result: event.result });
+      toolTrace.push({
+        kind: 'result',
+        name: event.payload.toolName,
+        result: event.payload.result,
+      });
     }
   }
   const result = await handle;
@@ -94,13 +102,21 @@ async function main() {
     toolCalls.length = 0;
     toolTrace.length = 0;
     for await (const event of followUp.events) {
-      if (event.type === 'text-delta') text += event.delta;
+      if (event.type === 'text-delta') text += event.payload.delta;
       if (event.type === 'tool-call') {
-        toolCalls.push(event.toolName);
-        toolTrace.push({ kind: 'call', name: event.toolName, args: event.args });
+        toolCalls.push(event.payload.toolName);
+        toolTrace.push({
+          kind: 'call',
+          name: event.payload.toolName,
+          args: event.payload.args,
+        });
       }
       if (event.type === 'tool-result') {
-        toolTrace.push({ kind: 'result', name: event.toolName, result: event.result });
+        toolTrace.push({
+          kind: 'result',
+          name: event.payload.toolName,
+          result: event.payload.result,
+        });
       }
     }
     const result2 = await followUp;

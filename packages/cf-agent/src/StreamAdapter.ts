@@ -1,9 +1,9 @@
-import type { HarnessStreamPart } from '@kuralle-agents/core';
+import type { StreamPart } from '@kuralle-agents/core';
 import type { StreamAdapterConfig } from './types.js';
 import { DEFAULT_STREAM_CONFIG } from './types.js';
 
 /**
- * Convert Kuralle's HarnessStreamPart generator into an SSE Response
+ * Convert Kuralle's StreamPart generator into an SSE Response
  * that CF's AIChatAgent._reply() can parse.
  *
  * CF's _streamSSEReply reads lines in the format:
@@ -23,7 +23,7 @@ type SSETextState = {
 };
 
 export function createSSEResponse(
-  stream: AsyncGenerator<HarnessStreamPart>,
+  stream: AsyncGenerator<StreamPart>,
   config: StreamAdapterConfig = DEFAULT_STREAM_CONFIG,
 ): Response {
   const encoder = new TextEncoder();
@@ -63,11 +63,11 @@ export function createSSEResponse(
 }
 
 /**
- * Convert a single HarnessStreamPart to SSE data lines.
+ * Convert a single StreamPart to SSE data lines.
  * Returns 0+ formatted SSE lines ("data: {...}\n\n").
  */
 export function convertToSSELines(
-  part: HarnessStreamPart,
+  part: StreamPart,
   config: StreamAdapterConfig,
   textState: SSETextState,
 ): string[] {
@@ -90,20 +90,20 @@ export function convertToSSELines(
       break;
 
     case 'text-cancel': {
-      textState.canceledIds.add(part.id);
+      textState.canceledIds.add(part.payload.id);
       closeTextSegment();
       break;
     }
 
     case 'text-delta': {
-      if (textState.canceledIds.has(part.id)) {
+      if (textState.canceledIds.has(part.payload.id)) {
         break;
       }
       if (!textState.open) {
         lines.push(sse({ type: 'text-start' }));
         textState.open = true;
       }
-      lines.push(sse({ type: 'text-delta', delta: part.delta }));
+      lines.push(sse({ type: 'text-delta', delta: part.payload.delta }));
       break;
     }
 
@@ -112,9 +112,9 @@ export function convertToSSELines(
       // CF expects tool-input-available with toolCallId, toolName, input
       lines.push(sse({
         type: 'tool-input-available',
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        input: config.includeToolArgs ? part.args : undefined,
+        toolCallId: part.payload.toolCallId,
+        toolName: part.payload.toolName,
+        input: config.includeToolArgs ? part.payload.args : undefined,
       }));
       break;
     }
@@ -122,8 +122,8 @@ export function convertToSSELines(
     case 'tool-result': {
       lines.push(sse({
         type: 'tool-output-available',
-        toolCallId: part.toolCallId,
-        output: part.result,
+        toolCallId: part.payload.toolCallId,
+        output: part.payload.result,
       }));
       break;
     }
@@ -133,8 +133,8 @@ export function convertToSSELines(
       lines.push(sse({
         type: 'data-handoff',
         data: {
-          to: part.targetAgent,
-          reason: part.reason,
+          to: part.payload.targetAgent,
+          reason: part.payload.reason,
         },
       }));
       break;
@@ -144,7 +144,7 @@ export function convertToSSELines(
       if (!config.includeFlowEvents) break;
       lines.push(sse({
         type: 'data-flow-enter',
-        data: { flow: part.flow },
+        data: { flow: part.payload.flow },
       }));
       break;
     }
@@ -153,7 +153,7 @@ export function convertToSSELines(
       if (!config.includeFlowEvents) break;
       lines.push(sse({
         type: 'data-flow-node',
-        data: { node: part.nodeName, event: 'enter' },
+        data: { node: part.payload.nodeName, event: 'enter' },
       }));
       break;
     }
@@ -162,7 +162,7 @@ export function convertToSSELines(
       if (!config.includeFlowEvents) break;
       lines.push(sse({
         type: 'data-flow-node',
-        data: { node: part.nodeName, event: 'exit' },
+        data: { node: part.payload.nodeName, event: 'exit' },
       }));
       break;
     }
@@ -171,7 +171,7 @@ export function convertToSSELines(
       if (!config.includeFlowEvents) break;
       lines.push(sse({
         type: 'data-flow-transition',
-        data: { from: part.from, to: part.to },
+        data: { from: part.payload.from, to: part.payload.to },
       }));
       break;
     }
@@ -180,7 +180,7 @@ export function convertToSSELines(
       if (!config.includeFlowEvents) break;
       lines.push(sse({
         type: 'data-flow-end',
-        data: { reason: part.reason },
+        data: { reason: part.payload.reason },
       }));
       break;
     }
@@ -188,7 +188,7 @@ export function convertToSSELines(
     case 'error': {
       lines.push(sse({
         type: 'data-error',
-        data: { error: part.error },
+        data: { error: part.payload.error },
       }));
       break;
     }

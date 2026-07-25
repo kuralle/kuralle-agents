@@ -382,8 +382,46 @@ export type {
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
 export type { Route } from './types/route.js';
-export type { TurnHandle } from './types/stream.js';
-export type { HarnessStreamPart } from './types/stream.js';
+export { PART_CHANNEL } from './types/stream.js';
+export type {
+  StreamChannel,
+  StreamPartBase,
+  TextStartPayload,
+  TextDeltaPayload,
+  TextEndPayload,
+  TextCancelPayload,
+  ToolCallPayload,
+  ToolResultPayload,
+  FlowEnterPayload,
+  FlowEndPayload,
+  NodeEnterPayload,
+  NodeExitPayload,
+  FlowTransitionPayload,
+  HandoffPayload,
+  InterruptedPayload,
+  PausedPayload,
+  ConversationOutcomePayload,
+  InteractivePayload,
+  TurnEndPayload,
+  PipelineValidationBlockPayload,
+  SafetyBlockedPayload,
+  WakePayload,
+  EscalationPayload,
+  ContextCompactedPayload,
+  CompactionSkippedPayload,
+  ContextOverflowRecoveredPayload,
+  ErrorPayload,
+  CustomPayload,
+  DonePayload,
+  KnowledgeCitationPayload,
+  KnowledgeCacheHitPayload,
+  KnowledgeCacheMissPayload,
+  KnowledgeSearchPayload,
+  KnowledgeQualityCheckPayload,
+  KnowledgeReformulationPayload,
+  StreamPart,
+  TurnHandle,
+} from './types/stream.js';
 export type { AgentSpan, AgentTrace, SpanKind } from './types/trace.js';
 export {
   MemoryTraceStore,

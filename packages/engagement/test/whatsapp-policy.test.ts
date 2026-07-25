@@ -365,13 +365,16 @@ describe('whatsapp_policy_unchanged_behavior', () => {
           window: openWindow,
           parts: [
             {
+              channel: 'internal',
               type: 'interactive',
-              nodeId: 'pick',
-              options: [
-                { id: 'a', label: 'Alpha' },
-                { id: 'b', label: 'Bravo' },
-              ],
-              prompt: 'Pick',
+              payload: {
+                nodeId: 'pick',
+                options: [
+                  { id: 'a', label: 'Alpha' },
+                  { id: 'b', label: 'Bravo' },
+                ],
+                prompt: 'Pick',
+              },
             },
           ],
           sessionId: 'sess-1',

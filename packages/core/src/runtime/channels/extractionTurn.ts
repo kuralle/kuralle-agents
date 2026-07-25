@@ -53,7 +53,7 @@ export async function runSilentExtraction(
       if (part.type === 'error') {
         const err = (part as { error?: unknown }).error;
         const message = err instanceof Error ? err.message : String(err);
-        ctx.emit({ type: 'error', error: message });
+        ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
         throw err instanceof Error ? err : new Error(message);
       }
     }

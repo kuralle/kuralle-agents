@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createRuntime, defineAgent } from '@kuralle-agents/core';
-import type { HarnessStreamPart, TurnHandle } from '@kuralle-agents/core';
+import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
 import {
   createCartTools,
   createOrderTool,
@@ -93,9 +93,9 @@ async function turn(input: string): Promise<{ text: string; tools: string[] }> {
   const handle: TurnHandle = runtime.run({ sessionId: 'live-cart', input });
   const tools: string[] = [];
   let text = '';
-  for await (const part of handle.events as AsyncIterable<HarnessStreamPart>) {
-    if (part.type === 'tool-call') tools.push(part.toolName);
-    if (part.type === 'text-delta') text += part.delta;
+  for await (const part of handle.events as AsyncIterable<StreamPart>) {
+    if (part.type === 'tool-call') tools.push(part.payload.toolName);
+    if (part.type === 'text-delta') text += part.payload.delta;
   }
   const result = await handle;
   return { text: text || result.text, tools };

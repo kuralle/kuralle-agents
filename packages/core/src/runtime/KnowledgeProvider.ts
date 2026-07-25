@@ -19,9 +19,9 @@ import type {
   KnowledgeRetrievalResult,
   KnowledgeRetrieverAdapter,
   KnowledgeEmbedderAdapter,
-  HarnessStreamPart,
   RetrievalCacheAdapter,
 } from '../types/index.js';
+import type { StreamPart } from '../types/stream.js';
 import { InMemoryRetrievalCache } from './InMemoryRetrievalCache.js';
 
 // Re-export so existing consumers that import from KnowledgeProvider still work
@@ -138,10 +138,10 @@ export class KnowledgeProvider {
     isVoice = false,
   ): Promise<{
     results: KnowledgeRetrievalResult[];
-    events: HarnessStreamPart[];
+    events: StreamPart[];
   }> {
     const resolved = this.resolveConfig(agentOverrides);
-    const events: HarnessStreamPart[] = [];
+    const events: StreamPart[] = [];
 
     if (!this.retriever || !resolved.toolEnabled) {
       return { results: [], events };
@@ -156,25 +156,34 @@ export class KnowledgeProvider {
 
       if (cached.length > 0) {
         events.push({
+          channel: 'internal',
           type: 'knowledge-cache-hit',
-          query,
-          resultCount: cached.length,
-          latencyMs: cacheLatency,
+          payload: {
+            query,
+            resultCount: cached.length,
+            latencyMs: cacheLatency,
+          },
         });
         events.push({
+          channel: 'internal',
           type: 'knowledge-search',
-          query,
-          resultCount: cached.length,
-          latencyMs: cacheLatency,
-          layer: 'cache',
+          payload: {
+            query,
+            resultCount: cached.length,
+            latencyMs: cacheLatency,
+            layer: 'cache',
+          },
         });
         return { results: cached, events };
       }
 
       events.push({
+        channel: 'internal',
         type: 'knowledge-cache-miss',
-        query,
-        latencyMs: cacheLatency,
+        payload: {
+          query,
+          latencyMs: cacheLatency,
+        },
       });
 
       // Layer 3: Hybrid search (cache miss)
@@ -188,11 +197,14 @@ export class KnowledgeProvider {
       const searchLatency = Date.now() - searchStart;
 
       events.push({
+        channel: 'internal',
         type: 'knowledge-search',
-        query,
-        resultCount: results.length,
-        latencyMs: searchLatency,
-        layer: 'hybrid',
+        payload: {
+          query,
+          resultCount: results.length,
+          latencyMs: searchLatency,
+          layer: 'hybrid',
+        },
       });
 
       // Quality check + optional reformulation
@@ -216,11 +228,14 @@ export class KnowledgeProvider {
     const searchLatency = Date.now() - searchStart;
 
     events.push({
+      channel: 'internal',
       type: 'knowledge-search',
-      query,
-      resultCount: results.length,
-      latencyMs: searchLatency,
-      layer: 'hybrid',
+      payload: {
+        query,
+        resultCount: results.length,
+        latencyMs: searchLatency,
+        layer: 'hybrid',
+      },
     });
 
     // Quality check + optional reformulation
@@ -237,7 +252,7 @@ export class KnowledgeProvider {
   private async runQualityCheck(
     query: string,
     results: KnowledgeRetrievalResult[],
-    events: HarnessStreamPart[],
+    events: StreamPart[],
     isVoice: boolean,
     resolved: ResolvedKnowledgeConfig,
   ): Promise<KnowledgeRetrievalResult[]> {
@@ -264,12 +279,15 @@ export class KnowledgeProvider {
     }
 
     events.push({
+      channel: 'internal',
       type: 'knowledge-quality-check',
-      query,
-      quality,
-      topScore,
-      avgScore,
-      coverageEstimate,
+      payload: {
+        query,
+        quality,
+        topScore,
+        avgScore,
+        coverageEstimate,
+      },
     });
 
     // Only reformulate on low quality with a reformulate callback
@@ -278,11 +296,14 @@ export class KnowledgeProvider {
     if (isVoice) {
       // Voice: signal background reformulation, don't block
       events.push({
+        channel: 'internal',
         type: 'knowledge-reformulation',
-        originalQuery: query,
-        reformulatedQuery: '',
-        trigger: 'background',
-        latencyMs: 0,
+        payload: {
+          originalQuery: query,
+          reformulatedQuery: '',
+          trigger: 'background',
+          latencyMs: 0,
+        },
       });
       return results;
     }
@@ -294,11 +315,14 @@ export class KnowledgeProvider {
       const reformulateLatency = Date.now() - reformulateStart;
 
       events.push({
+        channel: 'internal',
         type: 'knowledge-reformulation',
-        originalQuery: query,
-        reformulatedQuery,
-        trigger: 'inline',
-        latencyMs: reformulateLatency,
+        payload: {
+          originalQuery: query,
+          reformulatedQuery,
+          trigger: 'inline',
+          latencyMs: reformulateLatency,
+        },
       });
 
       // Re-retrieve with reformulated query (one attempt, no recursion)
