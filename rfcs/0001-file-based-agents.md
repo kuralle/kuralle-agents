@@ -92,7 +92,7 @@ store.ts                 → HarnessConfig.sessionStore
 observability.ts         → HarnessConfig.tracing
 retrieval.ts             → HarnessConfig.knowledge (KnowledgeProviderConfig)
 memory.ts                → HarnessConfig.memoryService + defaultWorkingMemoryStore
-hooks.ts                 → HarnessConfig.hooks
+hooks.ts                 → HarnessConfig.hooks (`Hooks`, project lifecycle only)
 escalation.ts            → HarnessConfig.escalation
 compaction.ts            → HarnessConfig.compaction
 agents/                  → HarnessConfig.agents
@@ -163,8 +163,7 @@ agents/
     routes.ts                   ← → routes + routing            (triage agents)
     retrieval.ts                ← → AgentConfig.knowledge       (vector retrieval)
     memory.ts                   ← → AgentConfig.memory
-    validate.ts                 ← → AgentConfig.validate[]
-    refine.ts                   ← → AgentConfig.refine[]
+    policies.ts                 ← → AgentConfig.guardrails + refine + validate
     skills/<name>/SKILL.md      ← → skills (already the shipped format)
     knowledge/**/*.md           ← OKF bundle, mounted into the workspace FS (grep/cat, no index)
     workspace/**                ← seed files copied into the workspace at build
@@ -172,6 +171,19 @@ agents/
 ```
 
 A directory is an agent **iff** it contains `agent.md`. One marker, no precedence rule needed.
+
+`policies.ts` is the single agent-level composition point, following ADR-0015. It returns the three
+distinct phase contracts together; the runtime keeps their fixed order:
+
+```
+guardrails.input → refine → model/tool execution → guardrails.output → validate
+```
+
+Project `hooks.ts` remains separate because it configures the operational `HarnessConfig.hooks`
+surface around the whole run, not an individual agent. The build targets the actual five-method
+`Hooks` contract used by `Runtime`; it does not expose the legacy 19-method `HarnessHooks` facade.
+Kuralle deliberately does not copy DeepAgents' middleware-everything model: arbitrary ordering
+would turn durable redaction and output-release boundaries into an implicit user convention.
 
 ```markdown
 ---
@@ -332,8 +344,7 @@ export interface DiscoveredAgent {
   readonly routesPath?: string;
   readonly retrievalPath?: string;
   readonly memoryPath?: string;
-  readonly validatePath?: string;
-  readonly refinePath?: string;
+  readonly policiesPath?: string;
   readonly skills: ReadonlyArray<{ name: string; skillMdPath: string; references: string[] }>;
   readonly knowledgeDir?: string;          // OKF bundle
   readonly workspaceSeedDir?: string;
@@ -513,7 +524,7 @@ Ordered by dependency. The project layer is chunks 1–3 because nothing else ca
 | 2 | Singleton discovery (default-export rule) + the `Lazy<T>` contract | V2, V6 green | auto |
 | 3 | `assembleHarnessConfig` in core | V3 green | auto |
 | 4 | `assembleAgentConfig` + `defineAgentPart` + `AgentAssemblyError` | V3 green | auto |
-| 5 | `discoverAgents` (all keys incl. routes/retrieval/memory/validate/refine) | V4 green | auto |
+| 5 | `discoverAgents` (all keys incl. routes/retrieval/memory/policies) | V4 green | auto |
 | 6 | Identity helpers + `assertAgentIdentities` | V5 green | auto |
 | 7 | `agent.md` frontmatter → `AgentParts` (nested YAML — §13 Q2) | round-trip tests green | auto |
 | 8 | Codegen `agents.ts` + `runtime.ts` (static imports, deterministic order) | V8 green | auto |
@@ -544,8 +555,8 @@ survives only for the prose plane, where the content is data, not modules.
 place to look — but it splits the project into two conventions (config-listed root, file-discovered
 agents) for no gain. File presence as declaration is one rule for both layers.
 
-**D. YAML-only, no `agent.ts` escape hatch.** Tempting after §4.4, but `validate`/`refine`
-capabilities, retrieval/memory adapters and dynamic instructions are objects and functions. Forcing
+**D. YAML-only, no `agent.ts` escape hatch.** Tempting after §4.4, but turn policies,
+retrieval/memory adapters and dynamic instructions are objects and functions. Forcing
 them into YAML means inventing a plugin-reference syntax — a config language pretending not to be one.
 
 **E. A Vite plugin, as Flue ships.** Flue can assume Vite; our CF path runs on wrangler's esbuild and

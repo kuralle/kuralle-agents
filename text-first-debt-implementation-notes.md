@@ -10,6 +10,8 @@
 
 - RFC 0002 classifies `knowledge-citation` as a live client stream event, but the current source only records it as a `ConversationAuditEntry`; no stream emitter exists. The type remains in scope because REQ-5 explicitly requires its client classification, without inventing a new emitter.
 - RFC 0002 V5 says nine SAFE types remain, while applying §4 exactly deletes `knowledge-no-results` and the three documented phantoms, leaving eight client types: four text lifecycle events, `conversation-outcome`, `knowledge-citation`, `error`, and `done`. The implementation follows the explicit §4 disposition.
+- ADR-0015 keeps processors, semantic capabilities, and lifecycle hooks distinct, with fixed phase ordering instead of a user-orderable middleware stack. RFC-0001 now discovers one agent `policies.ts`; project `hooks.ts` targets the five-method `Hooks` contract actually used by `Runtime`.
+- The 19-method `HarnessHooks` interface belongs to the older `createFoundation`/`HookRunner` surface and is not the contract behind `HarnessConfig.hooks`. It is explicitly excluded from the file convention rather than represented as working runtime middleware.
 
 ## Root causes
 
