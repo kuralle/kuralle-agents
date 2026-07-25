@@ -27,8 +27,6 @@ import {
   validatePath,
 } from './path-utils.js';
 
-export type { FileContent, FsStat, FileSystem };
-
 export interface FsData {
   [path: string]: import('@kuralle-agents/core').FsEntry;
 }
