@@ -34,6 +34,15 @@ export function defineTool<
     args: InferToolInput<S>,
     ctx?: ToolContext,
   ) => Promise<R> | AsyncIterable<R>;
+  /**
+   * Turns a thrown error into a result the model can act on, instead of a generic failure.
+   * Return a value to recover; rethrow (or omit this) to let the error propagate.
+   *
+   * Runs only for genuine failures — never for a timeout, an abort, an input/output schema
+   * violation, or a control-flow signal, all of which must stay distinguishable from a
+   * result the tool chose to return.
+   */
+  onError?: (error: Error, args: InferToolInput<S>) => Promise<R> | R;
 }): Tool<InferToolInput<S>, R> {
   return {
     name: config.name ?? inferToolName(config.description),
@@ -49,6 +58,7 @@ export function defineTool<
     parallelSafe: config.parallelSafe,
     idempotencyKey: config.idempotencyKey,
     execute: config.execute,
+    onError: config.onError,
   } as Tool<InferToolInput<S>, R>;
 }
 

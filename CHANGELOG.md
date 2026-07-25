@@ -158,6 +158,24 @@ The module had no internal consumers — every export resolved only to its own b
 
 Added `exported-definition-uniqueness`, a type-checker-backed guard asserting each publicly exported name has exactly one definition. It found 18 further duplicates, tracked on an explicit allow-list so new ones fail immediately.
 
+### Tool execution: control-flow signals, cancellation, concurrency
+
+Found by comparing our tool execution against OpenAI Agents JS, LangGraph, Mastra, DeepAgents, and the AI SDK.
+
+**A model-issued `needsApproval` tool never paused the run.** `ctx.tool` throws `SuspendError` to suspend; `executeModelToolCall` caught *every* error into a tool-error result. Reproduced against a real executor and run store: the store recorded `status: 'paused'`, `waitingFor: '__approval'` — while the turn kept going and handed the model the literal string `Run suspended waiting for __approval` as a tool failure, plus a client-facing `error` part for what is a routine approval gate. The tool body never ran, so nothing unauthorized executed; the control flow was wrong, not the gate.
+
+Flow `action` nodes were never affected — `runFlow` already rethrew both `SuspendError` and `ToolApprovalDeniedError`. The model path simply never learned that rule. Both now share one `isControlFlowSignal` predicate so they cannot disagree again.
+
+The fix keeps the property the parallel path depends on. `executeModelToolCall` still never rejects: a signal comes back as a *value* on the outcome, and the dispatcher rethrows it only once the whole batch has settled. Failing fast would abandon in-flight siblings — you cannot cancel a running promise, so the effect would happen anyway with its journal step left `running` and re-executed on resume.
+
+**`timeoutMs` abandoned the tool instead of cancelling it.** The old implementation raced a `setTimeout` against the tool's promise; on timeout the runtime stopped waiting and the tool kept running to completion. The timeout is now composed into the `AbortSignal` handed to the tool, so a cooperative tool actually stops. The race remains, to bound tools that ignore the signal — neither mechanism suffices alone. `interruptible: false` still opts out of caller-driven barge-in, and still does not opt out of `timeoutMs`.
+
+**Added `limits.maxToolConcurrency`.** A parallel batch ran unbounded, letting the model decide how many sockets, subprocesses, or rate-limited calls opened at once. Omitted, behaviour is unchanged.
+
+**Added `onError` to `defineTool`.** Return a result the model can act on instead of a generic failure; it is validated against `output` and journaled as the success it became. Deliberately not called for a timeout, an abort, a schema violation, or an approval decision — those are facts about the run, not results a tool may reinterpret.
+
+**Async-generator tools now stream.** Each `yield` is emitted immediately as an internal `tool-result` part with `preliminary: true`. Only the aggregate is journaled, so a replayed call emits nothing and replay stays deterministic.
+
 ### Parallel `ctx.tool` from action nodes
 
 `await Promise.all([ctx.tool(…), ctx.tool(…)])` — the obvious way to parallelise — previously threw `LogConflictError`, naming a journal invariant rather than anything actionable. Concurrent calls each read the step count before any of them appended, so they all claimed the same ordinal.

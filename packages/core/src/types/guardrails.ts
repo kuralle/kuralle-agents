@@ -13,4 +13,9 @@ export interface Limits {
   maxSteps?: number;
   toolMaxSteps?: number;
   maxOscillations?: number;
+  /**
+   * Ceiling on parallel-safe tools executing at once within one model-emitted batch.
+   * Unset means unbounded — the model's batch size decides how many run concurrently.
+   */
+  maxToolConcurrency?: number;
 }

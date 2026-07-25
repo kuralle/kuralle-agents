@@ -12,6 +12,7 @@ import {
 } from './pairing.js';
 import { ToolTimeoutError } from './errors.js';
 import { ToolValidationError, validateAndSanitize, validateOutput } from './schema.js';
+import { isControlFlowSignal } from '../../runtime/controlFlowSignal.js';
 
 export interface CoreToolExecutorConfig {
   tools: Record<string, AnyTool>;
@@ -19,6 +20,43 @@ export interface CoreToolExecutorConfig {
   parallelExecution?: boolean;
   agentId?: string;
   onInterim?: (message: string, toolName: string) => void;
+  /**
+   * Called for each chunk an async-iterable tool yields, as it arrives. The aggregate is
+   * still the tool's result; this is progress, not output.
+   */
+  onChunk?: (chunk: unknown, toolName: string, toolCallId: string) => void;
+}
+
+/**
+ * Merges the caller's abort with a timeout so the tool sees one signal. `AbortSignal.any` is
+ * present on Node 20+, Bun, and workerd; the manual path keeps older runtimes working.
+ * Mirrors `composeSignals` in `@kuralle-agents/fs`.
+ */
+function composeSignals(
+  signal?: AbortSignal,
+  timeoutSignal?: AbortSignal,
+): AbortSignal | undefined {
+  if (!signal) return timeoutSignal;
+  if (!timeoutSignal) return signal;
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([signal, timeoutSignal]);
+  }
+  const controller = new AbortController();
+  const onAbort = (): void => controller.abort();
+  signal.addEventListener('abort', onAbort, { once: true });
+  timeoutSignal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted || timeoutSignal.aborted) onAbort();
+  return controller.signal;
+}
+
+function rejectOnAbort(signal: AbortSignal, makeError: () => Error): Promise<never> {
+  return new Promise<never>((_, reject) => {
+    if (signal.aborted) {
+      reject(makeError());
+      return;
+    }
+    signal.addEventListener('abort', () => reject(makeError()), { once: true });
+  });
 }
 
 export interface CoreExecuteArgs {
@@ -38,6 +76,7 @@ export class CoreToolExecutor implements EffectToolExecutor {
   private readonly parallelExecution: boolean;
   private readonly agentId: string;
   private readonly onInterim?: (message: string, toolName: string) => void;
+  private readonly onChunk?: (chunk: unknown, toolName: string, toolCallId: string) => void;
   private readonly pairing = new PairingTracker();
   private executionGate: Promise<void> = Promise.resolve();
   private callHistory: ToolCallRecord[] = [];
@@ -48,6 +87,7 @@ export class CoreToolExecutor implements EffectToolExecutor {
     this.parallelExecution = config.parallelExecution ?? false;
     this.agentId = config.agentId ?? 'agent';
     this.onInterim = config.onInterim;
+    this.onChunk = config.onChunk;
   }
 
   getPairs(): ToolCallPair[] {
@@ -136,19 +176,15 @@ export class CoreToolExecutor implements EffectToolExecutor {
     }
 
     let interimTimer: ReturnType<typeof setTimeout> | undefined;
-    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-    let interimSent = false;
 
     const onAbort = (): void => {
       if (interimTimer) clearTimeout(interimTimer);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
     };
     abortSignal?.addEventListener('abort', onAbort, { once: true });
 
     try {
       if (def.interim && def.interimAfterMs != null && def.interimAfterMs >= 0) {
         interimTimer = setTimeout(() => {
-          interimSent = true;
           this.onInterim?.(def.interim!, name);
           this.pairing.closePair(
             requestId,
@@ -161,10 +197,17 @@ export class CoreToolExecutor implements EffectToolExecutor {
         }
       }
 
+      const timeoutMs = def.timeoutMs;
+      // The tool receives the timeout as an abort, so a cooperative tool stops working when
+      // we stop waiting for it. Racing alone abandoned the promise while the work continued.
+      const timeoutSignal =
+        timeoutMs != null && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
+      const effectiveSignal = composeSignals(abortSignal, timeoutSignal);
+
       const executeCtx: ToolContext | undefined = toolCtx
-        ? { ...toolCtx, abortSignal }
-        : abortSignal
-          ? ({ abortSignal } as ToolContext)
+        ? { ...toolCtx, abortSignal: effectiveSignal }
+        : effectiveSignal
+          ? ({ abortSignal: effectiveSignal } as ToolContext)
           : undefined;
 
       const executePromise = Promise.resolve(
@@ -174,39 +217,24 @@ export class CoreToolExecutor implements EffectToolExecutor {
           const chunks: unknown[] = [];
           for await (const chunk of result as AsyncIterable<unknown>) {
             chunks.push(chunk);
+            // Surface progress as it arrives. Observational only — the journal records the
+            // aggregate below, so a replayed step emits nothing and stays deterministic.
+            this.onChunk?.(chunk, name, requestId);
           }
           return chunks.length === 1 ? chunks[0] : chunks;
         }
         return result;
       });
 
+      // The signals above cancel a cooperative tool; these racers stop us waiting on one that
+      // ignores them. Both are needed — neither alone bounds the call.
       const abortPromise =
         abortSignal && def.interruptible !== false
-          ? new Promise<never>((_, reject) => {
-              if (abortSignal.aborted) {
-                reject(new DOMException('Aborted', 'AbortError'));
-                return;
-              }
-              abortSignal.addEventListener(
-                'abort',
-                () => reject(new DOMException('Aborted', 'AbortError')),
-                { once: true },
-              );
-            })
+          ? rejectOnAbort(abortSignal, () => new DOMException('Aborted', 'AbortError'))
           : null;
-
-      const timeoutMs = def.timeoutMs;
-      const timeoutPromise =
-        timeoutMs != null && timeoutMs > 0
-          ? new Promise<never>((_, reject) => {
-              timeoutTimer = setTimeout(() => {
-                reject(new ToolTimeoutError(name, timeoutMs));
-              }, timeoutMs);
-              if (typeof timeoutTimer === 'object' && 'unref' in timeoutTimer) {
-                (timeoutTimer as NodeJS.Timeout).unref();
-              }
-            })
-          : null;
+      const timeoutPromise = timeoutSignal
+        ? rejectOnAbort(timeoutSignal, () => new ToolTimeoutError(name, timeoutMs!))
+        : null;
 
       const racers: Promise<unknown>[] = [executePromise];
       if (abortPromise) racers.push(abortPromise);
@@ -215,23 +243,17 @@ export class CoreToolExecutor implements EffectToolExecutor {
         racers.length > 1 ? await Promise.race(racers) : await executePromise;
 
       if (interimTimer) clearTimeout(interimTimer);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
 
       const validated = await validateOutput(def.output, rawResult, name);
       callRecord.result = validated;
       callRecord.durationMs = Date.now() - callRecord.timestamp;
       this.callHistory.push(callRecord);
 
-      if (!interimSent) {
-        this.pairing.closePair(requestId, 'completed', validated);
-      } else {
-        this.pairing.closePair(requestId, 'completed', validated);
-      }
+      this.pairing.closePair(requestId, 'completed', validated);
 
       return validated;
     } catch (error) {
       if (interimTimer) clearTimeout(interimTimer);
-      if (timeoutTimer) clearTimeout(timeoutTimer);
 
       if (error instanceof DOMException && error.name === 'AbortError') {
         const placeholder = cancelledPlaceholder(requestId, name);
@@ -246,6 +268,31 @@ export class CoreToolExecutor implements EffectToolExecutor {
       if (error instanceof ToolValidationError) {
         this.pairing.closePair(requestId, 'validation_failed', undefined, error.message);
         throw error;
+      }
+
+      if (error instanceof ToolTimeoutError || isControlFlowSignal(error)) {
+        // A timeout and a suspend are decisions about the run, not results the tool may
+        // reinterpret. They reach the caller unchanged.
+        throw error;
+      }
+
+      if (def.onError) {
+        // Recovery runs before the failure is recorded, so a handled error is journaled as
+        // the success it became. A throwing handler falls through to the generic path below.
+        try {
+          const recovered = await def.onError(
+            error instanceof Error ? error : new Error(String(error)),
+            sanitizedArgs,
+          );
+          const validatedRecovery = await validateOutput(def.output, recovered, name);
+          callRecord.result = validatedRecovery;
+          callRecord.durationMs = Date.now() - callRecord.timestamp;
+          this.callHistory.push(callRecord);
+          this.pairing.closePair(requestId, 'completed', validatedRecovery);
+          return validatedRecovery;
+        } catch (recoveryError) {
+          error = recoveryError;
+        }
       }
 
       const err = error instanceof Error ? error : new Error(String(error));

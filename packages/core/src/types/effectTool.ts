@@ -21,6 +21,8 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
     args: TInput,
     ctx?: ToolContext,
   ) => Promise<TOutput> | AsyncIterable<TOutput>;
+  /** Recover from a thrown error by returning a result the model can act on. Not called for timeouts, aborts, schema violations, or control-flow signals. */
+  onError?: (error: Error, args: TInput) => Promise<TOutput> | TOutput;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- reason: bivariant erased tool-collection storage; the AI-SDK/Mastra/VoltAgent pattern (per-tool inference stays at the defineTool authoring site)

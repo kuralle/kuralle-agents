@@ -254,6 +254,13 @@ export class Runtime {
           emit({ channel: 'client', type: 'text-delta', payload: { id, delta: message } });
           emit({ channel: 'client', type: 'text-end', payload: { id } });
         },
+        onChunk: (chunk, toolName, toolCallId) => {
+          emit({
+            channel: 'internal',
+            type: 'tool-result',
+            payload: { toolName, result: chunk, toolCallId, preliminary: true },
+          });
+        },
       });
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =
@@ -465,6 +472,13 @@ export class Runtime {
                   payload: { id, delta: message },
                 });
                 emit({ channel: 'client', type: 'text-end', payload: { id } });
+              },
+              onChunk: (chunk, toolName, toolCallId) => {
+                emit({
+                  channel: 'internal',
+                  type: 'tool-result',
+                  payload: { toolName, result: chunk, toolCallId, preliminary: true },
+                });
               },
             });
 

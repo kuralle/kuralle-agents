@@ -36,6 +36,8 @@ export interface ToolResultPayload {
   toolName: string;
   result: unknown;
   toolCallId?: string;
+  /** A chunk from a still-running async-iterable tool. The final result follows without it. */
+  preliminary?: boolean;
 }
 
 export interface FlowEnterPayload {

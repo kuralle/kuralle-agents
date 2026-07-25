@@ -87,6 +87,71 @@ const get_weather = defineTool({
 
 A `replay: false` tool (one whose result must always be fresh — filesystem reads, shell commands) also qualifies for parallel execution, since it never returns a cached step result to race against. The runtime pre-assigns journal ordinals for the batch (`reserveSteps`) so replay stays aligned no matter which parallel call finishes first.
 
+A batch is otherwise unbounded — the model decides how many calls it emits, and all of them start at once. Cap it with `limits.maxToolConcurrency` when tools open sockets, spawn subprocesses, or hit a rate-limited API:
+
+```typescript
+const runtime = createRuntime({
+  agents: [agent],
+  limits: { maxToolConcurrency: 4 },
+});
+```
+
+## Timeouts and cancellation
+
+`timeoutMs` bounds a call. The timeout arrives at the tool as an **abort on `ctx.abortSignal`**, so a tool that watches the signal stops working when the runtime stops waiting:
+
+```typescript
+const fetch_report = defineTool({
+  name: 'fetch_report',
+  description: 'Fetch a report from the reporting service',
+  timeoutMs: 5_000,
+  input: z.object({ id: z.string() }),
+  execute: async ({ id }, ctx) =>
+    fetch(`/reports/${id}`, { signal: ctx?.abortSignal }).then((r) => r.json()),
+});
+```
+
+The call rejects with `ToolTimeoutError` either way. Passing the signal through is what stops the work; without it the request keeps running to completion after its result has been discarded.
+
+Set `interruptible: false` to opt a tool out of caller-driven aborts (barge-in). It does not opt out of `timeoutMs`.
+
+## Recovering from tool errors
+
+A tool that throws fails the call, and the model sees a generic failure. Give it an `onError` to return something the model can act on instead:
+
+```typescript
+const check_stock = defineTool({
+  name: 'check_stock',
+  description: 'Check warehouse stock',
+  input: z.object({ sku: z.string() }),
+  execute: async ({ sku }) => warehouse.stock(sku),
+  onError: (error, { sku }) => ({ sku, available: null, reason: error.message }),
+});
+```
+
+The recovered value is validated against `output` and journaled as the success it became, so a replay returns it without re-running the tool.
+
+`onError` is deliberately **not** called for a timeout, an abort, a schema violation, or an approval decision. Those are facts about the run, not results a tool may reinterpret.
+
+## Streaming progress from a tool
+
+A tool can be an async generator. Each `yield` is emitted immediately as an internal `tool-result` part marked `preliminary: true`; the aggregate is still the tool's result and the only thing journaled:
+
+```typescript
+const migrate = defineTool({
+  name: 'migrate',
+  description: 'Run a migration, reporting progress',
+  input: z.object({ table: z.string() }),
+  execute: async function* ({ table }) {
+    for (const batch of batches(table)) {
+      yield { migrated: batch.count };
+    }
+  },
+});
+```
+
+Because only the aggregate is journaled, a replayed call emits no preliminary parts — replay stays deterministic.
+
 ## Overriding the idempotency key
 
 Every tool call is keyed automatically — a hash of the run, its position in the effect log, and `{ name, args }`. That's a stable identity as long as `args` uniquely identifies the call. When it doesn't (for example, args include a fresh nonce), override the key with `idempotencyKey` so a retry still dedups on the field that actually identifies the operation:

@@ -6,6 +6,7 @@ import { classifyControl } from '../../flow/classifyControl.js';
 import { toolErrorResult } from '../../tools/controlResults.js';
 import { idempotencyKey, logicalRunId } from '../durable/idempotency.js';
 import { findStepByKey } from '../durable/replay.js';
+import { isControlFlowSignal } from '../controlFlowSignal.js';
 
 export interface ModelToolCall {
   toolName: string;
@@ -17,6 +18,12 @@ export interface ModelToolCallOutcome {
   result: unknown;
   control?: TurnControl;
   failed: boolean;
+  /**
+   * Set when the call unwound with a control-flow signal rather than a failure. Held as a
+   * value so a parallel batch can still finalize its siblings; the dispatcher rethrows it
+   * once the batch has settled. Never surfaced to the model.
+   */
+  signal?: unknown;
 }
 
 export async function executeModelToolCall(
@@ -45,6 +52,12 @@ export async function executeModelToolCall(
     });
     return { result: toolResult, control: classifyControl(toolResult), failed: false };
   } catch (error) {
+    if (isControlFlowSignal(error)) {
+      // A suspend or an approval denial. Not a failure, so no client-facing error and no
+      // tool result: returning it as a value keeps this function's never-rejects contract
+      // (which `Promise.all` below depends on) while letting the dispatcher rethrow it.
+      return { result: undefined, failed: true, signal: error };
+    }
     const message = error instanceof Error ? error.message : String(error);
     ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
     return { result: toolErrorResult(error), failed: true };
@@ -53,6 +66,38 @@ export async function executeModelToolCall(
 
 function isParallelSafeTool(def: AnyTool | undefined): boolean {
   return def?.parallelSafe === true || def?.replay === false;
+}
+
+/**
+ * Runs `task` over every item, at most `limit` at a time, preserving result order.
+ *
+ * Unbounded `Promise.all` over a model-emitted batch lets the model decide how many
+ * sockets, subprocesses, or rate-limited API calls open at once. `limit` is a ceiling on
+ * that; omitting it keeps the previous unbounded behaviour.
+ *
+ * `task` is expected not to reject (see the caller's contract). If one does, the rejection
+ * propagates and in-flight siblings still run to completion — they are not cancelled, so
+ * their journal writes complete rather than being abandoned half-done.
+ */
+async function runWithConcurrency<T, R>(
+  items: readonly T[],
+  task: (item: T) => Promise<R>,
+  limit?: number,
+): Promise<R[]> {
+  if (limit === undefined || limit <= 0 || limit >= items.length) {
+    return Promise.all(items.map((item) => task(item)));
+  }
+
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await task(items[index]!);
+    }
+  };
+  await Promise.all(Array.from({ length: limit }, () => worker()));
+  return results;
 }
 
 export async function dispatchModelToolCalls(
@@ -64,7 +109,11 @@ export async function dispatchModelToolCalls(
     outcome: ModelToolCallOutcome;
   }) => void,
 ): Promise<void> {
-  const runOne = async (call: ModelToolCall, durableOpts?: { callsite?: string; index?: number }) => {
+  /** Resolves to a control-flow signal when the call suspended, otherwise `undefined`. */
+  const runOne = async (
+    call: ModelToolCall,
+    durableOpts?: { callsite?: string; index?: number },
+  ): Promise<unknown> => {
     ctx.emit({
       channel: 'internal',
       type: 'tool-call',
@@ -75,6 +124,10 @@ export async function dispatchModelToolCalls(
       },
     });
     const outcome = await executeModelToolCall(ctx, call, localTools, durableOpts);
+    if (outcome.signal !== undefined) {
+      // Suspended: no result exists, so nothing may reach the model or the transcript.
+      return outcome.signal;
+    }
     onEach({ call, outcome });
     ctx.emit({
       channel: 'internal',
@@ -85,6 +138,7 @@ export async function dispatchModelToolCalls(
         toolCallId: call.toolCallId,
       },
     });
+    return undefined;
   };
 
   const runParallel = async (parallel: ModelToolCall[]) => {
@@ -119,19 +173,25 @@ export async function dispatchModelToolCalls(
       return { call, callsite: callsites[i]!, index };
     });
 
-    // executeModelToolCall catches tool errors and resolves with failed: true; Promise.all relies
-    // on that containment so one failed call cannot abandon sibling finalizeStep operations.
-    await Promise.all(
-      assignments.map(({ call, callsite, index }) =>
-        runOne(call, { callsite, index }),
-      ),
+    // executeModelToolCall never rejects — tool errors resolve with failed: true and control-flow
+    // signals resolve as outcome.signal — so no sibling can be abandoned mid-flight with its
+    // finalizeStep unawaited. A suspend is rethrown only after every sibling has settled: you
+    // cannot cancel an in-flight promise, so failing fast here would let the work happen anyway
+    // while the journal recorded it as still running.
+    const signals = await runWithConcurrency(
+      assignments,
+      ({ call, callsite, index }) => runOne(call, { callsite, index }),
+      ctx.limits?.maxToolConcurrency,
     );
+    const suspended = signals.find((signal) => signal !== undefined);
+    if (suspended !== undefined) throw suspended;
   };
 
   for (let cursor = 0; cursor < toolCalls.length;) {
     const call = toolCalls[cursor]!;
     if (!isParallelSafeTool(localTools[call.toolName])) {
-      await runOne(call);
+      const signal = await runOne(call);
+      if (signal !== undefined) throw signal;
       cursor += 1;
       continue;
     }

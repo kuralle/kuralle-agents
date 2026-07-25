@@ -23,8 +23,7 @@ import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
-import { SuspendError } from '../runtime/durable/RunStore.js';
-import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
+import { isControlFlowSignal } from '../runtime/controlFlowSignal.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
 import { appendConversationAudit } from '../audit/record.js';
 import {
@@ -348,7 +347,7 @@ export async function runFlow(
     try {
       transition = await dispatchNode(node, run, driver, ctx, agent, flow);
     } catch (error) {
-      if (error instanceof SuspendError || error instanceof ToolApprovalDeniedError) {
+      if (isControlFlowSignal(error)) {
         throw error;
       }
       const message = error instanceof Error ? error.message : String(error);

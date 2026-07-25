@@ -93,6 +93,10 @@ runtime.run({
 
 `recordSignalDelivery` validates the name against `waitingFor`, dedupes by `signalId`, appends the payload as a record, and clears `waitingFor`. The run then re-executes from the top — but now the approval is in the log, so the previously-suspending `ctx.approve()` returns the delivered payload and execution flows past it. (`ctx.approve()` is just a signal named `__approval`.)
 
+The same holds for a tool declared `needsApproval: true`, whether the call comes from a flow `action` node or from the model itself: the approval pause happens before `execute` runs, so an unapproved tool never executes.
+
+A suspend travels as an exception, but it is **not** a tool failure. It is never reported to the model as one, never shown to the user as an error, and never journaled as an error. When one call in a parallel batch suspends, the runtime lets the rest of the batch settle first and only then propagates — an abandoned sibling would leave its step `running` and re-execute on resume, since an in-flight promise cannot be cancelled.
+
 ## Example: a refund flow with an approval gate
 
 The `action` node collects an amount, pauses for a supervisor decision, and runs the refund tool exactly once on approval.
