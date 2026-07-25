@@ -324,11 +324,11 @@ async function executeHostControl(
   }
 
   if (control.type === 'escalate') {
-    ctx.emit({
-      channel: 'internal',
-      type: 'handoff',
-      payload: { targetAgent: 'human', reason: control.reason },
-    });
+    // No handoff part is emitted here. Runtime owns it: it emits one for any
+    // target in `terminalHandoffTargets` (default ['human']) on this exact
+    // return value. Emitting here too produced two handoff spans per escalation
+    // and a meaningless `human -> human` self-edge, which then mis-attributed
+    // every later span in the turn to `human`.
     return { kind: 'handoff', to: 'human', reason: control.reason, category: control.category };
   }
 

@@ -285,14 +285,38 @@ export class TraceRecorder {
   }
 }
 
+/**
+ * What the standalone {@link runOnce} needs from a runtime. `run` is required;
+ * the optional accessors let it resolve the same agent `Runtime.runOnce` would.
+ *
+ * It must NOT call `runtime.runOnce` — that method delegates here, so delegating
+ * back is infinite recursion.
+ */
+export interface RunOnceRuntime {
+  run(opts: RunOptions): TurnHandle;
+  getSessionStore?(): { get(id: string): Promise<{ activeAgentId?: string; currentAgent?: string } | null> };
+  getDefaultAgentId?(): string;
+}
+
 export async function runOnce(
-  runtime: { run(opts: RunOptions): TurnHandle },
+  runtime: RunOnceRuntime,
   opts: RunOptions,
 ): Promise<AgentTrace> {
+  // Resolve attribution the same way Runtime.runOnce does: caller's agentId
+  // first, then persisted state, then the runtime default. Without this the
+  // standalone helper produced spans with no `agentId` and handoff spans with
+  // no `handoffFrom` — the exact feature it is documented to provide.
+  let agentId = opts.agentId;
+  if (!agentId && opts.sessionId && runtime.getSessionStore) {
+    const existing = await runtime.getSessionStore().get(opts.sessionId);
+    agentId = existing?.activeAgentId ?? existing?.currentAgent;
+  }
+  agentId ??= runtime.getDefaultAgentId?.();
+
   const handle = runtime.run(opts);
   const recorder = new TraceRecorder({
     sessionId: opts.sessionId,
-    agentId: opts.agentId,
+    agentId,
     input: opts.input,
   });
   for await (const part of handle.events) {

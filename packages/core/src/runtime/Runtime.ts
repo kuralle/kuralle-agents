@@ -575,7 +575,11 @@ export class Runtime {
 
   async runOnce(opts: RunOptions): Promise<AgentTrace> {
     const existing = opts.sessionId ? await this.sessionStore.get(opts.sessionId) : null;
-    const agentId = existing?.activeAgentId ?? existing?.currentAgent ?? opts.agentId ?? this.config.defaultAgentId;
+    // Caller's explicit agentId wins, matching run() (`opts.agentId ?? defaultAgentId`).
+    // Persisted state is the fallback, not an override — otherwise the two public
+    // entry points disagree about which agent handles the same turn.
+    const agentId =
+      opts.agentId ?? existing?.activeAgentId ?? existing?.currentAgent ?? this.config.defaultAgentId;
     return recordRunOnce(this, { ...opts, agentId });
   }
 
@@ -599,6 +603,11 @@ export class Runtime {
 
   getTraceStore(): TraceStore | undefined {
     return this.traceStore;
+  }
+
+  /** The agent used when neither the caller nor persisted state names one. */
+  getDefaultAgentId(): string {
+    return this.config.defaultAgentId;
   }
 
   getSessionStore(): SessionStore {
