@@ -29,7 +29,7 @@ runFlow       imperative loop over FlowNode handlers
   action        → node.run(state, ctx) — no LLM
   decide        → driver.runStructured
 
-ctx.tool / ctx.approve / ctx.signal → effect log (exactly-once)
+ctx.tool / ctx.approve / ctx.signal → effect log (exactly-once-modulo-idempotency)
 ```
 
 ## Find local docs (npm)

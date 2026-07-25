@@ -184,7 +184,7 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'demo' });
 - Tools must not speak to users.
 - Flow control via node `next` / returned transitions — not tool prose.
 - Grounding must be explicit if you promise it.
-- Side-effecting tools go through `tools` / `ctx.tool` for exactly-once.
+- Side-effecting tools go through `tools` / `ctx.tool` for exactly-once-modulo-idempotency (finished steps replay without re-executing; a crash mid-effect re-runs it, deduped by the idempotency key).
 - `userId` required for MemoryService.
 - Same `defineAgent` for text and voice — channel is the driver, not a separate config.
 

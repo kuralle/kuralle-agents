@@ -5,7 +5,7 @@ import type { Session, SessionStore } from '@kuralle-agents/core';
  *
  * The durable run journal (`session.durableRuns`) is a plain property, so it is
  * serialized with the rest of the session — that's what gives suspend/resume +
- * exactly-once across DO eviction (a `/wa-pay` click can land on a cold DO).
+ * exactly-once-modulo-idempotency across DO eviction (a `/wa-pay` click can land on a cold DO).
  *
  * Dates (`createdAt`/`updatedAt`/handoff timestamps) don't survive JSON, so we
  * revive them on read — same approach the framework's BridgeSessionStore takes.
