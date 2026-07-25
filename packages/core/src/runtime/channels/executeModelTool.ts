@@ -119,6 +119,8 @@ export async function dispatchModelToolCalls(
       return { call, callsite: callsites[i]!, index };
     });
 
+    // executeModelToolCall catches tool errors and resolves with failed: true; Promise.all relies
+    // on that containment so one failed call cannot abandon sibling finalizeStep operations.
     await Promise.all(
       assignments.map(({ call, callsite, index }) =>
         runOne(call, { callsite, index }),

@@ -82,6 +82,8 @@ describe('SessionRunStore over SessionStore (MemoryStore)', () => {
         result: {},
         startedAt: Date.now(),
       }),
-    ).rejects.toBeInstanceOf(LogConflictError);
+    ).rejects.toThrow(
+      'Log conflict for run cas-run: expected append at index 2, current length is 1. For parallel durable effects, use ctx.tool directly or reserve callsites with ctx.reserveCallsites(count) before supplying explicit indices.',
+    );
   });
 });
