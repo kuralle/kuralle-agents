@@ -64,7 +64,7 @@ export async function buildAgentToolSurface(
   let skillPrompt: string | undefined;
   let skillTools: Record<string, AnyTool> = {};
   if (agent.skills) {
-    const wired = await wireAgentSkills(agent);
+    const wired = await wireAgentSkills(agent, resolvedWorkspace?.fs);
     if (wired) {
       skillTools = wired.tools;
       Object.assign(executorTools, wired.tools);

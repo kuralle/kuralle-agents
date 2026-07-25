@@ -1,6 +1,6 @@
 {
   "version": "plandesk-connect-v1",
-  "serverUrl": "http://127.0.0.1:3489",
-  "projectId": "cfe52cda-2547-45be-aed2-e94aea72645a",
+  "serverUrl": "http://127.0.0.1:7526",
+  "projectId": "53884329-347e-4aa1-9c72-914f800b6970",
   "projectName": "aria-flow"
 }

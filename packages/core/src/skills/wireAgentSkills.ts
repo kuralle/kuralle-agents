@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FileSystem } from '../types/filesystem.js';
 import { defineTool, type AnyTool } from '../types/effectTool.js';
 import type { PromptSection } from '../capabilities/index.js';
 import {
@@ -15,10 +16,13 @@ export interface WiredAgentSkills {
   promptSections: PromptSection[];
 }
 
-export async function wireAgentSkills(agent: SkillWireAgent): Promise<WiredAgentSkills | undefined> {
+export async function wireAgentSkills(
+  agent: SkillWireAgent,
+  fs?: FileSystem,
+): Promise<WiredAgentSkills | undefined> {
   if (!agent.skills) return undefined;
 
-  const { store, skills } = await prepareSkillStore(agent.skills);
+  const { store, skills } = await prepareSkillStore(agent.skills, fs);
   validateSkillAllowedTools(skills, collectRegisteredNames(agent));
 
   const metas = await store.list();

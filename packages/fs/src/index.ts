@@ -37,9 +37,6 @@ export {
 } from './path-utils.js';
 export { toBuffer, fromBuffer, getEncoding } from './encoding.js';
 export { createFsTool } from './tool.js';
-export { parseSkillFrontmatter, type ParsedSkill } from './skill-frontmatter.js';
-export { fsSkillStore } from './fs-skill-store.js';
-export { defineSkill } from './define-skill.js';
 export {
   parseOkfConcept,
   listOkfConcepts,

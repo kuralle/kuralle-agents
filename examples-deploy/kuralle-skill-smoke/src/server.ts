@@ -1,7 +1,7 @@
 import { routeAgentRequest } from 'agents';
 import { KuralleAgent } from '@kuralle-agents/cf-agent';
-import { createRuntime, defineAgent, defineTool, MemoryStore } from '@kuralle-agents/core';
-import { defineSkill } from '@kuralle-agents/skills';
+import { createRuntime, defineAgent, defineTool, MemoryStore , defineSkill } from '@kuralle-agents/core';
+
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 

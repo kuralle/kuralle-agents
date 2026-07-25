@@ -1,6 +1,9 @@
 import type { AnyTool } from '../types/effectTool.js';
-import type { SkillLike, SkillSource, SkillStoreLike } from '../types/skills.js';
+import type { FileSystem } from '../types/filesystem.js';
+import type { SkillEntry, SkillLike, SkillSource, SkillStoreLike } from '../types/skills.js';
 import { InlineSkillStore } from './inlineSkillStore.js';
+import { CompositeSkillStore } from './compositeSkillStore.js';
+import { fsSkillStore } from './fsSkillStore.js';
 
 export interface SkillWireAgent {
   skills?: SkillSource;
@@ -9,7 +12,7 @@ export interface SkillWireAgent {
   flows?: Array<{ name: string }>;
 }
 
-export function isSkillStore(value: SkillSource): value is SkillStoreLike {
+export function isSkillStore(value: SkillEntry | SkillSource): value is SkillStoreLike {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -19,10 +22,7 @@ export function isSkillStore(value: SkillSource): value is SkillStoreLike {
   );
 }
 
-async function collectSkillsFromSource(source: SkillSource): Promise<SkillLike[]> {
-  if (!isSkillStore(source)) {
-    return Array.isArray(source) ? source : [source];
-  }
+async function collectSkillsFromSource(source: SkillStoreLike): Promise<SkillLike[]> {
   if (typeof source.getAllSkills === 'function') {
     const all = source.getAllSkills();
     return Array.isArray(all) ? all : await all;
@@ -63,13 +63,64 @@ export function validateSkillAllowedTools(skills: SkillLike[], registered: Set<s
   }
 }
 
-export async function prepareSkillStore(source: SkillSource): Promise<{
-  store: SkillStoreLike;
-  skills: SkillLike[];
-}> {
-  if (isSkillStore(source)) {
-    return { store: source, skills: await collectSkillsFromSource(source) };
+/**
+ * Turns whatever the author wrote in `AgentConfig.skills` into one store.
+ *
+ * `fs` is the agent's workspace filesystem, needed only to resolve `string` entries. A path
+ * without a workspace is an authoring mistake, so it throws rather than silently yielding no
+ * skills — a missing skill is invisible at runtime and looks like the model ignoring it.
+ */
+export async function prepareSkillStore(
+  source: SkillSource,
+  fs?: FileSystem,
+): Promise<{ store: SkillStoreLike; skills: SkillLike[] }> {
+  const entries: SkillEntry[] = Array.isArray(source)
+    ? [...source]
+    : [source as SkillEntry];
+
+  // A lone store stays itself: wrapping one store in a composite would add a layer with
+  // nothing to compose, and lose any extra capability the store exposes.
+  if (entries.length === 1 && isSkillStore(entries[0]!)) {
+    const only = entries[0] as SkillStoreLike;
+    return { store: only, skills: await collectSkillsFromSource(only) };
   }
-  const skills = Array.isArray(source) ? source : [source];
-  return { store: new InlineSkillStore(skills), skills };
+
+  const stores: SkillStoreLike[] = [];
+  let inline: SkillLike[] = [];
+  const flushInline = (): void => {
+    if (inline.length > 0) {
+      stores.push(new InlineSkillStore(inline));
+      inline = [];
+    }
+  };
+
+  for (const entry of entries) {
+    if (typeof entry === 'string') {
+      if (!fs) {
+        throw new Error(
+          `[skills] "${entry}" is a workspace path, but this agent has no \`workspace\` filesystem. ` +
+            'Set `workspace` on the agent, or pass skills inline with defineSkill().',
+        );
+      }
+      flushInline();
+      stores.push(fsSkillStore(fs, [entry]));
+      continue;
+    }
+    if (isSkillStore(entry)) {
+      flushInline();
+      stores.push(entry);
+      continue;
+    }
+    // Consecutive inline skills share one store so ordering within a run is preserved.
+    inline.push(entry);
+  }
+  flushInline();
+
+  if (stores.length === 1) {
+    const only = stores[0]!;
+    return { store: only, skills: await collectSkillsFromSource(only) };
+  }
+
+  const store = new CompositeSkillStore(stores);
+  return { store, skills: await collectSkillsFromSource(store) };
 }

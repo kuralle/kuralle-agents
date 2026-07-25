@@ -1,5 +1,6 @@
-import type { FileSystem, SkillMeta, SkillStoreLike } from '@kuralle-agents/core';
-import { parseSkillFrontmatter } from './skill-frontmatter.js';
+import type { FileSystem } from '../types/filesystem.js';
+import type { SkillMeta, SkillStoreLike } from '../types/skills.js';
+import { parseSkillFrontmatter } from './parseSkillFrontmatter.js';
 
 const DEFAULT_ROOT = '/skills';
 

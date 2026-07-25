@@ -2,7 +2,7 @@
 
 ## What are skills?
 
-**Skills are Anthropic-style procedural bundles** (`SKILL.md` + optional resources) loaded via **progressive disclosure** in `@kuralle-agents/skills`:
+**Skills are Anthropic-style procedural bundles** (`SKILL.md` + optional resources) loaded via **progressive disclosure** in `@kuralle-agents/core`:
 
 | Level | What loads | When |
 |-------|------------|------|
@@ -391,14 +391,14 @@ All orders include tracking. Check status at: example.com/track
 ## Configuration (`AgentConfig.skills`)
 
 ```ts
-import { defineSkill } from '@kuralle-agents/skills';
+import { defineSkill } from '@kuralle-agents/core';
 
 const agent = defineAgent({
   id: 'support',
   model,
   instructions: 'Calm support agent.',
   tools: { lookup_order: lookupOrder },
-  skills: [returnsPolicy], // or MemorySkillStore / FsSkillStore
+  skills: [returnsPolicy], // or fsSkillStore(fs) / a workspace path
 });
 ```
 

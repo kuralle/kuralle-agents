@@ -340,8 +340,17 @@ export {
   prepareSkillStore,
   isSkillStore,
   InlineSkillStore,
+  CompositeSkillStore,
+  fsSkillStore,
+  defineSkill,
+  parseSkillFrontmatter,
 } from './skills/index.js';
-export type { WiredAgentSkills, SkillWireAgent } from './skills/index.js';
+export type {
+  WiredAgentSkills,
+  SkillWireAgent,
+  DefineSkillConfig,
+  ParsedSkill,
+} from './skills/index.js';
 export {
   buildToolSet,
   toolToAiSdk,

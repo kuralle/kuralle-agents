@@ -15,15 +15,18 @@ export function parseSkillFrontmatter(content: string, ctx: { path: string }): P
   const stripped = content.replace(/^\uFEFF/, '');
   const match = stripped.match(FRONTMATTER_RE);
   if (!match) {
-    throw new Error(`[skills] Skill ${ctx.path} is missing YAML frontmatter.`);
+    throw new Error(
+      `[skills] Skill ${ctx.path} is missing YAML frontmatter. Start SKILL.md with "---", ` +
+        'include "name" and "description", then close the block with "---".',
+    );
   }
 
   const raw = parseFlatYaml(match[1] ?? '', ctx.path);
   const name = requireField(raw, 'name', ctx.path);
   const description = requireField(raw, 'description', ctx.path);
 
-  validateName(name, ctx.path);
-  validateDescription(description, ctx.path);
+  validateSkillName(name, ctx.path);
+  validateSkillDescription(description, ctx.path);
 
   const compatibility = optionalString(raw.compatibility);
   if (compatibility !== undefined && codePointLength(compatibility) > 500) {
@@ -145,20 +148,37 @@ function optionalString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function validateName(name: string, path: string): void {
+/** Agent Skills forbids reserved vendor words in a skill name. */
+const RESERVED_NAME_WORDS = ['anthropic', 'claude'];
+/** Frontmatter is injected into the system prompt, so markup in it is a prompt-injection seam. */
+const XML_TAG_PATTERN = /<\/?[a-zA-Z][^>]*>/;
+
+export function validateSkillName(name: string, path: string): void {
   if (name.length > 64) {
     throw new Error(`[skills] Skill ${path} field "name" must be at most 64 characters.`);
+  }
+  if (XML_TAG_PATTERN.test(name)) {
+    throw new Error(`[skills] Skill ${path} field "name" must not contain XML tags.`);
   }
   if (!NAME_PATTERN.test(name)) {
     throw new Error(
       `[skills] Skill ${path} field "name" "${name}" must match /^[a-z0-9]+(?:-[a-z0-9]+)*$/.`,
     );
   }
+  const reserved = RESERVED_NAME_WORDS.find((word) => name.includes(word));
+  if (reserved) {
+    throw new Error(
+      `[skills] Skill ${path} field "name" must not contain the reserved word "${reserved}".`,
+    );
+  }
 }
 
-function validateDescription(description: string, path: string): void {
+export function validateSkillDescription(description: string, path: string): void {
   if (codePointLength(description) > 1024) {
     throw new Error(`[skills] Skill ${path} field "description" exceeds 1024 characters.`);
+  }
+  if (XML_TAG_PATTERN.test(description)) {
+    throw new Error(`[skills] Skill ${path} field "description" must not contain XML tags.`);
   }
 }
 

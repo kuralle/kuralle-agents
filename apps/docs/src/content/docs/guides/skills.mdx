@@ -11,13 +11,13 @@ up front and pulls a skill's full body **on demand** when the task matches. This
 small no matter how many skills you attach.
 
 ```bash
-npm install @kuralle-agents/skills
+npm install @kuralle-agents/core
 ```
 
 ## Quick start
 
 ```typescript
-import { defineSkill } from '@kuralle-agents/skills';
+import { defineSkill } from '@kuralle-agents/core';
 import { defineAgent } from '@kuralle-agents/core';
 
 const returnsPolicy = defineSkill({
@@ -87,7 +87,7 @@ concern (extra tokens + a tool round-trip), never a correctness one.
 | `resources?` | `Record<string, string>` | Bundled files exposed via `read_skill_resource`. |
 
 You can also load skills from `SKILL.md` folders or a custom `SkillStore` instead of inline
-`defineSkill` objects — see the `@kuralle-agents/skills` README for store backends.
+`defineSkill` objects — see below for store backends.
 
 ## Skills on a filesystem
 
@@ -119,6 +119,6 @@ const skills = fsSkillStore(fs, ['/skills/shared', '/skills/project']);
 ## Where it runs
 
 Skills are pure data + two tools, so they run identically on Node and Cloudflare Workers. The
-`@kuralle-agents/skills` workerd parity test verifies a skill body loads byte-identically inside the
+workerd parity test verifies a skill body loads byte-identically inside the
 Cloudflare runtime, and a `KuralleAgent` Durable Object does `load_skill` over a deployed Worker with
 no changes (see `examples-deploy/kuralle-skill-smoke`).

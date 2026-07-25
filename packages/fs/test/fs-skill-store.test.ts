@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { defineSkill, fsSkillStore, parseSkillFrontmatter } from '../src/index.js';
+import { defineSkill, fsSkillStore, parseSkillFrontmatter } from '@kuralle-agents/core';
 import { InMemoryFs } from '../src/in-memory-fs.js';
 
 describe('test:fs-skill-store', () => {

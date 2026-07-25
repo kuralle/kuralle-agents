@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 import type { Session } from '@kuralle-agents/core';
 import { buildAgentToolSurface } from '../../core/dist/runtime/buildAgentToolSurface.js';
-import { fsSkillStore, InMemoryFs } from '../src/index.js';
+import { fsSkillStore } from '@kuralle-agents/core';
+import { InMemoryFs } from '../src/index.js';
 
 function makeTestSession(sessionId = 'sess-1'): Session {
   const now = new Date();

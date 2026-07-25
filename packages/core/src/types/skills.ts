@@ -19,4 +19,19 @@ export interface SkillStoreLike {
   loadAllSkills?(): Promise<SkillLike[]>;
 }
 
-export type SkillSource = SkillLike | SkillLike[] | SkillStoreLike;
+/**
+ * One way to supply skills. A `string` is a filesystem root scanned for
+ * `<dir>/SKILL.md`, resolved against the agent's `workspace` filesystem.
+ */
+export type SkillEntry = SkillLike | SkillStoreLike | string;
+
+/**
+ * Skills for an agent: one entry, or an ordered array mixing inline skills, stores, and
+ * workspace paths. **Later entries win** on a name collision, so layering reads in the
+ * order you write it:
+ *
+ * ```ts
+ * skills: ['/skills/org', '/skills/team', defineSkill({ name: 'override', … })]
+ * ```
+ */
+export type SkillSource = SkillEntry | ReadonlyArray<SkillEntry>;

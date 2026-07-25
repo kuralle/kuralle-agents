@@ -97,25 +97,10 @@ const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
     files: ['packages/core/src/types/channel.ts', 'packages/messaging/src/inbound/types.ts'],
     reason: 'Core and messaging expose distinct turn-result contracts; unification is out of scope.',
   },
-  defineSkill: {
-    kind: 'export',
-    files: ['packages/skills/src/defineSkill.ts', 'packages/fs/src/define-skill.ts'],
-    reason: 'Skills and filesystem expose separate skill authoring helpers; unification is out of scope.',
-  },
-  isSkillStore: {
-    kind: 'export',
-    files: ['packages/core/src/skills/collectSkills.ts', 'packages/skills/src/toSkillStore.ts'],
-    reason: 'Core and skills use separate skill-store protocols; unification is out of scope.',
-  },
   ownershipGate: {
     kind: 'export',
     files: ['packages/engagement/src/ownership.ts', 'packages/messaging/src/inbound/pipeline.ts'],
     reason: 'Engagement and messaging expose separate ownership middleware; unification is out of scope.',
-  },
-  prepareSkillStore: {
-    kind: 'export',
-    files: ['packages/core/src/skills/collectSkills.ts', 'packages/skills/src/collectSkills.ts'],
-    reason: 'Core and skills prepare separate skill-store implementations; unification is out of scope.',
   },
 };
 
