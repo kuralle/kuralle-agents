@@ -195,6 +195,7 @@ export class Runtime {
     const recorder = this.shouldTrace(sessionId, opts.input)
       ? new TraceRecorder({
           sessionId,
+          agentId: opts.agentId ?? this.config.defaultAgentId,
           input: opts.input,
           onSpan: (span) => this.writeSpan(span),
         })
@@ -230,6 +231,7 @@ export class Runtime {
         defaultAgentId: this.config.defaultAgentId,
         sessionStore: this.sessionStore,
       });
+      recorder?.setInitiatingAgent(opened.agent.id);
 
       const policies = resolveAgentPolicies(opened.agent);
       const knowledgeProvider = this.config.knowledge
@@ -571,8 +573,10 @@ export class Runtime {
     });
   }
 
-  runOnce(opts: RunOptions): Promise<AgentTrace> {
-    return recordRunOnce(this, opts);
+  async runOnce(opts: RunOptions): Promise<AgentTrace> {
+    const existing = opts.sessionId ? await this.sessionStore.get(opts.sessionId) : null;
+    const agentId = existing?.activeAgentId ?? existing?.currentAgent ?? opts.agentId ?? this.config.defaultAgentId;
+    return recordRunOnce(this, { ...opts, agentId });
   }
 
   stream(opts: RunOptions): TurnHandle {

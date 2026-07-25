@@ -40,6 +40,7 @@ describe('Runtime.runOnce', () => {
     expect(trace.toolCalls).toEqual([]);
     expect(trace.toolResults).toEqual([]);
     expect(trace.spans.some((span) => span.kind === 'turn' && !span.parentSpanId)).toBe(true);
+    expect(trace.spans.find((span) => span.kind === 'turn')?.attributes.agentId).toBe('support');
     const stored = await runtime.listTraces('trace-text');
     expect(stored).toHaveLength(1);
     expect(stored[0]?.answer).toBe('Grounded answer.');

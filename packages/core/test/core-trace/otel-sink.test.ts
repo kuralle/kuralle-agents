@@ -11,7 +11,7 @@ const span: AgentSpan = {
   startTime: 1000,
   endTime: 1002,
   status: 'error',
-  attributes: { sessionId: 's-1', toolName: 'lookup', input: { id: 7 }, error: 'offline' },
+  attributes: { sessionId: 's-1', agentId: 'support', toolName: 'lookup', input: { id: 7 }, error: 'offline' },
   events: [{ name: 'retry', time: 1001, attributes: { attempt: 2 } }],
 };
 
@@ -24,6 +24,7 @@ describe('OtelTraceSink', () => {
     expect(output.parentSpanId).toBe(span.parentSpanId);
     expect(output.startTimeUnixNano).toBe('1000000000');
     expect(output.status.code).toBe(2);
+    expect(output.attributes).toContainEqual({ key: 'kuralle.agentId', value: { stringValue: 'support' } });
     expect(output.attributes).toContainEqual({ key: 'kuralle.toolName', value: { stringValue: 'lookup' } });
     expect(output.events[0]?.name).toBe('retry');
   });
