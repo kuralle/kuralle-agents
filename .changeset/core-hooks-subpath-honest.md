@@ -1,5 +1,5 @@
 ---
-"@kuralle-agents/core": major
+"@kuralle-agents/core": minor
 ---
 
 Remove the misnamed `@kuralle-agents/core/hooks` subpath and export its services from the package root instead.

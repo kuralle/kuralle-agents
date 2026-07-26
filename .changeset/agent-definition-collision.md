@@ -1,5 +1,5 @@
 ---
-'@kuralle-agents/core': major
+'@kuralle-agents/core': minor
 ---
 
 Resolve the `AgentDefinition` collision inside `@kuralle-agents/core`.

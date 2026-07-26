@@ -1,6 +1,6 @@
 ---
-'@kuralle-agents/core': major
-'@kuralle-agents/fs': major
+'@kuralle-agents/core': minor
+'@kuralle-agents/fs': minor
 ---
 
 Consolidate skills into `@kuralle-agents/core` and widen `AgentConfig.skills`.

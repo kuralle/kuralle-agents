@@ -1,5 +1,5 @@
 ---
-'@kuralle-agents/core': major
+'@kuralle-agents/core': minor
 ---
 
 Fix control-flow signals being swallowed on the model tool path, and close four tool-execution gaps found comparing against OpenAI Agents JS, LangGraph, Mastra, DeepAgents, and the AI SDK.

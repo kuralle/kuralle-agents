@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased — 1.0.0: one trace surface and one stream envelope (BREAKING)
+## Unreleased — 0.14.0: one trace surface and one stream envelope (BREAKING)
 
-This major combines the already-staged stream-envelope break with removal of lifecycle APIs that were publicly exported but not wired to the runtime. The fixed Changesets group moves the package family from 0.13.x to 1.0.0 together.
+This release combines the already-staged stream-envelope break with removal of lifecycle APIs that were publicly exported but not wired to the runtime. The fixed Changesets group moves the package family from 0.13.x to 0.14.0 together. These are breaking changes shipped under 0.x rules, where a minor may break — the API is still settling, so this is not a 1.0 stability commitment.
 
 ### Removed the misnamed `@kuralle-agents/core/hooks` subpath
 
