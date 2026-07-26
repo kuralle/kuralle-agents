@@ -50,7 +50,7 @@ import {
   reply,
 } from '@kuralle-agents/core';
 import { InMemoryFs } from '@kuralle-agents/fs';
-import { UNITS, VENDORS, WORK_ORDERS, WORKSPACE_FILES, nextWorkOrderId, sideEffects } from './data.js';
+import { UNITS, VENDORS, WORK_ORDERS, WORKSPACE_FILES, nextWorkOrderId, persist, sideEffects } from './data.js';
 
 const workspace = new InMemoryFs(WORKSPACE_FILES);
 
@@ -133,6 +133,7 @@ const create_work_order = defineTool({
     sideEffects.workOrdersCreated += 1;
     const id = nextWorkOrderId();
     WORK_ORDERS.push({ id, unitId: unitId.toUpperCase().trim(), issue, urgency, status: 'open' });
+    persist();
     return { workOrderId: id, unitId, issue, urgency, accessNotes, status: 'open' };
   },
 });
@@ -191,6 +192,7 @@ const dispatch_vendor_with_approval = defineTool({
     r.wo.vendorId = r.vendor.id;
     r.wo.estimateUsd = estimateUsd;
     r.wo.status = 'vendor_dispatched';
+    persist();
     return { dispatched: true, workOrderId: r.wo.id, vendor: r.vendor.name, estimateUsd };
   },
 });
@@ -223,6 +225,7 @@ const dispatch_vendor = defineTool({
     r.wo.vendorId = r.vendor.id;
     r.wo.estimateUsd = estimateUsd;
     r.wo.status = 'vendor_dispatched';
+    persist();
     return { dispatched: true, workOrderId: r.wo.id, vendor: r.vendor.name, estimateUsd, emergency: emergency ?? false };
   },
 });
@@ -233,6 +236,7 @@ const notify_resident = defineTool({
   input: z.object({ unitId: z.string(), message: z.string() }),
   execute: async ({ unitId, message }) => {
     sideEffects.messagesSent += 1;
+    persist();
     const unit = UNITS[unitId.toUpperCase().trim()];
     return { sent: true, to: unit?.residentPhone ?? 'unknown', message };
   },
@@ -334,6 +338,11 @@ Never split a job into smaller dispatches to stay under a threshold.
 Report what you did, in the past tense, and do not ask permission for something already
 done. If you dispatched, say who is coming. If you are waiting on owner approval, say that
 and stop. Never do both — "I dispatched X, shall I dispatch X?" is wrong and confusing.
+
+**Only claim an action you actually performed with a tool, and only if that tool returned
+success.** If a tool returned an error, say what failed and what you will do instead. Never
+narrate a dispatch, a work order, or a message you did not make — a manager acting on a
+report of work that was never scheduled is the worst outcome this assistant can produce.
 
 ## Escalation
 

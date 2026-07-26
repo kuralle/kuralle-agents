@@ -7,6 +7,10 @@
  * a cost, and the spend cap is what makes approval matter.
  */
 
+import { readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 export interface Unit {
   id: string;
   address: string;
@@ -65,8 +69,18 @@ export const VENDORS: Vendor[] = [
   { id: 'v-lock-1', name: 'Anchor Locksmith', trade: 'locksmith', calloutUsd: 130, emergency: true },
 ];
 
-/** Mutable so the example can show state actually changing across turns. */
-export const WORK_ORDERS: Array<{
+/**
+ * The fake backend is **persisted to disk**, because `kuralle send` runs one turn per
+ * process. Module-level state resets on every invocation, so a work order created on turn 2
+ * would not exist on turn 3 — the session survives (file-backed store) while the "database"
+ * silently did not. A real backend is out-of-process, so this matches reality rather than
+ * working around it.
+ *
+ * Override the path with KURALLE_PM_STATE.
+ */
+const STATE_PATH = process.env.KURALLE_PM_STATE ?? join(tmpdir(), 'kuralle-property-manager.json');
+
+type WorkOrder = {
   id: string;
   unitId: string;
   issue: string;
@@ -74,13 +88,45 @@ export const WORK_ORDERS: Array<{
   status: string;
   vendorId?: string;
   estimateUsd?: number;
-}> = [
+};
+
+const SEED: WorkOrder[] = [
   { id: 'WO-1041', unitId: 'A-204', issue: 'Bedroom window latch broken', urgency: 'routine', status: 'open' },
   { id: 'WO-1039', unitId: 'B-12', issue: 'Dishwasher not draining', urgency: 'routine', status: 'awaiting_vendor' },
 ];
 
-/** Counts real executions, so replay/exactly-once can be observed rather than asserted. */
-export const sideEffects = { dispatches: 0, workOrdersCreated: 0, messagesSent: 0 };
+interface BackendState {
+  workOrders: WorkOrder[];
+  /** Counts real executions, so exactly-once can be observed rather than asserted. */
+  sideEffects: { dispatches: number; workOrdersCreated: number; messagesSent: number };
+}
+
+function load(): BackendState {
+  try {
+    return JSON.parse(readFileSync(STATE_PATH, 'utf8')) as BackendState;
+  } catch {
+    return { workOrders: [...SEED], sideEffects: { dispatches: 0, workOrdersCreated: 0, messagesSent: 0 } };
+  }
+}
+
+const state = load();
+
+export const WORK_ORDERS = state.workOrders;
+export const sideEffects = state.sideEffects;
+
+/** Persist after any mutation. Called by every tool with a side effect. */
+export function persist(): void {
+  writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
+}
+
+/** Wipe the backend — used by the example's `--reset` and by a fresh demo run. */
+export function resetBackend(): void {
+  state.workOrders.splice(0, state.workOrders.length, ...SEED.map((w) => ({ ...w })));
+  state.sideEffects.dispatches = 0;
+  state.sideEffects.workOrdersCreated = 0;
+  state.sideEffects.messagesSent = 0;
+  persist();
+}
 
 /** Called after the counter increments, so the first created order is WO-1042. */
 export function nextWorkOrderId(): string {

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { TurnControl } from '../../../types/channel.js';
+import { isControlFlowSignal } from '../../controlFlowSignal.js';
 import type { RunContext } from '../../../types/run-context.js';
 import { SentenceAggregator } from './SentenceAggregator.js';
 import type { StreamMode } from './mode.js';
@@ -60,6 +61,11 @@ export async function speakGated(args: {
         full += delta;
       }
     } catch (err) {
+      // A suspend unwinds through here on its way to the host loop. It is not a failure and
+      // must not reach the user as one — the same rule executeModelToolCall and runFlow
+      // already apply. This third path was missed, so an approval pause still surfaced as
+      // "error: Run suspended waiting for __approval" mid-conversation.
+      if (isControlFlowSignal(err)) throw err;
       const message = err instanceof Error ? err.message : String(err);
       ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
       throw err instanceof Error ? err : new Error(message);
@@ -138,6 +144,7 @@ export async function speakGated(args: {
     }
     return { text: emitted };
   } catch (err) {
+    if (isControlFlowSignal(err)) throw err;
     const message = err instanceof Error ? err.message : String(err);
     ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
     if (started) {
