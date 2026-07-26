@@ -353,11 +353,10 @@ export class Runtime {
 
           if (loopResult.kind === 'handoff') {
             if (this.terminalHandoffTargets.has(loopResult.to)) {
-              emit({
-                channel: 'internal',
-                type: 'handoff',
-                payload: { targetAgent: loopResult.to, reason: loopResult.reason },
-              });
+              // No handoff part emitted here: `hostLoop` already emits one for EVERY handoff,
+              // terminal or not. Emitting again gave a terminal handoff two identical parts,
+              // which a client renders as two escalations. Same defect as the duplicate fixed
+              // on the escalate path — one emitter per event.
               runCtx.runState.status = 'paused';
               await runCtx.runStore.putRunState(runCtx.runState);
               await this.dispatchEscalation(

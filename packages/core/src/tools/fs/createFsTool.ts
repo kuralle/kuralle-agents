@@ -201,7 +201,8 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
       'grep for exact terms, names, codes, or keywords (returns matching lines only), ' +
       'cat/read for full file contents. Prefer grep over semantic knowledge search when ' +
       'the user mentions an exact term or identifier — it is faster, cheaper, and exact. ' +
-      'Ops: ls, cat, grep, find, read, write, edit.',
+      'Ops: ls, cat, grep, find, read, write, edit. grep is CASE-SENSITIVE by default — pass '+
+      'flags:"i" when searching prose, or a heading like "Entry notice" will not match "entry notice".',
     timeoutMs,
     input: workspaceInput,
     execute: async (args: WorkspaceInput) => {
