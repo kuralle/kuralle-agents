@@ -4,6 +4,7 @@ import type { ChannelDriver } from '../types/channel.js';
 import type { DecideNode, Flow, FlowNode } from '../types/flow.js';
 import { popFlowPark, runCollectDigression } from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
+import { inferRequiredFields } from './extraction.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
 import { hasPendingUserInput, setPendingUserInput } from '../runtime/channels/inputBuffer.js';
@@ -316,13 +317,24 @@ async function dispatchNode(
   throw new Error(`Unknown node kind: ${(node as FlowNode).kind}`);
 }
 
-/** Drop the cached extraction for every collect node in `flow`. Keys are namespaced per node. */
+/**
+ * Drop everything a previous run of `flow` collected. Namespaced cache keys AND the
+ * un-namespaced copies `reduceTransition` promotes onto `run.state` via Object.assign.
+ *
+ * Clearing only the cache was not enough. The promoted fields are a plain merge, and
+ * `projectCollectData` omits any field the new extraction did not supply — so an optional
+ * field answered on report #1 (say `accessNotes: "key under the mat"`) and left blank on
+ * report #2 survives the merge and is read by the next action node as if it belonged to
+ * report #2. A work order then ships another unit's access instructions.
+ */
 export function clearFlowCollectCache(state: Record<string, unknown>, flow: Flow): void {
   for (const node of flow.nodes) {
     if (node.kind !== 'collect') continue;
     delete state[`__collect_${node.id}`];
     delete state[`__collectTurns_${node.id}`];
-    delete state[`__extract_${node.id}`];
+    for (const field of inferRequiredFields(node.schema)) {
+      delete state[field];
+    }
   }
 }
 

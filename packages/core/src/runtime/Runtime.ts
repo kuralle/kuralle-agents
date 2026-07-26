@@ -353,10 +353,20 @@ export class Runtime {
 
           if (loopResult.kind === 'handoff') {
             if (this.terminalHandoffTargets.has(loopResult.to)) {
-              // No handoff part emitted here: `hostLoop` already emits one for EVERY handoff,
-              // terminal or not. Emitting again gave a terminal handoff two identical parts,
-              // which a client renders as two escalations. Same defect as the duplicate fixed
-              // on the escalate path — one emitter per event.
+              // This emit is load-bearing for TERMINAL targets specifically. A terminal
+              // handoff breaks out of the loop here, before hostLoop's own emit and before
+              // handoffHistory is appended — so this is the only handoff part a client ever
+              // sees for an escalation. Removing it as "redundant" silently produced zero
+              // handoff parts for every escalation; escalation.test.ts catches it.
+              //
+              // The self-edge seen live (handoff human->human, two spans on one turn) is a
+              // real but SEPARATE defect on the non-terminal path — fix it there, not by
+              // deleting this.
+              emit({
+                channel: 'internal',
+                type: 'handoff',
+                payload: { targetAgent: loopResult.to, reason: loopResult.reason },
+              });
               runCtx.runState.status = 'paused';
               await runCtx.runStore.putRunState(runCtx.runState);
               await this.dispatchEscalation(

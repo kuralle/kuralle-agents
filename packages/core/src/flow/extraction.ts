@@ -206,7 +206,7 @@ function fieldPopulated(value: unknown): boolean {
   return true;
 }
 
-function inferRequiredFields(schema: StandardSchemaV1): string[] {
+export function inferRequiredFields(schema: StandardSchemaV1): string[] {
   const zodSchema = schema as z.ZodObject<z.ZodRawShape>;
   if (typeof zodSchema?.shape === 'object') {
     return Object.keys(zodSchema.shape);
