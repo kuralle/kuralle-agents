@@ -430,6 +430,9 @@ export {
   type OtelTraceSinkOptions,
 } from './tracing/index.js';
 export { TraceRecorder, runOnce, type TraceRecorderOptions } from './runtime/TraceRecorder.js';
+export { TracingService } from './services/TracingService.js';
+export { InMemoryMetricsService } from './services/MetricsService.js';
+export type { MetricsService } from './services/MetricsService.js';
 export { harnessToUIMessageStream } from './ai-sdk/uiMessageStream.js';
 export type {
   KuralleMetadata,
