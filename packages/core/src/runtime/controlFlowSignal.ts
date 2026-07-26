@@ -1,5 +1,5 @@
 import { SuspendError } from './durable/RunStore.js';
-import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
+import { RecoverableToolError, ToolApprovalDeniedError } from '../tools/effect/errors.js';
 
 /**
  * The run is not finished: stop the turn, keep the journal, resume when a signal arrives.
@@ -28,4 +28,13 @@ export function isControlFlowSignal(error: unknown): boolean {
  */
 export function isApprovalDenial(error: unknown): error is ToolApprovalDeniedError {
   return error instanceof ToolApprovalDeniedError;
+}
+
+/**
+ * A tool failed in a way the model can correct (bad referent, missing precondition). Not a
+ * control-flow signal and not a fatal fault: on the flow path it routes back to re-collecting
+ * the offending input rather than degrading the turn.
+ */
+export function isRecoverableToolError(error: unknown): error is RecoverableToolError {
+  return error instanceof RecoverableToolError;
 }

@@ -4,11 +4,13 @@
  *
  *   kuralle chat [--trace] [--store <file>] [--session <id>] [--auto "msg1|msg2"] [--agent <path.ts>]
  *   kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
+ *   kuralle resume <session> [--store <file>] [--summary <text>]
  *   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
  *   kuralle trace <session> [--last] [--json] [--web] [--port N]
  */
 import { resolveBuildRuntime } from './agentLoader.js';
 import { runChat } from './chat.js';
+import { runResume } from './resume.js';
 import { runSend } from './send.js';
 import { runSim } from './sim.js';
 import { runTrace } from './trace.js';
@@ -18,6 +20,7 @@ const HELP = `kuralle — Kuralle agent CLI
 Usage:
   kuralle chat [--trace] [--store <file>] [--session <id>] [--auto "msg1|msg2"] [--agent <path.ts>]
   kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
+  kuralle resume <session> [--store <file>] [--summary <text>]
   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
   kuralle trace <session> [--last] [--json] [--web] [--port N]
 
@@ -28,6 +31,7 @@ Options:
   --trace             Live trace side panel — the built-in AgentTrace of each turn (chat only)
   --store <file>      Persist the session + traces to JSON files so chat survives across launches (chat only)
   --session <id>      Session id to resume with --store (default: "default")
+  --summary <text>    Resolution note appended on resume (seen by the agent post-resume)
 `;
 
 function flag(argv: string[], name: string): string | undefined {
@@ -70,6 +74,9 @@ async function main(): Promise<void> {
       break;
     case 'send':
       await runSend(subArgv, buildRuntime);
+      break;
+    case 'resume':
+      await runResume(subArgv, buildRuntime);
       break;
     case 'sim':
       await runSim(subArgv, buildRuntime);

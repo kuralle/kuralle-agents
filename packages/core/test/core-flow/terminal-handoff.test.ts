@@ -147,6 +147,10 @@ describe('terminal handoff targets', () => {
     );
 
     const session = await sessionStore.get(sessionId);
-    expect(session?.handoffHistory).toHaveLength(0);
+    // REQ-B6: terminal handoffs are now recorded in handoffHistory (previously this
+    // branch broke before the push, so the array stayed empty and isHandoffOscillating
+    // could never see repeated escalations). closeRun persists it across turns.
+    expect(session?.handoffHistory).toHaveLength(1);
+    expect(session?.handoffHistory?.[0]).toMatchObject({ from: 'support', to: 'human' });
   });
 });

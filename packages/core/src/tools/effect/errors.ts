@@ -11,6 +11,25 @@ export class ToolTimeoutError extends Error {
   }
 }
 
+/**
+ * Thrown by a tool's `execute` (or a guard wrapping it) when the call failed for a
+ * reason the model can correct: a referent that does not exist ("Unknown unit '12B'"),
+ * a value out of range, a missing precondition the user can supply. Distinct from a
+ * fatal fault (network down, schema broken) in that the model should see the message
+ * and retry — not be told "something went wrong on my side".
+ *
+ * On the model path it is returned to the model as a tool result (the model self-corrects).
+ * On the flow path it is the signal to re-collect the offending input instead of
+ * degrading the flow — see `runFlow`. Detected by type (`isRecoverableToolError`), never
+ * by string-matching the message.
+ */
+export class RecoverableToolError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecoverableToolError';
+  }
+}
+
 /** Thrown when a human denies a tool call that requires approval. */
 export class ToolApprovalDeniedError extends Error {
   readonly toolName: string;

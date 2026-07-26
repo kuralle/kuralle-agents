@@ -6,7 +6,7 @@ import { classifyControl } from '../../flow/classifyControl.js';
 import { toolDeniedResult, toolErrorResult } from '../../tools/controlResults.js';
 import { idempotencyKey, logicalRunId } from '../durable/idempotency.js';
 import { findStepByKey } from '../durable/replay.js';
-import { isApprovalDenial, isControlFlowSignal } from '../controlFlowSignal.js';
+import { isApprovalDenial, isControlFlowSignal, isRecoverableToolError } from '../controlFlowSignal.js';
 
 export interface ModelToolCall {
   toolName: string;
@@ -62,6 +62,12 @@ export async function executeModelToolCall(
       // A human declined. The model asked for this call, so the model is told — otherwise
       // the turn dies and the user never hears why. No client error part: nothing broke.
       return { result: toolDeniedResult(error.toolName, error.by), failed: true };
+    }
+    if (isRecoverableToolError(error)) {
+      // The model can correct this (bad referent, missing precondition): return the message
+      // as a tool result so it can retry. Not a malfunction, so no client error part —
+      // same posture as an approval denial.
+      return { result: toolErrorResult(error), failed: true };
     }
     const message = error instanceof Error ? error.message : String(error);
     ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });

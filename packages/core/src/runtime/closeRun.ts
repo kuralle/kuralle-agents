@@ -60,6 +60,12 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
     // otherwise lacks assistant turns and keeps pre-guardrail (unredacted)
     // user input written at openRun.
     latest.messages = [...runState.messages];
+    // Persist handoff history accumulated on the run's working session this turn
+    // (terminal + non-terminal handoffs alike). Without this the in-memory pushes
+    // were silently dropped: stores that clone on get/save (e.g. MemoryStore) hand
+    // back a fresh snapshot here, and the previous mutator never copied handoffHistory
+    // across — so isHandoffOscillating's cross-turn safeguard never saw prior turns.
+    latest.handoffHistory = session.handoffHistory;
     syncPendingUserInput(ctx.session, latest);
   });
 }

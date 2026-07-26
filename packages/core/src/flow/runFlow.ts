@@ -1,10 +1,10 @@
 import type { ModelMessage } from 'ai';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
-import type { DecideNode, Flow, FlowNode } from '../types/flow.js';
+import type { CollectNode, DecideNode, Flow, FlowNode } from '../types/flow.js';
 import { popFlowPark, runCollectDigression } from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
-import { inferRequiredFields } from './extraction.js';
+import { inferRequiredFields, resetCollect } from './extraction.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
 import { hasPendingUserInput, setPendingUserInput } from '../runtime/channels/inputBuffer.js';
@@ -24,7 +24,7 @@ import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
-import { isApprovalDenial, isControlFlowSignal } from '../runtime/controlFlowSignal.js';
+import { isApprovalDenial, isControlFlowSignal, isRecoverableToolError } from '../runtime/controlFlowSignal.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
 import { appendConversationAudit } from '../audit/record.js';
 import {
@@ -375,8 +375,16 @@ export async function runFlow(
 
   const edgeCounts = new Map<string, number>();
   const maxOscillations = flow.maxOscillations ?? 2;
+  // The node to re-collect from when an action throws a recoverable error (bad referent,
+  // missing precondition). Tracked as the most recent collect node visited in THIS flow
+  // invocation. If an action runs before any collect (no node can re-collect), a
+  // recoverable error degrades exactly as a fatal one would.
+  let lastCollectNode: CollectNode | undefined;
 
   for (;;) {
+    if (isCollectNode(node)) {
+      lastCollectNode = node;
+    }
     let transition: NormalizedTransition;
     try {
       transition = await dispatchNode(node, run, driver, ctx, agent, flow);
@@ -386,6 +394,25 @@ export async function runFlow(
       // the action node author's to handle, since they chose to call the tool.
       if (isControlFlowSignal(error) || isApprovalDenial(error)) {
         throw error;
+      }
+      if (isRecoverableToolError(error) && lastCollectNode) {
+        // The action node called a tool imperatively, so there is no model tool-call to
+        // attach a result to. Carry the message to the model as a system note (the next
+        // extraction/reply turn reads it from history), clear the offending collect's cache
+        // so re-entry genuinely re-collects instead of re-completing with the bad value, and
+        // return to that node. With the cache cleared and the turn's input already consumed
+        // by the collect that fed this action, collectUntilComplete emits its `ask` and
+        // parks on awaitingUser — a real re-ask, not an end.
+        resetCollect(run.state, lastCollectNode.id);
+        const note: ModelMessage = {
+          role: 'system',
+          content: `Action "${node.id}" could not complete: ${error.message}. Re-collect the affected input from the user before retrying.`,
+        };
+        run.messages = [...run.messages, note];
+        node = lastCollectNode;
+        run.activeNode = node.id;
+        await ctx.runStore.putRunState(run);
+        continue;
       }
       const message = error instanceof Error ? error.message : String(error);
       ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });

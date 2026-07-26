@@ -77,6 +77,15 @@ import { runHookSafely } from './runHookSafely.js';
 export const HANDOFF_TO_HUMAN_MESSAGE =
   "I'm bringing a colleague into this — they'll pick it up from here.";
 
+/**
+ * What the user is told on any turn that arrives WHILE a run is already held for a human.
+ * The agent does not re-run for these turns — without a live `kuralle resume` the session
+ * would otherwise re-escalate every message regardless of topic. Distinct from
+ * `HANDOFF_TO_HUMAN_MESSAGE`, which is the one-time notice emitted on the escalating turn.
+ */
+export const HELD_FOR_HUMAN_MESSAGE =
+  "A colleague is already handling this — I'll pick it back up as soon as they're done.";
+
 export interface TracingConfig {
   enabled?: boolean;
   store?: TraceStore;
@@ -223,8 +232,16 @@ export class Runtime {
       // were observed producing empty output while silently firing transfer_to_agent, which
       // is indistinguishable from an outage.
       let sawUserText = false;
+      // Handoff targets already announced this turn. `hostLoop` emits a handoff part when
+      // the transfer control tool fires, and the terminal branch below emits one too —
+      // but only SOME terminal handoffs come through hostLoop's control path (a validator
+      // escalate does not), so neither emitter can be deleted. Deduplicate instead: the
+      // double emit produced a spurious `human -> human` self-edge in the trace, because
+      // by the second emit the recorder's current agent was already the target.
+      const announcedHandoffs = new Set<string>();
       const emit = (part: StreamPart) => {
         if (part.type === 'text-delta' && part.payload.delta) sawUserText = true;
+        if (part.type === 'handoff') announcedHandoffs.add(part.payload.targetAgent);
         recorder?.record(part);
         if (part.type === 'done') this.flushTraceSinks();
         bus.emit(part);
@@ -283,6 +300,14 @@ export class Runtime {
       // THIS turn's consumption (delta), not the running session total (see the
       // per-turn scope requirement in the observability guide).
       const usageBaseline = readCumulativeUsage(freshRunState.state);
+
+      // A run parked on a terminal-handoff escalation (status 'paused' with NO `waitingFor`)
+      // is held for a human until `resumeFromEscalation`. It must not re-run the agent —
+      // without this gate every later turn re-escalated, recycling the prior escalation's
+      // reason even for unrelated messages. `waitingFor` is the discriminator: suspend and
+      // approval waits also set status 'paused' but DO set `waitingFor` and resume by
+      // signal; gating those would hang every approval and every suspended tool.
+      const heldForHuman = freshRunState.status === 'paused' && !freshRunState.waitingFor;
 
       const model = opened.agent.model ?? this.defaultModel;
       if (!model) {
@@ -345,6 +370,25 @@ export class Runtime {
       let overflowRetried = false;
 
       try {
+        if (heldForHuman) {
+          // Mirror the degraded-turn shape so TurnHandle consumers see a normal text +
+          // `done` and do not hang: the hold message streams once, the turn is persisted,
+          // and the existing `finally` emits `done` and runs closeRun. The agent never runs.
+          const heldId = crypto.randomUUID();
+          emit({ channel: 'client', type: 'text-start', payload: { id: heldId } });
+          emit({ channel: 'client', type: 'text-delta', payload: { id: heldId, delta: HELD_FOR_HUMAN_MESSAGE } });
+          emit({ channel: 'client', type: 'text-end', payload: { id: heldId } });
+          runCtx.runState.messages = [
+            ...runCtx.runState.messages,
+            { role: 'assistant', content: HELD_FOR_HUMAN_MESSAGE },
+          ];
+          await runCtx.runStore.putRunState(runCtx.runState);
+          // NOT a terminal outcome: the run stays `paused` (closeRun only flips to
+          // `finished` when terminalOutcome is set). Setting it would both break the
+          // hold — the next turn would no longer see `paused` — and trip a stale-version
+          // outcome mark across multi-turn sessions.
+          loopResult = { kind: 'ended', reason: 'held_for_human' };
+        } else {
         turnLoop: for (;;) {
           try {
             loopResult = await hostLoop({
@@ -376,10 +420,24 @@ export class Runtime {
               // The self-edge seen live (handoff human->human, two spans on one turn) is a
               // real but SEPARATE defect on the non-terminal path — fix it there, not by
               // deleting this.
-              emit({
-                channel: 'internal',
-                type: 'handoff',
-                payload: { targetAgent: loopResult.to, reason: loopResult.reason },
+              if (!announcedHandoffs.has(loopResult.to)) {
+                emit({
+                  channel: 'internal',
+                  type: 'handoff',
+                  payload: { targetAgent: loopResult.to, reason: loopResult.reason },
+                });
+              }
+              // Record the terminal handoff in handoffHistory. This branch used to `break`
+              // before the non-terminal push below, so the array stayed empty and
+              // isHandoffOscillating could never see repeated escalations. The oscillation
+              // check only runs on the non-terminal branch and only counts consecutive
+              // same-pair hops, so appending `agent -> human` here cannot trip a false
+              // oscillation on a later legitimate handoff to a different target.
+              opened.session.handoffHistory.push({
+                from: runCtx.runState.activeAgentId,
+                to: loopResult.to,
+                reason: loopResult.reason ?? 'handoff',
+                timestamp: new Date(),
               });
               runCtx.runState.status = 'paused';
               // Never hand off in silence. dispatchEscalation returns immediately when no
@@ -554,6 +612,7 @@ export class Runtime {
         // Post-turn maintenance: text already streamed, so the summarizer call
         // is off the user's latency path; the NEXT turn starts compact.
         await this.applyCompaction(runCtx, activeAgent, emit, false);
+        }
       } catch (error) {
         await runHookSafely('onError', () => this.hooks?.onError?.(runCtx, error as Error));
         if (isDegradableRuntimeError(error)) {
