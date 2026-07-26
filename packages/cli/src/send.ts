@@ -2,6 +2,11 @@
  * send — ONE turn against a PERSISTED session for adaptive multi-turn conversations.
  *
  * Flags: --session <id> · --store <file> · --state · --reset
+ *        --approve [by] · --deny [by] · --signal <name> [--payload <json>]
+ *
+ * A `needsApproval` tool suspends the run durably. Without a way to deliver the decision the
+ * CLI could enter that pause and never leave it — every later turn re-requested approval and
+ * paused again. The runtime already accepted `signalDelivery`; only the CLI could not send one.
  */
 import { join } from 'node:path';
 import type { StreamPart } from '@kuralle-agents/core';
@@ -19,9 +24,30 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const storePath = flag(argv, '--store') ?? join(process.cwd(), 'runs/tui-sessions.json');
   const doReset = argv.includes('--reset');
   const doState = argv.includes('--state');
+  const approve = argv.includes('--approve');
+  const deny = argv.includes('--deny');
+  const signalName = flag(argv, '--signal');
+  const by = flag(argv, '--approve') ?? flag(argv, '--deny') ?? 'cli';
+  const signalDelivery =
+    approve || deny
+      ? {
+          // A fresh id per delivery: recordSignalDelivery dedupes on it, so reusing one
+          // would make a second decision a silent no-op.
+          signalId: `cli-${Date.now()}`,
+          name: '__approval',
+          payload: { approved: approve, by },
+        }
+      : signalName
+        ? {
+            signalId: `cli-${Date.now()}`,
+            name: signalName,
+            payload: JSON.parse(flag(argv, '--payload') ?? '{}') as Record<string, unknown>,
+          }
+        : undefined;
   const reserved = new Set(['--session', sessionId, '--store', storePath]);
+  const consumesValue = new Set(['--session', '--store', '--signal', '--payload', '--approve', '--deny']);
   const message = argv
-    .filter((a, i) => !a.startsWith('--') && !(i > 0 && (argv[i - 1] === '--session' || argv[i - 1] === '--store')))
+    .filter((a, i) => !a.startsWith('--') && !(i > 0 && consumesValue.has(argv[i - 1]!)))
     .join(' ')
     .trim();
 
@@ -44,14 +70,15 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
     console.log(`reset session "${sessionId}"`);
     return;
   }
-  if (doState || !message) {
+  // A decision can arrive with no message — approving is itself the turn.
+  if (doState || (!message && !signalDelivery)) {
     console.log(await readState());
     if (!message && !doState) console.error('(no message — pass one to take a turn, or --state to inspect)');
     return;
   }
 
   const events: string[] = [];
-  const handle = demo.runtime.run({ sessionId, input: message });
+  const handle = demo.runtime.run({ sessionId, input: message, ...(signalDelivery ? { signalDelivery } : {}) });
   let text = '';
   for await (const part of handle.events as AsyncIterable<StreamPart>) {
     if (part.type === 'text-delta') { text += part.payload.delta; process.stdout.write(part.payload.delta); }
