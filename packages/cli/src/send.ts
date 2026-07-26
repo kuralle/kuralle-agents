@@ -44,8 +44,18 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
             payload: JSON.parse(flag(argv, '--payload') ?? '{}') as Record<string, unknown>,
           }
         : undefined;
-  const reserved = new Set(['--session', sessionId, '--store', storePath]);
-  const consumesValue = new Set(['--session', '--store', '--signal', '--payload', '--approve', '--deny']);
+  // Every flag whose VALUE must not be mistaken for message text. Missing `--model` here
+  // meant the model id survived the filter and became the first word of every user turn —
+  // a whole live run was sent to the model with "gpt-4.1-mini " prepended to each message.
+  const consumesValue = new Set([
+    '--session',
+    '--store',
+    '--model',
+    '--signal',
+    '--payload',
+    '--approve',
+    '--deny',
+  ]);
   const message = argv
     .filter((a, i) => !a.startsWith('--') && !(i > 0 && consumesValue.has(argv[i - 1]!)))
     .join(' ')
