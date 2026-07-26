@@ -130,9 +130,18 @@ const create_work_order = defineTool({
     accessNotes: z.string().optional(),
   }),
   execute: async ({ unitId, issue, urgency, accessNotes }) => {
+    // The model will happily collect a unit id the resident said out loud ("12B") that is
+    // not in the portfolio, and the flow will then run to completion around it. Validate at
+    // the tool boundary — the same place resolveDispatch guards vendor ids.
+    const normalized = unitId.toUpperCase().trim();
+    if (!UNITS[normalized]) {
+      throw new Error(
+        `Unknown unit '${unitId}'. Call list_units or lookup_unit to get a real unit id — do not invent one.`,
+      );
+    }
     sideEffects.workOrdersCreated += 1;
     const id = nextWorkOrderId();
-    WORK_ORDERS.push({ id, unitId: unitId.toUpperCase().trim(), issue, urgency, status: 'open' });
+    WORK_ORDERS.push({ id, unitId: normalized, issue, urgency, status: 'open' });
     persist();
     return { workOrderId: id, unitId, issue, urgency, accessNotes, status: 'open' };
   },
