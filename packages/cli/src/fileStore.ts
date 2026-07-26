@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Session, SessionStore } from '@kuralle-agents/core';
-import { reviveSession } from '@kuralle-agents/core';
+import { reviveSession, StaleWriteError } from '@kuralle-agents/core';
 
 export function fileSessionStore(path: string): SessionStore {
   const readAll = (): Record<string, unknown> => {
@@ -28,8 +28,18 @@ export function fileSessionStore(path: string): SessionStore {
       return map[id] ? reviveSession(map[id]) : null;
     },
     async save(session: Session): Promise<void> {
+      // Compare-and-swap, matching MemoryStore. The durable journal appends through
+      // `mutateSessionWithRetry`, which retries on StaleWriteError — a store that accepts
+      // a stale write silently drops the losing append instead, and the step it wrote is
+      // then missing when finalizeStep looks for it.
       const map = readAll();
-      map[session.id] = session;
+      const existing = map[session.id] as Session | undefined;
+      const expected = session.version ?? 0;
+      const stored = existing ? (existing.version ?? 0) : 0;
+      if (stored !== expected) {
+        throw new StaleWriteError(session.id, expected, stored);
+      }
+      map[session.id] = { ...session, updatedAt: new Date(), version: expected + 1 };
       writeAll(map);
     },
     async delete(id: string): Promise<void> {
