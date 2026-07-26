@@ -4,21 +4,29 @@
   "commit": false,
   "fixed": [
     [
-      "@kuralle-agents/core",
-      "@kuralle-agents/hono-server",
-      "@kuralle-agents/tools",
-      "@kuralle-agents/rag",
-      "@kuralle-agents/eval",
-      "@kuralle-agents/cf-agent",
-      "@kuralle-agents/redis-store",
-      "@kuralle-agents/postgres-store",
       "@kuralle-agents/analytics-sdk",
-      "@kuralle-agents/widget"
-    ],
-    [
+      "@kuralle-agents/cf-agent",
+      "@kuralle-agents/cli",
+      "@kuralle-agents/commerce",
+      "@kuralle-agents/core",
+      "@kuralle-agents/engagement",
+      "@kuralle-agents/eval",
+      "@kuralle-agents/fs",
+      "@kuralle-agents/hono-server",
+      "@kuralle-agents/http-client",
+      "@kuralle-agents/lancedb-store",
       "@kuralle-agents/messaging",
       "@kuralle-agents/messaging-meta",
-      "@kuralle-agents/engagement"
+      "@kuralle-agents/postgres-store",
+      "@kuralle-agents/rag",
+      "@kuralle-agents/rag-loaders",
+      "@kuralle-agents/redis-store",
+      "@kuralle-agents/tools",
+      "@kuralle-agents/trace-ui",
+      "@kuralle-agents/upstash-store",
+      "@kuralle-agents/vectorize-store",
+      "@kuralle-agents/widget",
+      "create-kuralle-agents"
     ]
   ],
   "linked": [],
