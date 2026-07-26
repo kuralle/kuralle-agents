@@ -316,6 +316,16 @@ async function dispatchNode(
   throw new Error(`Unknown node kind: ${(node as FlowNode).kind}`);
 }
 
+/** Drop the cached extraction for every collect node in `flow`. Keys are namespaced per node. */
+export function clearFlowCollectCache(state: Record<string, unknown>, flow: Flow): void {
+  for (const node of flow.nodes) {
+    if (node.kind !== 'collect') continue;
+    delete state[`__collect_${node.id}`];
+    delete state[`__collectTurns_${node.id}`];
+    delete state[`__extract_${node.id}`];
+  }
+}
+
 export async function runFlow(
   flow: Flow,
   run: RunState,
@@ -332,6 +342,18 @@ export async function runFlow(
   }
 
   if (!run.activeNode) {
+    // Fresh entry, not a resume. A collect node caches its extraction under
+    // `__collect_<nodeId>` and that cache is SUPPOSED to survive turn boundaries — it is how
+    // fields accumulate across several user turns mid-flow. But it must not survive the flow
+    // itself: re-entering a completed flow found the previous run's cache already complete,
+    // finished instantly with those values, and the action node acted on them.
+    //
+    // Observed live: three maintenance reports for three different units produced three
+    // copies of the FIRST work order; the units actually reported were never touched.
+    //
+    // Cleared here rather than on completion so mid-flow accumulation is untouched — which
+    // is what `continuity.test.ts` and the G14 slot-correction test encode.
+    clearFlowCollectCache(run.state, flow);
     run.activeNode = node.id;
     run.activeFlow = flow.name;
     ctx.emit({ channel: 'internal', type: 'flow-enter', payload: { flow: flow.name } });

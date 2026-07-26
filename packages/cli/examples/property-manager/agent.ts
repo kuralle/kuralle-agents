@@ -281,7 +281,12 @@ const intake = collect({
   required: ['unitId', 'issue', 'urgency'],
   maxTurns: 8,
   instructions: (missing) =>
-    `Extract work-order intake fields from the conversation. Still missing: ${missing.join(', ')}. ` +
+    // Extraction sees the whole history, so an earlier report in the same conversation is
+    // a live distractor: without this the second report re-extracted the first one's unit
+    // and issue, and the flow created a verbatim duplicate work order.
+    `Extract intake fields for the MOST RECENT maintenance report only — the newest one the ` +
+    `manager raised. Earlier reports in this conversation are already logged; ignore them ` +
+    `entirely, including their unit and issue. Still missing: ${missing.join(', ')}. ` +
     `Classify urgency using the triage-work-order skill. Do not invent a unit id.`,
   ask: (missing) => {
     const label: Record<string, string> = {
@@ -323,7 +328,15 @@ from tools. Policy, lease terms and escalation rules are markdown files in your 
 read them with the workspace tool rather than answering from memory. When a question turns
 on a policy detail, grep the policy first and say which file you used.
 
-Before creating a work order, check whether one already exists for that unit and issue.
+## Every maintenance report goes through the flow
+
+When someone reports a NEW maintenance problem, use the raise_work_order flow first. Do this
+every time, including the second and third report in one conversation — each report is its
+own work order. Check list_work_orders first so you do not duplicate one that already exists
+for the same unit and issue.
+
+**Never dispatch against a work order id you have not seen in a tool result.** If there is no
+work order yet, raise one; do not request approval for something that does not exist.
 
 ## Spend approval
 
