@@ -18,6 +18,8 @@ import {
   mergeTurnExtraction,
   projectCollectData,
   schemaSatisfied,
+  invalidCollectFields,
+  setCollectData,
 } from './extraction.js';
 import { normalizeTransition } from './normalizeTransition.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
@@ -76,8 +78,32 @@ export async function collectUntilComplete(
     const turns = incrementCollectTurns(run.state, node.id);
     const maxTurns = node.maxTurns ?? 10;
     if (turns > maxTurns) {
-      const data = projectCollectData(node, run.state);
-      return normalizeTransition(await node.onComplete(data, run.state));
+      // Running out of turns is not the same as finishing. Calling onComplete here with
+      // required fields still missing hands the rest of the flow a half-filled record and
+      // lets an action node act on it — for an intake SOP that means creating a record
+      // against whatever happened to be in state. Complete only if the node is genuinely
+      // satisfied; otherwise this is a failure to collect, and a human should see it.
+      if (schemaSatisfied(node, run.state)) {
+        const data = projectCollectData(node, run.state);
+        return normalizeTransition(await node.onComplete(data, run.state));
+      }
+      const missing = computeMissingFields(node, getCollectData(run.state, node.id));
+      return normalizeTransition({
+        escalate:
+          `Could not collect ${missing.join(', ')} for "${node.id}" after ${maxTurns} turns.`,
+      });
+    }
+
+    // Drop any collected value the schema rejects before working out what to ask for.
+    // Without this a value that is present-but-invalid is neither missing (so it is never
+    // re-asked) nor satisfying (so the node never completes) — the loop would spin to
+    // maxTurns. Purging turns an invalid value back into a missing one, which the existing
+    // ask/extract machinery already knows how to chase.
+    const collected = getCollectData(run.state, node.id);
+    const invalid = invalidCollectFields(node, collected);
+    if (invalid.length > 0) {
+      for (const field of invalid) delete collected[field];
+      setCollectData(run.state, node.id, collected);
     }
 
     const missingBefore = computeMissingFields(node, getCollectData(run.state, node.id));

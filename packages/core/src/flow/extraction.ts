@@ -26,7 +26,7 @@ export function getCollectData(state: FlowState, nodeId: string): Record<string,
   return {};
 }
 
-function setCollectData(state: FlowState, nodeId: string, data: Record<string, unknown>): void {
+export function setCollectData(state: FlowState, nodeId: string, data: Record<string, unknown>): void {
   state[collectDataKey(nodeId)] = data;
 }
 
@@ -49,9 +49,54 @@ export function computeMissingFields(
   return required.filter((field) => !fieldPopulated(data[field]));
 }
 
+/**
+ * Fields whose collected value is present but does NOT satisfy the node's schema.
+ *
+ * Completion used to be presence-only: any non-empty value passed, so a model that invented
+ * an enum member (`urgency: "high"` against `z.enum(['emergency','urgent','routine'])`) or
+ * supplied the wrong primitive completed the node and the flow acted on it. The schema was
+ * only ever used to derive key names, never to check a value.
+ *
+ * Only validates synchronously — StandardSchema permits an async validator, and the
+ * completion gate is sync. Zod is sync, which covers every schema in this repo; an async
+ * validator degrades to the old presence-only behaviour rather than blocking.
+ *
+ * NOTE this catches SHAPE, not REFERENT. `unitId: "12B"` is a perfectly valid string; that a
+ * unit by that id does not exist is a domain fact only a tool boundary can know.
+ */
+export function invalidCollectFields(node: CollectNode, data: Record<string, unknown>): string[] {
+  const validate = (node.schema as StandardSchemaV1)['~standard']?.validate;
+  if (typeof validate !== 'function') return [];
+  let result: unknown;
+  try {
+    result = validate(data);
+  } catch {
+    return [];
+  }
+  if (result instanceof Promise) return [];
+  const issues = (result as { issues?: readonly { path?: readonly unknown[] }[] } | undefined)
+    ?.issues;
+  if (!issues?.length) return [];
+  const fields = new Set<string>();
+  for (const issue of issues) {
+    const first = issue.path?.[0];
+    const key =
+      typeof first === 'string'
+        ? first
+        : typeof (first as { key?: unknown })?.key === 'string'
+          ? ((first as { key: string }).key)
+          : undefined;
+    // Only report fields the node actually collected. An issue on a field that was never
+    // supplied is a missing-field problem, which computeMissingFields already owns.
+    if (key && key in data) fields.add(key);
+  }
+  return [...fields];
+}
+
 export function schemaSatisfied(node: CollectNode, state: FlowState): boolean {
   const data = getCollectData(state, node.id);
-  return computeMissingFields(node, data).length === 0;
+  if (computeMissingFields(node, data).length > 0) return false;
+  return invalidCollectFields(node, data).length === 0;
 }
 
 export function projectCollectData(node: CollectNode, state: FlowState): unknown {
