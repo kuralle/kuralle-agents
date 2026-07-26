@@ -151,10 +151,19 @@ async function runActiveFlow(
     return { kind: 'turnComplete' };
   }
 
-  const completed = run.state.__completedFlows;
-  const completedFlows = Array.isArray(completed) ? (completed as string[]) : [];
-  if (!completedFlows.includes(flow.name)) {
-    run.state.__completedFlows = [...completedFlows, flow.name];
+  // A flow that ended because a node threw is NOT completed. Marking it so made the
+  // failure permanent for the turn: `select` and the host-control tools both exclude a
+  // completed flow from re-entry, so a failed intake could not be retried even though the
+  // error was recoverable (a mistyped unit id, a transient tool fault). Observed live —
+  // a session held __completedFlows: ["raise_work_order"] with an errored journal step
+  // and no work order to show for it.
+  const degraded = result.kind === 'ended' && result.reason === 'error_degraded';
+  if (!degraded) {
+    const completed = run.state.__completedFlows;
+    const completedFlows = Array.isArray(completed) ? (completed as string[]) : [];
+    if (!completedFlows.includes(flow.name)) {
+      run.state.__completedFlows = [...completedFlows, flow.name];
+    }
   }
 
   run.activeFlow = undefined;

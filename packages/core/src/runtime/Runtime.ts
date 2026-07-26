@@ -25,6 +25,7 @@ import { isHandoffOscillating } from './handoffOscillation.js';
 import { applyHandoffContinuation } from './handoffContinuation.js';
 import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
+
 import type { classifyHostTarget, selectHostTarget } from './select.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
 import { openRun, sessionDerivedRunId } from './openRun.js';
@@ -68,6 +69,13 @@ import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
+/**
+ * What the user is told when the run hands off to a human and the app has not configured an
+ * escalation handler to say something better. Silence is the wrong default: an escalation
+ * that emits no text is indistinguishable from the agent having crashed.
+ */
+export const HANDOFF_TO_HUMAN_MESSAGE =
+  "I'm bringing a colleague into this — they'll pick it up from here.";
 
 export interface TracingConfig {
   enabled?: boolean;
@@ -210,7 +218,13 @@ export class Runtime {
 
     const execute = async (): Promise<TurnResult> => {
       let runCtx!: import('../types/run-context.js').RunContext;
+      // Whether the user has been told anything at all this turn. A terminal handoff with
+      // no escalation handler configured used to emit zero text — seven consecutive turns
+      // were observed producing empty output while silently firing transfer_to_agent, which
+      // is indistinguishable from an outage.
+      let sawUserText = false;
       const emit = (part: StreamPart) => {
+        if (part.type === 'text-delta' && part.payload.delta) sawUserText = true;
         recorder?.record(part);
         if (part.type === 'done') this.flushTraceSinks();
         bus.emit(part);
@@ -368,6 +382,23 @@ export class Runtime {
                 payload: { targetAgent: loopResult.to, reason: loopResult.reason },
               });
               runCtx.runState.status = 'paused';
+              // Never hand off in silence. dispatchEscalation returns immediately when no
+              // escalation handler is configured, so without this the turn ends with no
+              // assistant text at all and the user cannot tell an escalation from a crash.
+              if (!sawUserText) {
+                const handoffId = crypto.randomUUID();
+                emit({ channel: 'client', type: 'text-start', payload: { id: handoffId } });
+                emit({
+                  channel: 'client',
+                  type: 'text-delta',
+                  payload: { id: handoffId, delta: HANDOFF_TO_HUMAN_MESSAGE },
+                });
+                emit({ channel: 'client', type: 'text-end', payload: { id: handoffId } });
+                runCtx.runState.messages = [
+                  ...runCtx.runState.messages,
+                  { role: 'assistant', content: HANDOFF_TO_HUMAN_MESSAGE },
+                ];
+              }
               await runCtx.runStore.putRunState(runCtx.runState);
               await this.dispatchEscalation(
                 runCtx,
