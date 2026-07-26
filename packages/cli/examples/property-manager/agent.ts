@@ -210,17 +210,24 @@ const dispatch_vendor = defineTool({
   name: 'dispatch_vendor',
   description:
     'Dispatch a vendor when the estimate is AT OR BELOW the unit owner\'s approval threshold, ' +
-    'or when the issue is an emergency (emergencies are exempt from the cap). No approval pause.',
+    'or when the work order was triaged as an emergency (emergencies are exempt from the cap). '+
+    'The exemption is read from the work order, not passed in — you cannot declare an emergency here. '+
+    'No approval pause.',
   input: z.object({
     workOrderId: z.string(),
     vendorId: z.string(),
     estimateUsd: z.number(),
-    emergency: z.boolean().optional(),
   }),
-  execute: async ({ workOrderId, vendorId, estimateUsd, emergency }) => {
+  execute: async ({ workOrderId, vendorId, estimateUsd }) => {
     const r = resolveDispatch(workOrderId, vendorId);
     if ('error' in r) return r;
     const unit = UNITS[r.wo.unitId];
+    // The emergency exemption is read from the work order's RECORDED urgency, never from a
+    // tool argument. When it was a model-supplied boolean the model set it on jobs it had
+    // itself triaged as `urgent` one turn earlier — dispatching $320 against a $250 cap.
+    // A flag that disables an authorization check cannot be supplied by the thing being
+    // checked; it has to come from state written at triage.
+    const emergency = r.wo.urgency === 'emergency';
     // The spend cap is enforced here, not just described in the prompt. Routing an
     // over-threshold job through the no-approval tool is exactly the mistake to catch.
     if (!emergency && unit && estimateUsd > unit.approvalThresholdUsd) {
