@@ -6,8 +6,8 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/cli"
   },
-  "version": "0.14.0",
-  "description": "Kuralle CLI \u2014 interactive TUI chat, adaptive send, and conversation simulation",
+  "version": "0.15.0",
+  "description": "Kuralle CLI — interactive TUI chat, adaptive send, and conversation simulation",
   "type": "module",
   "bin": {
     "kuralle": "./dist/cli.js"

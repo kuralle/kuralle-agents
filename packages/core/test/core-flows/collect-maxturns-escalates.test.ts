@@ -60,7 +60,7 @@ describe('collect maxTurns exhaustion', () => {
       emit: () => {},
     });
 
-    // Drive past maxTurns. 'stay' and 'awaitingUser' both mean "still collecting".
+    // Drive past maxTurns. runFlow reports an unfinished collect as 'awaitingUser'.
     // Exhaustion escalates, and an escalation parks the run by throwing SuspendError —
     // that throw IS the pass condition; the failure mode is a clean completion instead.
     let suspended = false;
@@ -68,7 +68,7 @@ describe('collect maxTurns exhaustion', () => {
       for (let i = 0; i < 6; i += 1) {
         ctx.turnInputConsumed = false;
         const result = await runFlow(flow, runState, driver, ctx);
-        if (result.kind !== 'stay' && result.kind !== 'awaitingUser') {
+        if (result.kind !== 'awaitingUser') {
           expect(result.kind).not.toBe('ended');
           break;
         }

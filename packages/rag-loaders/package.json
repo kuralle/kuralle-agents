@@ -7,7 +7,7 @@
     "directory": "packages/rag-loaders"
   },
   "version": "0.14.0",
-  "description": "Document loaders for Kuralle RAG pipelines (INGESTION-TIME ONLY \u2014 never import at runtime)",
+  "description": "Document loaders for Kuralle RAG pipelines (INGESTION-TIME ONLY — never import at runtime)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
