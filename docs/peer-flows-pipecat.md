@@ -48,15 +48,26 @@ when the LLM calls a function whose handler returns `(result, next_node)`.
 
 ### Why this is our advantage, concretely
 
-A `collect` node **cannot be talked out of collecting.** The required fields are a schema, the
-question shown is framework-emitted, and the node does not advance until extraction succeeds.
+A `collect` node is **much harder** to talk out of collecting: the required fields are a
+schema and the question shown is framework-emitted, not model-authored.
+
+Two honest limits, both verified in source. Completion is **presence-only** —
+`schemaSatisfied`/`projectCollectData` check non-null/non-empty and never invoke the
+StandardSchema validator, so a well-shaped but wrong value passes. Live, a collect accepted
+`unitId: "12B"` for a portfolio whose real id is `B-12`; the flow advanced, created a work
+order against it, and the next turn's lookup returned not-found. And on `maxTurns` exhaustion
+(`collectUntilComplete.ts`) the node calls `onComplete` with whatever it has, required fields
+missing. The structural guarantee is over the *shape*, not the *referent*.
 A Pipecat node in the same position depends on the LLM choosing to call the right function on
 every turn — which is the thing that fails under adversarial input, long context, or a weaker
 model.
 
-We saw this hold in live testing today: with a `collect` node, `gpt-4.1-mini` asked for the
-missing unit id and would not proceed without it. Before the flow engaged on an earlier turn,
-the same model invented a work-order id and a vendor id outright.
+What live testing *does* support: before a flow engaged, `gpt-4.1-mini` invented a
+work-order id and a vendor id outright, and tool-boundary validation caught both. An earlier
+draft of this doc claimed the collect node was also observed refusing to proceed without a
+unit id — the trace store does not support that claim (every collect completed in a single
+pass; the deterministic ask string appears nowhere in the persisted sessions), so it has been
+withdrawn rather than left standing.
 
 Their `respond_immediately` and our `'stay'` / their `NO_RESPONSE` sentinel are the same idea
 under different names.
@@ -102,8 +113,8 @@ this `reply` node but stay silent until they speak."
 - **Typed transitions.** `Transition` is a union — `goto` / `handoff` / `escalate` / `end` /
   `'stay'` — checked at compile time. Theirs is a tuple returned from a handler.
 - **`confirmGate`** as a first-class node, rather than a convention.
-- **Per-node grounding** (`NodeGrounding`: query, knowledge overrides, memory scoping). No
-  equivalent in theirs.
+- **Per-node grounding** (`NodeGrounding`: query, knowledge overrides, memory scoping) — but
+  only on `reply` nodes; `collect`/`action`/`decide` have none. No equivalent in theirs.
 
 Context strategy is a draw: we both have `append` / `reset` / `reset_with_summary`.
 
