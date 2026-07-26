@@ -4,6 +4,21 @@
 
 This major combines the already-staged stream-envelope break with removal of lifecycle APIs that were publicly exported but not wired to the runtime. The fixed Changesets group moves the package family from 0.13.x to 1.0.0 together.
 
+### Removed the misnamed `@kuralle-agents/core/hooks` subpath
+
+The `./hooks` subpath's barrel exported `TracingService`, `MetricsService`, and `InMemoryMetricsService` — three services re-exported from `../services/`. **No hooks.** The live `Hooks` interface lives at `types/hooks.ts` and reaches users through the package root. The subpath was collateral from removing `HarnessHooks`: the directory's real contents (`HookRunner`, `helpers.ts`, the built-in logging/metrics/observability hooks) were deleted and the barrel was reduced to the two service re-exports that happened to live there. Nobody decided the name.
+
+Measured before removal: **zero consumers** of `@kuralle-agents/core/hooks` across `packages/`, `apps/`, `examples-deploy/`, `docs/`, and `apps/docs/`, and zero consumers of the three services through that subpath (the only internal use imports the service files directly). The `Hooks` type already has a canonical home at the package root.
+
+- **Removed:** the `./hooks` export-map entry and the `src/hooks/` directory.
+- **The three services remain public** — now exported from the package root, alongside the rest of the observability surface (`MemoryTraceStore`, `OtelTraceSink`, `TraceRecorder`):
+  - Before: `import { TracingService } from '@kuralle-agents/core/hooks'`
+  - After: `import { TracingService } from '@kuralle-agents/core'`
+  - Before: `import { MetricsService, InMemoryMetricsService } from '@kuralle-agents/core/hooks'`
+  - After: `import { MetricsService, InMemoryMetricsService } from '@kuralle-agents/core'`
+- **`Hooks` is unchanged** — `import type { Hooks } from '@kuralle-agents/core'` already worked and still does; nothing was ever importable as `Hooks` from `./hooks`.
+- Added `packages/core/test/exports-map.test.ts`, which dynamically imports every subpath declared in the `exports` map against the built `dist` and fails if any cannot resolve — so an export-map entry can never again silently point at the wrong (or a missing) file. It also asserts `./hooks` is not re-added.
+
 ### Removed lifecycle surface
 
 - Removed `HarnessHooks`; `HookRunner` and `createHookRunner`; `loggingHooks` and `createLoggingHooks`; `createMetricsHooks` and `InMemoryMetrics`; and `createObservabilityHooks` and `ObservabilityConfig`.
