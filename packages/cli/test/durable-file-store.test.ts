@@ -6,6 +6,10 @@ import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { createRuntime, defineAgent, defineTool } from '@kuralle-agents/core';
 import type { StreamPart } from '@kuralle-agents/core';
 import { z } from 'zod';
+import {
+  runSessionStoreCasContract,
+  runSessionStoreContract,
+} from '@kuralle-agents/core/session/testing';
 import { fileSessionStore } from '../src/fileStore.js';
 
 /**
@@ -110,40 +114,13 @@ describe('test:durable-file-store', () => {
 });
 
 /**
- * The invariant, tested directly.
+ * The shared contract, run against the CLI's file store.
  *
- * Reproducing the race itself proved unreliable — four separate loops (bare ctx, Runtime +
- * MemoryStore, Runtime + a no-CAS stub, Runtime + this file store, all with parallel
- * `replay:false` tools) stayed green while the live agent failed 3/3. Asserting the symptom
- * would have given false confidence. So assert the contract the runtime actually depends on:
- * a stale write must be rejected, because `mutateSessionWithRetry` retries on exactly that
- * and silently loses the append otherwise.
+ * `runSessionStoreContract` / `runSessionStoreCasContract` have existed in core all along,
+ * and MemoryStore, PostgresSessionStore and RedisSessionStore all run them. This store was
+ * added later, in a different package, and never adopted them — which is exactly why its
+ * missing compare-and-swap shipped. A store that backs the durable journal must pass the
+ * same battery as every other one.
  */
-describe('test:file-store-cas', () => {
-  it('rejects a stale write instead of silently overwriting', async () => {
-    const path = join(mkdtempSync(join(tmpdir(), 'kuralle-cas-')), 'sessions.json');
-    const store = fileSessionStore(path);
-
-    const base = {
-      id: 's1', conversationId: 's1', channelId: 'test',
-      createdAt: new Date(), updatedAt: new Date(),
-      messages: [], workingMemory: {}, currentAgent: 'a',
-      agentStates: {}, handoffHistory: [], version: 0,
-    } as never;
-
-    await store.save(base);
-    const a = (await store.get('s1'))!;
-    const b = (await store.get('s1'))!;   // second reader at the same version
-
-    await store.save({ ...a, currentAgent: 'from-a' } as never);
-
-    // b is now stale. Accepting this write is what loses a journal append.
-    await expect(store.save({ ...b, currentAgent: 'from-b' } as never)).rejects.toThrow(
-      /stale|version/i,
-    );
-
-    const final = await store.get('s1');
-    expect(final?.currentAgent).toBe('from-a');   // first write survives
-    expect(final?.version).toBe(2);               // and the version advanced exactly once
-  });
-});
+runSessionStoreContract(() => fileSessionStore(join(mkdtempSync(join(tmpdir(), 'kuralle-c1-')), 's.json')));
+runSessionStoreCasContract(() => fileSessionStore(join(mkdtempSync(join(tmpdir(), 'kuralle-c2-')), 's.json')));

@@ -24,6 +24,15 @@ type RedisResult<T = unknown> = T | null;
 type RedisCommand = (...args: any[]) => Promise<RedisResult>;
 
 export type RedisClientLike = {
+  /**
+   * Atomic script execution, normalised.
+   *
+   * Every real client exposes `eval`, but with a different argument shape (ioredis takes
+   * positional `numKeys`, node-redis takes an options object, Upstash takes two arrays).
+   * The adapters in `adapters.ts` map their client's native form onto this one, so the
+   * store can express an atomic compare-and-swap without knowing which client it holds.
+   */
+  evalScript?: (script: string, keys: string[], args: string[]) => Promise<unknown>;
   get?: RedisCommand;
   set?: RedisCommand;
   del?: RedisCommand;
@@ -96,6 +105,33 @@ const reviveSession = (raw: Session): Session => {
   return session;
 };
 
+/**
+ * Atomic compare-and-swap for one session, run server-side so nothing can interleave.
+ *
+ * The previous implementation did GET -> compare in JS -> SET: three round-trips, so two
+ * clients could both read version 5, both pass the check, and both write. The check read
+ * as protection and provided none. (Our test double hid this by performing the version
+ * check inside its own `set`, which a real Redis does not do.)
+ *
+ * Returns -1 on success, otherwise the version actually stored, so the caller can raise a
+ * truthful StaleWriteError. Versions only ever increase from 0, so -1 is a safe sentinel.
+ *
+ * The stored version is read out of the session payload rather than a companion key, so
+ * this works against data written by earlier versions with no migration.
+ */
+const CAS_SCRIPT = `
+local cur = redis.call('GET', KEYS[1])
+local stored = 0
+if cur then
+  local ok, obj = pcall(cjson.decode, cur)
+  if ok and obj and obj.version then stored = tonumber(obj.version) or 0 end
+end
+if stored ~= tonumber(ARGV[2]) then return stored end
+redis.call('SET', KEYS[1], ARGV[1])
+if tonumber(ARGV[3]) > 0 then redis.call('EXPIRE', KEYS[1], ARGV[3]) end
+return -1
+`;
+
 export class RedisSessionStore implements SessionStore {
   private client: RedisClientLike;
   private prefix: string;
@@ -148,16 +184,20 @@ export class RedisSessionStore implements SessionStore {
   }
 
   async save(session: Session): Promise<void> {
+    const evalScript = this.client.evalScript;
+    if (typeof evalScript !== 'function') {
+      throw new Error(
+        'RedisSessionStore requires a client that can run Lua scripts. Wrap yours with ' +
+          'fromIORedis / fromNodeRedis / fromUpstash from @kuralle-agents/redis-store, or ' +
+          'supply `evalScript`. Without atomic compare-and-swap a concurrent write is ' +
+          'silently lost, which corrupts the durable journal.',
+      );
+    }
+
+    // Read only to reconcile the conversation index below — never to gate the write.
+    // The version check that actually guards the write happens inside the Lua script.
     const previous = await this.get(session.id);
     const expectedVersion = session.version ?? 0;
-    if (previous !== null) {
-      const storedVersion = previous.version ?? 0;
-      if (storedVersion !== expectedVersion) {
-        throw new StaleWriteError(session.id, expectedVersion, storedVersion);
-      }
-    } else if (expectedVersion !== 0) {
-      throw new StaleWriteError(session.id, expectedVersion, 0);
-    }
 
     session.updatedAt = new Date();
     session.conversationId = session.conversationId ?? session.id;
@@ -166,8 +206,17 @@ export class RedisSessionStore implements SessionStore {
     const key = this.sessionKey(session.id);
     const payload = JSON.stringify(session);
 
-    await callCommand(this.client, ['set'], key, payload);
-    await setExpiration(this.client, key, this.sessionTtlSeconds);
+    const outcome = Number(
+      await evalScript.call(this.client, CAS_SCRIPT, [key], [
+        payload,
+        String(expectedVersion),
+        String(this.sessionTtlSeconds ?? 0),
+      ]),
+    );
+    if (outcome !== -1) {
+      session.version = expectedVersion; // leave the caller's object as it found it
+      throw new StaleWriteError(session.id, expectedVersion, outcome);
+    }
 
     await addMembers(this.client, this.sessionIndexKey(), session.id);
 

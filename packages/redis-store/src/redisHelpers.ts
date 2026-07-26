@@ -2,7 +2,9 @@ import type { RedisClientLike } from './RedisSessionStore.js';
 
 export const callCommand = async <T>(
   client: RedisClientLike,
-  names: Array<keyof RedisClientLike>,
+  // `evalScript` is our normalised script hook, not a Redis command — it has its own
+  // signature and is called directly, never through this generic dispatcher.
+  names: Array<Exclude<keyof RedisClientLike, 'evalScript'>>,
   ...args: unknown[]
 ): Promise<T> => {
   for (const name of names) {

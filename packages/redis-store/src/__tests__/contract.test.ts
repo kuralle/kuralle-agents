@@ -39,21 +39,27 @@ function createMockRedisClient() {
 
   return {
     async get(key: string) { return kv.get(key) ?? null; },
+    // A faithful SET: real Redis does NOT version-check. The previous double did the
+    // compare inside `set`, so the store's own missing compare-and-swap was invisible to
+    // this suite — the test asserted behaviour only the double had.
     async set(key: string, value: string) {
-      const next = JSON.parse(value) as { id?: string; version?: number };
-      const expected = (next.version ?? 1) - 1;
-      const raw = kv.get(key);
-      if (raw) {
-        const stored = JSON.parse(raw) as { version?: number };
-        const storedVersion = stored.version ?? 0;
-        if (storedVersion !== expected) {
-          throw new StaleWriteError(next.id ?? key, expected, storedVersion);
-        }
-      } else if (expected !== 0) {
-        throw new StaleWriteError(next.id ?? key, expected, 0);
-      }
       kv.set(key, value);
       return 'OK';
+    },
+    // Stands in for server-side EVAL: runs the store's CAS logic atomically, the way a
+    // real Redis executes a Lua script, without interpreting Lua.
+    async evalScript(_script: string, keys: string[], args: string[]) {
+      const [payload, expectedRaw] = args;
+      const expected = Number(expectedRaw);
+      const raw = kv.get(keys[0]!);
+      let stored = 0;
+      if (raw) {
+        const parsed = JSON.parse(raw) as { version?: number };
+        stored = parsed.version ?? 0;
+      }
+      if (stored !== expected) return stored;
+      kv.set(keys[0]!, payload!);
+      return -1;
     },
     async del(...keys: string[]) {
       let n = 0;
