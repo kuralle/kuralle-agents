@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/commerce"
   },
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Conversational commerce primitives for Kuralle agents: carts, idempotent orders, catalog contracts",
   "type": "module",
   "main": "dist/index.js",

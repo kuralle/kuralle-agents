@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/trace-ui",
-  "version": "0.14.1",
+  "version": "0.14.2",
   "description": "Embeddable read-only trace viewer for Kuralle agents",
   "license": "Apache-2.0",
   "type": "module",
