@@ -227,7 +227,7 @@
         "typescript": "^5.3.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/core": "0.x",
         "ai": "^6.0.0",
         "zod": "^4.0.0",
       },
@@ -376,7 +376,7 @@
         "zod": "^4.0.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/core": "0.x",
       },
     },
     "packages/http-client": {
@@ -397,7 +397,7 @@
         "typescript": "^5.3.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/rag": "workspace:*",
+        "@kuralle-agents/rag": "0.x",
         "@lancedb/lancedb": ">=0.13.0",
       },
     },
@@ -453,8 +453,8 @@
         "typescript": "^5.3.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/core": "workspace:*",
-        "@kuralle-agents/rag": "workspace:*",
+        "@kuralle-agents/core": "0.x",
+        "@kuralle-agents/rag": "0.x",
         "pg": "^8.0.0",
       },
     },
@@ -491,7 +491,7 @@
         "typescript": "^5.3.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/rag": "workspace:*",
+        "@kuralle-agents/rag": "0.x",
         "cheerio": ">=1.0.0",
         "papaparse": ">=5.4.0",
         "pdf-parse": ">=1.1.1",
@@ -520,8 +520,8 @@
         "zod": "^4.0.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/core": "workspace:*",
-        "@kuralle-agents/rag": "workspace:*",
+        "@kuralle-agents/core": "0.x",
+        "@kuralle-agents/rag": "0.x",
       },
     },
     "packages/tools": {
@@ -538,8 +538,8 @@
         "zod": "^4.0.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/core": "workspace:*",
-        "@kuralle-agents/rag": "workspace:*",
+        "@kuralle-agents/core": "0.x",
+        "@kuralle-agents/rag": "0.x",
         "ai": "^6.0.0",
         "zod": "^4.0.0",
       },
@@ -560,7 +560,7 @@
         "typescript": "^5.3.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/rag": "workspace:*",
+        "@kuralle-agents/rag": "0.x",
       },
     },
     "packages/vectorize-store": {
@@ -572,7 +572,7 @@
         "typescript": "^5.3.0",
       },
       "peerDependencies": {
-        "@kuralle-agents/rag": "workspace:*",
+        "@kuralle-agents/rag": "0.x",
       },
     },
     "packages/widget": {

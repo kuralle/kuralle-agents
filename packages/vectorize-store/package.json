@@ -18,7 +18,7 @@
     }
   },
   "peerDependencies": {
-    "@kuralle-agents/rag": "workspace:*"
+    "@kuralle-agents/rag": "0.x"
   },
   "devDependencies": {
     "@kuralle-agents/rag": "workspace:*",

@@ -30,5 +30,8 @@
     "cag-demo",
     "langfuse-demo",
     "rag-demo"
-  ]
+  ],
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
 }

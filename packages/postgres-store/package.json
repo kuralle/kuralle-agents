@@ -21,8 +21,8 @@
     "@kuralle-agents/core": "workspace:*"
   },
   "peerDependencies": {
-    "@kuralle-agents/core": "workspace:*",
-    "@kuralle-agents/rag": "workspace:*",
+    "@kuralle-agents/core": "0.x",
+    "@kuralle-agents/rag": "0.x",
     "pg": "^8.0.0"
   },
   "devDependencies": {

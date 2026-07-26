@@ -18,7 +18,7 @@
     }
   },
   "peerDependencies": {
-    "@kuralle-agents/rag": "workspace:*",
+    "@kuralle-agents/rag": "0.x",
     "pdf-parse": ">=1.1.1",
     "cheerio": ">=1.0.0",
     "papaparse": ">=5.4.0"

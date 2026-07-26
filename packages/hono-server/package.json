@@ -23,7 +23,7 @@
     "@kuralle-agents/core": "workspace:*"
   },
   "peerDependencies": {
-    "@kuralle-agents/core": "workspace:*"
+    "@kuralle-agents/core": "0.x"
   },
   "devDependencies": {
     "@ai-sdk/openai": "^3.0.0",

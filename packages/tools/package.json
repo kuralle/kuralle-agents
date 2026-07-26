@@ -22,8 +22,8 @@
     "@kuralle-agents/rag": "workspace:*"
   },
   "peerDependencies": {
-    "@kuralle-agents/core": "workspace:*",
-    "@kuralle-agents/rag": "workspace:*",
+    "@kuralle-agents/core": "0.x",
+    "@kuralle-agents/rag": "0.x",
     "ai": "^6.0.0",
     "zod": "^4.0.0"
   },
