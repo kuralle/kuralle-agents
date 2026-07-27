@@ -14,11 +14,11 @@ const text = (b: PromptTemplateBuilder) => JSON.stringify(b.build());
 
 describe('injectTodayDate', () => {
   it('is OFF by default', () => {
-    expect(text(new PromptTemplateBuilder({ role: 'assistant' }))).not.toContain('Today is');
+    expect(text(new PromptTemplateBuilder({ id: 'p1', name: 'probe' }))).not.toContain('Today is');
   });
 
   it('can still be opted into', () => {
-    expect(text(new PromptTemplateBuilder({ role: 'assistant' }).injectTodayDate(true))).toContain(
+    expect(text(new PromptTemplateBuilder({ id: 'p1', name: 'probe' }).injectTodayDate(true))).toContain(
       'Today is',
     );
   });
