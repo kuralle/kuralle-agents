@@ -40,14 +40,41 @@ describe('applyPromptCache (provider gating)', () => {
     expect((MSGS.at(-1) as { providerOptions?: unknown }).providerOptions).toBeUndefined();
   });
 
-  it('OpenAI Responses: sets promptCacheKey=sessionId + truncation auto, messages untouched', () => {
+  // Contract changed deliberately: promptCacheKey is derived from the PREFIX (stable head
+  // + tool surface), not the session, so two sessions of the same agent share a cache lane.
+  it('OpenAI Responses: sets a prefix-derived promptCacheKey + truncation auto, messages untouched', () => {
     const out = applyPromptCache({
       model: openai,
       sessionId: 'sess-abc',
       messages: MSGS,
     });
     expect(out.messages).toBe(MSGS);
-    expect(out.providerOptions?.openai).toEqual({ promptCacheKey: 'sess-abc', truncation: 'auto' });
+    expect(out.providerOptions?.openai?.truncation).toBe('auto');
+    // No stable head and no tools: there is no prefix to key on, so sessionId remains the
+    // fallback. Keying on nothing would put every agent in one lane.
+    expect(out.providerOptions?.openai?.promptCacheKey).toBe('sess-abc');
+  });
+
+  it('OpenAI Responses: keys on the PREFIX once there is a stable head', () => {
+    const out = applyPromptCache({
+      model: openai,
+      sessionId: 'sess-abc',
+      messages: MSGS,
+      stableSystem: [{ role: 'system', content: 'You are Realm.' }],
+    });
+    expect(out.providerOptions?.openai?.promptCacheKey).not.toBe('sess-abc');
+    expect(String(out.providerOptions?.openai?.promptCacheKey)).toMatch(/^kuralle-[0-9a-f]+$/);
+
+    // A different session with the same prefix lands in the SAME lane — the whole point.
+    const other = applyPromptCache({
+      model: openai,
+      sessionId: 'sess-zzz',
+      messages: MSGS,
+      stableSystem: [{ role: 'system', content: 'You are Realm.' }],
+    });
+    expect(other.providerOptions?.openai?.promptCacheKey).toBe(
+      out.providerOptions?.openai?.promptCacheKey,
+    );
   });
 
   it('Other providers: untouched (no providerOptions, no message transform)', () => {
@@ -100,7 +127,8 @@ describe('TextDriver wires prompt cache into streamText', () => {
     }
     await handle;
 
-    expect(captured?.providerOptions?.openai?.promptCacheKey).toBe('sess-xyz');
+    expect(captured?.providerOptions?.openai?.promptCacheKey).not.toBe('sess-xyz');
+    expect(String(captured?.providerOptions?.openai?.promptCacheKey)).toMatch(/^kuralle-[0-9a-f]+$/);
     // System must be SystemModelMessage[] (not a bare string) so breakpoints can attach.
     expect(Array.isArray(captured?.system)).toBe(true);
   });
@@ -154,5 +182,22 @@ describe('TextDriver wires prompt cache into streamText', () => {
       (head?.providerOptions as { anthropic?: { cacheControl?: unknown } } | undefined)?.anthropic
         ?.cacheControl,
     ).toEqual({ type: 'ephemeral' });
+  });
+});
+
+describe('decide nodes are cached', () => {
+  it('choiceMatch receives providerOptions instead of paying full price', async () => {
+    // Finding 2: choiceMatch fires on every flow transition and had zero applyPromptCache
+    // references — uncached, and invisible in the per-turn rate because that only samples
+    // the main channel.
+    const { applyPromptCache } = await import('../../src/runtime/promptCache.js');
+    const out = applyPromptCache({
+      model: { provider: 'openai', modelId: 'gpt-4.1-mini' },
+      sessionId: 'decide-sess',
+      messages: [{ role: 'user', content: 'pick one' }],
+      stableSystem: [{ role: 'system', content: 'You are Realm.' }],
+    });
+    expect(out.providerOptions?.openai?.promptCacheKey).toBeDefined();
+    expect(String(out.providerOptions?.openai?.promptCacheKey)).toMatch(/^kuralle-[0-9a-f]+$/);
   });
 });

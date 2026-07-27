@@ -219,8 +219,11 @@ describe('applyPromptCache (integration)', () => {
       messages: msgs,
       stableSystem: [{ role: 'system', content: 'sys' }],
     });
-    expect(out.providerOptions?.openai).toEqual({
-      promptCacheKey: 'sess-abc',
+    // promptCacheKey is now derived from the prefix, not the session — two sessions of the
+    // same agent must land in the same cache lane.
+    expect(out.providerOptions?.openai?.promptCacheKey).not.toBe('sess-abc');
+    expect(String(out.providerOptions?.openai?.promptCacheKey)).toMatch(/^kuralle-[0-9a-f]+$/);
+    expect(out.providerOptions?.openai).toMatchObject({
       truncation: 'auto',
     });
     expect(out.messages).toBe(msgs);

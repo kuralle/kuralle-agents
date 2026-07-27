@@ -3,6 +3,7 @@ import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { DecideNode } from '../types/flow.js';
 import type { ChoiceOption } from '../types/selection.js';
+import type { JSONValue, SystemModelMessage } from 'ai';
 import type { RunContext } from '../types/run-context.js';
 
 /** Reserved enum member: model declines to pick a listed choice (→ author stay/unmatched). */
@@ -104,7 +105,8 @@ export function matchChoiceFromInput(input: string, choices: ChoiceOption[]): st
 export async function resolveStructuredDecide(
   node: DecideNode,
   ctx: RunContext,
-  system: string,
+  system: string | SystemModelMessage[],
+  providerOptions?: Record<string, Record<string, JSONValue>>,
 ): Promise<unknown> {
   const schema = node.schema as z.ZodType;
   const useConstrainedChoices = (node.choices?.length ?? 0) > 0 && isChoiceFieldSchema(schema);
@@ -113,10 +115,11 @@ export async function resolveStructuredDecide(
     const { object } = await generateObject({
       model: ctx.controlModel,
       schema,
-      system,
+      system: systemText(system),
       messages: ctx.runState.messages,
       temperature: 0,
       abortSignal: ctx.abortSignal,
+      ...(providerOptions ? { providerOptions } : {}),
     });
     return object;
   }
@@ -133,10 +136,22 @@ export async function resolveStructuredDecide(
   const { object } = await generateObject({
     model: ctx.controlModel,
     schema: choiceSchema,
-    system,
+    system: systemText(system),
     messages: ctx.runState.messages,
     temperature: 0,
     abortSignal: ctx.abortSignal,
+    ...(providerOptions ? { providerOptions } : {}),
   });
   return object;
+}
+
+/**
+ * generateObject takes a string system prompt. Decide nodes still get the cache benefits
+ * that matter on this path — promptCacheKey and gateway auto-caching ride providerOptions,
+ * which is provider-level and independent of message structure.
+ */
+function systemText(system: string | SystemModelMessage[]): string {
+  return typeof system === 'string'
+    ? system
+    : system.map((m) => String(m.content ?? '')).join('\n\n');
 }

@@ -240,6 +240,35 @@ export interface OpenAIResponsesCompactOptions {
   useSessionAsPromptCacheKey?: boolean;
 }
 
+/**
+ * A cache key derived from the PREFIX, not the session.
+ *
+ * OpenAI's `prompt_cache_key` is a routing hint: requests sharing a key route to the same
+ * cache. Keying it on `sessionId` gave every session its own lane, so two users talking to
+ * the same agent — identical instructions, identical tools, therefore an identical cacheable
+ * prefix — could never share an entry. The stable head plus the tool surface IS the shared
+ * part, so it is what the key is derived from.
+ *
+ * Tool names are sorted: the same surface declared in a different order is the same prefix.
+ */
+export function promptCacheKeyFor(
+  stableSystem: readonly SystemModelMessage[],
+  tools: ToolSet | undefined,
+): string {
+  const head = stableSystem.map((m) => String(m.content ?? '')).join('\n');
+  const toolNames = tools ? Object.keys(tools).sort().join(',') : '';
+  const material = `${head}\u0000${toolNames}`;
+
+  // FNV-1a. Not cryptographic — this only needs to be stable and well-distributed, and it
+  // must not pull in a hash dependency on the workerd path.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < material.length; i += 1) {
+    hash ^= material.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `kuralle-${hash.toString(16)}`;
+}
+
 export function buildOpenAIResponsesProviderOptions(
   opts: OpenAIResponsesCompactOptions,
   sessionId: string,
@@ -327,9 +356,16 @@ export function applyPromptCache(input: ApplyPromptCacheInput): ApplyPromptCache
   }
 
   if (isOpenAIResponsesModel(model)) {
+    // Key on the PREFIX, not the session — see promptCacheKeyFor. sessionId is kept as the
+    // fallback for the degenerate case of no stable head and no tools, where prefix identity
+    // carries no information.
+    const prefixKey =
+      outSystem.length > 0 || (outTools && Object.keys(outTools).length > 0)
+        ? promptCacheKeyFor(stableSystem, outTools)
+        : sessionId;
     const openai = buildOpenAIResponsesProviderOptions(
       { useSessionAsPromptCacheKey: true, truncationFallback: 'auto' },
-      sessionId,
+      prefixKey,
     );
     if (openai) {
       providerOptions = {

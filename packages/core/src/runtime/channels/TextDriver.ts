@@ -222,16 +222,23 @@ export class TextDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const system = systemMessagesText(
-      composeSystem(
-        ctx.baseInstructions,
-        resolveInstructions(node.instructions, ctx.runState.state),
-        ctx.runState.state,
-        ctx.skillPrompt,
-        ctx.workingMemoryPrompt,
-      ),
+    const stableSystem = composeSystem(
+      ctx.baseInstructions,
+      resolveInstructions(node.instructions, ctx.runState.state),
+      ctx.runState.state,
+      ctx.skillPrompt,
+      ctx.workingMemoryPrompt,
     );
-    return resolveStructuredDecide(node, ctx, system);
+    // Decide nodes fire on every flow transition and used to bypass prompt caching
+    // entirely — full price, every time, invisible in the per-turn rate because that
+    // only samples the main channel.
+    const cached = applyPromptCache({
+      model: ctx.controlModel,
+      sessionId: ctx.session.id,
+      messages: ctx.runState.messages,
+      stableSystem,
+    });
+    return resolveStructuredDecide(node, ctx, stableSystem, cached.providerOptions);
   }
 
   async awaitUser(ctx: RunContext): Promise<UserSignal> {
