@@ -114,11 +114,21 @@ Project gamma body.`,
 
       const store = fsSkillStore(fs, ['/skills/base', '/skills/project']);
 
-      expect(await store.list()).toEqual([
+      // SkillMeta now also carries `path` — the SKILL.md location, surfaced in the
+      // available-skills catalog so the model can read the file rather than infer it.
+      // Assert it explicitly rather than loosening the check: `alpha` must resolve to the
+      // PROJECT root (last-one-wins), `beta` to the base root, which is exactly what this
+      // test is about and is now pinned more tightly than before.
+      const listed = await store.list();
+      expect(listed).toMatchObject([
         { name: 'alpha', description: 'Project alpha.' },
         { name: 'beta', description: 'Base beta.' },
         { name: 'gamma', description: 'Project gamma.' },
       ]);
+      // The winning root is visible in the path, which the old toEqual could not express.
+      expect(String(listed[0]?.path)).toContain('alpha');
+      expect(String(listed[1]?.path)).toContain('beta');
+      expect(listed.every((m) => typeof m.path === 'string' && m.path.endsWith('SKILL.md'))).toBe(true);
       expect(await store.loadBody('alpha')).toBe('Project alpha body.');
       expect(await store.loadResource('alpha', 'references/source.md')).toBe('project source');
       expect(await store.loadBody('beta')).toBe('Base beta body.');
