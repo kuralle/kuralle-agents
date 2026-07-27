@@ -1,55 +1,58 @@
 # CLAUDE.md
 
-Guidance for Claude Code (claude.ai/code) when working in this repository.
+Guidance for Claude Code (claude.ai/code) in this repository.
 
-## Engineering Philosophy
+Every architectural claim below was checked against source on 2026-07-27. Claims that could
+not be verified were removed rather than left standing. If you find one that has drifted,
+fix the code or fix this file — do not leave it.
 
-We are building a framework developers will depend on. Every decision reflects that responsibility.
+General working standards live in the global `~/.claude/CLAUDE.md` and are not repeated here.
 
-**No shortcuts. Always do the right thing.**
+## What Kuralle is
 
-- Never take pragmatic workarounds. If something needs publishing before a dependent deploy, publish it first.
-- Docs stay in sync with code. Never ship a feature without documentation; never leave docs pointing at removed code.
-- Best engineering principles and design patterns. No hacks, no "we'll fix it later."
-- No source maps (`.map`) in published tarballs.
-- Publish with `pnpm publish -r` (replaces `workspace:*` with real versions). Dev uses Bun; publish uses pnpm.
-- Quality over speed, always.
+A **TypeScript framework for building conversational AI agents** with structured flows,
+routing, and durable tool execution. Monorepo on Bun workspaces, built on the Vercel AI SDK
+(OpenAI, Anthropic, Google, xAI).
 
-**Non-negotiable working rules**
-- Never reason shallowly. Never choose a quick "fix" over an elegant solve.
-- Never leave a task incomplete. Never skip code review.
-
-## How to work here
-
-### 1. Think before coding
-State assumptions explicitly; if uncertain, ask. If multiple interpretations exist, surface them — don't pick silently. If a simpler approach exists, say so. If something's unclear, stop and name it.
-
-### 2. Simplicity first
-Minimum code that solves the problem. No speculative features, no abstractions for single-use code, no error handling for impossible cases. If 200 lines could be 50, rewrite it.
-
-### 3. Surgical changes
-Touch only what the task requires. Don't refactor what isn't broken; match existing style. Remove orphans *your* change created; leave pre-existing dead code (mention it). Every changed line traces to the request.
-
-### 4. Goal-driven execution
-Turn tasks into verifiable goals ("add validation" → "write tests for invalid inputs, then make them pass"). Prove it: a green gate, an observed behavior, a passing test — not "should work."
-
-## Architecture
-
-Kuralle is a **TypeScript framework for building conversational AI agents** with structured flows, routing, and durable tool execution. Monorepo on Bun workspaces; built on the Vercel AI SDK (OpenAI, Anthropic, Google, xAI).
-
-- **Agents** — one tagless primitive: `defineAgent({ id, model, instructions, tools?, globalTools?, flows?, routes?, routing?, agents?, handoffs? })`. Behavior is derived from the fields you populate: `flows[]` → flow agent, `routes` + `routing` → triage, `agents[]` → composition.
-- **Flows** — node graphs via `defineFlow` + `reply`/`collect`/`action`/`decide`; each node returns its next transition. Hybrid mode answers off-flow questions, then resumes.
-- **Runtime** — `createRuntime(...)` → `Runtime`; `runtime.run({ input, sessionId })` → `TurnHandle` (`.events` AsyncIterable, awaitable result, `toResponseStream('sse')`). Orchestrates sessions, history, handoffs, streaming, hooks. Flow state lives in the session.
-- **Tools** — `defineTool({ name, description, input: <zod>, execute })` creates a durable effect tool; `buildToolSet(...)` exposes it to the model (model-visible schema) while `tools` runs the durable executor (effect log → **exactly-once-modulo-idempotency**: a finished step replays without re-executing; a crash between execute and finalize re-runs the effect, so external side effects must honour the idempotency key).
+- **Agents** — one tagless primitive: `defineAgent({ id, model, instructions, tools?,
+  globalTools?, flows?, routes?, routing?, agents?, handoffs?, policy? })`. Behaviour is
+  derived from which fields you populate: `flows[]` → flow agent, `routes` + `routing` →
+  triage, `agents[]` → composition.
+- **Flows** — node graphs via `defineFlow` + `reply` / `collect` / `action` / `decide`. Each
+  node returns its next transition.
+- **Runtime** — `createRuntime(...)` → `Runtime`; `runtime.run({ input, sessionId })` →
+  `TurnHandle` (`.events` AsyncIterable, awaitable result,
+  `toResponseStream('sse' | 'ndjson')`). Orchestrates sessions, history, handoffs, streaming,
+  hooks. Flow state (`activeFlow` / `activeNode`) lives on the run state.
+- **Tools** — `defineTool({ name, description, input: <zod>, execute })` creates a durable
+  effect tool. `buildToolSet(...)` exposes it to the model while the durable executor runs it
+  against an effect log → **exactly-once-modulo-idempotency**: a finished step replays without
+  re-executing; a crash between execute and finalize re-runs the effect, so external side
+  effects must honour the idempotency key.
+- **Policy** — `Policy.decide(req)` returns `allow` / `ask` / `deny` per tool call. Set on
+  `HarnessConfig` (runtime default) or `AgentConfig` (per-agent, which is what a delegated
+  read-only worker needs). `needsApproval: true` is sugar for a policy returning `ask`.
+  See `/guides/policy`.
 - **Sessions** — `SessionStore` interface; backends: Memory (default), Redis, Postgres.
-- **Voice** — out of scope. Provider-native realtime and cascaded/telephony voice are not in this repo; Kuralle is text-first. Inbound voice notes remain supported as multimodal audio input.
-- **Runtimes** — Node/Bun via `@kuralle-agents/hono-server`; Cloudflare Workers/Durable Objects via `@kuralle-agents/cf-agent`.
+- **Runtimes** — Node/Bun via `@kuralle-agents/hono-server`; Cloudflare Workers/Durable
+  Objects via `@kuralle-agents/cf-agent`.
+- **Voice** — out of scope; it lives in a separate repo. Inbound voice notes remain supported
+  as multimodal audio input.
 
-### Non-negotiable design rules
-- **SOP lives in flows, not prompts** — pasting >20 lines of procedure into a system prompt means it belongs in a flow.
-- **Pure dispatchers route silently by derived shape; answering agents use host-control tools + guard** — no `routing.mode`; dispatch never leaks to the user.
-- **Tools return data only** — never conversational text; flow control comes from node transitions, not tool output.
+## Design rules
+
+- **SOP lives in flows, not prompts.** Pasting >20 lines of procedure into a system prompt
+  means it belongs in a flow.
+- **Enforce at the tool boundary, not in the prompt.** Repeatedly demonstrated under
+  adversarial testing: every safety property enforced by a tool boundary or a typed
+  transition held; every property that depended on the model recalling or finding something
+  failed. If a rule matters, make it structural.
+- **Pure dispatchers route silently by derived shape** — there is no `routing.mode`, and
+  dispatch never leaks to the user.
 - **Grounding is explicit if promised** — CAG tools + retrieval for always-grounded agents.
+- **Tools return data.** Control results (`toolDeniedResult`, `toolErrorResult`) are the one
+  exception: they carry a `message` the model reads to decide what to say next. Ordinary
+  tools must not return conversational text; flow control comes from node transitions.
 
 ## Commands
 
@@ -69,45 +72,73 @@ pnpm changeset           # describe the change
 pnpm release             # version + build + publish (all packages version together)
 ```
 
-**Stale dist gotcha:** workspace packages import from each other's `dist/` (compiled), not `src/`. After editing a package's `src/`, rebuild it before running anything that depends on it — stale dist is a common "my fix didn't take" false negative.
-
-**E2E tests**: see `packages/e2e-tests/README.md`.
+E2E tests: see `packages/e2e-tests/README.md`.
 
 ## Adding a feature
-1. Start in `@kuralle-agents/core` for primitives or runtime changes; update types under `packages/core/src/types/`.
-2. Update the runtime / flow execution paths; keep streaming semantics stable (`text-delta`, tool events, `done`).
-3. Add a runnable example under `packages/core/examples/` — and **run it** (live smoke), not just typecheck it (see Gotchas).
-4. Update the docs (`apps/docs/`, package READMEs, `docs/skills/`) — in the same change.
 
-## Gotchas & disciplines (learned the hard way)
+1. Start in `@kuralle-agents/core` for primitives or runtime changes; types under
+   `packages/core/src/types/`.
+2. Update the runtime / flow execution paths; keep streaming semantics stable
+   (`text-delta`, tool events, `done`).
+3. Add a runnable example under `packages/core/examples/` — and **run it live**, not just
+   typecheck it.
+4. Update the docs (`apps/docs/`, package READMEs, `docs/skills/`) in the same change.
 
-- **Version + publish *together*, never piecemeal.** `pnpm` rewrites `workspace:*` to the *exact* dependency version at publish time. So publishing `core@x` alone leaves every dependent (e.g. `hono-server`) pinning the *old exact* `core` → consumers install two copies of `core` → `tsc` errors ("separate declarations of a private property"). Bump and `pnpm publish -r` the whole graph — or at minimum every package a template/consumer installs — in one release.
-- **Run examples and templates — typecheck is not enough.** A flow/agent example that compiles can still throw at runtime (both shipped `*-direct-functions` flow examples crashed on the first tool call: schema registered, executor not). Execute a live smoke before shipping; gate templates with a build-smoke (`verify-templates.sh`). "Untested example = broken example."
-- **Ship a tested lockfile with each template** so `npm install` is deterministic — a transitive major bump (e.g. `next-themes`) can break a previously-green scaffold (ERESOLVE, or a dropped subpath like `next-themes/dist/types`).
-- **Never bundle a real `.env` in a published artifact** — only `.env.example`. A bundled `.env.local` once leaked a key. The starter sync excludes every `.env*` except `.env.example`.
-- **`npm`/`wrangler` `config.load()` failure** — these CLIs error ("call config.load() before reading values") when run from *inside* a monorepo package dir. Run them from a neutral cwd (repo root or `/tmp`).
-- **Forcing a model in examples/templates** — `resolveTemplateModel`/`requireLiveModel` prefer **xAI → Google → OpenAI** by which provider key is present. To force OpenAI, clear `XAI_API_KEY` + the Google keys; otherwise you may hit a stale Grok model (404) or a Google quota (429) that *looks* like an OpenAI failure but isn't.
-- **Playground apps (`apps/playground/*`) are excluded from `typecheck:all`** and rot silently (a trailing-comma `package.json` went uncaught). If a playground demo is referenced by docs/guides, either add it to CI or fold it into the relevant package's `examples/`.
+## Gotchas — learned the hard way, all still live
+
+- **Stale dist.** Workspace packages import each other's `dist/`, not `src/`. After editing a
+  package's `src/`, rebuild before running anything that depends on it. The most common
+  "my fix didn't take" false negative.
+- **Version and publish *together*, never piecemeal.** `pnpm` rewrites `workspace:*` to the
+  *exact* dependency version at publish time, so publishing `core@x` alone leaves dependents
+  pinning the old exact version → consumers install two copies of `core` → `tsc` errors about
+  "separate declarations of a private property". All publishable packages sit in one `fixed`
+  group for this reason.
+- **`changeset:version` runs `pnpm install`,** which creates a second copy of `agents`
+  alongside Bun's and breaks `typecheck:all` with a spurious type mismatch. Run `bun install`
+  before gating. False red on three consecutive releases.
+- **Run examples — typecheck is not enough.** A published feature can be unreachable:
+  `RecoverableToolError` shipped in 0.16.0 exported from nowhere, and only a live run caught it.
+- **Prove a test discriminates.** Disable the fix, watch the test fail, restore it. Two tests
+  written this week passed with their fix disabled; one regression shipped because the suite
+  was not re-run before claiming done.
+- **`zsh` does not word-split unquoted parameters.** `CMD=$FLAGS` passes one argv element, so
+  a command invoked with `$FLAGS` silently runs with none of them. Use explicit args.
+- **Never bundle a real `.env`** in a published artifact — only `.env.example`.
+- **No source maps** (`.map`) in published tarballs.
+- **`npm` / `wrangler` `config.load()` failure** — these CLIs error when run from *inside* a
+  monorepo package dir. Run them from a neutral cwd.
+- **Model preference in examples** — `resolveTemplateModel` prefers **xAI → Google → OpenAI**
+  by which provider key is present. To force OpenAI, clear `XAI_API_KEY` and the Google keys.
+- **Playground apps (`apps/playground/*`) are excluded from `typecheck:all`** and rot silently.
 
 ## Key docs
-- `README.md` — onboarding. `apps/docs/` — the documentation site (Astro Starlight).
-- `docs/skills/kuralle-usage/` — usage skill for coding agents. `docs/skills/kuralle-framework-development/` — framework-dev skill.
-- `CONTRIBUTING.md` — monorepo dev/build/publish workflow.
 
-<!-- plandesk:start -->
+- `README.md` — onboarding · `apps/docs/` — the documentation site (Astro Starlight)
+- `docs/skills/kuralle-usage/` — usage skill for coding agents
+- `docs/skills/kuralle-framework-development/` — framework-dev skill
+- `docs/research/` — primary sources behind current RFCs
+- `CONTRIBUTING.md` — monorepo dev/build/publish workflow
+
 @.plandesk/skill.md
-<!-- plandesk:end -->
-
-<!-- plandesk-factory:start -->
 ## Plan Desk Factory — default operating mode
 
 This repository runs on the Factory workflow. On any work request:
-1. **Follow the factory cycle** — the always-on [factory.md](.agents/factory/factory.md) contract governs each work item: pull → read → red gate → delegate → prove → observe → gate → ship. Bracket the session with `start_agent_run` / `complete_agent_run`; call `record_agent_progress` every cycle.
-2. **Delegate implementation by default — when a worker is available.** The supervisor orchestrates; IC workers execute. Probe the dispatchers in [.agents/factory/workers/](.agents/factory/workers/) per [protocol.md](.agents/factory/protocol.md) and hand each work item to a probed worker. **If no worker is installed on this machine, do the work yourself under the same contract** — never skip the cycle just because you are the one typing, and never assume a delegation skill or worker CLI exists that this repo did not ship. Write inline without dispatch only for trivial edits, integration/conflict resolution, and review fixes under ~5 lines.
-3. **Execute without pausing** — decompose the goal into verifiable moves on a harness task list (`TaskCreate` / `TaskList` / `TaskUpdate`), drive them to zero, and ship finished work without pausing for permission. The IC spine is [execution.md](.agents/factory/execution.md).
-4. **Prove before done** — re-run the claimed checks per [protocol.md](.agents/factory/protocol.md); exit codes are authoritative.
 
-New to this repo? Run `plandesk onboard` for the full Plan Desk + Factory model and the operating loop.
+1. **Follow the factory cycle** — the always-on [factory.md](.agents/factory/factory.md)
+   contract governs each work item: pull → read → red gate → act → prove → observe → gate →
+   report. For the session program, read [workflow.md](.agents/factory/workflow.md).
+2. **Delegate implementation by default — when a worker is available.** Probe the dispatchers
+   in [.agents/factory/workers/](.agents/factory/workers/) per
+   [protocol.md](.agents/factory/protocol.md). If no worker is installed, do the work yourself
+   under the same contract. Write inline without dispatch only for trivial edits, integration
+   and conflict resolution, and review fixes under ~5 lines.
+3. **Operate in autonomous-stand mode** — decompose into verifiable moves on a harness task
+   list, drive them to zero, ship without pausing for permission. See
+   [autonomous-stand.md](.agents/factory/autonomous-stand.md).
+4. **Prove before done** — re-run the claimed checks per
+   [protocol.md](.agents/factory/protocol.md); exit codes are authoritative.
+
+New to this repo? Run `plandesk onboard`.
 
 @.agents/factory/factory.md
-<!-- plandesk-factory:end -->
