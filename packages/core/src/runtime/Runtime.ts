@@ -50,7 +50,12 @@ import {
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { SessionMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
-import { readLastPromptTokens, readCumulativeUsage, computeTurnTraceUsage } from './turnTokenUsage.js';
+import {
+  readLastPromptTokens,
+  readCumulativeUsage,
+  computeTurnTraceUsage,
+  resetTurnPeakPromptTokens,
+} from './turnTokenUsage.js';
 import { isContextOverflowError, recoverFromContextOverflow } from './contextOverflow.js';
 import { projectGoalsPromptFromState, updateGoalsFromTurn } from './goals.js';
 import type { RunContext } from '../types/run-context.js';
@@ -307,6 +312,7 @@ export class Runtime {
       // THIS turn's consumption (delta), not the running session total (see the
       // per-turn scope requirement in the observability guide).
       const usageBaseline = readCumulativeUsage(freshRunState.state);
+      resetTurnPeakPromptTokens(freshRunState.state);
 
       // A run parked on a terminal-handoff escalation (status 'paused' with NO `waitingFor`)
       // is held for a human until `resumeFromEscalation`. It must not re-run the agent —

@@ -4,6 +4,25 @@ import { TokenAccumulator } from './TokenAccumulator.js';
 
 export const TOKEN_USAGE_STATE_KEY = '__tokenUsage';
 export const LAST_PROMPT_TOKENS_KEY = '__lastPromptTokens';
+/**
+ * Peak prompt size within the CURRENT user turn.
+ *
+ * A flow turn calls `driver.runAgentTurn` once per node, and each call builds a fresh usage
+ * snapshot — so `LAST_PROMPT_TOKENS_KEY` alone records whichever node ran last. On a flow
+ * turn that is typically a small extraction call, which is why a turn that sent 22,226
+ * tokens reported a context of 2,166. Reset at turn open; maxed on every node.
+ */
+export const TURN_PEAK_PROMPT_TOKENS_KEY = '__turnPeakPromptTokens';
+
+/** Called when a user turn opens, so the peak measures one turn and not the session. */
+export function resetTurnPeakPromptTokens(state: Record<string, unknown>): void {
+  delete state[TURN_PEAK_PROMPT_TOKENS_KEY];
+}
+
+export function readTurnPeakPromptTokens(state: Record<string, unknown>): number | undefined {
+  const value = state[TURN_PEAK_PROMPT_TOKENS_KEY];
+  return typeof value === 'number' ? value : undefined;
+}
 
 export interface PersistedTokenUsage {
   inputTokens: number;
@@ -57,8 +76,12 @@ export async function persistTurnUsageFromTurn(ctx: RunContext, turn: TurnResult
   });
 
   ctx.runState.state[TOKEN_USAGE_STATE_KEY] = acc.cumulative;
-  ctx.runState.state[LAST_PROMPT_TOKENS_KEY] =
-    turn.usage.contextTokens ?? turn.usage.inputTokens;
+  const prompt = turn.usage.contextTokens ?? turn.usage.inputTokens ?? 0;
+  ctx.runState.state[LAST_PROMPT_TOKENS_KEY] = prompt;
+  ctx.runState.state[TURN_PEAK_PROMPT_TOKENS_KEY] = Math.max(
+    readTurnPeakPromptTokens(ctx.runState.state) ?? 0,
+    prompt,
+  );
   ctx.runState.updatedAt = Date.now();
   await ctx.runStore.putRunState(ctx.runState);
 }
@@ -94,7 +117,8 @@ export function computeTurnTraceUsage(
   baseline: PersistedTokenUsage | undefined,
   state: Record<string, unknown>,
 ): TraceTurnUsage {
-  const contextTokens = readLastPromptTokens(state);
+  // Peak across the turn's node calls, not whichever node happened to run last.
+  const contextTokens = readTurnPeakPromptTokens(state) ?? readLastPromptTokens(state);
   const now = readPersistedUsage(state);
   if (!now) {
     return contextTokens === undefined ? {} : { contextTokens };
