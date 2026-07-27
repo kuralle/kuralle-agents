@@ -28,6 +28,27 @@ export function buildNodePrompt(node: ReplyNode, state: FlowState): string {
  * Returned as `SystemModelMessage[]` so a cache breakpoint can annotate the
  * last message — a single string cannot carry per-message providerOptions.
  */
+/**
+ * Tells the model it may issue several tool calls in one response.
+ *
+ * The runtime already runs parallel-safe calls from a single response concurrently and
+ * fires ONE follow-up completion for the batch (`dispatchModelToolCalls`). Nothing told
+ * the model to batch, so it emitted one call per response and that machinery never fired
+ * — a turn was measured spending ~10,400 ms on six sequential tool round-trips at ~1.7 s
+ * each, while tool execution across the whole turn was 15 ms.
+ *
+ * Round-trip COUNT dominates turn latency, and it is the model that decides the count.
+ * Wording follows Eve's, including the independence caveat: batching calls that depend on
+ * each other is a correctness bug, not a speed-up.
+ *
+ * Lives in the stable head so it sits inside the cache breakpoint rather than being
+ * re-billed every turn.
+ */
+export const PARALLEL_TOOL_INSTRUCTION =
+  'Tool use: if you need several independent tools, call them all in one response — they ' +
+  'run in parallel and cost a single round-trip. Only batch calls that do not depend on ' +
+  "each other's results; anything that needs a previous result must wait for it.";
+
 export function composeSystem(
   base: Instructions | undefined,
   nodeSystem: string,
@@ -44,7 +65,11 @@ export function composeSystem(
   // head    = base instructions + skills. Stable for the life of the agent.
   // volatile = working memory + node prompt. Changes turn to turn, by design.
   const baseText = base ? resolveInstructions(base, state) : '';
-  const head = [baseText, skillPrompt].filter((s) => s && s.trim()).join('\n\n');
+  // Only alongside real instructions. An agent with nothing to say should not get a system
+  // message consisting solely of a tool-batching note — composeSystem returning [] for empty
+  // input is a contract two tests pin.
+  const authored = [baseText, skillPrompt].filter((s) => s && s.trim());
+  const head = authored.length > 0 ? [authored[0], PARALLEL_TOOL_INSTRUCTION, ...authored.slice(1)].join('\n\n') : '';
   const volatile = [workingMemoryPrompt, nodeSystem].filter((s) => s && s.trim()).join('\n\n');
 
   const messages: SystemModelMessage[] = [];
