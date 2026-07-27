@@ -355,6 +355,7 @@ export {
   buildToolSet,
   toolToAiSdk,
   wrapAiSdkTool,
+  RecoverableToolError,
   ToolApprovalDeniedError,
   ToolTimeoutError,
 } from './tools/effect/index.js';

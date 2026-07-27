@@ -44,6 +44,7 @@ import { z } from 'zod';
 import {
   defineAgent,
   defineTool,
+  RecoverableToolError,
   defineFlow,
   collect,
   action,
@@ -135,7 +136,9 @@ const create_work_order = defineTool({
     // the tool boundary — the same place resolveDispatch guards vendor ids.
     const normalized = unitId.toUpperCase().trim();
     if (!UNITS[normalized]) {
-      throw new Error(
+      // RecoverableToolError, not Error: the caller can fix this by naming a real unit, so
+      // the flow re-asks instead of ending the turn with "something went wrong on my side".
+      throw new RecoverableToolError(
         `Unknown unit '${unitId}'. Call list_units or lookup_unit to get a real unit id — do not invent one.`,
       );
     }

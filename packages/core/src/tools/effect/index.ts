@@ -16,4 +16,4 @@ export type {
   InProgressToolResult,
 } from './pairing.js';
 export { validateAndSanitize, validateOutput, ToolValidationError } from './schema.js';
-export { ToolApprovalDeniedError, ToolTimeoutError } from './errors.js';
+export { RecoverableToolError, ToolApprovalDeniedError, ToolTimeoutError } from './errors.js';
