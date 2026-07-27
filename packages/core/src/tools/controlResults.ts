@@ -47,11 +47,18 @@ export interface ToolDeniedResult {
  * instead of the turn dying. `__denied` (not `error: true`) keeps it distinguishable from a
  * genuine failure — nothing malfunctioned.
  */
-export function toolDeniedResult(toolName: string, deniedBy?: string): ToolDeniedResult {
+export function toolDeniedResult(
+  toolName: string,
+  deniedBy?: string,
+  reason?: string,
+): ToolDeniedResult {
   return {
     __denied: true,
     toolName,
     deniedBy,
-    message: `The "${toolName}" action was not approved${deniedBy ? ` by ${deniedBy}` : ''}. Tell the user it was declined; do not retry it.`,
+    message:
+      `The "${toolName}" action was not approved${deniedBy ? ` by ${deniedBy}` : ''}.` +
+      `${reason ? ` Reason: ${reason}.` : ''}` +
+      ` Tell the user it was declined; do not retry it.`,
   };
 }

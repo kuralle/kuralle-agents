@@ -25,6 +25,7 @@ import {
 } from './durable/idempotency.js';
 import { findStepByKey } from './durable/replay.js';
 import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
+import { needsApprovalPolicy, type Policy } from './policies/toolPolicy.js';
 
 const APPROVAL_SIGNAL = '__approval';
 
@@ -54,6 +55,8 @@ export interface CtxDeps {
   abortSignal?: AbortSignal;
   clock?: EffectClock;
   emit?: (part: StreamPart) => void;
+  /** Decides allow / ask / deny per tool call. Defaults to honouring `needsApproval`. */
+  policy?: Policy;
 }
 
 function makeCtx(deps: CtxDeps): RunContext {
@@ -68,6 +71,10 @@ function makeCtx(deps: CtxDeps): RunContext {
 
   // Mutable holder: handoff reassigns runCtx.toolExecutor; ctx.tool must see the swap.
   const toolExecutorHolder = { executor: deps.toolExecutor };
+  // Swappable for the same reason the executor is: a handoff changes which agent is
+  // acting, and the new agent's policy must govern its calls. Leaving the source agent's
+  // policy in place would let a delegated read-only worker inherit write permission.
+  const policyHolder = { policy: deps.policy ?? needsApprovalPolicy };
 
   let pendingAppendTail = Promise.resolve();
   const serializePendingAppend = <T>(operation: () => Promise<T>): Promise<T> => {
@@ -279,6 +286,12 @@ function makeCtx(deps: CtxDeps): RunContext {
     set toolExecutor(executor: EffectToolExecutor) {
       toolExecutorHolder.executor = executor;
     },
+    get policy() {
+      return policyHolder.policy;
+    },
+    set policy(policy: Policy) {
+      policyHolder.policy = policy ?? needsApprovalPolicy;
+    },
     model: deps.model,
     controlModel: deps.controlModel ?? deps.model,
     outOfBandControl: deps.outOfBandControl ?? false,
@@ -318,9 +331,16 @@ function makeCtx(deps: CtxDeps): RunContext {
       // itself a replayable effect — this is fully deterministic for flow `action` tools;
       // for model-issued tool calls, resume re-enters the agent turn.
       const def = options?.def ?? toolExecutorHolder.executor.getTool?.(name);
-      if (def?.needsApproval) {
+      const verdict = await policyHolder.policy.decide({ toolName: name, args, def });
+      if (verdict.kind === 'deny') {
+        // Denied by rule, not by a person: no pause, nothing to wait for. Reuses the
+        // approval-denied path so the model still receives it as a readable result rather
+        // than a crash — "was not approved, do not retry" is correct for a rule too.
+        throw new ToolApprovalDeniedError(name, 'policy', verdict.reason);
+      }
+      if (verdict.kind === 'ask') {
         const decision = (await pauseEffect(APPROVAL_SIGNAL, {
-          approval: { title: `Approve tool: ${name}` },
+          approval: { title: verdict.title ?? `Approve tool: ${name}` },
         })) as { approved: boolean; by?: string };
         if (!decision.approved) {
           throw new ToolApprovalDeniedError(name, decision.by);

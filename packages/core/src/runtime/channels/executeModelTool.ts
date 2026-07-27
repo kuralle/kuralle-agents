@@ -61,7 +61,7 @@ export async function executeModelToolCall(
     if (isApprovalDenial(error)) {
       // A human declined. The model asked for this call, so the model is told — otherwise
       // the turn dies and the user never hears why. No client error part: nothing broke.
-      return { result: toolDeniedResult(error.toolName, error.by), failed: true };
+      return { result: toolDeniedResult(error.toolName, error.by, error.reason), failed: true };
     }
     if (isRecoverableToolError(error)) {
       // The model can correct this (bad referent, missing precondition): return the message

@@ -1,3 +1,4 @@
+import type { Policy } from '../runtime/policies/toolPolicy.js';
 import type { LanguageModel, ModelMessage, TelemetrySettings } from 'ai';
 import type { Session } from './session.js';
 import type { InputProcessor, OutputProcessor } from './processors.js';
@@ -52,6 +53,8 @@ export interface RunContext {
   runStore: RunStore;
   emit: (part: StreamPart) => void;
   toolExecutor: EffectToolExecutor;
+  /** Decides allow / ask / deny per tool call. Reassigned on handoff. */
+  policy: Policy;
   model: LanguageModel;
   /** Control-path model (routing, decide, extraction) at temperature 0. */
   controlModel: LanguageModel;

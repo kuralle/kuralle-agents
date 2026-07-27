@@ -69,6 +69,7 @@ import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
+import { needsApprovalPolicy, type Policy } from './policies/toolPolicy.js';
 /**
  * What the user is told when the run hands off to a human and the app has not configured an
  * escalation handler to say something better. Silence is the wrong default: an escalation
@@ -148,6 +149,11 @@ export interface HarnessConfig {
    * are projected into the next turn's prompt. Default off — opt-in cost/latency.
    */
   trackGoals?: boolean;
+  /**
+   * Default decision for every tool call, when the agent does not supply its own.
+   * Omitted, tools honour `needsApproval` exactly as before.
+   */
+  policy?: Policy;
   /** Read-only observability, configured independently from durable session state. */
   tracing?: TracingConfig;
 }
@@ -315,6 +321,7 @@ export class Runtime {
       }
 
       runCtx = await createRunContext({
+        policy: opened.agent.policy ?? this.config.policy,
         session: opened.session,
         runState: freshRunState,
         runStore: opened.runStore,
@@ -557,6 +564,7 @@ export class Runtime {
             runCtx.validationPolicies = targetPolicies.validationPolicies;
             runCtx.inputProcessors = targetPolicies.inputProcessors;
             runCtx.outputProcessors = targetPolicies.outputProcessors;
+            runCtx.policy = target.policy ?? this.config.policy ?? needsApprovalPolicy;
             runCtx.toolExecutor = new CoreToolExecutor({
               tools: targetSurface.executorTools,
               enforcer: targetPolicies.enforcer,

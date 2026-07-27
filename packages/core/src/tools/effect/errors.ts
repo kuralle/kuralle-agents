@@ -34,11 +34,16 @@ export class RecoverableToolError extends Error {
 export class ToolApprovalDeniedError extends Error {
   readonly toolName: string;
   readonly by?: string;
+  /** Why, when a policy refused. Human denials carry no reason — the human just said no. */
+  readonly reason?: string;
 
-  constructor(toolName: string, by?: string) {
-    super(`Tool "${toolName}" was denied approval${by ? ` by ${by}` : ''}`);
+  constructor(toolName: string, by?: string, reason?: string) {
+    super(
+      `Tool "${toolName}" was denied approval${by ? ` by ${by}` : ''}${reason ? `: ${reason}` : ''}`,
+    );
     this.name = 'ToolApprovalDeniedError';
     this.toolName = toolName;
     this.by = by;
+    this.reason = reason;
   }
 }

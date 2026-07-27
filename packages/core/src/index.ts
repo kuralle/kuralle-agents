@@ -476,3 +476,11 @@ export {
   peekPendingUserInput,
   hasPendingUserInput,
 } from './runtime/channels/inputBuffer.js';
+
+export {
+  needsApprovalPolicy,
+  readOnlyPolicy,
+  composePolicies,
+  ALLOW,
+} from './runtime/policies/toolPolicy.js';
+export type { Policy, PolicyDecision, PolicyRequest } from './runtime/policies/toolPolicy.js';

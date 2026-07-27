@@ -6,6 +6,7 @@ import type { Guardrails, Limits } from './guardrails.js';
 import type { AgentKnowledge, AgentMemory } from './grounding.js';
 import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
+import type { Policy } from '../runtime/policies/toolPolicy.js';
 import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
 import type { Shell } from './shell.js';
@@ -51,6 +52,12 @@ export interface AgentConfig {
   validate?: ValidationCapability[];
   /** Pre-turn refinement policies. Default: none. */
   refine?: RefinementCapability[];
+  /**
+   * Decides allow / ask / deny for every tool call this agent makes. Overrides the runtime
+   * policy. This is how a delegated worker becomes genuinely read-only: the restriction is
+   * enforced at the gate, not by hoping the model respects its instructions.
+   */
+  policy?: Policy;
   experimental?: {
     /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1).
      *  Default ON when the agent declares `flows`; OFF for answering-only agents. Override explicitly to opt out. */
