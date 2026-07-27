@@ -1,0 +1,635 @@
+# Transcript: https://www.youtube.com/watch?v=IgFe361zRW4
+# Source: youtube-captions
+Okay, so I want to dive into OpenCode and 
+Zen, but real quick before we do, I want to   go over some of my Dax favorite Dax takes. Just 
+a couple of them. Okay. Um, so I tweeted, I said,   I can't stand people who aren't funny. You replied 
+and you almost ratioed me. You got so many. You   got over 300 likes. You said, "Eh, I don't think 
+you should be that harsh on yourself. This is my   favorite thing." Yeah. I still think about this 
+tweet sometimes. I still think about this. This is   my favorite. Yeah, it's uh sometimes when I Here's 
+here's what happens. Sometimes the setup is so   good that like it's like a reflex where I'm just 
+like before I know it, I've already typed it out   and hit enter because I'm like it's so it's like 
+set up for me so well. And that was definitely one   of those. The worst thing is people who don't want 
+to roast back though. Like I don't even know how   to interact with this type of person. There's just 
+nothing there's nothing there. My favorite thing   that happens online all the time is when I do that 
+to someone I know. Like if I like I did that to   you because you know we obviously know each other. 
+Yeah. Uh and then people watching it are just like   they don't realize that they think I'm just like 
+some random person replying to you and they get   like whoa that's so mean. Like how could you get 
+so mad and they like go to defend the person and   I'm like this is really funny. Wait this is so 
+funny. I've definitely had that if you're going to   say something and someone's like oh my god he's so 
+mean to you. I was like this is this is so funny.   Um okay so tell us about OpenCode. Can you start 
+talking about like what is OpenCode and why did   you start building it? Yeah so uh the history 
+with this is pretty like we kind of started in   a totally different place but we we all started to 
+use LLMs for our work. Um and it was always a very   clunky experience. It was I'm in my editor. 
+I'm in the zone. I got all my key bindings.   I'm really happy with how it works. I have a 
+question. Okay, I need to stop. Switch over to   my browser. Type out my question. Paste in some 
+code potentially. Submit. Wait for the response.   Have a conversation. Then maybe I get some code 
+that it spits out and I have to copy paste back   into my editor. And this just felt really bad. I'm 
+like this loop that there's I'm going to use this   loop constantly throughout the day, but it's so 
+not the right approach. And I kept thinking, oh,   browsers can technically access your file system. 
+So I I was just waiting for one of these LLMs to   let you say like, oh, I can just you can just 
+mount a folder, which is your project, and you   can mention files in your project. It can write 
+the results back into your files. And imagine   it's like all in the browser. And I just thought, 
+okay, someone's going to do this one day. But then   Claude Code came out where it ran in your terminal 
+alongside your editor. You can ask it stuff and it   can just manipulate your file system directly. And 
+it elegantly solved the problem I had which was   the LLM can't touch my files. And that was like 
+the first AI coding product that really clicked   for me. I had the aha moment and I was like, 
+"Oh, this is really great. This is a really   cool way to do things." And I started to use it. 
+I tried a bunch of AI products in the past year,   but that was the first one that stuck. And I was 
+like, this is great. This is a good way to to to   build stuff. Then I started to think, okay, 
+there's other models out there that I want to   try. Like every week there's like a new cool 
+model that's claiming XYZ things. Also, like,   you know, we we have terminal, our coffee shop. 
+Yes. Terminal. Love it. Yeah. So we we like I   had deep understanding of how much you can do in 
+the terminal and also like this is this and we   had another project that that we were working on 
+that also had like some really advanced terminal   functionality and I'm also a neo user so I like 
+kind of understand what the ceiling of what you   can do in the terminal is and I think Claude 
+Code does I think the scope that they've defined   makes a lot of sense like they're not trying to go 
+crazy with terminal stuff they just want something   that's simple and works everywhere and like you 
+know it's just kind of friendly to the average   but like they're never going to go and like push 
+the limits of what's possible in a terminal. And   I felt myself wanting to do that. Like CL code 
+is good, but there's certain things that I felt   like could be done better. So we had the idea 
+to you we're kicking around the idea to like   okay maybe we should do something also for other 
+projects. We like those were all terminal ass. We   want to integrate this type of flow into them. 
+So we started exploring this and yeah so like   what if we built an open source version of Claude 
+Code that was way heavy on the on the 2E stuff on   the C on the command line stuff or sorry on the 
+terminal stuff and also was really flexible for   uh for any model because that that's where open 
+source has an advantage. Just because something's   open source doesn't mean it's going to be any 
+better than the closed source equivalent. It   only happens when there's like a long tale of 
+things to cover. like we need to cover all the   different models and people playing with all 
+different models. We need help improving how   how it all works. Then it kind of makes sense to 
+be open source so the community can can help with   that. And we're obviously very good at kind of 
+bootstrapping an open source community overnight.   So it kind of felt like the the right problem for 
+us. So you you're talking about the advantage of   making it open source. Can you talk a little bit 
+more about that advantage? Yeah. So I think um so   for Claude Code for example is not open source. 
+Um, and I think that makes total sense because   they don't there's no problem that Claude Code 
+has that a large open source effort would solve,   right? Claude Code, it just works with anthropic 
+models. It's all tightly integrated. You don't   really need help from the community too much. 
+I'm sure they can fix bugs here and there,   but there's not like a core like the core reason 
+for existing doesn't benefit from the open source   stuff. on our on our side, we're like, we need to 
+make sure our stuff works really well across, you   know, the hundred models and it's not really 100 
+models, but like there's more every day, just all   the different models that are out there. I can't 
+go and use every single model every day. Like I'm   not going to know the quirks between them. I'm 
+like I never use Gemini. This is not something I   use. We're never going to deliver a good Gemini 
+experience because we don't use it personally.   But this is where open source community can help 
+because someone out there uses Gemini every single   day. And they're like, "Oh, Gemini makes these 
+common mistakes when editing tool calls. Here's   like a fix for that." Or, "Here's like a bug with 
+their API. Uh, we can fix that." So, if you need   like large manpower for something you're doing, 
+but you can't like directly fund that effort, uh,   being open source helps quite a bit. And that's 
+like our core positioning. Like we are the open   source option in this space. Yeah, that's really 
+cool. Um, I know you were also talking about Kim   K2 being like one of your favorite models right 
+now. Um, why is that? Can you talk a little bit   more about that? Yeah, so I think people use 
+these tools in a lot of different ways. Uh,   I think what you what is kind of popular online 
+is people will be like, "Oh, I gave the AI this   really difficult task and it just ran for 30 
+minutes and it gave me the perfect answer." Like,   wow, that's amazing. did that there are some cases 
+where I use it in that way but I would say like if   you look at all my queries to the LLM like 5% of 
+them are in that category 95% of my queries are   I know kind of what needs to be done it's just 
+tedious so I tell it to do it and it goes and   does the work for me and it's like you know these 
+things make mistakes a lot they do do the wrong   thing so it's a very interactive process where I'm 
+kind of watching what it's doing or at least like   I'm like getting pinged once it's done and I'm 
+going and I'm telling you how to fix it or like   I'm interr interrupting it. Uh, it's very like 
+interactive process, not like a hands-off one for   that process. Slow LLMs are like complete garbage. 
+Like it feels horrible to do GBT for that because   you're just waiting waiting then it finally gives 
+does something and you realize, oh, it did the   wrong thing and you got to like redirect it. So 
+K2 is smart enough like it can do like a lot,   but it's just so fast and it feels like a totally 
+different kind of tool when you're using a model   that's fast. It's like very interactive. People 
+are like, "Oh yeah, like I open up like six   terminals and I've got like six different tasks 
+going and I'm like shipping so much." I'm like,   "Those people are making [ __ ] up. There's 
+like no way they're actually doing that." Uh,   if you have a fast model, you like can't really 
+do that because it's asking for your attention   constantly. Um, you can maybe paralyze a little 
+bit. Like sometimes I will be working on something   and there's like a backend and front end component 
+to it and I'll give the backend component to the   LLM and while it's working I'll work on the 
+front end component and I'll check back in   in like a minute or two. So there's like some of 
+that that I do but this whole vision of like yeah   we have I'm like in the chair like commanding 
+like you know 100 little AI things. It's just   all people role playing. I don't think it's like 
+a real real thing. Yeah. But do you think it's   coming in the future though and it's just not 
+yet here? It it's it has nothing to do with   the capabilities of ALM. It's the capabilities 
+of the human. You know, I can only keep so many   tasks going at once in their own head. And like 
+I said, there are times where you can do this,   but you're not doing this every minute of your 
+day. Like babysitting 10 different things going   on at the same time and like, you know, jumping 
+between them. you probably feel very productive,   but I haven't seen these people ship anything. I 
+don't see people shipping more I don't see like   more products out there. I see a lot of like 
+I call it masturbation. Like this is just like   LLM masturbation that people are just like super 
+into. Oh yeah. Like I I run these all in parallel   and I take the output of GBC5 and I shove it up 
+the butt of Opus 4.1 and then like then you get   like the perfect it's it's just like people just 
+love like feeling like they're doing something but   they're not really. Yeah. I think that is so true. 
+And then just talking about it on Twitter. Yeah.   Yeah. I think a a realistic um like the actual 
+realistic version of this or how it would actually   work is you I heard you and Adam talking a little 
+bit about this about having a mobile OpenCode and   then like having it run a task and then maybe like 
+you're off with your kids and then kind of coming   back to check on it but being on your phone like 
+the actual real way this is happening. Can you   talk a little bit more about this or plans for 
+this? This one's very exciting to me. Yeah. So   the other thing is these tools do much better in 
+mature code bases. And I think this is something   that is not focused on because everyone is just so 
+focused on like oh look at this [ __ ] I built in   a day and oh it's so amazing but like you know the 
+project dies after a day. In mature code bases,   there are really mature patterns of like generally 
+when we're building a feature, here's how we do it   or like almost any new feature looks very similar 
+to an old feature or there's a really good testing   suite so that there's a feedback loop on hey did 
+I break something whatever in these types of code   bases which again nobody talks about letting stuff 
+go asynchronously works a lot better. Um, so this   thing where you can give it a task and kind 
+of like check in asynchronously Mhm. works way   better. So I imagine something like a mobile app 
+where it's not competing. So the the reason I like   that I'm like okay with this more asynchronous 
+flow in mobile is not competing with anything   right now. Like if you're on taking a walk and 
+you're just like scrolling Twitter or whatever,   that's what's competing with. It has to just do 
+a better job at being productive than being not   productive. So, we are still going to have like a 
+mobile experience for this where you can like, you   know, give itself you'll get a push notification. 
+You maybe you'll even see like a live activity on   your iPhone um of the progress and stuff. But 
+again, this is really this like 100% hands-off   like I'm not even like using the editor. There are 
+cases where it can work and it can be fun and it   it slots in. It's just I I just don't think it's 
+going to be like the default or like the uh or at   least right now it's not the primary way of using 
+these things. Yeah, that makes sense. Yeah. So,   OpenCode is basically an AI agent. I feel like 
+I don't even know what an AI agent is anymore.   Like the term is so overloaded. Yeah. Could you 
+tell me like there's so much hype about it and I   see very different um definitions of what it is. 
+Yeah. I mean, I made so many jokes about this a   while ago where I'm like we just added a new word 
+for no reason. But I kind of I like Okay, I'll be   a little fair like I see the the reason for for 
+the term. Um, when you're using an LLM and you're   just prompting it and getting a response, that's 
+like one way of using it. When you're giving it   a goal and giving it access to tools and it's just 
+going to keep running until it achieves that goal,   that's a kind of different way of using it. 
+And that's what people categorize as, okay,   this is an agent. By the end of the day, it's 
+just an LLM that has access to some tools like   I can edit a file or I can read a file or I can 
+like look up something on the internet and it's   just going to decide to keep It's going to think. 
+It's going to think about what tool to call. It's   going to call tools. Then it's going to use that 
+result as a new input. It's going to think again.   It's going to call a tool. Use result as a new 
+input. It's going to keep repeating that until   it decides the task is complete or like, you know, 
+I don't know how to solve this. And then you get   the response back. So that's why people say like 
+agentic workflows or whatever. That's kind of what   they're talking about. And obviously in coding, 
+this has been pretty big with Claude Code. Pretty   much every like cursor has added this type of 
+workflow. there's like a million options for   you now. Um, but it makes sense in other contexts 
+as well. We've been seeing people use OpenCode. I   actually recommend people don't do this for like a 
+real production app, but people do use OpenCode to   power all kinds of workflows that aren't coding 
+related. Um, because if you think about it,   like let's say you are some kind of business 
+that has like a million contracts in some kind   of directory somewhere and you need to query it. 
+giving it to an a an AI agent to like run GP and   like scan through them and try to figure out the 
+answer and connect the dots that works really   well and we've seen like people productize flows 
+like that. Um but I think for coding is where it's   like the most useful and the most adopted. 
+There's probably some use cases outside of   it as well. Yeah. And I do love how OpenCode is 
+like running locally on your machine. Um and so   it doesn't feel like you're having to, you know, 
+like be Claude-based or switching back and forth.   I know this is probably like a big question, but 
+I want to talk a little bit about like how does   OpenCode know like what tool to use. Yeah. So, 
+this is the part that I this is another thing   that I talk a lot about is uh we don't do anything 
+impressive or smart in OpenCode. All the magic   is in the model. Like the people that make the 
+models teach them how to solve problems. All we   do is take that and put that in a loop. And the 
+process of putting that in the loop makes magic   happen kind of. So people in this space start to 
+like believe they're doing something incredible,   but it's nothing like the the model decides what 
+tools to call. We need to make sure we call them.   We need to make sure we implement the tools in a 
+way where it's resilient to mistakes the models   make. Like sometimes when it tries to edit a 
+file, it like kind of [ __ ] up exactly the   input it gives us. So we got to uh handle that. 
+But again, it's nothing like revolutionary. Um,   and the model decides when to stop and when to 
+keep going. And that's it's it's all in there.   Like they're trained to do this. And our our 
+side of it is just last mile like making it into   a product doing basic things like, hey, when it 
+edits a file, maybe you should run the formatter   to make sure it's formatted. Just like stupid 
+product stuff like that. Yeah, that makes sense. I   want to ask a little bit about maybe for someone I 
+feel like I I talked to a lot of people like this   who haven't like they aren't really using their 
+terminal that much but they're maybe like curious   about being more like terminal based or checking 
+these out. Curious terminal curious. Yeah. Like   I was um I wasn't really using my terminal as 
+much and then like years ago when I met Prime   and everyone and then I got into new obviously. Um 
+but what are some of like the benefits or or why   you would encourage someone to kind of check it 
+out more? Yeah, I think uh so I think people for   some reason people get really upset at OpenCode 
+because they're like why are you trying so hard   on a terminal app like just make it a like a you 
+whatever and I keep it's what's funny is like we   are like we're building other like OpenCode itself 
+is a server it's like a it doesn't have a front   end and we can build any kind of front end you 
+want for it so the terminal UI is just one front   end we built we're working on like a web UI we're 
+working on like other experiences but people get   so mad when we try hard on the terminal one. I'm 
+like, if we're going to have an experience, we're   going to try harder on that. Like, what we we you 
+need us to keep it shitty so you can believe that   terminals are bad. Um, the idea with the terminal 
+is that it's kind of a universal interface. Like,   it's pretty hard to avoid if you don't like the 
+terminal, it's pretty hard to avoid it because   like you usually need to run some commands on it. 
+Bringing up your project, like running the process   that your project needs locally, you probably 
+need to use the terminal. For me, if I'm going   to if I have to use it, I want to be good at it. 
+I want to use the best terminal. I want to like   see how best ways you can possibly use it. And 
+I think people's experience with terminals have   been with shitty terminals, like stuff that's 
+just like shoved into VS Code or wherever. Uh   like the most minimal possible experience, but 
+there are really good terminals out there these   days. I personally use WTerm. Uh Ghosty is like 
+another really popular one that people enjoy using   and they can do quite a bit. Uh, so in my head 
+like we all use a browser, right? We all use a   browser. We use it to use to access different 
+apps. The browser can do a lot of things like   you can have text that's different sizes and like 
+images and and whatever. The terminal is the same   as a browser. It's more constrained, but not to 
+the extent that people think it is. Like it can   do quite a bit. The thing I say is like everyone's 
+like, "Oh, terminals are so limited." But then you   look at something like Neoim and that's like a 
+full-blown editor that can do a crazy amount of   stuff competitive with like full like graphical 
+editors like I was running in the terminal. So   that shows whether you like Neoim or not. It shows 
+you that there's like a huge ceiling what what   terminal apps can be. And some of the constraints 
+are kind of nice like the fact that you can't have   different text sizes. Like all the text in your 
+terminal has to be the same size. So when you're   designing a UI for that, you have to now be a 
+lot more uh clear about how to emphasize things,   what's even worth putting on the screen. So I feel 
+like the constraints if given the constraints and   you get and there's someone that cares, you end up 
+with with better better apps. I don't think that   answered your question about like what that's 
+that's my pitch for why you should maybe care   about this or maybe your perspective on terminals 
+aren't like is maybe a little off. Um but yeah,   I mean you just start by like I think 
+most people start by oh I got to use git,   I got to use git in the terminal. I mean there's 
+git UIs that people are popular with or you know   I need to bring up my project. I need to do npm 
+dev in my terminal or I need to like compile   this app in my terminal. Um but if you start to 
+use like full-blown apps like t-mucks or neoim,   you sort of get more familiar with what's possible 
+and uh they're very powerful. Like you can do   quite a bit with it. And like I said, everyone has 
+to have them. That's why we build OpenCode, which   means any developer in the world can fit OpenCode 
+into their workflow because they probably have a   terminal that's there. Yeah. Also, you don't have 
+to. People get like this is one of those things   where people when I talk about terminal stuff, 
+they think for some reason I'm showing off and   then that makes them upset cuz they're like, he's 
+saying that if I don't do that, I'm not cool. So,   he's saying that I have to do it, but [ __ ] him 
+for saying that. I'm not saying any of that. Like,   you don't This is like a place that I've spent 
+time in and I find interesting and I find fun.   I think there's like some useful things that can 
+come out of it, but you can also just not care   and shut up and stop replying to me on Twitter. 
+Thanks. Yeah, I think people feel this way about   um like Vim or Neov when you're talking about 
+using it. I mean, obviously there are some people   who feel they're better than others who are using 
+it, like me. No, I'm just kidding. Um, but I think   it's just that it's like you're not trying to say 
+you're better or cooler. It's just like something   that I fell in love with using and wanted to 
+be talking about because it's interesting.   Yeah. Yeah. There's there's like if you go deep in 
+anything, it can be anything but anything. There's   going to be something useful you're going to learn 
+out of it. And what I hate is that people don't   want to go deep, which is fine. Can't go deep 
+into everything. You know, you can only go deep   into stuff they're interested in, but they want 
+to reject that going deep into it is even useful.   Right? This happens with Neovim all the time. The 
+classic thing that people say about Neoim is like,   "Oh, you guys are just like, like, why do you 
+care about using your keyboard quickly?" Like,   coding isn't typing, it's thinking. I only 
+spend like x% of my time typing. But for me,   if you use this these tools a lot, you actually 
+realize something totally different where it's   not about how long it takes for you to type out 
+the code. It's not really about how long it takes   to like get to a file. It's not really a speed 
+thing. It's entirely an energy thing. Like if   I have a thought of I need to go to this file 
+and I need to like make this change. The more   cumbersome that is to find the file to then make 
+the change, the more like my energy that starts to   sap. I feel like friction in doing that and that 
+adds up over the day. And after for most people   after four or five hours they're like I'm like 
+I can't code anymore today. But that's because   of these frictions that get that add up. And when 
+you use something that's like a lot more powerful,   it's maybe a little more difficult to learn. You 
+feel more energized as you use it. You can go for   longer. Like you don't get as burnt out. And 
+that's like the reason to like kind of go deep   in some of these tools cuz if you do learn them, 
+they can eliminate all these micro frictions that   are that are annoying you you all day. Again, you 
+don't have to, but for people that do, that's kind   of what they experience. That's a benefit of it. 
+It's not this thing where we just want to feel   cool. I kind of convinced that that's why this is 
+I've been using Vim and Neovim for 10 plus years   now. Like it wasn't even a thing that you could 
+show off when I was first using it. Yeah. Yeah.   Yeah. I feel similar in that it talking about 
+it so much um was like less about being cool,   but then I got really obsessed with wanting 
+to learn it more just because I felt like it   it was kind of like the gateway for me into like 
+understanding my tools better. Um, and just like   the the like the competency of it and and learning 
+like the skill um and using your your keyboard   less now testing out other text editors actually I 
+still I feel like there's this pause where I like   take my hand over to the keyboard when I'm like 
+trying um other things and I'm I'm almost like   not used to it. Um, but what I love about, you 
+know, when I've been using like OpenCode, just   like I've got my terminal, I've got like um like 
+Vim open and then OpenCode and like everything is   so local and it's like I don't have to switch away 
+from anything or go out of flow or like pull up   um a different browser. I mean there's so 
+many cool tools out there like I love Zed,   I love cursor, like there's so many cool things to 
+use. Um but what I love about OpenCode when I've   been using it is just like everything staying 
+like so locally and like feeling so in flow in   that way. Yeah. Yeah. Yeah. Yeah. And like this is 
+we build products that we use ourselves. And the   reason claude code was the first thing that really 
+clicked for me was because of that. Like I didn't   want to switch my editor. I'm not going to do 
+that. And all like the neo plugins that tried to   use AI like I did try some of them but like never 
+really clicked. But yeah, this idea of just being   able to flip between these two things all in the 
+terminal like terminals are very good at flipping   between things if they all live in there. Yeah, 
+it's you can get into a really nice rhythm. Um,   okay. I want to talk about Zen. You just launched 
+Zen. Um, can you talk about like what Zen is for,   you know, it was just launched this week, so I'm 
+sure there's a bunch of people that are still not   familiar with it. Yeah. Not yet. Yeah. So, if you 
+think about how I described OpenCode, I was like,   it's very flexible, very configurable. You can use 
+whatever model you can hack it. You can customize   it. There's like so many ways to tweak it. When 
+people hear that, they think, "Oh, they're like   the advanced user product. This is for people 
+that like really want to tinker. They're not the   everyday user product." But these things aren't in 
+in conflict. We start with the primitives and then   we build up to like a good default experience. 
+The downside of being able to use any model is,   oh, what model should I use? If you're just 
+the average person, like you have no idea. Um,   you're like, okay, I hear this Kimmy K2 thing is 
+is pretty interesting. Let me go figure out how   to plug that in. Maybe you find Open Router, sign 
+up for that. It gives you access to 100 models.   Seems useful. But then when you go to use it, the 
+experience is really variable. We didn't really   understand this right away because we were kind 
+of like partic we're in the space. So we like knew   where to like use where to find hosting for these 
+models. But in our GitHub issues, every single day   it would be somebody, hey, I tried to use this and 
+I had this error like the LLM is randomly stopping   in the middle or or like I'm getting this like 
+random HTTP error or like I'm getting this random   tool parts error. And what we learned is these 
+open source models that are coming out constantly   are actually very very good but then when you go 
+to use them depending on the provider they could   be really bad especially for use in coding. So for 
+using coding that you really need them deployed in   like a high quality way um especially with all the 
+tool calling stuff. So, we just constantly kept   seeing people complain this isn't working, that 
+isn't working. And they blame us cuz they're like,   "Oh, this OpenCode problem." And I get it makes 
+sense like you're trying to use this thing,   it doesn't work, you go to the people that respond 
+to GitHub issues. So, we're like, how do we make   it so yes, you can if you're like an expert, you 
+can go crazy and tinker everything with OpenCode,   but how do we make the I know nothing. I just want 
+to get going and have a good experience workflow   better. So, we really liked what open router 
+did. It's like a single thing you sign up for,   a single API key, and you get access to a bunch 
+of different models. Whatever is new and cool,   they get added there pretty quickly. But their 
+approach was to give you as many providers as   possible for any possible use case. We realized we 
+don't need to have 50 providers backing Kim Kate   2. We just need to have a few good deployments 
+that we've tested, make sure it work well,   uh that we have SLAs's with that we can talk to 
+the team when something goes wrong and ensure a   really high quality deployment for it. And it's 
+also something that we use ourselves so we know   that it it's good like it's good enough for 
+us. So yeah, that's what OpenCode Zen is. It   gives you access to some of the brand name models 
+like Claude and GPT, but also like the latest and   greatest open source models deployed in uh the 
+best possible way. And it works with OpenCode,   but it works with anything else as well. 
+Oh, it works with anything else. Okay. So,   you can plug it into other tools, too. Like we 
+don't care if you don't use it with OpenCode. So,   you can plug it into any tool and then essentially 
+um you're going to have like the best model,   the fastest model um for your for your use case 
+there. But like specifically around coding. Yep.   Specifically for coding. Yeah. So, we're not 
+like Open Rider where we're not going to give   you access to like a 100 models. We'll give you 
+access to like five or six and we'll make sure   that they're the cheapest that we can possibly 
+get. Oh, that's the other side. Uh we're not this   isn't like a for-profit thing. This is something 
+we try to do at break even. So what's nice about   this is we can pull resources. Every new person 
+that starts to use Zen, we're pulling all of our   volume together and we're going to providers 
+and negotiating discounted rates given that we   have larger volume. And when we do that, the cost 
+savings flow right back down to everyone. So yeah,   if everyone just used this, everyone could just 
+have access to the cheapest possible rates that   exists out there right now. That's great. So it's 
+like the more and more people using it, the better   it will be. I love that. Yeah, we have plans where 
+like we know when we hit these volumes, we can now   unlock different approaches of hosting this stuff 
+that like drive down costs even more. That makes   sense. Yeah. when it comes to like the models and 
+you know making them like faster and cheaper and   like looking at inference um like what are your 
+generally generally how do you decide upon like   picking a good inference provider or what are you 
+looking for there? Yeah, so uh I've always been   a big believer in anecdotes over data. So I will 
+personally use these as my daily driver for a day   or two and just get a feel for for how it feels. 
+I think that's a number one signal. Like I can   pretty much always tell not with deep granularity 
+but from a binary sense like is this good or bad.   That's what I usually do first. Uh and then we 
+have a there's this guy on on X go coder. Uh he   has a set of emails that he runs. They're private. 
+They're not public because he doesn't want people   optimizing for them. But he has shared with me his 
+approach and it's actually the exact same approach   that I would take. But he's just done a really 
+fantastic job with it and gone way deeper than I   ever would. We had him so we like deployed a bunch 
+of stuff ourselves and had him run benchmarks to   it so we could see like quantitatively here's 
+like the ceiling on where it could be. Then   we went to providers like like B 10 and then some 
+other people to see if they can get close to that   and some of them were able to um and then then 
+that's what we're that's what we're using. So   there is like so those eval to get a little more 
+specific a lot of the coding benchmarks you see oh   by the way if you ever see a company go any like 
+AI coding product if they're like if they launch   a product or launch a new announcement they're 
+like hey we're number one on this benchmark you   know they're [ __ ] because it's always some 
+benchmark you've never heard of and they just   like found the thing that they could be number one 
+on. So, anytime you see someone say, "Hey, we're   number one on a benchmark," it's just it should be 
+a red flag. When you go look into the benchmarks,   90% of them do not look like anything real world. 
+A lot of the coding benchmarks are like, "Hey,   like given this maze, write a program to like get 
+yourself out of the maze." I'm like, "That's cool,   but none of my work day-to-day involves escaping a 
+maze." Like, it just does not look like real real   world stuff. Um, go coders benchmarks are more 
+real world codebases, actual feature building in   them, stuff that you would really do. Uh, and he 
+has like a scoring process that sits on top of it.   So, I don't like most benchmarks because they're 
+the reality that they're built by AI researchers   and AI researchers like don't know what real 
+world like day-to-day work looks like. And   they're focused on like very academic problems 
+like programming puzzles, stuff like that. Uh,   so those benchmarks are useless. this approach 
+is is kind of more useful for us. So yeah,   that's what we use. Yeah, I I do feel like since 
+I entered the AI space and I just constantly see   benchmarks everywhere and then kind of like the 
+engineers in my company internally will be talking   about how like people can game them essentially, 
+but then a lot of people don't know that others   are just gaming a certain benchmark. So it looks 
+really good or you're seeing it on someone's like   banner or posted on Twitter and it's getting a 
+bunch of likes, but then it's like once you look   into it, it's completely gamed. Yeah. I had a post 
+the other day. I was like, we're so fortunate to   live in a world where every single company can 
+be number one on benchmarks because every single   product is number one on benchmarks. Like we are 
+number one on blah blah blah benchmark. Um the   other thing is I think it's also a stupid game 
+to play because like how do I explain this? So,   if your product or your LLM or whatever, if you 
+can only notice that as better on a benchmark,   that means the end user can't tell. They can't 
+tell when they're using your thing versus the   other thing cuz like the difference only shows up 
+on a benchmark. So, people always ask us to like   optimize for certain things. But I'm like, I don't 
+think the user is going to be able to tell because   these things are so non-deterministic. People are 
+using them in all different kinds of code bases,   all different kind of environments. People 
+really can't tell whether OpenCode is better   than Claude Code or whether codec is better than 
+Claude Code or whatever. Everyone's every week   there's something new. This is better than this 
+is better than the better. But people really   can't tell. So that whole like benchmark game is 
+like yeah you want in benchmarks but nobody can   tell a difference. It's like so you're saying 
+that they should be able to actually tell the   difference rather than you can only tell through 
+this benchmark. Like the end user should be like   noticeably seeing this difference. The things that 
+the end user can notice aren't these like crazy   advanced AI like math genius optimizations. It's 
+just like really basic stuff where is it a good   product experience? You know, like does it feel 
+responsive? Does if if I'm trying to do something,   is it easy to do those? People see that and 
+feel that and they tend to articulate it as   oh like the AI is better, but it's really not 
+the AI is better. It's just like the experience   around it is is better. That's what people can 
+notice. they can't really tell that, you know,   the incremental it's incrementally smarter on this 
+benchmark. Yeah. And I think it's about kind of   like what you said earlier where like people can't 
+tell because we're also like not going deep. And I   think part of like the whole like AGI is almost 
+here. It's almost an excuse for people to not   go deep on things anymore. Um so yeah. Yeah. 
+It's uh I mean the other thing that I I keep   it's like it's crazy how much this is a thing. 
+I posted about this once, but have you heard   of that like old like pigeon the superstitious 
+pigeon experiment? Have you ever heard of this   thing? No. Okay. So, there's this I don't know. 
+I think his name is BF Skinner. He's like this   uh psychologist. I don't remember what he is. 
+He had this experiment where he had a bunch of   pigeons and on totally random intervals he would 
+give them food, right? Completely randomly. The   pigeon started developing superstitious behavior 
+because at some point they would notice that oh   the food came when I walked this way or like when 
+I did this head movement and they developed like   superstitions like they would start doing it 
+thinking it was causing the food to show up   and it's this funny like it's like even like a 
+pigeon can like develop superstition. I'm seeing   this so much with LLM because LLM are not like 
+anything else in tech. They behave randomly and   it's really hard to predict how they're going to 
+work. They like be great one day on a certain task   and be horrible the next day. They're effectively 
+random. But people are developing superstitious   behavior around this. And it's funny because I 
+build these things. So I like know how they work   under the hood. And I'll see people say stuff that 
+I know is impossible. They'll say they'll be like,   "Wow, OpenCode is so much better than Claude 
+Code in these situations and it it works like   this and Claude Code works like that." They're 
+not understanding that under the hood, we reverse   engineered Claude Code and re-implemented almost 
+the exact same logic. There's some differences,   but it's almost the exact same thing, but people 
+are like perceiving all these differences and   they're like getting really intellectual 
+about it and they're like a pig is going   to be stupid about superitions. a human going 
+to be really smart about their superstitions   and believe that and like build it up into this 
+like really complex intellectual thing. But yeah,   whenever I see like every week there's like a new 
+trend of like oh CEX is so much better than Claude   now and oh I feel like Codex is so much better 
+at this task like it's it's smarter. It's like   it knows how to do XY. It's not. It's like you 
+people cannot evaluate this stuff and the level   of superstitions happening in tech right now is 
+it's like it's at this crazy level. Yeah. Yeah, I   just want to be able to like kind of see under the 
+hood and you know that some of the stuff people   are saying are is actually impossible. That's 
+incredible because as you were saying that I   was like oh I'm not one of those pigeons and then 
+I thought no I absolutely have superstitions about   like which model I'm going to use like for even 
+for a cooking recipe or something I'll reach for   one I'll be like oh and I'm like this one is more 
+like emotionally intelligent like just as I as you   were saying that I was like oh I would never be 
+a pigeon like that. like wait actually I have a   lot of superstition yeah it's impossible because 
+our brain is wired to find patterns like when this   thing happens this other good thing happened it's 
+because of that good that first thing but yeah   it's like I think in tech almost everything we 
+do has been very deterministic and not random or   complex like this so I think our industry is being 
+exposed to this for the first time and we all   think we're so much better and so much rational 
+more rational than like the rest of the world   and we're not like we're now we're exposed to this 
+this stuff and we are literally operating the same   way that you know people that are into astrology 
+you know feel and like it's like it's all the same   stuff and we're it's all just human nature. That's 
+a hot take. I think people are not going to like   that about they're deciding on their models like 
+astrology. You you smart think you're so smart   like you're you're basically doing astrology when 
+you have opinions on these models or these tools.   That's so good. Yeah. Also, this is my favorite 
+comment. It said, "New achievement unlocked.   Dags called us dumber than pigeons." No, what I'm 
+what I'm actually saying is you're smarter than a   pigeon. But yeah, you're behaving the same, which 
+makes it more annoying, right? Like when you're   making the same fundamental behavior, but you're 
+acting smart about it. Like that just that's just   annoying over the person. So I love how you say it 
+as it sounds like a compliment like, "Oh, you're   a little smarter than a pigeon. You're a little 
+smarter than a pigeon." I also feel like so much   like um the superstition like that um like there's 
+connection there with just like what seems popular   at the time like if everyone is saying that one 
+of the models good right like you just said Kimmy   K2 you're like oh these are the reasons and so 
+I started thinking oh I think maybe I should use   it like this is a better model just like based 
+on what you said you know a friend is telling   you or like you see a popular influencer talking 
+about it and so you're getting excited it's like   um yeah pigeon group think I don't know yeah yeah 
+I think yeah so I try to focus on stuff that tends   to be like I I'm not I can't talk about K2's 
+intelligence or like how well it solves tasks.   I just know it's fast. It's literally fast 
+and that's like a fact. Like you can't that's   actually something that's measurable. Yeah, that 
+that's why I'm into it and it kind of enables some   new workflows. But uh you're like that's actually 
+not super in this case. That's good. You're Yeah.   But yeah, I mean we see this all the time because 
+people are just like it's it's it's funny to have   to be honest because it cuts both ways. Like 
+there's times where people are like OpenCode   sucks and codeex is so much better. But there's 
+also times where people are like OpenCode's so   much smarter than codeex but like to be honest 
+across both. You have to tell people like that's   not the case in in either situation even when it's 
+kind of benefiting us. But yeah, people are just   primed like they like the products they're primed 
+to feel like it's also smarter, more effective.   Yeah. What else should we talk about? Let's see. 
+You talked about kind of some of the reasons   um like you use Zen kind of like instead of open 
+router and things like that. What have I missed   chat? What have I missed? I've been ignoring 
+chat for a while. About some of the questions   people there were some ridiculous questions that 
+people wanted to ask me. Okay, I can go look. I'm   scared. It was mostly about your um hair. Yes, 
+hair is you can pull it up. Um well, there was   about your favorite open source coding model right 
+now. uh the daily driver which you kind of already   talked about. Yeah. So I'm using K2 as my default 
+right now. Um but you know it changes for me every   week. I'm actually the worst person to ask about 
+this because I I'm forced to use new models every   week so I can test our stuff. So I never like 
+settle on anything. I'm never like settled. I'm   just always trying whatever we're testing. Yeah. 
+Right now that's K2. So you're the worst person   because you're just constantly trying new ones and 
+you won't be sticking. Yeah. One. Someone asked,   "How did you grow that thick beard?" Okay. I'm 
+gonna I'm gonna try to inspire people right now.   So people see my beard and they're like, "Wow, 
+it's like a thick full beard." There was a time   when I would try to grow a beard and I had 
+these two like crazy bald spots right here,   like totally bare, like two circles. And I'm like, 
+"Man, I can never grow a beard." And almost every   guy that tries to grow one has something like 
+that. But then one month I was like, "Fuck it.   I don't care how bad this looks. I'm just gonna 
+like wait it out." And I like three or four weeks   in it started to fill in. It started to like the 
+the patches went away. I just had to like get   through this really awkward phase. And since then 
+the beard has been been solid or just been getting   better better and better. So that's amazing. Were 
+you Was this a long time ago or is this like when   you were with with Liz? Was she seeing this like 
+awkward? No. I was fully baked when I when I when   I met her. Thankfully, this is probably I was 
+probably like 24. So, even like, you know, as   an adult, I didn't have like a I still had like my 
+beard coming in. So, if you want to grow a beard,   you might you maybe is maybe it's possible. Maybe 
+you're just giving up too early. You're going to   have to deal with looking like really bad for a 
+while, but Yeah. Yeah. Yeah. Do most do most guys   like just give up too early on it? Yeah. I I think 
+so. I feel like I mean I think a lot of people can   grow a beard, but sometimes I see people and they 
+like give up because it looks bad. I think it can   look better if you just keep going. Yeah. Yeah. 
+That's my advice. the talking about just giving   up. I feel like it just in the air right now 
+like because of AI hype and things like that   is just like people giving up on learning hard 
+things like I feel like I see this all the time.   It makes me kind of sad. What are your thoughts 
+on this? Someone DM'd me about this. Do you think   do you think this is like an SF thing or do you 
+think it's like in SF it's the opposite? Everyone   is so optimistic and but I feel like I see this on 
+Twitter. I feel like in in SF at least people here   are like optimistic about it. still learning hard 
+things, still learning like deeper fundamentals,   building things, but I feel like in other areas 
+or maybe it's just a Twitter thing and it's not   real. But I do feel like there's like a like a 
+pessimism. Yeah, I think there's always people   looking for excuses not to do stuff. There's 
+like it's kind of always a thing. And yeah,   I think this hasn't helped that at all. But I 
+have learned more in the past since LLMs have come   out than I've ever learned in my whole life. Like 
+I've become expert an expert in things that would   be very difficult to even access the knowledge 
+for before because it's like obscure like all   the terminal stuff is a great example. There's not 
+like a well doumented place of how terminals work   and like all the different quirks and and all 
+that stuff. But kind of hacking together stuff   by talking to an LLM has let me go really deep in 
+something where before I would see that and like   you know we're like a business and I'm like can 
+I risk trying to do something in something that's   that seems kind of difficult to learn and like do 
+I even know if I can pull it off? Now the so much   has been derised like we can take swings at all 
+this stuff because we know that I can use an LLM   to learn. I can use an LLM to write some of the 
+code. So for me it's been just just amazing. Uh,   the thing I keep saying, I've had a few posts and 
+whenever I post it like people, it tends to get   a lot of likes. I feel like the funniest outcome 
+for all this, which is getting more and more real,   is programming has always been like a cushy job. 
+It's like a desk job. You could potentially do it   remotely. It pays well. People treat you like 
+you're smart, even though most of you aren't.   Everyone, but but me, right? You're talking 
+about everyone else but me. Everyone else.   Everyone else is out there. It's always been 
+an amazing job. Not always, but like, you know,   it can be an amazing job. I feel like LLMs the 
+like have shown up and have taken this amazing   job and made it more amazing and will fail to 
+eliminate it. So like now any like [ __ ] tedious   thing I need to do I need to build write like a CI 
+script for GitHub actions. The LLM takes care of   that. It took my already really nice job and made 
+it so it's even nicer. And I don't think these   things are gonna eliminate my job or anyone's job. 
+So we're I think we're gonna end in a situation   where like being a programmer is like better than 
+it ever was. Like people should hit us even more   now because like it was already like this really 
+cushy job and now it's even cushier. So the I   think the pessimism is kind of unwarranted because 
+if you just look at it on paper, it's way easier   to learn anything now. Anything that's tedious 
+can be removed by this and what's left is so that   that's like a really great combination of things. 
+So yeah, I don't think I get why the pessimism is   there. I get why like the way that some of these 
+companies talk about the future of this stuff is   so scary and wrong and it's their fault for the 
+pessimism. I think like they they kind they kind   of went about marketing this stuff in a in a bad 
+way. But if you actually look at what people's   days are like I it's hard not to be anything but 
+but optimistic. Like my job is better than it than   it ever was. Yeah. I love that take because I feel 
+like all I see at least online are is the opposite   take. And I think obviously there's the companies 
+that are like incentivized to say like my you   won't you'll you can replace all your developers 
+with my tool, right? So that's a tricky part,   but I feel like all I see is the opposite and just 
+like software engineers are cooked and things like   that. Um which makes me quite sad. Like I think 
+Prime talked about this, it's like you're people   who are saying this, it's like you're stealing 
+hope from all of these people um that are excited   to like learn something deeply and become deeply 
+technical. Yeah. Yeah. Exactly. It's like these   things, you know, going deep into something is 
+always difficult. These things have showed up and   made it easier than ever. And that's kind of what 
+we need to need to focus on. And I actually think,   you know, Anthropic CEO is guilty of pushing like 
+the this like more negative narrative. I think   overall though, I feel like he is more balanced. 
+They recently I don't know if you saw their recent   hype video they put up yesterday. Haven't seen 
+it yet. I think tonewise it is perfect. I forgot   the It's funny. Maybe they didn't do a good job 
+because I forgot the tagline, but it was like a   really good tag. It was like keep thinking or 
+something. It was I think that was like the   tagline. It was it was like so personentric and 
+humanentric of like these tools are great. They're   going to help you think even more, think even 
+better, like improve yourself. Like that's like   the that's the right message. I think that is a 
+great message. I feel like I haven't seen that. I   want to go watch that video now. Yeah, that's kind 
+of a lot about what you say as well. Um, again,   I saw some of your tweets about just like these 
+tools making us much better programmers but not   actually eliminating us. Yeah. And it's it's going 
+to be so like we're going to look back on this and   like if they felt limited us like programmers 
+going to be more annoying than they ever were.   That is so true. Like the ego will become so big. 
+Mine will be for sure. Yeah. Like look, you tried   to destroy me. Yeah. You still need me. And you 
+know, now my job is easier than ever because   I just tell an LLM what to do. Yeah. I love it. 
+if you have a few more minutes. Um I mean a lot   of people were asking what it's like to be a new 
+new dad. I'd love to hear about this. This is so   exciting because you and Liz are my couple goals 
+like fashionable, smart, love you guys. Like Oh,   thank you for real. Yeah. Uh I I've been I've 
+been saying this in the beginning. I was like,   "No matter how it is, I'm going to tell everyone 
+that it's so easy and everyone's so stupid for   saying having a baby is hard." Um so you're 
+basically lying. I'm just kidding. Well, okay.   But actually though like so I'll I'll explain our 
+experience with it and I don't think this is an   experience that everyone can have but I think 
+it's a good perspective. Everyone going into it   everyone talks about it's so intense. It's crazy 
+sleep deprivation like it's so hard whatever. So   far we haven't had any of that and it's because we 
+just did one thing which not everyone can do and   it's also is somewhat of a choice. Liz switched 
+to pumping, right? Which means that I can feed the   baby given that there's like bottled breast milk. 
+And we also do do formula, too, as a mix. And if   you can do that, you can just break up your day 
+into shifts. So, I have now taken from midnight to   7:00 a.m. I stay up and I work. The baby wakes up 
+two times and I have to feed her. It's like a nice   break from my work. You know, it takes 30 minutes 
+to feed her, change her, put her back to bed. And   Liz can sleep for that 7-hour block. Uh, and she 
+has to wake up to pump, but she can kind of go   back to sleep right away. So, she's not getting as 
+much sleep as before, but she's not like getting   like two or three hours sleep, which is what a 
+lot of people warn you of. And once I'm done,   I go to sleep and I wake up at 2. So, not everyone 
+can do this because, you know, you might not have   a flexible work schedule, you might not work 
+from home, but it's entirely around this feeding   concept. If you can like make it so both parents 
+can help on the feeding, it gets way better. At   least with one kid. With one kid, I think it's 
+it's fine. With two kids, I see how this is   basically impossible. But for your first kid, 
+I think a lot of people are really apprehensive   about it. It's not that bad. You you everyone 
+figures out like a different way to make it work.   So, I think it's been it's been pretty good so 
+far. So, yeah. I don't know. I think it was is a   lot less hard than people prepared me for. That's 
+great to hear. Yeah. I feel like all I ever see is   how hard it is and it's going to like wreck your 
+productivity and things like that. Yeah. Which is   not a great narrative. You know what's funny? Like 
+productivity is like a weird thing to measure,   but a form of it for me has gone up because I work 
+from midnight to 7 a.m. There's nothing coming at   me. Wait, what? You work from midnight to Oh, this 
+is why Adam said, "I'd like to know if he'll ever   work during US waking hours." Okay, this explains 
+some of our messaging. It's been difficult for   the rest of my team because like we're not as 
+collaborative, which has been an adjustment.   And this is temporary. Like I'll go back to it in 
+a month or two, but nothing is coming at me. like   whether it's users messaging me, whether it's my 
+team messaging me, whether it's just like general   internet stuff, like nothing happens at that 
+time. So, I've been putting I've been like in   terms of like individual contribution work, I've 
+been doing so much work, like way more than I've   been doing in the past past couple years. So, like 
+one for my productivity has gone up, but yeah, I   don't know. I think one kid is definitely doable. 
+I'm scared about having more than one, but yeah,   I think for most people, one should be like 
+you should, if you're like worried about that,   the first one's not bad. Yeah, which is great. Oh, 
+wait, one more thing. So, you may have heard that   the moment your baby's born, they're not going to 
+look great because they're like just coming out   and like they're not going to look great. So, 
+I I've heard this before and people have said,   you know, be prepared for your kid to not look 
+great. It is so much worse than that. Like, it is   Like I I want to prepare everyone. Everyone 
+expects this moment of you see your child for   the first time and like this beautiful magical 
+moment. The first 30 minutes of her being alive,   I had like the most negative emotions ever cuz 
+when she came out, it was like the freakiest   thing I'd ever seen. Like her head was like in 
+this super [ __ ] up shape and like hair was   it was all messed up and like she was gray. She 
+looked gray when she came out and her face was   all scrunched up and swollen. It is disturbing. 
+Like what you like, take any baby animal out there   that you can imagine. Human animals are worse. 
+Like human babies when they're born are like the   worst creepiest like creepiest thing ever. It's 
+very likely you're going to have a deeply negative   reaction the first time you see your kid. And uh 
+like both me and Liz were private like later we   talked about it and we like both were privately 
+having these same emotions in our head. She was   like, "Oh, okay. We have like one of the ugliest 
+kids that ever ugliest babies that ever existed.   What's crazy is after that 30 minutes, she like 
+transformed into looking a lot more normal and she   got really cute. So, and then like, you know, a 
+couple days goes by and she's like very cute now.   She's she's she's 3 weeks old now, so she's very 
+cute. So, do not expect this magical movie moment   where you have this amazing reaction to to your 
+kid. It is way creepier than it's probably going   to be one the creepiest things you've ever seen. 
+Like yeah, realistically. And I think that I also   think the doctors know this. I think they kind of 
+[ __ ] with you cuz they pulled her out. And so we   had like an annoying labor. It was like we when 
+I say we I mean Liz had annoying labor. She like   tried to push for like or like tried to do like 
+normal labor for 20 something hours and we had to   end it we had ended up having to do a C C-section 
+anyway. So in the C-section we have the curtain up   cuz we don't want to see anything. Then like we 
+hear the baby cry and they immediately like get   my attention to show me the b they like kind of 
+show her like the second she comes out. They show   her to me like this and she's just like flailing 
+and creepy and disgusting and they're like look   it's your baby and and I know they know that 
+she looks creepy and I feel like they're they   enjoy [ __ ] with the dad in that way. The other 
+mess of part is I walked over to the other side   to like cuz they're like cleaning her and like I 
+never wanted to cut the umbilical cord. I think   I'm like not into that. And Liz was like, I'll do 
+it. I'm into it. But she couldn't because she was   in the wrong position. So they made me do it. I 
+hated it. It's not like either. You have to like   I went like that, but it's really thick. So I have 
+to like do it again. And like it it was not it was   not fun. Oh my god, that's too funny. And then 
+and then I turn around and they're finishing up   the C-section. I'm not I'm also not someone that's 
+like curious about stuff medically. I turn around   and I see like a [ __ ] like human anatomy diagram 
+of Liz because the her whole [ __ ] stomach is   open. Like I see like her liver and I see all this 
+crazy stuff. And I and I remember thinking like   that is like the insides of a person. I do not 
+know how they put that person back together. Like   when I saw her after she was like I like my brain 
+wasn't registering like how I was like seeing her   whole insides and like how her body functioned 
+and all her organs and now she's like normal   like nothing happened. So that's crazy. I can't 
+imagine that experience but you know eventually   the baby's cute and it's worth it but yeah I love 
+that so much. Yeah that's crazy. Yeah. Thank you   for sharing that. Good warnings. Yeah. Yeah. I was 
+I was there um I helped deliver my sister's baby   um which was really exciting but I'd never seen a 
+live birth before and it was amazing and beautiful   and also crazy and I was like the nurses all said 
+that I like left the room just like like my face   they're like are you okay and I think there was 
+like a cuteness factor absolutely like where they   just keep getting cuter and cuter as time goes on. 
+Yeah. Yeah. Also, we we were like 30 hours we were   awake for 30 hours at that point. So, yeah, 
+our like sleep deprivation and stuff was was   really really crazy. Um, but she was she was like 
+super active and she opened her eyes right away   which makes them way cuter. Yeah. Uh, so so that 
+helped. But love that. No one. Is the name Is the   name private? No, her name is Iro. I O Iro. Yeah, 
+that's beautiful. So, we're trying to stick with   threeletter names for for the whole family. Iro. I 
+love it. Oh, yeah. Dax was Iro. Yeah. What's Wait,   what's the dog's name again? Do Mizuko. He He's 
+He's a four-letter name. Dang. Yeah. Awesome.   Well, I feel like this is a good good place 
+to wrap. Um, we went a bit over, but this was   so much fun. I won't answer Trash's question to 
+you, which is, "How do you like being a dev now,   Dax?" We'll leave that one. We'll leave that 
+one. It's great. It's amazing. Well, this is so   awesome. I really appreciate you coming on. This 
+is so much fun. Likewise. Also, you were right.   Streamyard quality was incredible. Yeah, this is 
+so much fun. Thank you for doing this with me.   Okay. Any any last final things I forgot or left 
+out? No. Shout outs to you, I guess. Yeah. Check   out OpenCode. Check out Zen. Excited to play with 
+it. Yeah. Yeah. That's it. Cool. Okay. Thank you   so much, Dax. Yep. I'll see you later then. Have 
+a good day. Have a good weekend. Bye. Bye. Bye.

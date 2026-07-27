@@ -95,6 +95,8 @@ runtime.run({
 
 The same holds for a tool declared `needsApproval: true`, whether the call comes from a flow `action` node or from the model itself: the approval pause happens before `execute` runs, so an unapproved tool never executes.
 
+`needsApproval: true` is the shorthand for a policy that returns `ask` for that tool. When you need a rule the boolean cannot express — a read-only worker, an allowlist, a threshold that depends on the call's arguments — see [Tool Policy](/guides/policy).
+
 A suspend travels as an exception, but it is **not** a tool failure. It is never reported to the model as one, never shown to the user as an error, and never journaled as an error. When one call in a parallel batch suspends, the runtime lets the rest of the batch settle first and only then propagates — an abandoned sibling would leave its step `running` and re-execute on resume, since an in-flight promise cannot be cancelled.
 
 ### When approval is denied

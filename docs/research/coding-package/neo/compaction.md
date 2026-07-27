@@ -1,0 +1,67 @@
+# Compaction
+
+## The Simple Idea
+
+Compaction is how an agent keeps a long conversation small enough to fit in the model's context window.
+
+If the transcript is a backpack, compaction is repacking it so the important things still fit.
+
+## The Problem
+
+Every model has a context limit. Long coding sessions can accumulate user messages, assistant messages, tool calls, tool results, diffs, test output, and screenshots.
+
+If the transcript gets too large, the next provider call may fail or become wastefully expensive.
+
+## How Neo Solves It Today
+
+Neo summarizes old turns once the transcript gets large:
+
+- `compact.Compactor` is the interface; the agent calls it before every provider call.
+- `compact.Summarizer` is wired in by the chat command. When the estimated transcript size passes 70% of the configured context window, it asks the provider to summarize the oldest turns and replaces them with a single user message carrying the summary. The most recent messages are kept verbatim.
+- `NoCompaction` is the fallback when no compactor is configured.
+- `SafeSplitPoint` picks the cut so strategies avoid invalid transcript splits.
+
+The important safety rule is: never keep a `tool_result` without its matching `tool_use`.
+
+## Context Window Setting
+
+Neo uses a conservative default context window of 200k tokens and compacts at 70% of that estimate. Users on larger-context models can raise it in `neo.yaml`:
+
+```yaml
+compaction:
+  context_window_tokens: 1000000
+```
+
+Neo does not maintain a model catalog for compaction. Unknown or custom models use the same conservative default unless the user sets an override.
+
+## Strategy Options
+
+| Strategy | Idea | Status |
+| --- | --- | --- |
+| No compaction | Keep the transcript as-is. | Fallback when unconfigured. |
+| Summarize old turns | Replace older conversation with a summary. | Current default (`Summarizer`). |
+| Sliding window | Keep only the most recent safe chunk. | Future. |
+| Manual context-window override | Compact at 70% of `compaction.context_window_tokens`. | Current default path. |
+
+## What Good Compaction Preserves
+
+Good compaction keeps:
+
+- the user's goal,
+- decisions already made,
+- files changed,
+- commands run,
+- unresolved errors,
+- enough recent context for the model to continue.
+
+It can drop:
+
+- repeated logs,
+- obsolete exploration,
+- huge tool outputs once summarized,
+- details that no longer affect the task.
+
+## Where To Look
+
+- `internal/compact/compact.go`: compactor interface and safe split helper.
+- `internal/agent/agent.go`: compactor call before provider calls.

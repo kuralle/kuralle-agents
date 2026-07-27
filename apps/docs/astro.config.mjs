@@ -79,6 +79,7 @@ const sidebar = [
       { label: 'Flow Execution Model', link: '/guides/flow-execution' },
       { label: 'Tools', link: '/guides/tools' },
       { label: 'Multimodal Input', link: '/guides/multimodal' },
+      { label: 'Tool Policy', link: '/guides/policy' },
       { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Routing & Handoffs', link: '/guides/routing' },
       { label: 'Sessions & State', link: '/guides/sessions' },
