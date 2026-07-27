@@ -11,6 +11,7 @@ import type { RunState } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { recordSignalDelivery } from './durable/replay.js';
 import { resetTurnCount } from './policies/limits.js';
+import { addSystemNote } from './systemNotes.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 
 export interface OpenRunOptions {
@@ -152,19 +153,18 @@ export async function openRun(
     const payloadNote = options.wake.payload
       ? ` Context: ${JSON.stringify(options.wake.payload)}.`
       : '';
-    const wakeMessage: ModelMessage = {
-      role: 'system',
-      content:
-        `[Scheduled wake: ${options.wake.reason}]${payloadNote} ` +
+    // A wake is an instruction to the model, not a turn anybody took. It goes in the system
+    // prompt for exactly this turn; the assistant's proactive message is what belongs in the
+    // transcript, and that still lands there normally.
+    addSystemNote(
+      runState,
+      `[Scheduled wake: ${options.wake.reason}]${payloadNote} ` +
         'There is no new user message. Re-engage the user proactively per your instructions; ' +
         'if a task is in progress, follow up on it gently.',
-    };
-    runState.messages = [...runState.messages, wakeMessage];
+      { lifetime: 'turn', tag: 'wake' },
+    );
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
-    await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
-      latest.messages = [...latest.messages, wakeMessage];
-    });
   }
 
   const agent = agentsById.get(runState.activeAgentId);

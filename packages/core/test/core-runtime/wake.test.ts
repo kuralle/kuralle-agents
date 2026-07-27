@@ -1,3 +1,4 @@
+import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { describe, expect, it } from 'bun:test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
@@ -33,7 +34,7 @@ function proactiveDriver(reply = 'Hi! Your cart is waiting — ready to check ou
 }
 
 describe('wake turns', () => {
-  it('runs an agent-initiated turn: wake note in history, wake part emitted, reply recorded', async () => {
+  it('runs an agent-initiated turn: wake note in the system prompt, wake part emitted, reply recorded', async () => {
     const sessionStore = new MemoryStore();
     const { driver } = proactiveDriver();
     const runtime = createRuntime({
@@ -63,13 +64,14 @@ describe('wake turns', () => {
 
     const runStore = new SessionRunStore(sessionStore, 'wake-sess');
     const runState = await runStore.getRunState(sessionDerivedRunId('wake-sess'));
-    const wakeNote = runState?.messages.find(
-      (message) =>
-        message.role === 'system' && String(message.content).includes('[Scheduled wake:'),
-    );
+    // The wake reaches the model as a system NOTE folded into the prompt, not as a message.
+    // A wake is an instruction, not a turn anybody took — and AI SDK 7 rejects system
+    // messages inside `messages`. The assistant's proactive reply is the transcript record.
+    const wakeNote = systemNoteBlocks(runState!).find((b) => b.includes('[Scheduled wake:'));
     expect(wakeNote).toBeDefined();
-    expect(String(wakeNote?.content)).toContain('cart abandoned for 2 hours');
-    expect(String(wakeNote?.content)).toContain('c-1');
+    expect(String(wakeNote)).toContain('cart abandoned for 2 hours');
+    expect(String(wakeNote)).toContain('c-1');
+    expect(runState?.messages.some((m) => m.role === 'system')).toBe(false);
     // no fabricated user message
     const userMessages = runState?.messages.filter((m) => m.role === 'user') ?? [];
     expect(userMessages).toHaveLength(1);

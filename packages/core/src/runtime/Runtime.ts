@@ -69,6 +69,7 @@ import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
+import { addSystemNote } from './systemNotes.js';
 import { needsApprovalPolicy, type Policy } from './policies/toolPolicy.js';
 /**
  * What the user is told when the run hands off to a human and the app has not configured an
@@ -1006,14 +1007,17 @@ export class Runtime {
       throw new Error(`No run state for session: ${sessionId}`);
     }
 
-    const note: ModelMessage = {
-      role: 'system',
-      content: `[A human agent handled this conversation${
+    // `run` lifetime: the assistant needs to know a human intervened for the rest of this
+    // run, not just the next turn. As a system NOTE rather than a message it stops being a
+    // prompt-injection surface (the resolution summary is human-authored free text) and
+    // stops re-triggering the AI SDK warning on every post-resume turn.
+    addSystemNote(
+      runState,
+      `[A human agent handled this conversation${
         opts?.resolutionSummary ? `. Resolution: ${opts.resolutionSummary}` : ''
       }. The assistant is now resuming.]`,
-    };
-
-    runState.messages = [...runState.messages, note];
+      { lifetime: 'run', tag: 'escalation-resume' },
+    );
     runState.status = 'running';
     runState.waitingFor = undefined;
     runState.activeFlow = undefined;

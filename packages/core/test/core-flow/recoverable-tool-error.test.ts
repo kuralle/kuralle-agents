@@ -1,3 +1,4 @@
+import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { action, collect, defineFlow } from '../../src/types/flow.js';
@@ -82,12 +83,13 @@ describe('recoverable tool error inside a flow', () => {
     // The gather cache was cleared so re-collection actually happens (not an instant
     // re-complete with the bad value).
     expect(runState.state.__collect_gather).toBeUndefined();
-    // The error message reached the model context as a system note.
+    // The error reaches the model through the system-note channel, NOT the message array —
+    // it interpolates tool output containing user-supplied ids, so it must not sit where it
+    // could read as an instruction (AI SDK 7 rejects system messages in `messages`).
+    expect(systemNoteBlocks(runState).join('\n')).toContain("Unknown unit '12B'");
     expect(
-      runState.messages.some(
-        (m) => m.role === 'system' && String(m.content).includes("Unknown unit '12B'"),
-      ),
-    ).toBe(true);
+      runState.messages.some((m) => m.role === 'system'),
+    ).toBe(false);
     // The user saw a re-ask, not the degraded apology.
     expect(parts.some((p) => p.type === 'text-delta' && /Which unit/.test(p.payload.delta))).toBe(true);
     expect(parts.some((p) => p.type === 'text-delta' && p.payload.delta.includes('something went wrong'))).toBe(false);

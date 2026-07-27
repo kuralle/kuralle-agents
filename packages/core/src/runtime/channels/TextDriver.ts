@@ -5,6 +5,7 @@ import type { ToolCallRecord } from '../../types/session.js';
 import { streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
+import { systemNoteBlocks } from '../systemNotes.js';
 import { buildToolSet } from '../../tools/effect/index.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
 import { dispatchModelToolCalls, toolResultMessage } from './executeModelTool.js';
@@ -74,7 +75,11 @@ export class TextDriver implements ChannelDriver {
       ctx.skillPrompt,
       ctx.workingMemoryPrompt,
     );
-    const system = appendGatherBlocks(baseSystem, [gather.retrievalBlock, gather.memoryBlock]);
+    const system = appendGatherBlocks(baseSystem, [
+      gather.retrievalBlock,
+      gather.memoryBlock,
+      ...systemNoteBlocks(ctx.runState),
+    ]);
     const messages: ModelMessage[] = [...ctx.runState.messages];
     const aiTools = this.resolveTools(node, ctx);
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);

@@ -5,6 +5,8 @@ import type { RunContext } from '../../types/run-context.js';
 import type { ReplyNode } from '../../types/flow.js';
 import { buildToolSet } from '../../tools/effect/index.js';
 import { buildNodePrompt, composeSystem } from '../../flow/nodeBuilders.js';
+import { appendGatherBlocks } from '../grounding/knowledge.js';
+import { systemNoteBlocks } from '../systemNotes.js';
 import { applyPromptCache } from '../promptCache.js';
 
 /**
@@ -25,12 +27,15 @@ export async function runSilentExtraction(
 ): Promise<TurnResult> {
   const replyNode = node.node as ReplyNode;
   const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
-  const system = composeSystem(
-    ctx.baseInstructions,
-    nodeSystem,
-    ctx.runState.state,
-    ctx.skillPrompt,
-    ctx.workingMemoryPrompt,
+  const system = appendGatherBlocks(
+    composeSystem(
+      ctx.baseInstructions,
+      nodeSystem,
+      ctx.runState.state,
+      ctx.skillPrompt,
+      ctx.workingMemoryPrompt,
+    ),
+    systemNoteBlocks(ctx.runState),
   );
   const messages: ModelMessage[] = [...ctx.runState.messages];
   const aiTools = resolveExtractionTools(node);

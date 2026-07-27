@@ -1,3 +1,4 @@
+import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { describe, expect, it, mock, afterEach } from 'bun:test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
@@ -247,13 +248,15 @@ describe('escalation loop', () => {
     expect(runState?.activeFlow).toBeUndefined();
     expect(runState?.state.__escalationNotified).toBeUndefined();
 
-    const lastMessage = runState?.messages[runState.messages.length - 1];
-    expect(lastMessage?.role).toBe('system');
-    expect(String(lastMessage?.content)).toContain('Refund of $20 issued for order #42.');
+    // The resolution reaches the model as a `run`-lifetime system NOTE, not a message. It is
+    // human-authored free text, so it must not sit in `messages` where it could read as an
+    // instruction — and AI SDK 7 rejects system messages there outright.
+    const notes = systemNoteBlocks(runState!).join('\n');
+    expect(notes).toContain('human agent handled');
+    expect(notes).toContain('Refund of $20 issued for order #42.');
+    expect(runState?.messages.some((m) => m.role === 'system')).toBe(false);
 
-    const session = await sessionStore.get('resume-sess');
-    expect(String(session?.messages[session.messages.length - 1]?.content)).toContain(
-      'human agent handled',
-    );
+    // It persists for the rest of the run rather than only the next turn.
+    expect(runState?.state.__systemNotes).toBeDefined();
   });
 });
