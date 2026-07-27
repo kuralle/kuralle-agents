@@ -282,7 +282,7 @@ export class TextDriver implements ChannelDriver {
   }
 }
 
-function addTurnUsage(
+export function addTurnUsage(
   current: TurnUsageSnapshot | undefined,
   usage: LanguageModelUsage,
 ): TurnUsageSnapshot {
@@ -307,7 +307,11 @@ function addTurnUsage(
     totalTokens: current.totalTokens + totalTokens,
     cacheReadTokens: (current.cacheReadTokens ?? 0) + cacheReadTokens,
     cacheWriteTokens: (current.cacheWriteTokens ?? 0) + cacheWriteTokens,
-    contextTokens: inputTokens,
+    // PEAK, not last. contextTokens answers "how much window did this turn occupy", and a
+    // multi-step turn occupies the largest single prompt it sent — not the final one, and
+    // not the sum. Assigning the last step made a 24,437-token turn report 2,232 because
+    // its tail step was a small extraction call.
+    contextTokens: Math.max(current.contextTokens ?? 0, inputTokens),
   };
 }
 

@@ -142,7 +142,12 @@ export function formatMemoryWithBudget(
 ): string {
   if (maxTokens <= 0) return '';
 
-  const entries = Object.entries(memory);
+  // Sorted, not insertion order. This text goes into the system prompt, so its bytes are
+  // part of the cache prefix. Working memory is persisted, and a store that rebuilds the
+  // object (a Redis hash, a Postgres row mapped to an object) can return a different key
+  // order — which would silently change the prefix and miss the cache on a conversation
+  // that should have hit.
+  const entries = Object.entries(memory).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   const filteredEntries = allowlist
     ? entries.filter(([key]) => allowlist.includes(key))
     : entries;

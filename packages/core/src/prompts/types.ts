@@ -191,7 +191,12 @@ export class PromptTemplateBuilder {
   private toolsProvided: boolean = false;
   private voiceRulesConfig: VoiceRulesConfig = {};
   private glossaryTerms: GlossaryTerm[] = [];
-  private injectTodayDateFlag: boolean = true; // Default to true for .default() to include date
+  // OFF by default. A date near the front of the system prompt is the canonical
+  // prompt-cache anti-pattern: it flushes the prefix at every date boundary, and because
+  // it renders at build() time, two servers booted on different days serve permanently
+  // different prefixes and can never share cache. Opt in with injectTodayDate(true) if a
+  // prompt genuinely needs the date.
+  private injectTodayDateFlag: boolean = false;
 
   constructor(options: PromptTemplateBuilderOptions) {
     this.id = options.id;
@@ -396,7 +401,9 @@ ACT on their specific need immediately.
           month: 'long',
           day: 'numeric',
         });
-        sections.push({ type: 'system_reminder', content: `Today is ${today}.`, priority: 25 });
+        // priority 999: sections sort ascending, so an opted-in date lands at the END
+        // of the prompt, below the cacheable head, instead of invalidating it.
+        sections.push({ type: 'system_reminder', content: `Today is ${today}.`, priority: 999 });
       }
     }
 
