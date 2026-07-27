@@ -129,8 +129,12 @@ const create_work_order = defineTool({
     issue: z.string().describe('One line, specific: "kitchen sink drain blocked", not "plumbing issue"'),
     urgency: z.enum(['emergency', 'urgent', 'routine']),
     accessNotes: z.string().optional(),
+    alsoDistinct: z
+      .boolean()
+      .optional()
+      .describe('Set true only to confirm this is a SEPARATE fault from the unit\'s existing open work orders'),
   }),
-  execute: async ({ unitId, issue, urgency, accessNotes }) => {
+  execute: async ({ unitId, issue, urgency, accessNotes, alsoDistinct }) => {
     // The model will happily collect a unit id the resident said out loud ("12B") that is
     // not in the portfolio, and the flow will then run to completion around it. Validate at
     // the tool boundary — the same place resolveDispatch guards vendor ids.
@@ -140,6 +144,20 @@ const create_work_order = defineTool({
       // the flow re-asks instead of ending the turn with "something went wrong on my side".
       throw new RecoverableToolError(
         `Unknown unit '${unitId}'. Call list_units or lookup_unit to get a real unit id — do not invent one.`,
+      );
+    }
+    // A live run created WO-1042 and WO-1043 for one leak, and WO-1044/WO-1045 for one
+    // radiator — the model re-entered the intake flow on a follow-up ("yes raise it") and
+    // logged the same fault twice. Neither pair was ever flagged, so the manager's open
+    // list showed twice as many problems as existed. Presence of an open work order on the
+    // unit is the signal; the model must look at it and decide, not log blindly.
+    const openOnUnit = WORK_ORDERS.filter((w) => w.unitId === normalized && w.status !== 'closed');
+    if (openOnUnit.length > 0 && !alsoDistinct) {
+      throw new RecoverableToolError(
+        `Unit ${normalized} already has ${openOnUnit.length} open work order(s): ` +
+          openOnUnit.map((w) => `${w.id} (${w.issue})`).join('; ') +
+          `. If "${issue}" is one of those, use that id instead of raising a new one. ` +
+          `If it is genuinely a separate fault, call again with alsoDistinct: true.`,
       );
     }
     sideEffects.workOrdersCreated += 1;
