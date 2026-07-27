@@ -141,6 +141,8 @@ export interface DonePayload {
     inputTokens?: number;
     outputTokens?: number;
     contextTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
   };
 }
 

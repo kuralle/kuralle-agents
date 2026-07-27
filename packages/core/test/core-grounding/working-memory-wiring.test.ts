@@ -99,8 +99,17 @@ describe('working memory wiring', () => {
       const actual = require('ai');
       return {
         ...actual,
-        streamText: (opts: { system?: string }) => {
-          capturedSystem = opts.system ?? '';
+        streamText: (opts: { system?: unknown }) => {
+          capturedSystem =
+            typeof opts.system === 'string'
+              ? opts.system
+              : Array.isArray(opts.system)
+                ? opts.system
+                    .map((m: { content?: unknown }) =>
+                      typeof m?.content === 'string' ? m.content : '',
+                    )
+                    .join('\n\n')
+                : '';
           return {
             fullStream: (async function* () {
               yield Object.assign({ type: 'text-delta' }, { text: 'Noted.' });

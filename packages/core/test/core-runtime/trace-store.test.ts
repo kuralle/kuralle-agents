@@ -66,4 +66,26 @@ describe('TraceRecorder sinks', () => {
     const turn = recorder.finish({ text: '', toolResults: [] }).spans.find((span) => span.kind === 'turn');
     expect(turn?.attributes.agentId).toBe('specialist');
   });
+
+  test('emits cacheReadTokens and cacheWriteTokens on the turn span', () => {
+    const recorder = new TraceRecorder({ sessionId: 'session-cache' });
+    recorder.record({
+      channel: 'client',
+      type: 'done',
+      payload: {
+        sessionId: 'session-cache',
+        usage: {
+          inputTokens: 1000,
+          outputTokens: 20,
+          contextTokens: 1000,
+          cacheReadTokens: 800,
+          cacheWriteTokens: 150,
+        },
+      },
+    });
+    const turn = recorder.finish({ text: '', toolResults: [] }).spans.find((span) => span.kind === 'turn');
+    expect(turn?.attributes.cacheReadTokens).toBe(800);
+    expect(turn?.attributes.cacheWriteTokens).toBe(150);
+    expect(turn?.attributes.tokensIn).toBe(1000);
+  });
 });

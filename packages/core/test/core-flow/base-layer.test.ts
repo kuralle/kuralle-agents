@@ -10,6 +10,21 @@ import { setupDurableHarness } from '../core-durable/helpers.js';
 
 const stubModel = {} as import('ai').LanguageModel;
 
+function flattenSystem(system: unknown): string {
+  if (typeof system === 'string') return system;
+  if (Array.isArray(system)) {
+    return system
+      .map((m) =>
+        m && typeof m === 'object' && 'content' in m && typeof (m as { content: unknown }).content === 'string'
+          ? (m as { content: string }).content
+          : '',
+      )
+      .filter(Boolean)
+      .join('\n\n');
+  }
+  return '';
+}
+
 function captureStream(captured: Record<string, unknown>[]) {
   mock.module('ai', () => {
     const actual = require('ai');
@@ -55,8 +70,8 @@ describe('agent base layer (ADR 0001)', () => {
     await runFlow(flow, runState, new TextDriver(), ctx);
 
     const turn = captured[0]!;
-    expect(String(turn.system)).toContain('BASE_PERSONA_SAFETY'); // base composed
-    expect(String(turn.system)).toContain('NODE_GREET_RULE'); // node layered on top
+    expect(flattenSystem(turn.system)).toContain('BASE_PERSONA_SAFETY'); // base composed
+    expect(flattenSystem(turn.system)).toContain('NODE_GREET_RULE'); // node layered on top
     expect(Object.keys((turn.tools as Record<string, unknown>) ?? {})).toContain('faq_lookup');
   });
 
@@ -89,7 +104,7 @@ describe('agent base layer (ADR 0001)', () => {
 
     const extraction = captured[0]!;
     const toolNames = Object.keys((extraction.tools as Record<string, unknown>) ?? {});
-    expect(String(extraction.system)).toContain('BASE_PERSONA_SAFETY'); // base still present
+    expect(flattenSystem(extraction.system)).toContain('BASE_PERSONA_SAFETY'); // base still present
     expect(toolNames).not.toContain('faq_lookup'); // global tools NOT exposed during extraction
     expect(toolNames.some((n) => n.startsWith('submit_'))).toBe(true); // only the submit tool
   });

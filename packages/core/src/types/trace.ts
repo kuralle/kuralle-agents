@@ -28,6 +28,10 @@ export interface AgentSpan {
     tokensOut?: number;
     /** Context-window occupancy at this turn (last prompt tokens — a snapshot, not a delta). */
     contextTokens?: number;
+    /** Prompt-cache read tokens for this turn (delta). */
+    cacheReadTokens?: number;
+    /** Prompt-cache write / creation tokens for this turn (delta). */
+    cacheWriteTokens?: number;
   };
 }
 

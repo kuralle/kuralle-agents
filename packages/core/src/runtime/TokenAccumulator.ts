@@ -15,6 +15,7 @@ export class TokenAccumulator {
   private _cumTotal = 0;
   private _peakUtil = 0;
   private _cumCacheRead = 0;
+  private _cumCacheWrite = 0;
 
   constructor(private readonly contextWindow?: number) {}
 
@@ -24,11 +25,13 @@ export class TokenAccumulator {
     outputTokens: number;
     totalTokens: number;
     cacheReadTokens?: number;
+    cacheWriteTokens?: number;
   }): void {
     this._cumInput = saved.inputTokens;
     this._cumOutput = saved.outputTokens;
     this._cumTotal = saved.totalTokens;
     this._cumCacheRead = saved.cacheReadTokens ?? 0;
+    this._cumCacheWrite = saved.cacheWriteTokens ?? 0;
   }
 
   record(usage: TurnUsageInput): TurnUsage {
@@ -37,6 +40,9 @@ export class TokenAccumulator {
     this._cumTotal += usage.totalTokens;
     if (typeof usage.cacheReadTokens === 'number') {
       this._cumCacheRead += usage.cacheReadTokens;
+    }
+    if (typeof usage.cacheWriteTokens === 'number') {
+      this._cumCacheWrite += usage.cacheWriteTokens;
     }
 
     const utilization =
@@ -59,11 +65,19 @@ export class TokenAccumulator {
     return turn;
   }
 
-  get cumulative(): { inputTokens: number; outputTokens: number; totalTokens: number } {
+  get cumulative(): {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+  } {
     return {
       inputTokens: this._cumInput,
       outputTokens: this._cumOutput,
       totalTokens: this._cumTotal,
+      cacheReadTokens: this._cumCacheRead,
+      cacheWriteTokens: this._cumCacheWrite,
     };
   }
 

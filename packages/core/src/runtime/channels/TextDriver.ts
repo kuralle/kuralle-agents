@@ -4,7 +4,7 @@ import type { ChannelDriver } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
 import { streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
-import { buildNodePrompt, resolveInstructions, composeSystem } from '../../flow/nodeBuilders.js';
+import { buildNodePrompt, resolveInstructions, composeSystem, systemMessagesText } from '../../flow/nodeBuilders.js';
 import { systemNoteBlocks } from '../systemNotes.js';
 import { buildToolSet } from '../../tools/effect/index.js';
 import type { Tool, AnyTool } from '../../types/effectTool.js';
@@ -16,7 +16,7 @@ import { resolveMaxSteps } from '../policies/limits.js';
 import { speakWithHostControl } from './streaming/hostControlSpeak.js';
 import type { TokenSource } from './streaming/speakGated.js';
 import { resolveStreamMode } from './streaming/mode.js';
-import { appendGatherBlocks, resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
+import { resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import { applyPromptCache } from '../promptCache.js';
 import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
 import { resolveStructuredDecide } from '../../flow/choiceMatch.js';
@@ -68,18 +68,18 @@ export class TextDriver implements ChannelDriver {
     const toolMessages: ModelMessage[] = [];
     const model = replyNode.model ?? ctx.model;
     const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
-    const baseSystem = composeSystem(
+    const stableSystem = composeSystem(
       ctx.baseInstructions,
       nodeSystem,
       ctx.runState.state,
       ctx.skillPrompt,
       ctx.workingMemoryPrompt,
     );
-    const system = appendGatherBlocks(baseSystem, [
+    const volatileSystemBlocks = [
       gather.retrievalBlock,
       gather.memoryBlock,
       ...systemNoteBlocks(ctx.runState),
-    ]);
+    ];
     const messages: ModelMessage[] = [...ctx.runState.messages];
     const aiTools = this.resolveTools(node, ctx);
     const maxSteps = resolveMaxSteps(ctx.limits, this.maxSteps);
@@ -91,12 +91,19 @@ export class TextDriver implements ChannelDriver {
     const source: TokenSource = {
       async *[Symbol.asyncIterator]() {
         for (let step = 0; step < maxSteps; step += 1) {
-          const cached = applyPromptCache(model, ctx.session.id, messages);
+          const cached = applyPromptCache({
+            model,
+            sessionId: ctx.session.id,
+            messages,
+            tools: aiTools,
+            stableSystem,
+            volatileSystemBlocks,
+          });
           const result = streamText({
             model,
-            system,
+            ...(cached.system ? { system: cached.system } : {}),
             messages: cached.messages,
-            tools: aiTools,
+            tools: cached.tools ?? aiTools,
             abortSignal: ctx.abortSignal,
             ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
           });
@@ -215,12 +222,14 @@ export class TextDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
-    const system = composeSystem(
-      ctx.baseInstructions,
-      resolveInstructions(node.instructions, ctx.runState.state),
-      ctx.runState.state,
-      ctx.skillPrompt,
-      ctx.workingMemoryPrompt,
+    const system = systemMessagesText(
+      composeSystem(
+        ctx.baseInstructions,
+        resolveInstructions(node.instructions, ctx.runState.state),
+        ctx.runState.state,
+        ctx.skillPrompt,
+        ctx.workingMemoryPrompt,
+      ),
     );
     return resolveStructuredDecide(node, ctx, system);
   }
@@ -281,14 +290,23 @@ function addTurnUsage(
   const outputTokens = usage.outputTokens ?? 0;
   const totalTokens = usage.totalTokens ?? inputTokens + outputTokens;
   const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
+  const cacheWriteTokens = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
   if (!current) {
-    return { inputTokens, outputTokens, totalTokens, cacheReadTokens, contextTokens: inputTokens };
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      contextTokens: inputTokens,
+    };
   }
   return {
     inputTokens: current.inputTokens + inputTokens,
     outputTokens: current.outputTokens + outputTokens,
     totalTokens: current.totalTokens + totalTokens,
     cacheReadTokens: (current.cacheReadTokens ?? 0) + cacheReadTokens,
+    cacheWriteTokens: (current.cacheWriteTokens ?? 0) + cacheWriteTokens,
     contextTokens: inputTokens,
   };
 }

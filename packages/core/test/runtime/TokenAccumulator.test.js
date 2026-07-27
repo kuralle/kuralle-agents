@@ -51,6 +51,7 @@ test('TokenAccumulator: toSessionTraceFields matches cumulative and cache sum', 
   acc.record(
     baseTurn({
       cacheReadTokens: 3,
+      cacheWriteTokens: 7,
       inputTokens: 10,
       outputTokens: 5,
       totalTokens: 15,
@@ -59,6 +60,7 @@ test('TokenAccumulator: toSessionTraceFields matches cumulative and cache sum', 
   const fields = acc.toSessionTraceFields();
   assert.strictEqual(fields.totalInputTokens, 10);
   assert.strictEqual(fields.totalCacheReadTokens, 3);
+  assert.strictEqual(acc.cumulative.cacheWriteTokens, 7);
   assert.strictEqual(fields.peakContextUtilization, 10 / 2000);
   assert.ok(Array.isArray(fields.perTurnUsage));
 });

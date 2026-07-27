@@ -129,10 +129,18 @@ export function buildKnowledgeTool(
   });
 }
 
-export function appendGatherBlocks(system: string, blocks: Array<string | undefined>): string {
-  const extras = blocks.filter((block): block is string => Boolean(block?.trim()));
-  if (extras.length === 0) {
-    return system;
-  }
-  return system + extras.join('');
+import type { SystemModelMessage } from 'ai';
+import { appendVolatileSystemBlocks } from '../promptCache.js';
+
+/**
+ * Append volatile gather blocks AFTER the stable system head.
+ * Ordering is load-bearing for prompt caching: the system breakpoint sits on
+ * the last stable message; volatile retrieval/memory/run-notes must not pull
+ * into the cached prefix.
+ */
+export function appendGatherBlocks(
+  system: SystemModelMessage[],
+  blocks: Array<string | undefined>,
+): SystemModelMessage[] {
+  return appendVolatileSystemBlocks(system, blocks);
 }

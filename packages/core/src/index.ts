@@ -219,11 +219,25 @@ export type { OverflowRecoveryResult } from './runtime/contextOverflow.js';
 export {
   applyPromptCache,
   applyAnthropicCacheControl,
+  applyConversationCacheControl,
+  applyLastToolCacheBreakpoint,
+  applySystemCacheBreakpoint,
+  appendVolatileSystemBlocks,
   buildOpenAIResponsesProviderOptions,
+  detectPromptCachePath,
+  getAnthropicCacheMarker,
   isAnthropicLanguageModel,
   isOpenAIResponsesModel,
+  mergeGatewayAutoCaching,
 } from './runtime/promptCache.js';
-export type { AnthropicCacheTtl, OpenAIResponsesCompactOptions } from './runtime/promptCache.js';
+export type {
+  AnthropicCacheMarker,
+  AnthropicCacheTtl,
+  ApplyPromptCacheInput,
+  ApplyPromptCacheResult,
+  OpenAIResponsesCompactOptions,
+  PromptCachePath,
+} from './runtime/promptCache.js';
 
 export {
   handoffFilters,

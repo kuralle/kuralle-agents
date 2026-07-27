@@ -90,6 +90,8 @@ describe('F1: real token usage budgeting', () => {
       inputTokens: 500,
       outputTokens: 50,
       totalTokens: 550,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
     });
     expect(runState!.state[LAST_PROMPT_TOKENS_KEY]).toBe(500);
   });

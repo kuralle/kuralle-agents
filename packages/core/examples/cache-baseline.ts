@@ -1,23 +1,14 @@
 /**
- * Baseline: what fraction of our prompt tokens are actually served from cache?
- *
- * Eve's metric (packages/eve/src/harness/prompt-cache.ts + the input-cache-rate eval):
+ * Input-cache rate measurement (Eve's formula).
  *
  *     rate = Σ cache_read / (Σ cache_read + Σ uncached_input)
  *     uncached_input = input_total − cache_read − cache_write
  *
- * They assert > 99% on a multi-step tool session and note that a lagging final
- * breakpoint collapses it to 45–60%.
- *
- * Two honest limits on what this can tell us:
- *
- *  - `cacheWriteTokens` is not plumbed anywhere in kuralle, so the denominator here
- *    treats writes as uncached. That biases the rate DOWN on the first turn and is
- *    correct from then on.
- *  - No ANTHROPIC_API_KEY in this environment, so this measures the OpenAI path.
- *    Our breakpoint code (`applyAnthropicCacheControl`) does not run for OpenAI at
- *    all — OpenAI caches automatically above ~1024 tokens. So this is a baseline for
- *    the path we actually run in practice, NOT a test of our breakpoint logic.
+ * Limits:
+ *  - Without ANTHROPIC_API_KEY this measures the OpenAI path (automatic caching
+ *    + promptCacheKey). Our Anthropic breakpoint code does not run there.
+ *  - With ANTHROPIC_API_KEY set, a second block exercises the direct-Anthropic
+ *    breakpoint path (the only path where applyPromptCache places markers).
  *
  * Run: bun packages/core/examples/cache-baseline.ts
  */
@@ -41,58 +32,84 @@ const fetch_archive_page = defineTool({
   execute: async ({ page }) => ({ page, content: PAGES[page] ?? 'not found' }),
 });
 
-// A deliberately large stable instruction block — this is the part that SHOULD be
-// cached across every turn, and the part we currently cannot mark a breakpoint on.
 const BIG_INSTRUCTIONS =
   'You are an archive assistant. Follow these rules precisely.\n' +
-  Array.from({ length: 80 }, (_, i) => `Rule ${i + 1}: always cite the page number you read.`).join('\n');
+  Array.from({ length: 80 }, (_, i) => `Rule ${i + 1}: always cite the page number you read.`).join(
+    '\n',
+  );
 
-const agent = defineAgent({
-  id: 'archivist',
-  model: openai('gpt-4.1-mini'),
-  instructions: BIG_INSTRUCTIONS,
-  globalTools: { fetch_archive_page },
-});
+type UsageTotals = { read: number; write: number; input: number; steps: number };
 
-const runtime = createRuntime({ agents: [agent], defaultAgentId: 'archivist' });
+async function runSession(
+  label: string,
+  model: unknown,
+  sessionId: string,
+): Promise<{ rate: number; totals: UsageTotals }> {
+  const agent = defineAgent({
+    id: 'archivist',
+    model: model as never,
+    instructions: BIG_INSTRUCTIONS,
+    globalTools: { fetch_archive_page },
+  });
+  const runtime = createRuntime({ agents: [agent], defaultAgentId: 'archivist' });
+  const totals: UsageTotals = { read: 0, write: 0, input: 0, steps: 0 };
 
-let read = 0;
-let input = 0;
-let steps = 0;
-
-async function turn(sessionId: string, text: string) {
-  const handle = runtime.run({ sessionId, input: text });
-  for await (const part of handle.events as AsyncIterable<StreamPart>) {
-    if (part.type === 'done' && part.payload?.usage) {
-      const u = part.payload.usage as {
-        inputTokens?: number;
-        cacheReadTokens?: number;
-      };
-      steps += 1;
-      input += u.inputTokens ?? 0;
-      read += u.cacheReadTokens ?? 0;
-      console.log(
-        `  turn ${steps}: input=${u.inputTokens ?? 0} cacheRead=${u.cacheReadTokens ?? 0}`,
-      );
+  async function turn(text: string) {
+    const handle = runtime.run({ sessionId, input: text });
+    for await (const part of handle.events as AsyncIterable<StreamPart>) {
+      if (part.type === 'done' && part.payload?.usage) {
+        const u = part.payload.usage;
+        totals.steps += 1;
+        totals.input += u.inputTokens ?? 0;
+        totals.read += u.cacheReadTokens ?? 0;
+        totals.write += u.cacheWriteTokens ?? 0;
+        console.log(
+          `  turn ${totals.steps}: input=${u.inputTokens ?? 0} cacheRead=${u.cacheReadTokens ?? 0} cacheWrite=${u.cacheWriteTokens ?? 0}`,
+        );
+      }
     }
+    await handle;
   }
-  await handle;
+
+  console.log(`── ${label} ──`);
+  await turn('Fetch archive pages 1, 2 and 3, one tool call at a time, then say PAGES LOADED.');
+  await turn('Now fetch archive page 4 the same way, then say DONE.');
+
+  const uncached = Math.max(0, totals.input - totals.read - totals.write);
+  const rate = totals.read + uncached === 0 ? 0 : totals.read / (totals.read + uncached);
+
+  console.log(`\n── ${label} rate ──`);
+  console.log(`  total input tokens : ${totals.input}`);
+  console.log(`  served from cache  : ${totals.read}`);
+  console.log(`  cache writes       : ${totals.write}`);
+  console.log(`  uncached           : ${uncached}`);
+  console.log(`  INPUT-CACHE RATE   : ${(rate * 100).toFixed(2)}%   (Eve's bar: > 99%)`);
+  console.log(
+    rate === 0
+      ? '\n  ZERO — nothing is being served from cache on this path.'
+      : `\n  ${(rate * 100).toFixed(1)}% cached.`,
+  );
+  return { rate, totals };
 }
 
-console.log('── multi-step tool session (Eve requires >= 4 model steps for the metric to mean anything) ──');
-await turn('cache-baseline', 'Fetch archive pages 1, 2 and 3, one tool call at a time, then say PAGES LOADED.');
-await turn('cache-baseline', 'Now fetch archive page 4 the same way, then say DONE.');
-
-const uncached = Math.max(0, input - read);
-const rate = read + uncached === 0 ? 0 : read / (read + uncached);
-
-console.log('\n── baseline ──');
-console.log(`  total input tokens : ${input}`);
-console.log(`  served from cache  : ${read}`);
-console.log(`  uncached           : ${uncached}`);
-console.log(`  INPUT-CACHE RATE   : ${(rate * 100).toFixed(2)}%   (Eve's bar: > 99%)`);
-console.log(
-  rate === 0
-    ? '\n  ZERO — nothing is being served from cache on this path.'
-    : `\n  ${(rate * 100).toFixed(1)}% cached.`,
+const openaiResult = await runSession(
+  'OpenAI gpt-4.1-mini (promptCacheKey path)',
+  openai('gpt-4.1-mini'),
+  'cache-baseline-openai',
 );
+
+// Direct-Anthropic measurement requires both ANTHROPIC_API_KEY and
+// `@ai-sdk/anthropic` (not a core dependency). Breakpoint placement is
+// covered by unit tests (detectPromptCachePath / applyPromptCache).
+if (process.env.ANTHROPIC_API_KEY) {
+  console.log(
+    '\n── Anthropic direct: set up `@ai-sdk/anthropic` locally to measure the breakpoint path ──',
+  );
+} else {
+  console.log(
+    '\n── Anthropic direct skipped (no ANTHROPIC_API_KEY) — breakpoint path covered by unit tests ──',
+  );
+}
+
+console.log(`\n── summary ──`);
+console.log(`  openai INPUT-CACHE RATE: ${(openaiResult.rate * 100).toFixed(2)}%`);

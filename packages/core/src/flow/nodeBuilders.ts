@@ -1,4 +1,4 @@
-import type { ToolSet } from 'ai';
+import type { SystemModelMessage, ToolSet } from 'ai';
 import type { Instructions } from '../types/agentConfig.js';
 import type { FlowState, ReplyNode, CollectNode } from '../types/flow.js';
 import type { ResolvedNode } from '../types/channel.js';
@@ -23,20 +23,33 @@ export function buildNodePrompt(node: ReplyNode, state: FlowState): string {
   return resolveInstructions(node.instructions, state);
 }
 
-/** Compose the agent base layer (ADR 0001) into a node's system prompt: the
- *  agent's base instructions (persona / safety / grounding) prefix the node's
- *  own instructions. Node instructions layer ON TOP — they never replace the
- *  base. Base resolves against the current state so dynamic base prompts work. */
+/**
+ * Compose the agent base layer (ADR 0001) into a stable system-message array.
+ * Returned as `SystemModelMessage[]` so a cache breakpoint can annotate the
+ * last message — a single string cannot carry per-message providerOptions.
+ */
 export function composeSystem(
   base: Instructions | undefined,
   nodeSystem: string,
   state: FlowState,
   skillPrompt?: string,
   workingMemoryPrompt?: string,
-): string {
+): SystemModelMessage[] {
   const baseText = base ? resolveInstructions(base, state) : '';
-  return [baseText, skillPrompt, workingMemoryPrompt, nodeSystem]
+  const content = [baseText, skillPrompt, workingMemoryPrompt, nodeSystem]
     .filter((s) => s && s.trim())
+    .join('\n\n');
+  if (!content.trim()) {
+    return [];
+  }
+  return [{ role: 'system', content }];
+}
+
+/** Flatten system messages to a string for callers that still need one (e.g. structured decide). */
+export function systemMessagesText(messages: readonly SystemModelMessage[]): string {
+  return messages
+    .map((m) => (typeof m.content === 'string' ? m.content : ''))
+    .filter((s) => s.trim())
     .join('\n\n');
 }
 

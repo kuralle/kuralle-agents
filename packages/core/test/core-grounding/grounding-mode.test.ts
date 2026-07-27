@@ -285,10 +285,19 @@ describe('declared grounding contract', () => {
       const actual = require('ai');
       return {
         ...actual,
-        streamText: (opts: { tools?: Record<string, unknown>; system?: string }) => {
+        streamText: (opts: { tools?: Record<string, unknown>; system?: unknown }) => {
           seenToolSets.push(Object.keys(opts.tools ?? {}).sort());
           if (seenToolSets.length >= 3) {
-            capturedSpecialistSystem = opts.system ?? '';
+            capturedSpecialistSystem =
+              typeof opts.system === 'string'
+                ? opts.system
+                : Array.isArray(opts.system)
+                  ? opts.system
+                      .map((m: { content?: unknown }) =>
+                        typeof m?.content === 'string' ? m.content : '',
+                      )
+                      .join('\n\n')
+                  : '';
           }
           const turn = modelTurns.shift();
           if (!turn) {

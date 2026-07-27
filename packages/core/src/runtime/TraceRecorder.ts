@@ -176,6 +176,12 @@ export class TraceRecorder {
             if (typeof part.payload.usage.contextTokens === 'number') {
               this.root.attributes.contextTokens = part.payload.usage.contextTokens;
             }
+            if (typeof part.payload.usage.cacheReadTokens === 'number') {
+              this.root.attributes.cacheReadTokens = part.payload.usage.cacheReadTokens;
+            }
+            if (typeof part.payload.usage.cacheWriteTokens === 'number') {
+              this.root.attributes.cacheWriteTokens = part.payload.usage.cacheWriteTokens;
+            }
           }
           this.close(at);
           break;

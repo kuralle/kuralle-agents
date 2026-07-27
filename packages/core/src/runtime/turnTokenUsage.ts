@@ -10,6 +10,7 @@ export interface PersistedTokenUsage {
   outputTokens: number;
   totalTokens: number;
   cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 function readPersistedUsage(state: Record<string, unknown>): PersistedTokenUsage | undefined {
@@ -51,6 +52,7 @@ export async function persistTurnUsageFromTurn(ctx: RunContext, turn: TurnResult
     outputTokens: turn.usage.outputTokens,
     totalTokens: turn.usage.totalTokens,
     cacheReadTokens: turn.usage.cacheReadTokens,
+    cacheWriteTokens: turn.usage.cacheWriteTokens,
     latencyMs: 0,
   });
 
@@ -78,6 +80,10 @@ export interface TraceTurnUsage {
   outputTokens?: number;
   /** Context-window occupancy — the last prompt's token count (not a per-turn delta). */
   contextTokens?: number;
+  /** Prompt-cache read tokens for THIS turn (delta). */
+  cacheReadTokens?: number;
+  /** Prompt-cache write tokens for THIS turn (delta). */
+  cacheWriteTokens?: number;
 }
 
 /** Per-turn token usage for a trace's `done` event. `baseline` is the cumulative
@@ -98,5 +104,7 @@ export function computeTurnTraceUsage(
     inputTokens: Math.max(0, now.inputTokens - base.inputTokens),
     outputTokens: Math.max(0, now.outputTokens - base.outputTokens),
     ...(contextTokens === undefined ? {} : { contextTokens }),
+    cacheReadTokens: Math.max(0, (now.cacheReadTokens ?? 0) - (base.cacheReadTokens ?? 0)),
+    cacheWriteTokens: Math.max(0, (now.cacheWriteTokens ?? 0) - (base.cacheWriteTokens ?? 0)),
   };
 }

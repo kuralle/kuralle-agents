@@ -1,130 +1,222 @@
 /**
- * Anthropic prompt caching — `system_and_3` layout.
+ * Provider prompt caching.
  *
- * Researched against AI SDK v6 docs: cache breakpoints are configured
- * via `providerOptions.anthropic.cacheControl = { type: 'ephemeral' }`
- * at the message OR message-part level. The provider supports up to 4
- * concurrent breakpoints. Cache creation cost is returned in
- * `providerMetadata.anthropic.cacheCreationInputTokens`; cache reads in
- * `cacheReadInputTokens` — both already plumbed through kuralle's
- * \`TokenAccumulator\` via the existing inputTokenDetails wiring.
+ * Anthropic-direct path (Eve layout — four breakpoints, Anthropic's max):
+ *   1. Last ToolSet entry — caches tool definitions across turns
+ *   2. Last stable SystemModelMessage — caches the system prefix
+ *   3. Last conversation message regardless of role — writes newest
+ *      content (often a tool result) into the cache on the same request
+ *   4. Most recent assistant message before it — automatic cache advance
  *
- * `system_and_3` strategy:
- *   - 1 cache breakpoint on the system message (the largest stable prefix)
- *   - up to 3 breakpoints on the last 3 non-system messages
+ * Gateway string models get `gateway.caching = "auto"` and never receive
+ * breakpoints. OpenAI Responses models get `promptCacheKey` + truncation.
  *
- * Why these 4 specifically:
- *   - The system prompt is the largest stable prefix and benefits most
- *   - The last 3 non-system messages cover the typical "second turn"
- *     where the model re-reads everything — caching them turns the
- *     ~75% cost reduction on for multi-turn within-session.
- *
- * TTL options: '5m' (Anthropic default) or '1h'. The 1h tier costs more
- * but extends caching across short user idle periods + cross-session
- * within an hour.
+ * Volatile system blocks (retrieval, memory, run notes) must sit AFTER the
+ * stable head so the system breakpoint does not pull them into the cache.
  */
-import type { JSONValue, ModelMessage } from 'ai';
+import type { JSONValue, ModelMessage, SystemModelMessage, ToolSet } from 'ai';
 
-export type AnthropicCacheTtl = '5m' | '1h';
+export type PromptCachePath =
+  | { readonly kind: 'gateway-auto' }
+  | { readonly kind: 'anthropic-direct' }
+  | { readonly kind: 'none' };
 
-interface AnthropicCacheControl {
-  type: 'ephemeral';
-  ttl?: '1h'; // '5m' is implicit when omitted
+/**
+ * Dual-namespace marker: Anthropic Messages API reads `anthropic.cacheControl`;
+ * Bedrock Converse reads `bedrock.cachePoint`. Providers ignore foreign namespaces.
+ */
+export interface AnthropicCacheMarker {
+  readonly anthropic: {
+    readonly cacheControl: { readonly type: 'ephemeral'; readonly ttl?: '1h' };
+  };
+  readonly bedrock: {
+    readonly cachePoint: { readonly type: 'default' };
+  };
 }
 
-function buildCacheControl(ttl: AnthropicCacheTtl): AnthropicCacheControl {
-  return ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' };
+/** @deprecated Prefer ephemeral default; TTL only applies to anthropic.cacheControl. */
+export type AnthropicCacheTtl = '5m' | '1h';
+
+const ANTHROPIC_CACHE_MARKER: AnthropicCacheMarker = Object.freeze({
+  anthropic: Object.freeze({
+    cacheControl: Object.freeze({ type: 'ephemeral' as const }),
+  }),
+  bedrock: Object.freeze({
+    cachePoint: Object.freeze({ type: 'default' as const }),
+  }),
+});
+
+const ANTHROPIC_CACHE_MARKER_1H: AnthropicCacheMarker = Object.freeze({
+  anthropic: Object.freeze({
+    cacheControl: Object.freeze({ type: 'ephemeral' as const, ttl: '1h' as const }),
+  }),
+  bedrock: Object.freeze({
+    cachePoint: Object.freeze({ type: 'default' as const }),
+  }),
+});
+
+export function detectPromptCachePath(model: unknown): PromptCachePath {
+  if (typeof model === 'string') {
+    return { kind: 'gateway-auto' };
+  }
+  if (!model || typeof model !== 'object') {
+    return { kind: 'none' };
+  }
+
+  const m = model as { provider?: unknown; modelId?: unknown };
+  const providerName = typeof m.provider === 'string' ? m.provider.toLowerCase() : '';
+  if (providerName.includes('anthropic')) {
+    return { kind: 'anthropic-direct' };
+  }
+
+  const modelId = typeof m.modelId === 'string' ? m.modelId.toLowerCase() : '';
+  if (providerName.includes('bedrock') && modelId.includes('anthropic')) {
+    return { kind: 'anthropic-direct' };
+  }
+
+  return { kind: 'none' };
+}
+
+export function getAnthropicCacheMarker(ttl: AnthropicCacheTtl = '5m'): AnthropicCacheMarker {
+  return ttl === '1h' ? ANTHROPIC_CACHE_MARKER_1H : ANTHROPIC_CACHE_MARKER;
 }
 
 /**
- * Returns a SHALLOW-COPIED message list with cache_control markers
- * applied to the system message (if present) + the last 3 non-system
- * messages. Original input is not mutated.
- *
- * When `messages` has no system message, only the last 3 non-system
- * messages get breakpoints. When fewer than 3 non-system messages
- * exist, all of them get breakpoints (Anthropic accepts <4 fine).
+ * True when breakpoints should be placed (direct Anthropic / Bedrock-Anthropic).
+ * String gateway ids are NOT anthropic-direct — they take gateway-auto.
+ */
+export function isAnthropicLanguageModel(model: unknown): boolean {
+  return detectPromptCachePath(model).kind === 'anthropic-direct';
+}
+
+export function mergeGatewayAutoCaching(
+  base: Readonly<Record<string, unknown>> | undefined,
+): Record<string, unknown> {
+  const baseGateway =
+    base?.gateway !== undefined && typeof base.gateway === 'object' && base.gateway !== null
+      ? (base.gateway as Record<string, unknown>)
+      : undefined;
+
+  return {
+    ...base,
+    gateway: {
+      ...baseGateway,
+      caching: baseGateway?.caching ?? 'auto',
+    },
+  };
+}
+
+export function applyLastToolCacheBreakpoint(
+  tools: ToolSet,
+  marker: AnthropicCacheMarker,
+): ToolSet {
+  const entries = Object.entries(tools);
+  if (entries.length === 0) {
+    return tools;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (let i = 0; i < entries.length; i++) {
+    const [name, tool] = entries[i] as [string, Record<string, unknown>];
+    if (i === entries.length - 1) {
+      const existingProviderOptions =
+        tool.providerOptions !== undefined && typeof tool.providerOptions === 'object'
+          ? (tool.providerOptions as Record<string, unknown>)
+          : undefined;
+      result[name] = {
+        ...tool,
+        providerOptions: {
+          ...existingProviderOptions,
+          ...marker,
+        },
+      };
+    } else {
+      result[name] = tool;
+    }
+  }
+
+  return result as ToolSet;
+}
+
+/**
+ * Marks the last stable system message. Callers must append volatile blocks
+ * AFTER this so retrieval/memory/run-notes stay outside the cached prefix.
+ */
+export function applySystemCacheBreakpoint(
+  instructions: readonly SystemModelMessage[],
+  marker: AnthropicCacheMarker,
+): SystemModelMessage[] {
+  if (instructions.length === 0) return [...instructions];
+
+  const result = [...instructions];
+  const last = result[result.length - 1]!;
+  result[result.length - 1] = {
+    ...last,
+    providerOptions: {
+      ...last.providerOptions,
+      ...marker,
+    },
+  };
+  return result;
+}
+
+/**
+ * Final breakpoint on the last message (any role) + assistant anchor before it.
+ * A lagging final breakpoint caps effective hit rate near 50%.
+ */
+export function applyConversationCacheControl(
+  messages: readonly ModelMessage[],
+  marker: AnthropicCacheMarker,
+): ModelMessage[] {
+  if (messages.length === 0) {
+    return [...messages];
+  }
+
+  const out = [...messages];
+
+  const mark = (index: number): void => {
+    const message = out[index];
+    if (message === undefined) return;
+    out[index] = {
+      ...message,
+      providerOptions: {
+        ...message.providerOptions,
+        ...marker,
+      },
+    };
+  };
+
+  mark(out.length - 1);
+
+  for (let i = out.length - 2; i >= 0; i--) {
+    if (out[i]?.role === 'assistant') {
+      mark(i);
+      break;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * @deprecated Use {@link applyConversationCacheControl}. Kept as a named export
+ * for existing callers; places the last-message + assistant-anchor breakpoints.
  */
 export function applyAnthropicCacheControl(
   messages: ModelMessage[],
   ttl: AnthropicCacheTtl = '5m',
 ): ModelMessage[] {
-  if (!messages || messages.length === 0) return messages;
-  const cacheControl = buildCacheControl(ttl);
-
-  const result = messages.slice();
-
-  let breakpoints = 0;
-
-  // 1. System message (always the first if present in this list, but
-  //    kuralle typically passes the system prompt SEPARATELY to
-  //    streamText. This branch only fires when callers put system msgs
-  //    inside the messages array — handoff markers, etc.)
-  const systemIdx = result.findIndex((m) => m.role === 'system');
-  if (systemIdx !== -1) {
-    result[systemIdx] = withProviderOptions(result[systemIdx]!, cacheControl);
-    breakpoints += 1;
-  }
-
-  // 2. Last 3 non-system messages, oldest-first within that window.
-  const remaining = 4 - breakpoints;
-  const nonSystemIndices: number[] = [];
-  for (let i = 0; i < result.length; i++) {
-    if (result[i]!.role !== 'system') nonSystemIndices.push(i);
-  }
-  const lastN = nonSystemIndices.slice(-remaining);
-  for (const idx of lastN) {
-    result[idx] = withProviderOptions(result[idx]!, cacheControl);
-  }
-
-  return result;
+  return applyConversationCacheControl(messages, getAnthropicCacheMarker(ttl));
 }
 
-/**
- * Returns true when the model is an Anthropic Claude model (direct
- * provider, OpenRouter pass-through, or Vertex Anthropic). Used to
- * gate the cache-control wiring — applying it to non-Anthropic
- * providers is a wasted property on the message that other providers
- * ignore but it adds clutter we don't need to ship.
- */
-export function isAnthropicLanguageModel(model: unknown): boolean {
-  if (!model || typeof model !== 'object') return false;
-  const m = model as { provider?: unknown; modelId?: unknown };
-  const provider = typeof m.provider === 'string' ? m.provider.toLowerCase() : '';
-  const modelId = typeof m.modelId === 'string' ? m.modelId.toLowerCase() : '';
-  if (provider.includes('anthropic')) return true;
-  if (modelId.startsWith('claude') || modelId.startsWith('anthropic/')) return true;
-  if (modelId.includes('claude-')) return true;
-  return false;
-}
-
-// ── PR-14b: OpenAI Responses compact ────────────────────────────────
-
-/**
- * Detect an OpenAI Responses-API model. The Responses API supports
- * `truncation: 'auto'` (server-side context-overflow safety net) and
- * `promptCacheKey` (per-session cache routing). Both flow through
- * AI SDK v6's `providerOptions.openai`.
- *
- * Matches:
- *   - provider === 'openai' (direct + OpenRouter pass-through "openai/…")
- *   - modelId on the Responses family (gpt-4o, gpt-4.1, gpt-5, o3, o4-mini, etc.)
- *
- * Conservative: when in doubt, returns false (it's safer to skip the
- * provider option than to send a 400-causing field to a non-OpenAI
- * provider).
- */
 export function isOpenAIResponsesModel(model: unknown): boolean {
   if (!model || typeof model !== 'object') return false;
   const m = model as { provider?: unknown; modelId?: unknown };
   const provider = typeof m.provider === 'string' ? m.provider.toLowerCase() : '';
   const modelId = typeof m.modelId === 'string' ? m.modelId.toLowerCase() : '';
   if (!provider.includes('openai') && !modelId.startsWith('openai/')) {
-    // Non-OpenAI → skip.
     return false;
   }
-  // Responses-family Whitelist. Conservative — only the families we
-  // know AI SDK routes through the Responses API in v6.
   const stripped = modelId.startsWith('openai/') ? modelId.slice('openai/'.length) : modelId;
   return (
     stripped.startsWith('gpt-4o') ||
@@ -137,37 +229,10 @@ export function isOpenAIResponsesModel(model: unknown): boolean {
 }
 
 export interface OpenAIResponsesCompactOptions {
-  /**
-   * Server-side safety net. With 'auto', when the prompt exceeds the
-   * model's context window, the OpenAI Responses API drops items from
-   * the beginning of the conversation (silently) instead of throwing
-   * a 400. With 'disabled' (default), the request fails — our
-   * client-side overflow recovery (PR-1) catches the error and
-   * retries.
-   *
-   * Recommended setup: enable 'auto' on top of our existing client-
-   * side compaction. The client path stays the primary strategy
-   * (cheaper, observable, controllable); the server fallback covers
-   * the rare cases where our compaction is mid-flight or hasn't
-   * caught up yet.
-   */
   truncationFallback?: 'auto' | 'disabled';
-  /**
-   * When true, sets `providerOptions.openai.promptCacheKey` to a
-   * stable per-session value derived from session.id. OpenAI's
-   * automatic prompt-cache (free, >1024 tokens) gets significantly
-   * higher hit rates when subsequent turns from the same session
-   * route to the same cache slot.
-   */
   useSessionAsPromptCacheKey?: boolean;
 }
 
-/**
- * Build the provider-options bag for an OpenAI Responses model call.
- * Returns null when the options compile to nothing (caller can skip
- * merging entirely). The session id is required for the cache-key
- * branch but ignored otherwise.
- */
 export function buildOpenAIResponsesProviderOptions(
   opts: OpenAIResponsesCompactOptions,
   sessionId: string,
@@ -182,26 +247,77 @@ export function buildOpenAIResponsesProviderOptions(
   return Object.keys(out).length > 0 ? out : null;
 }
 
+export function appendVolatileSystemBlocks(
+  stable: readonly SystemModelMessage[],
+  blocks: Array<string | undefined>,
+): SystemModelMessage[] {
+  const extras = blocks.filter((block): block is string => Boolean(block?.trim()));
+  if (extras.length === 0) {
+    return [...stable];
+  }
+  return [
+    ...stable,
+    ...extras.map((content) => ({ role: 'system' as const, content })),
+  ];
+}
+
+export interface ApplyPromptCacheInput {
+  model: unknown;
+  sessionId: string;
+  messages: ModelMessage[];
+  tools?: ToolSet;
+  /** Stable system prefix (persona, node instructions). Receives the system breakpoint. */
+  stableSystem?: SystemModelMessage[];
+  /** Volatile blocks appended AFTER the system breakpoint (retrieval, memory, run notes). */
+  volatileSystemBlocks?: Array<string | undefined>;
+  providerOptions?: Record<string, Record<string, JSONValue>>;
+}
+
+export interface ApplyPromptCacheResult {
+  messages: ModelMessage[];
+  system?: SystemModelMessage[];
+  tools?: ToolSet;
+  providerOptions?: Record<string, Record<string, JSONValue>>;
+}
+
 /**
- * Single wiring point for provider prompt caching, called by the driver
- * `streamText` sites. Gated by the conservative detectors so non-matching
- * providers are untouched:
- *   - Anthropic → applies `cache_control` breakpoints (caches the system+tools
- *     prefix + recent history; ~75% input-cost + TTFT off multi-turn turns).
- *   - OpenAI Responses → sets `promptCacheKey` (= sessionId, pins same-session
- *     turns to one cache slot) + `truncation: 'auto'` overflow safety net.
- * Returns the (possibly transformed) messages + an optional `providerOptions`
- * bag ready to spread into `streamText`. Default-on: both are no-ops on
- * providers that ignore the fields.
+ * Single wiring point for provider prompt caching. Volatile system blocks are
+ * always appended after the stable head — even on non-Anthropic paths — so
+ * ordering is a contract of this function, not of call-site accident.
  */
-export function applyPromptCache(
-  model: unknown,
-  sessionId: string,
-  messages: ModelMessage[],
-): { messages: ModelMessage[]; providerOptions?: Record<string, Record<string, JSONValue>> } {
-  const outMessages = isAnthropicLanguageModel(model)
-    ? applyAnthropicCacheControl(messages)
-    : messages;
+export function applyPromptCache(input: ApplyPromptCacheInput): ApplyPromptCacheResult {
+  const {
+    model,
+    sessionId,
+    messages,
+    tools,
+    stableSystem = [],
+    volatileSystemBlocks = [],
+    providerOptions: baseProviderOptions,
+  } = input;
+
+  const path = detectPromptCachePath(model);
+  let outMessages = messages;
+  let outTools = tools;
+  let outSystem = [...stableSystem];
+  let providerOptions: Record<string, Record<string, JSONValue>> | undefined =
+    baseProviderOptions ? { ...baseProviderOptions } : undefined;
+
+  if (path.kind === 'gateway-auto') {
+    const merged = mergeGatewayAutoCaching(providerOptions);
+    providerOptions = merged as Record<string, Record<string, JSONValue>>;
+    outSystem = appendVolatileSystemBlocks(outSystem, volatileSystemBlocks);
+  } else if (path.kind === 'anthropic-direct') {
+    const marker = getAnthropicCacheMarker();
+    if (outTools && Object.keys(outTools).length > 0) {
+      outTools = applyLastToolCacheBreakpoint(outTools, marker);
+    }
+    outSystem = applySystemCacheBreakpoint(outSystem, marker);
+    outSystem = appendVolatileSystemBlocks(outSystem, volatileSystemBlocks);
+    outMessages = applyConversationCacheControl(messages, marker);
+  } else {
+    outSystem = appendVolatileSystemBlocks(outSystem, volatileSystemBlocks);
+  }
 
   if (isOpenAIResponsesModel(model)) {
     const openai = buildOpenAIResponsesProviderOptions(
@@ -209,27 +325,20 @@ export function applyPromptCache(
       sessionId,
     );
     if (openai) {
-      return { messages: outMessages, providerOptions: { openai: openai as Record<string, JSONValue> } };
+      providerOptions = {
+        ...providerOptions,
+        openai: {
+          ...(providerOptions?.openai ?? {}),
+          ...(openai as Record<string, JSONValue>),
+        },
+      };
     }
   }
-  return { messages: outMessages };
-}
 
-function withProviderOptions(msg: ModelMessage, cacheControl: AnthropicCacheControl): ModelMessage {
-  const existing = msg.providerOptions ?? {};
-  const existingAnthropic = existing.anthropic ?? {};
-  const cacheControlJson =
-    cacheControl.ttl === '1h'
-      ? ({ type: 'ephemeral' as const, ttl: '1h' as const })
-      : ({ type: 'ephemeral' as const });
   return {
-    ...msg,
-    providerOptions: {
-      ...existing,
-      anthropic: {
-        ...existingAnthropic,
-        cacheControl: cacheControlJson,
-      },
-    },
+    messages: outMessages,
+    system: outSystem.length > 0 ? outSystem : undefined,
+    tools: outTools,
+    ...(providerOptions ? { providerOptions } : {}),
   };
 }
