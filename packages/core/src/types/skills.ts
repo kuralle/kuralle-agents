@@ -1,6 +1,12 @@
 export interface SkillMeta {
   name: string;
   description: string;
+  /**
+   * Where the skill's SKILL.md lives, when it is file-backed. Surfaced in the available-skills
+   * catalog so the model can read the file directly rather than inferring a location.
+   * Undefined for inline skills, which have no file.
+   */
+  path?: string;
 }
 
 export interface SkillLike {

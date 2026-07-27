@@ -91,7 +91,7 @@ async function discoverSkills(
         skills.set(parsed.name, {
           root,
           folder: entry,
-          meta: { name: parsed.name, description: parsed.description },
+          meta: { name: parsed.name, description: parsed.description, path: skillPath },
           body: parsed.body,
         });
       } catch (err) {

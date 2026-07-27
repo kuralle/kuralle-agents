@@ -41,7 +41,12 @@ export class SkillsCapability implements Capability {
 
   getPromptSections(): PromptSection[] {
     if (!this.metas.length) return [];
-    const lines = this.metas.map((m) => `- ${m.name}: ${m.description}`).join('\n');
+    // Include the path for file-backed skills so the model can read SKILL.md directly
+    // instead of guessing a location — the difference between dispatching a skill by
+    // reference and merely naming it.
+    const lines = this.metas
+      .map((m) => `- ${m.name}: ${m.description}${m.path ? ` (path: ${m.path})` : ''}`)
+      .join('\n');
     return [
       {
         role: 'context',
