@@ -35,14 +35,22 @@ export function composeSystem(
   skillPrompt?: string,
   workingMemoryPrompt?: string,
 ): SystemModelMessage[] {
+  // TWO messages, deliberately. A cache breakpoint is placed on a system message, and it
+  // only buys anything if that message is byte-identical between turns. Joining everything
+  // into one message meant the marked message changed the moment a flow node prompt or a
+  // working-memory line appeared — so the whole system region re-billed on every flow turn
+  // (measured: 93.20% cache rate on a plain session, 77.20% once a flow entered).
+  //
+  // head    = base instructions + skills. Stable for the life of the agent.
+  // volatile = working memory + node prompt. Changes turn to turn, by design.
   const baseText = base ? resolveInstructions(base, state) : '';
-  const content = [baseText, skillPrompt, workingMemoryPrompt, nodeSystem]
-    .filter((s) => s && s.trim())
-    .join('\n\n');
-  if (!content.trim()) {
-    return [];
-  }
-  return [{ role: 'system', content }];
+  const head = [baseText, skillPrompt].filter((s) => s && s.trim()).join('\n\n');
+  const volatile = [workingMemoryPrompt, nodeSystem].filter((s) => s && s.trim()).join('\n\n');
+
+  const messages: SystemModelMessage[] = [];
+  if (head.trim()) messages.push({ role: 'system', content: head });
+  if (volatile.trim()) messages.push({ role: 'system', content: volatile });
+  return messages;
 }
 
 /** Flatten system messages to a string for callers that still need one (e.g. structured decide). */

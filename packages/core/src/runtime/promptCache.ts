@@ -139,8 +139,15 @@ export function applyLastToolCacheBreakpoint(
 }
 
 /**
- * Marks the last stable system message. Callers must append volatile blocks
- * AFTER this so retrieval/memory/run-notes stay outside the cached prefix.
+ * Marks the STABLE HEAD — the first system message — so everything up to and including it
+ * is cached.
+ *
+ * `composeSystem` returns [head, volatile]: the head is base instructions + skills and is
+ * byte-identical across turns; the volatile message carries working memory and the flow
+ * node prompt, which change every turn by design. Marking the LAST message here would put
+ * the breakpoint on the volatile one, caching nothing across a flow transition — that is
+ * the bug this exists to prevent, and it cost ~16 points of cache rate (93.20% on a plain
+ * session vs 77.20% once a flow entered).
  */
 export function applySystemCacheBreakpoint(
   instructions: readonly SystemModelMessage[],
@@ -149,11 +156,11 @@ export function applySystemCacheBreakpoint(
   if (instructions.length === 0) return [...instructions];
 
   const result = [...instructions];
-  const last = result[result.length - 1]!;
-  result[result.length - 1] = {
-    ...last,
+  const head = result[0]!;
+  result[0] = {
+    ...head,
     providerOptions: {
-      ...last.providerOptions,
+      ...head.providerOptions,
       ...marker,
     },
   };

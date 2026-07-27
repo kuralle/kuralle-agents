@@ -79,16 +79,21 @@ describe('isAnthropicLanguageModel', () => {
 });
 
 describe('applySystemCacheBreakpoint', () => {
-  it('marks the last system message with anthropic + bedrock namespaces', () => {
+  // Contract changed deliberately. This used to mark the LAST message, on the assumption
+  // that callers passed only stable content and appended volatile blocks afterwards.
+  // composeSystem now returns [stable head, volatile], so "last" is the volatile message —
+  // marking it would cache nothing across a flow transition, which is the ~16-point drop
+  // this whole change exists to fix.
+  it('marks the STABLE HEAD, leaving the volatile message outside the cached prefix', () => {
     const instructions: SystemModelMessage[] = [
-      { role: 'system', content: 'stable-a' },
-      { role: 'system', content: 'stable-b' },
+      { role: 'system', content: 'stable-head' },
+      { role: 'system', content: 'volatile-node-prompt' },
     ];
     const out = applySystemCacheBreakpoint(instructions, marker);
-    expect(anthropicCache(out[0]!)).toBeUndefined();
-    expect(anthropicCache(out[1]!)).toEqual({ type: 'ephemeral' });
-    expect(bedrockPoint(out[1]!)).toEqual({ type: 'default' });
-    expect(instructions[1]!.providerOptions).toBeUndefined();
+    expect(anthropicCache(out[0]!)).toEqual({ type: 'ephemeral' });
+    expect(bedrockPoint(out[0]!)).toEqual({ type: 'default' });
+    expect(anthropicCache(out[1]!)).toBeUndefined();
+    expect(instructions[0]!.providerOptions).toBeUndefined();
   });
 });
 
