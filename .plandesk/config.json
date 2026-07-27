@@ -1,6 +1,10 @@
 {
-  "version": "plandesk-connect-v1",
+  "version": "plandesk-connect-v2",
   "serverUrl": "http://127.0.0.1:7526",
-  "projectId": "53884329-347e-4aa1-9c72-914f800b6970",
-  "projectName": "aria-flow"
+  "orgId": "00000000-0000-4000-8000-0000000000a1",
+  "workspaceId": "MIkqU4vJYn4CH06LX3LF4TQQMn9arNBG",
+  "workspaceName": "aria-flow",
+  "projectIds": [
+    "53884329-347e-4aa1-9c72-914f800b6970"
+  ]
 }
