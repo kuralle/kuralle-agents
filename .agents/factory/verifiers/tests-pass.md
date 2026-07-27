@@ -1,12 +1,16 @@
 ---
 type: verifier
-command: npm test
-enabled: false
+command: bun run test
+enabled: true
 ---
 
 # Tests pass
 
-Example verifier. A verifier is a fast, deterministic per-change check:
-`command` runs from the repo root and exit code 0 means pass. One check per
-file; the filename is the verifier's name. Set `enabled: true` (or delete
-this file and add your own) once the command matches this repository.
+Runs every package's suite. `bun run test` fans out via `--filter '*'`; `npm test`
+resolves to the same script, so either works — this uses bun to match how the repo
+is developed.
+
+Exit code 0 means pass. Note what a green suite does *not* prove: that a test for
+the requirement exists at all. `protocol.md` covers that separately — diff the
+per-package test counts against the pre-dispatch baseline, because a requirement
+whose package gained zero tests is unproven however green the run.
