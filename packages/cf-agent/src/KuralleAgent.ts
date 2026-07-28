@@ -369,13 +369,24 @@ export abstract class KuralleAgent<
     const url = new URL(request.url);
 
     // Durable resume: deliver a signal to a suspended run (e.g. a paid checkout
-    // link). Body: { signalId: string, name: string, payload?: unknown }.
+    // link). Body: { signalId, requestId, name, decision?, reason?, payload? }.
     if (request.method === 'POST' && url.pathname.endsWith('/resume')) {
       const body = (await request.json().catch(() => null)) as SignalDelivery | null;
-      if (!body || typeof body.signalId !== 'string' || typeof body.name !== 'string') {
-        return Response.json({ error: 'signalId and name are required' }, { status: 400 });
+      if (
+        !body ||
+        typeof body.signalId !== 'string' ||
+        typeof body.requestId !== 'string' ||
+        typeof body.name !== 'string'
+      ) {
+        return Response.json(
+          { error: 'signalId, requestId, and name are required' },
+          { status: 400 },
+        );
       }
-      const { text } = await this.resumeWithSignal(body);
+      const { text } = await this.resumeWithSignal({
+        ...body,
+        actor: { id: 'cloudflare-resume', type: 'service' },
+      });
       return Response.json({ ok: true, text });
     }
 

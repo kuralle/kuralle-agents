@@ -98,9 +98,24 @@ const rt2 = createRuntime({
 // Turn 1: suspends at ctx.approve — the tool must NOT fire.
 await rt2.run({ sessionId: 'appr', input: 'charge me', driver: approvalDriver() });
 const afterSuspend = charges;
+const pausedSession = await store2.get('appr');
+const waitingFor = (
+  pausedSession as unknown as {
+    durableRuns?: Record<string, {
+      runState?: { waitingFor?: { requestId: string } };
+    }>;
+  }
+).durableRuns?.appr?.runState?.waitingFor;
+if (!waitingFor) throw new Error('approval did not persist its request identity');
 
 // Turn 2: deliver the approval signal; the run resumes and the tool fires.
-const approval = { signalId: 'sig-1', name: '__approval', payload: { approved: true, by: 'supervisor' } };
+const approval = {
+  signalId: 'sig-1',
+  requestId: waitingFor.requestId,
+  name: '__approval',
+  actor: { id: 'supervisor', type: 'user' as const },
+  decision: 'approve' as const,
+};
 await rt2.run({ sessionId: 'appr', input: 'approved', driver: approvalDriver(), signalDelivery: approval });
 const afterResume = charges;
 

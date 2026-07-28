@@ -76,8 +76,10 @@ describe('control-flow signals are not tool failures', () => {
     const resumedState = await reloadRunState(harness.runStore, 'approve-run');
     await recordSignalDelivery(harness.runStore, resumedState, {
       signalId: 'sig-1',
+      requestId: resumedState.waitingFor!.requestId,
       name: APPROVAL_SIGNAL,
-      payload: { approved: true },
+      actor: { id: 'supervisor', type: 'user' },
+      decision: 'approve',
     });
 
     const results: unknown[] = [];
@@ -118,8 +120,10 @@ describe('control-flow signals are not tool failures', () => {
     const resumed = await reloadRunState(harness.runStore, 'deny-run');
     await recordSignalDelivery(harness.runStore, resumed, {
       signalId: 'sig-deny',
+      requestId: resumed.waitingFor!.requestId,
       name: APPROVAL_SIGNAL,
-      payload: { approved: false, by: 'supervisor' },
+      actor: { id: 'supervisor', type: 'user' },
+      decision: 'deny',
     });
 
     const emitted: StreamPart[] = [];

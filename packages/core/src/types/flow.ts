@@ -10,6 +10,13 @@ import type { ChoiceOption } from './selection.js';
 
 export type FlowState = Record<string, unknown>;
 
+export interface FlowStateBoundary {
+  /** Maps parent/root state into a new isolated frame. Omitted means no inbound state. */
+  input?: (source: Readonly<FlowState>) => FlowState;
+  /** Selects values exported to the parent/root frame on successful completion. */
+  output?: (state: Readonly<FlowState>) => Record<string, unknown>;
+}
+
 export interface Flow {
   name: string;
   description: string;
@@ -18,6 +25,8 @@ export interface Flow {
   instructions?: string;
   context?: ContextStrategy;
   maxOscillations?: number;
+  /** Explicit state mapping at flow boundaries. The active frame is otherwise isolated. */
+  state?: FlowStateBoundary;
   /**
    * Enter this flow directly when routing says it owns the request, instead of
    * offering `enter_flow` and letting the model choose.
@@ -68,10 +77,17 @@ export type Transition =
   | { end: string }
   | 'stay';
 
-export interface ReplyNode {
+export interface NodeVerification {
+  verify?: NodeVerify;
+  outputSchema?: StandardSchemaV1;
+}
+
+export interface ReplyNode extends NodeVerification {
   kind: 'reply';
   id: string;
   instructions: Instructions;
+  /** Framework-emitted text for transactional outcomes that must not be model-authored. */
+  response?: (state: Readonly<FlowState>) => string;
   tools?: ToolSet | ((state: FlowState) => ToolSet);
   /** Which tool layers the model sees on this node. Default `'open'`. */
   toolScope?: NodeToolScope;
@@ -83,10 +99,15 @@ export interface ReplyNode {
   next?: (turn: TurnResult, state: FlowState) => Transition | Promise<Transition>;
 }
 
-export interface CollectNode {
+export interface CollectNode extends NodeVerification {
   kind: 'collect';
   id: string;
   schema: StandardSchemaV1;
+  /**
+   * Field names used for deterministic missing-field prompts. Zod object schemas expose
+   * these automatically; other Standard Schema implementations should declare them.
+   * Completion still validates the complete object asynchronously either way.
+   */
   required?: string[];
   /** Extraction-only guidance for the (non-speaking) field extraction turn.
    *  This text is NEVER shown to the user — see `ask` for user-facing copy. */
@@ -101,11 +122,9 @@ export interface CollectNode {
   onComplete: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
 }
 
-export interface ActionNode {
+export interface ActionNode extends NodeVerification {
   kind: 'action';
   id: string;
-  verify?: NodeVerify;
-  outputSchema?: StandardSchemaV1;
   run: (state: FlowState, ctx: ActionContext) => Transition | Promise<Transition>;
 }
 
@@ -115,7 +134,7 @@ export interface ConfirmGate {
   onAmbiguous?: Transition;
 }
 
-export interface DecideNode {
+export interface DecideNode extends NodeVerification {
   kind: 'decide';
   id: string;
   instructions: Instructions;

@@ -384,6 +384,7 @@ export type {
   DecideNode,
   ConfirmGate,
   NodeGrounding,
+  FlowStateBoundary,
 } from './types/flow.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
@@ -407,6 +408,7 @@ export type {
   FlowTransitionPayload,
   HandoffPayload,
   InterruptedPayload,
+  HitlInterrupt,
   PausedPayload,
   ConversationOutcomePayload,
   InteractivePayload,
@@ -461,6 +463,12 @@ export type {
   RunState,
   StepRecord,
   SignalDelivery,
+  SignalActor,
+  InterruptRequest,
+  InterruptDecisionRecord,
+  FrozenToolOperation,
+  PersistedFlowFrame,
+  PersistedFlowPark,
   SessionDurableRuns,
   PersistedRun,
 } from './runtime/durable/types.js';

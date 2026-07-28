@@ -263,11 +263,7 @@ export function runTurn(): InboundMiddleware {
         result = await ctx.rt.runtime.deliverSignal({
           key: ctx.key,
           sessionId: ctx.sessionId ?? `${ctx.key.platform}:${ctx.key.businessId}:${ctx.key.threadId}`,
-          signal: {
-            signalId: ctx.event.data.signalId,
-            name: ctx.event.data.name,
-            payload: ctx.event.data.payload,
-          },
+          signal: ctx.event.data,
         });
       } else if (ctx.event.kind === 'message' && ctx.input !== undefined) {
         result = await ctx.rt.runtime.runTurn({
@@ -287,7 +283,13 @@ export function runTurn(): InboundMiddleware {
         await ctx.rt.ownership.claim(ctx.event.data.threadId, 'human');
       }
 
-      if (result.suspended) return { kind: 'suspended', signalId: result.suspended.signalId };
+      if (result.suspended) {
+        return {
+          kind: 'suspended',
+          requestId: result.suspended.requestId,
+          signalName: result.suspended.signalName,
+        };
+      }
       return { kind: 'ran', parts: result.parts };
     },
   };

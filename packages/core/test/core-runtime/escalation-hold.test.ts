@@ -156,7 +156,13 @@ describe('REQ-B2: a run parked on approval/suspend is NOT held', () => {
     const t3 = await collectParts(
       runtime.run({
         sessionId: 'ap',
-        signalDelivery: { signalId: `cli-${Date.now()}`, name: '__approval', payload: { approved: true } },
+        signalDelivery: {
+          signalId: `cli-${Date.now()}`,
+          requestId: stillPending.waitingFor!.requestId,
+          name: '__approval',
+          actor: { id: 'mgr', type: 'user' },
+          decision: 'approve',
+        },
         driver,
       }),
     );

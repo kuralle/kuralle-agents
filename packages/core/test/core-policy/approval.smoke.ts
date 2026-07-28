@@ -112,8 +112,10 @@ describeLive(`core-v2 durable approval smoke (${lm?.label ?? 'no live key'})`, (
       sessionId,
       signalDelivery: {
         signalId: `sig-approval-${sessionId}`,
+        requestId: pausedState!.waitingFor!.requestId,
         name: '__approval',
-        payload: { approved: true, by: 'supervisor' },
+        actor: { id: 'supervisor', type: 'user' },
+        decision: 'approve',
       },
       driver: new TextDriver(),
     });

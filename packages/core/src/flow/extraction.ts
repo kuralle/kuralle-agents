@@ -58,25 +58,25 @@ export function computeMissingFields(
  * supplied the wrong primitive completed the node and the flow acted on it. The schema was
  * only ever used to derive key names, never to check a value.
  *
- * Only validates synchronously — StandardSchema permits an async validator, and the
- * completion gate is sync. Zod is sync, which covers every schema in this repo; an async
- * validator degrades to the old presence-only behaviour rather than blocking.
+ * Validation is awaited so async Standard Schema implementations receive the same
+ * field-level diagnostics as synchronous schemas.
  *
  * NOTE this catches SHAPE, not REFERENT. `unitId: "12B"` is a perfectly valid string; that a
  * unit by that id does not exist is a domain fact only a tool boundary can know.
  */
-export function invalidCollectFields(node: CollectNode, data: Record<string, unknown>): string[] {
+export async function invalidCollectFields(
+  node: CollectNode,
+  data: Record<string, unknown>,
+): Promise<string[]> {
   const validate = (node.schema as StandardSchemaV1)['~standard']?.validate;
   if (typeof validate !== 'function') return [];
-  let result: unknown;
+  let result: StandardSchemaV1.Result<unknown>;
   try {
-    result = validate(data);
+    result = await validate(data);
   } catch {
     return [];
   }
-  if (result instanceof Promise) return [];
-  const issues = (result as { issues?: readonly { path?: readonly unknown[] }[] } | undefined)
-    ?.issues;
+  const issues = 'issues' in result ? result.issues : undefined;
   if (!issues?.length) return [];
   const fields = new Set<string>();
   for (const issue of issues) {
@@ -94,18 +94,19 @@ export function invalidCollectFields(node: CollectNode, data: Record<string, unk
   return [...fields];
 }
 
-export function schemaSatisfied(node: CollectNode, state: FlowState): boolean {
+export async function schemaSatisfied(node: CollectNode, state: FlowState): Promise<boolean> {
   const data = getCollectData(state, node.id);
   if (computeMissingFields(node, data).length > 0) return false;
-  return invalidCollectFields(node, data).length === 0;
+  const result = await node.schema['~standard'].validate(data);
+  return !('issues' in result);
 }
 
 /** Whether merging tool results into current collect state would satisfy the node. */
-export function wouldCollectSatisfyAfterToolResults(
+export async function wouldCollectSatisfyAfterToolResults(
   node: CollectNode,
   state: FlowState,
   toolResults: Array<{ name: string; result: unknown }>,
-): boolean {
+): Promise<boolean> {
   const submitName = submitToolName(node.id);
   let data = getCollectData(state, node.id);
   for (const record of toolResults) {
@@ -122,21 +123,14 @@ export function wouldCollectSatisfyAfterToolResults(
   return schemaSatisfied(node, probeState);
 }
 
-export function projectCollectData(node: CollectNode, state: FlowState): unknown {
-  // Hand onComplete EVERY field the node collected (all schema keys present in
-  // the collected data) — not just the required subset. Projecting only the
-  // required fields silently dropped optional extracted values (e.g. a welcome
-  // node that also captures occasion/recipient), so onComplete could never read
-  // them. The schema is the contract for what a collect node yields.
+export async function projectCollectData(node: CollectNode, state: FlowState): Promise<unknown> {
   const data = getCollectData(state, node.id);
-  const fields = inferRequiredFields(node.schema);
-  const projected: Record<string, unknown> = {};
-  for (const field of fields) {
-    if (field in data) {
-      projected[field] = data[field];
-    }
+  const result = await node.schema['~standard'].validate(data);
+  if ('issues' in result) {
+    const message = result.issues.map((issue) => issue.message).join('; ');
+    throw new Error(`Collect "${node.id}" completed with invalid data: ${message}`);
   }
-  return projected;
+  return result.value;
 }
 
 export function mergeExtractionData(

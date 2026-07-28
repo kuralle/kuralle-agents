@@ -9,6 +9,7 @@ import { systemNoteBlocks } from '../systemNotes.js';
 import { applyPromptCache } from '../promptCache.js';
 import { resolveNodeTools } from './resolveNodeTools.js';
 import { addTurnUsage, languageModelId } from './turnUsage.js';
+import { currentFlowState } from '../../flow/flowState.js';
 
 /**
  * Shared, NON-SPEAKING field extraction for `collect` nodes, used by every
@@ -28,11 +29,12 @@ export async function runSilentExtraction(
   agentToolDefs: Record<string, AnyTool> = {},
 ): Promise<TurnResult> {
   const replyNode = node.node as ReplyNode;
-  const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+  const state = currentFlowState(ctx.runState);
+  const nodeSystem = node.prompt || buildNodePrompt(replyNode, state);
   const stableSystem = composeSystem(
     ctx.baseInstructions,
     nodeSystem,
-    ctx.runState.state,
+    state,
     ctx.skillPrompt,
     ctx.workingMemoryPrompt,
   );
@@ -149,7 +151,7 @@ export async function runSilentExtraction(
       if (
         submitReturned &&
         !submitFailed &&
-        (node.extractionSatisfied?.(out.toolResults) ?? false)
+        (await node.extractionSatisfied?.(out.toolResults) ?? false)
       ) {
         break;
       }

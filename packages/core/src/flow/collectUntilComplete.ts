@@ -25,6 +25,7 @@ import {
 } from './extraction.js';
 import { normalizeTransition } from './normalizeTransition.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
+import { currentFlowState } from './flowState.js';
 
 function appendAssistantMessage(run: RunState, text: string): void {
   if (!text.trim()) {
@@ -46,6 +47,7 @@ export async function collectUntilComplete(
   ctx: RunContext,
   options?: { agent?: AgentConfig; activeFlowName?: string },
 ): Promise<NormalizedTransition> {
+  const state = currentFlowState(run);
   const bindingFlow = options?.agent?.flows?.some(
     (flow) => flow.name === options.activeFlowName && flow.binding,
   );
@@ -55,9 +57,12 @@ export async function collectUntilComplete(
   // does not clear the pending buffer — completion no longer depends on that.
   let pendingConsumed = false;
   for (;;) {
-    if (schemaSatisfied(node, run.state) && (!hasPendingUserInput(ctx.session) || pendingConsumed)) {
-      const data = projectCollectData(node, run.state);
-      return normalizeTransition(await node.onComplete(data, run.state));
+    if (
+      (await schemaSatisfied(node, state)) &&
+      (!hasPendingUserInput(ctx.session) || pendingConsumed)
+    ) {
+      const data = await projectCollectData(node, state);
+      return normalizeTransition(await node.onComplete(data, state));
     }
 
     // Acquire THIS turn's fresh input before extracting. If input is pending,
@@ -82,7 +87,7 @@ export async function collectUntilComplete(
     }
     ctx.turnInputConsumed = true;
 
-    const turns = incrementCollectTurns(run.state, node.id);
+    const turns = incrementCollectTurns(state, node.id);
     const maxTurns = node.maxTurns ?? 10;
     if (turns > maxTurns) {
       // Running out of turns is not the same as finishing. Calling onComplete here with
@@ -90,11 +95,11 @@ export async function collectUntilComplete(
       // lets an action node act on it — for an intake SOP that means creating a record
       // against whatever happened to be in state. Complete only if the node is genuinely
       // satisfied; otherwise this is a failure to collect, and a human should see it.
-      if (schemaSatisfied(node, run.state)) {
-        const data = projectCollectData(node, run.state);
-        return normalizeTransition(await node.onComplete(data, run.state));
+      if (await schemaSatisfied(node, state)) {
+        const data = await projectCollectData(node, state);
+        return normalizeTransition(await node.onComplete(data, state));
       }
-      const missing = computeMissingFields(node, getCollectData(run.state, node.id));
+      const missing = computeMissingFields(node, getCollectData(state, node.id));
       return normalizeTransition({
         escalate:
           `Could not collect ${missing.join(', ')} for "${node.id}" after ${maxTurns} turns.`,
@@ -106,20 +111,20 @@ export async function collectUntilComplete(
     // re-asked) nor satisfying (so the node never completes) — the loop would spin to
     // maxTurns. Purging turns an invalid value back into a missing one, which the existing
     // ask/extract machinery already knows how to chase.
-    const collected = getCollectData(run.state, node.id);
-    const invalid = invalidCollectFields(node, collected);
+    const collected = getCollectData(state, node.id);
+    const invalid = await invalidCollectFields(node, collected);
     if (invalid.length > 0) {
       for (const field of invalid) delete collected[field];
-      setCollectData(run.state, node.id, collected);
+      setCollectData(state, node.id, collected);
     }
 
-    const missingBefore = computeMissingFields(node, getCollectData(run.state, node.id));
+    const missingBefore = computeMissingFields(node, getCollectData(state, node.id));
     const submitTool = createExtractionSubmitTool(node, missingBefore, {
       userMessage: peekLatestUserMessage(run),
     });
-    const resolved = resolveCollectExtractionNode(node, missingBefore, run.state, submitTool);
+    const resolved = resolveCollectExtractionNode(node, missingBefore, state, submitTool);
     resolved.extractionSatisfied = (toolResults) =>
-      wouldCollectSatisfyAfterToolResults(node, run.state, toolResults);
+      wouldCollectSatisfyAfterToolResults(node, state, toolResults);
     // Non-speaking extraction: the model's prose is DISCARDED (never emitted or
     // appended), so a collect turn cannot author narration that contradicts flow
     // state. Falls back to runAgentTurn for drivers without runExtraction; its
@@ -131,9 +136,9 @@ export async function collectUntilComplete(
     await persistTurnUsageFromTurn(ctx, turn);
     mergeExtractionFromTurn(node, run, turn, ctx);
 
-    const missingAfter = computeMissingFields(node, getCollectData(run.state, node.id));
+    const missingAfter = computeMissingFields(node, getCollectData(state, node.id));
     const advanced =
-      missingAfter.length < missingBefore.length || schemaSatisfied(node, run.state);
+      missingAfter.length < missingBefore.length || await schemaSatisfied(node, state);
 
     if (
       !advanced &&
@@ -186,12 +191,13 @@ function renderCollectAsk(node: CollectNode, missing: string[], state: RunState[
 }
 
 export function emitCollectAsk(node: CollectNode, run: RunState, ctx: RunContext): void {
-  const missing = computeMissingFields(node, getCollectData(run.state, node.id));
-  const ask = renderCollectAsk(node, missing, run.state);
+  const state = currentFlowState(run);
+  const missing = computeMissingFields(node, getCollectData(state, node.id));
+  const ask = renderCollectAsk(node, missing, state);
   // A recovery reason is author-written and shown ONCE, ahead of the ask. Both halves
   // are deterministic copy: the user learns what blocked them without the model getting
   // an opportunity to rephrase a business rule.
-  const reason = takePendingRecoveryMessage(run.state, node.id);
+  const reason = takePendingRecoveryMessage(state, node.id);
   const text = reason ? `${reason}\n\n${ask}`.trim() : ask;
   if (!text.trim()) {
     return;
@@ -212,11 +218,11 @@ function mergeExtractionFromTurn(
 ): void {
   const { merged, incoming } = mergeTurnExtraction(
     node,
-    run.state,
+    currentFlowState(run),
     turn.toolResults.map((record) => ({ name: record.name, result: record.result })),
   );
   if (merged && incoming) {
-    emitExtractionTelemetry(node, run.state, incoming, ctx.emit);
+    emitExtractionTelemetry(node, currentFlowState(run), incoming, ctx.emit);
   }
 }
 

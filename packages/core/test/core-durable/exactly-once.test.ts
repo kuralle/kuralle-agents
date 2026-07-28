@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { z } from 'zod';
 import { SuspendError } from '../../src/runtime/durable/RunStore.js';
 import { buildCtx, reloadRunState, setupDurableHarness } from './helpers.js';
 
@@ -71,10 +72,32 @@ describe('core-v2 durable pause', () => {
     expect(await runStore.getSteps(runState.runId)).toHaveLength(0);
 
     const { recordSignalDelivery } = await import('../../src/runtime/durable/replay.js');
+    await expect(
+      recordSignalDelivery(runStore, pausedState, {
+        signalId: 'wrong-request',
+        requestId: 'approval-for-a-different-operation',
+        name: '__approval',
+        actor: { id: 'supervisor', type: 'user' },
+        decision: 'approve',
+      }),
+    ).rejects.toThrow('does not match waitingFor');
+    await expect(
+      recordSignalDelivery(runStore, pausedState, {
+        signalId: 'wrong-name',
+        requestId: pausedState.waitingFor!.requestId,
+        name: 'payment_confirmed',
+        actor: { id: 'supervisor', type: 'user' },
+        decision: 'approve',
+      }),
+    ).rejects.toThrow('does not match waitingFor');
+    expect(await runStore.getSteps(runState.runId)).toHaveLength(0);
+
     const delivery = {
       signalId: 'sig-approve-1',
+      requestId: pausedState.waitingFor!.requestId,
       name: '__approval',
-      payload: { approved: true, by: 'supervisor' },
+      actor: { id: 'supervisor', type: 'user' as const },
+      decision: 'approve' as const,
     };
 
     const recorded = await recordSignalDelivery(runStore, pausedState, delivery);
@@ -113,7 +136,10 @@ describe('core-v2 durable pause', () => {
     const { session, runStore, runState } = await setupDurableHarness();
 
     async function signalHandler(ctx: Awaited<ReturnType<typeof buildCtx>>) {
-      return ctx.signal('payment_confirmed', { meta: { orderId: 'ord-9' } });
+      return ctx.signal('payment_confirmed', {
+        schema: z.object({ confirmed: z.literal(true) }),
+        meta: { orderId: 'ord-9' },
+      });
     }
 
     const ctx1 = await buildCtx({ session, runStore, runState, toolExecutor });
@@ -125,11 +151,25 @@ describe('core-v2 durable pause', () => {
     const { recordSignalDelivery } = await import('../../src/runtime/durable/replay.js');
     const delivery = {
       signalId: 'sig-pay-1',
+      requestId: pausedState.waitingFor!.requestId,
       name: 'payment_confirmed',
+      actor: { id: 'payments-webhook', type: 'service' as const },
       payload: { confirmed: true },
     };
 
-    await recordSignalDelivery(runStore, pausedState, delivery);
+    await expect(
+      recordSignalDelivery(
+        runStore,
+        pausedState,
+        { ...delivery, signalId: 'sig-pay-invalid', payload: { confirmed: 'yes' } },
+        { schema: z.object({ confirmed: z.literal(true) }) },
+      ),
+    ).rejects.toThrow('Invalid signal payload');
+    expect(await runStore.getSteps(runState.runId)).toHaveLength(0);
+
+    await recordSignalDelivery(runStore, pausedState, delivery, {
+      schema: z.object({ confirmed: z.literal(true) }),
+    });
 
     const ctx2 = await buildCtx({
       session,

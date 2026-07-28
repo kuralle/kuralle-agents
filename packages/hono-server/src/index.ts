@@ -65,7 +65,14 @@ export type ChatResponse = {
  */
 export type ResumeRequest = {
   sessionId: string;
-  signal: { signalId: string; name: string; payload?: unknown };
+  signal: {
+    signalId: string;
+    requestId: string;
+    name: string;
+    decision?: 'approve' | 'deny';
+    reason?: string;
+    payload?: unknown;
+  };
 };
 
 export type FlowRequest = {
@@ -516,8 +523,16 @@ export const createKuralleChatRouter = ({
 
   app.post('/api/chat/resume', async (c) => {
     const body = await parseJsonBody<ResumeRequest>(c);
-    if (!body?.sessionId || !body.signal?.signalId || !body.signal?.name) {
-      return c.json({ error: 'sessionId and signal { signalId, name } required' }, 400);
+    if (
+      !body?.sessionId ||
+      !body.signal?.signalId ||
+      !body.signal?.requestId ||
+      !body.signal?.name
+    ) {
+      return c.json(
+        { error: 'sessionId and signal { signalId, requestId, name } required' },
+        400,
+      );
     }
 
     return streamSSE(c, async (stream) => {
@@ -526,7 +541,11 @@ export const createKuralleChatRouter = ({
           sessionId: body.sessionId,
           signalDelivery: {
             signalId: body.signal.signalId,
+            requestId: body.signal.requestId,
             name: body.signal.name,
+            actor: { id: 'hono-resume', type: 'service' },
+            decision: body.signal.decision,
+            reason: body.signal.reason,
             payload: body.signal.payload,
           },
         })) {

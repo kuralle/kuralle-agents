@@ -9,7 +9,6 @@ import { setPendingUserInput } from './channels/inputBuffer.js';
 import { SessionRunStore } from './durable/SessionRunStore.js';
 import type { RunState } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
-import { recordSignalDelivery } from './durable/replay.js';
 import { resetTurnCount } from './policies/limits.js';
 import { addSystemNote } from './systemNotes.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
@@ -80,11 +79,6 @@ export async function openRun(
     await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
       latest.messages = [...latest.messages, ...options.historyDelta!];
     });
-  }
-
-  if (options.signalDelivery) {
-    await recordSignalDelivery(runStore, runState, options.signalDelivery);
-    runState = (await runStore.getRunState(runId)) ?? runState;
   }
 
   if (options.selection?.formData) {

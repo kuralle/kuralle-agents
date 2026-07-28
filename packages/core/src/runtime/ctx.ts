@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { LanguageModel } from 'ai';
+import type { LanguageModel, ModelMessage } from 'ai';
 import type { Session } from '../types/session.js';
 import type {
   EffectToolExecutor,
@@ -13,21 +13,46 @@ import type { ValidationCapability } from '../capabilities/ValidationCapability.
 import type { InputProcessor, OutputProcessor } from '../types/processors.js';
 import type { Limits } from '../types/guardrails.js';
 import type { FileSystem } from '../types/filesystem.js';
-import type { RunState, StepKind, StepRecord } from './durable/types.js';
+import type {
+  FrozenToolOperation,
+  InterruptRequest,
+  RunState,
+  SignalDelivery,
+  StepKind,
+  StepRecord,
+} from './durable/types.js';
 import type { RunStore } from './durable/RunStore.js';
 import { SuspendError } from './durable/RunStore.js';
 import {
   clockEffectKey,
+  approvalEffectKey,
   idempotencyKey,
   logicalRunId,
   pauseEffectKey,
-  toolEffectKey,
+  valueHash,
 } from './durable/idempotency.js';
-import { findStepByKey } from './durable/replay.js';
+import { findStepByKey, recordSignalDelivery } from './durable/replay.js';
 import { ToolApprovalDeniedError } from '../tools/effect/errors.js';
 import { needsApprovalPolicy, type Policy } from './policies/toolPolicy.js';
+import type { StandardSchemaV1 } from '../types/standard-schema.js';
+import type { HitlInterrupt } from '../types/stream.js';
+import { appendConversationAudit } from '../audit/record.js';
+import { toolDeniedResult, toolErrorResult } from '../tools/controlResults.js';
+import { z } from 'zod';
+import { toolResultMessage } from './channels/executeModelTool.js';
 
 const APPROVAL_SIGNAL = '__approval';
+const APPROVAL_DELIVERY_SCHEMA = z.object({}).strict();
+const APPROVAL_RESPONSE_SCHEMA = {
+  type: 'object',
+  required: ['requestId', 'decision'],
+  additionalProperties: false,
+  properties: {
+    requestId: { type: 'string' },
+    decision: { enum: ['approve', 'deny'] },
+    reason: { type: 'string' },
+  },
+};
 
 interface EffectClock {
   now(): number;
@@ -57,6 +82,39 @@ export interface CtxDeps {
   emit?: (part: StreamPart) => void;
   /** Decides allow / ask / deny per tool call. Defaults to honouring `needsApproval`. */
   policy?: Policy;
+  signalDelivery?: SignalDelivery;
+}
+
+function publicInterrupt(request: InterruptRequest): HitlInterrupt {
+  return {
+    requestId: request.requestId,
+    kind: request.kind,
+    signalName: request.signalName,
+    ...(request.operation
+      ? {
+          operation: {
+            toolCallId: request.operation.toolCallId,
+            toolName: request.operation.toolName,
+            args: request.operation.args,
+            argsHash: request.operation.argsHash,
+          },
+        }
+      : {}),
+    display: request.display,
+    responseSchema: request.responseSchema,
+    deadline: request.deadline,
+    allowedDecisions: request.allowedDecisions,
+    createdAt: request.createdAt,
+  };
+}
+
+function auditContext(deps: CtxDeps) {
+  return {
+    sessionId: deps.session.id,
+    conversationId: deps.session.conversationId,
+    userId: deps.session.userId,
+    agentId: deps.runState.activeAgentId,
+  };
 }
 
 function makeCtx(deps: CtxDeps): RunContext {
@@ -236,31 +294,79 @@ function makeCtx(deps: CtxDeps): RunContext {
   const effectRunId = () =>
     logicalRunId(deps.runState.runId, deps.runState.runEpoch);
 
+  let resumedToolOutcome: import('../types/run-context.js').ResumedToolOutcome | undefined;
+
+  const recordDecisionAudit = (decision: NonNullable<StepRecord['interruptDecision']>) => {
+    appendConversationAudit(deps.session, auditContext(deps), {
+      type: 'interrupt-decided',
+      requestId: decision.requestId,
+      signalId: decision.signalId,
+      actor: decision.actor,
+      ...(decision.decision !== undefined ? { decision: decision.decision } : {}),
+      ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+      decidedAt: new Date(decision.decidedAt).toISOString(),
+    });
+  };
+
   const suspendForSignal = async (
-    signalName: string,
-    callsite: string,
-    meta?: { deadline?: number; meta?: Record<string, unknown>; approval?: { title: string; description?: string } },
+    request: InterruptRequest,
+    recordRequested: boolean,
   ): Promise<never> => {
-    deps.runState.waitingFor = {
-      signalName,
-      callsite,
-      deadline: meta?.deadline,
-      meta: meta?.meta,
-      approval: meta?.approval,
-    };
+    if (recordRequested) {
+      appendConversationAudit(deps.session, auditContext(deps), {
+        type: 'interrupt-requested',
+        requestId: request.requestId,
+        signalName: request.signalName,
+        kind: request.kind,
+        ...(request.operation
+          ? {
+              operation: {
+                toolCallId: request.operation.toolCallId,
+                toolName: request.operation.toolName,
+                args: request.operation.args,
+                argsHash: request.operation.argsHash,
+              },
+            }
+          : {}),
+        display: request.display,
+        deadline: request.deadline,
+        allowedDecisions: request.allowedDecisions,
+        requestedAt: new Date(request.createdAt).toISOString(),
+      });
+    }
+    deps.runState.waitingFor = request;
     deps.runState.status = 'paused';
     deps.runState.updatedAt = Date.now();
     await deps.runStore.putRunState(deps.runState);
-    emit({ channel: 'internal', type: 'paused', payload: { waitingFor: signalName } });
-    throw new SuspendError(signalName);
+    emit({
+      channel: 'internal',
+      type: 'paused',
+      payload: {
+        waitingFor: request.signalName,
+        interrupt: publicInterrupt(request),
+      },
+    });
+    throw new SuspendError(request.signalName);
   };
 
   const pauseEffect = async (
     signalName: string,
-    meta?: { deadline?: number; meta?: Record<string, unknown>; approval?: { title: string; description?: string } },
+    options: {
+      kind: 'approval' | 'signal';
+      title: string;
+      description?: string;
+      schema: StandardSchemaV1;
+      responseSchema: Record<string, unknown>;
+      deadline?: number;
+      meta?: Record<string, unknown>;
+      callsite?: string;
+      resumeKey?: string;
+      requestId?: string;
+      operation?: FrozenToolOperation;
+    },
   ): Promise<unknown> => {
-    const callsite = consumeCallsite();
-    const key = pauseEffectKey(effectRunId(), callsite, signalName);
+    const callsite = options.callsite ?? consumeCallsite();
+    const key = options.resumeKey ?? pauseEffectKey(effectRunId(), callsite, signalName);
     const hit = findStepByKey(steps, key);
     if (hit) {
       if (hit.status === 'error' || hit.error) {
@@ -271,11 +377,75 @@ function makeCtx(deps: CtxDeps): RunContext {
       }
     }
 
-    await suspendForSignal(signalName, callsite, meta);
+    const existing =
+      deps.runState.waitingFor?.resumeKey === key
+        ? deps.runState.waitingFor
+        : undefined;
+    const createdAt = existing?.createdAt ?? Date.now();
+    const request: InterruptRequest = existing ?? {
+      requestId: options.requestId ?? `interrupt-${key.slice(0, 24)}`,
+      kind: options.kind,
+      signalName,
+      callsite,
+      resumeKey: key,
+      createdAt,
+      deadline: options.deadline ?? null,
+      ...(options.meta !== undefined ? { meta: options.meta } : {}),
+      display: {
+        title: options.title,
+        ...(options.description !== undefined ? { description: options.description } : {}),
+      },
+      allowedDecisions: options.kind === 'approval' ? ['approve', 'deny'] : [],
+      responseSchema: options.responseSchema,
+      ...(options.operation ? { operation: options.operation } : {}),
+    };
+
+    if (deps.signalDelivery) {
+      await recordSignalDelivery(
+        deps.runStore,
+        deps.runState,
+        deps.signalDelivery,
+        { schema: options.schema, onDecision: recordDecisionAudit },
+      );
+      const persisted = await deps.runStore.getSteps(deps.runState.runId);
+      steps.splice(0, steps.length, ...persisted);
+      const recorded = findStepByKey(steps, key);
+      if (!recorded || recorded.result === undefined) {
+        throw new Error(`Signal ${signalName} was recorded without a resumable result`);
+      }
+      return recorded.result;
+    }
+
+    await suspendForSignal(request, existing === undefined);
     throw new Error('unreachable');
   };
 
-  return {
+  const signal = async <T>(
+    name: string,
+    opts: {
+      schema: StandardSchemaV1<unknown, T>;
+      responseSchema?: Record<string, unknown>;
+      title?: string;
+      description?: string;
+      deadline?: number;
+      meta?: Record<string, unknown>;
+    },
+  ): Promise<T> => {
+    return pauseEffect(name, {
+      kind: 'signal',
+      title: opts.title ?? `Waiting for ${name}`,
+      description: opts.description,
+      schema: opts.schema,
+      responseSchema: opts.responseSchema ?? {
+        type: 'object',
+        description: `Payload for ${name}`,
+      },
+      deadline: opts.deadline,
+      meta: opts.meta,
+    }) as Promise<T>;
+  };
+
+  const context: RunContext = {
     session: deps.session,
     runState: deps.runState,
     runStore: deps.runStore,
@@ -323,37 +493,51 @@ function makeCtx(deps: CtxDeps): RunContext {
       return sites;
     },
     tool: async (name, args, options) => {
-      // needsApproval gate: a tool flagged `needsApproval` must be approved by a human
-      // before it runs. Approval is a durable pause (the `__approval` signal); on resume
-      // the recorded decision is replayed, then the tool effect runs exactly once. The
-      // approval pause consumes its own callsite ordinal before the tool effect, so the
-      // ordering is deterministic across replays. NOTE: the surrounding agent turn is not
-      // itself a replayable effect — this is fully deterministic for flow `action` tools;
-      // for model-issued tool calls, resume re-enters the agent turn.
       const def = options?.def ?? toolExecutorHolder.executor.getTool?.(name);
-      const verdict = await policyHolder.policy.decide({ toolName: name, args, def });
-      if (verdict.kind === 'deny') {
-        // Denied by rule, not by a person: no pause, nothing to wait for. Reuses the
-        // approval-denied path so the model still receives it as a readable result rather
-        // than a crash — "was not approved, do not retry" is correct for a rule too.
-        throw new ToolApprovalDeniedError(name, 'policy', verdict.reason);
-      }
-      if (verdict.kind === 'ask') {
-        const decision = (await pauseEffect(APPROVAL_SIGNAL, {
-          approval: { title: verdict.title ?? `Approve tool: ${name}` },
-        })) as { approved: boolean; by?: string };
-        if (!decision.approved) {
-          throw new ToolApprovalDeniedError(name, decision.by);
-        }
-      }
       const callsite = options?.callsite ?? consumeCallsite();
       const logicalId = effectRunId();
-      const key =
+      const baseEffectKey =
         def?.idempotencyKey != null
           ? def.idempotencyKey(args)
           : idempotencyKey(logicalId, callsite, { name, args });
       const imperative = options?.toolCallId === undefined;
       const toolCallId = options?.toolCallId ?? randomUUID();
+      const effectKey =
+        def?.replay === false
+          ? `${baseEffectKey}:nonreplay:${toolCallId}`
+          : baseEffectKey;
+      const verdict = await policyHolder.policy.decide({ toolName: name, args, def });
+      if (verdict.kind === 'deny') {
+        throw new ToolApprovalDeniedError(name, 'policy', verdict.reason);
+      }
+      if (verdict.kind === 'ask') {
+        const approvalKey = approvalEffectKey(logicalId, effectKey, name, args);
+        const operation: FrozenToolOperation = {
+          toolCallId,
+          toolName: name,
+          args,
+          argsHash: valueHash(args),
+          effectKey,
+          callsite,
+          ...(options?.index !== undefined ? { stepIndex: options.index } : {}),
+          source: imperative ? 'action' : 'model',
+          ...(deps.runState.activeFlow !== undefined ? { flow: deps.runState.activeFlow } : {}),
+          ...(deps.runState.activeNode !== undefined ? { node: deps.runState.activeNode } : {}),
+        };
+        const decision = (await pauseEffect(APPROVAL_SIGNAL, {
+          kind: 'approval',
+          title: verdict.title ?? `Approve tool: ${name}`,
+          schema: APPROVAL_DELIVERY_SCHEMA,
+          responseSchema: APPROVAL_RESPONSE_SCHEMA,
+          callsite,
+          resumeKey: approvalKey,
+          requestId: `approval-${approvalKey.slice(0, 24)}`,
+          operation,
+        })) as { approved: boolean; by?: string };
+        if (!decision.approved) {
+          throw new ToolApprovalDeniedError(name, decision.by);
+        }
+      }
       if (imperative) {
         emit({
           channel: 'internal',
@@ -383,28 +567,177 @@ function makeCtx(deps: CtxDeps): RunContext {
         return result;
       };
 
-      if (def?.replay === false) {
-        const auditKey = `${key}:${steps.length}:${options?.index ?? callsite}`;
-        return finishImperative(
-          await replayOrExecute(auditKey, 'tool', name, executeTool, { index: options?.index }),
-        );
-      }
-
       return finishImperative(
-        await replayOrExecute(key, 'tool', name, executeTool, { index: options?.index }),
+        await replayOrExecute(effectKey, 'tool', name, executeTool, { index: options?.index }),
       );
     },
     approve: async (req) => {
-      return pauseEffect(APPROVAL_SIGNAL, { approval: req }) as Promise<{
+      return pauseEffect(APPROVAL_SIGNAL, {
+        kind: 'approval',
+        title: req.title,
+        description: req.description,
+        schema: APPROVAL_DELIVERY_SCHEMA,
+        responseSchema: APPROVAL_RESPONSE_SCHEMA,
+      }) as Promise<{
         approved: boolean;
         by?: string;
       }>;
     },
-    signal: async (name, opts) => {
-      return pauseEffect(name, {
-        deadline: opts?.deadline,
-        meta: opts?.meta,
-      });
+    signal,
+    attachInterruptContinuation: async (messages) => {
+      const waitingFor = deps.runState.waitingFor;
+      if (!waitingFor?.operation || waitingFor.operation.source !== 'model') return;
+      waitingFor.continuation = [...messages];
+      deps.runState.updatedAt = Date.now();
+      await deps.runStore.putRunState(deps.runState);
+    },
+    resumePendingInterrupt: async (def) => {
+      const request = deps.runState.waitingFor;
+      const delivery = deps.signalDelivery;
+      if (!request || !delivery || request.kind !== 'approval') return undefined;
+
+      await recordSignalDelivery(
+        deps.runStore,
+        deps.runState,
+        delivery,
+        { schema: APPROVAL_DELIVERY_SCHEMA, onDecision: recordDecisionAudit },
+      );
+      const persisted = await deps.runStore.getSteps(deps.runState.runId);
+      steps.splice(0, steps.length, ...persisted);
+      const decisionStep = findStepByKey(steps, request.resumeKey);
+      const decision = decisionStep?.result as
+        | { approved: boolean; by?: string; reason?: string }
+        | undefined;
+      if (!decision) {
+        throw new Error(`Approval ${request.requestId} has no recorded decision`);
+      }
+      const operation = request.operation;
+      if (!operation) return undefined;
+
+      const operationAudit = {
+        toolCallId: operation.toolCallId,
+        toolName: operation.toolName,
+        args: operation.args,
+        argsHash: operation.argsHash,
+      };
+      let result: unknown;
+      let failed = false;
+
+      if (!decision.approved) {
+        result = toolDeniedResult(operation.toolName, decision.by, decision.reason);
+        appendConversationAudit(deps.session, auditContext(deps), {
+          type: 'interrupt-executed',
+          requestId: request.requestId,
+          operation: operationAudit,
+          outcome: 'denied',
+          resultPreview: JSON.stringify(result).slice(0, 500),
+          executedAt: new Date().toISOString(),
+        });
+      } else {
+        emit({
+          channel: 'internal',
+          type: 'tool-call',
+          payload: {
+            toolName: operation.toolName,
+            args: operation.args,
+            toolCallId: operation.toolCallId,
+            ...(operation.source === 'action' ? { imperative: true } : {}),
+          },
+        });
+        const execute = () =>
+          toolExecutorHolder.executor.execute({
+            name: operation.toolName,
+            args: operation.args,
+            session: deps.session,
+            toolCallId: operation.toolCallId,
+            abortSignal: deps.bargeIn ?? deps.abortSignal,
+            def,
+            toolCtx: {
+              session: deps.session,
+              runState: deps.runState,
+              tool: context.tool.bind(context),
+              now: context.now.bind(context),
+              uuid: context.uuid.bind(context),
+              emit: context.emit.bind(context),
+              fs: context.fs,
+              abortSignal: deps.bargeIn ?? deps.abortSignal,
+            },
+          });
+        try {
+          result = await replayOrExecute(
+            operation.effectKey,
+            'tool',
+            operation.toolName,
+            execute,
+            { index: operation.stepIndex },
+          );
+          appendConversationAudit(deps.session, auditContext(deps), {
+            type: 'interrupt-executed',
+            requestId: request.requestId,
+            operation: operationAudit,
+            outcome: 'succeeded',
+            resultPreview: JSON.stringify(result).slice(0, 500),
+            executedAt: new Date().toISOString(),
+          });
+        } catch (error) {
+          appendConversationAudit(deps.session, auditContext(deps), {
+            type: 'interrupt-executed',
+            requestId: request.requestId,
+            operation: operationAudit,
+            outcome: 'failed',
+            errorMessage: error instanceof Error ? error.message : String(error),
+            executedAt: new Date().toISOString(),
+          });
+          if (operation.source === 'action') throw error;
+          failed = true;
+          result = toolErrorResult(error);
+        }
+        emit({
+          channel: 'internal',
+          type: 'tool-result',
+          payload: {
+            toolName: operation.toolName,
+            result,
+            toolCallId: operation.toolCallId,
+            ...(operation.source === 'action' ? { imperative: true } : {}),
+          },
+        });
+      }
+
+      if (request.continuation?.length) {
+        deps.runState.messages = [...deps.runState.messages, ...request.continuation];
+      }
+      if (operation.source === 'model') {
+        deps.runState.messages = [
+          ...deps.runState.messages,
+          toolResultMessage(
+            {
+              toolName: operation.toolName,
+              input: operation.args,
+              toolCallId: operation.toolCallId,
+            },
+            result,
+          ),
+        ];
+        resumedToolOutcome = {
+          requestId: request.requestId,
+          ...(operation.node !== undefined ? { node: operation.node } : {}),
+          toolName: operation.toolName,
+          args: operation.args,
+          toolCallId: operation.toolCallId,
+          result,
+          failed,
+        };
+      }
+      deps.runState.updatedAt = Date.now();
+      await deps.runStore.putRunState(deps.runState);
+      return resumedToolOutcome;
+    },
+    takeResumedToolOutcome: (nodeId) => {
+      if (!resumedToolOutcome || resumedToolOutcome.node !== nodeId) return undefined;
+      const outcome = resumedToolOutcome;
+      resumedToolOutcome = undefined;
+      return outcome;
     },
     now: async () => {
       const callsite = consumeCallsite();
@@ -417,6 +750,7 @@ function makeCtx(deps: CtxDeps): RunContext {
       return replayOrExecute(key, 'uuid', 'uuid', async () => clock.uuid()) as Promise<string>;
     },
   };
+  return context;
 }
 
 export async function createRunContext(deps: CtxDeps): Promise<RunContext> {

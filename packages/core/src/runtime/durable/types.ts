@@ -18,14 +18,60 @@ export interface StepRecord {
   finishedAt?: number;
   /** Logical-run epoch when this step was recorded. Absent on legacy steps → prune keeps them until superseded. */
   epoch?: number;
+  interruptDecision?: InterruptDecisionRecord;
 }
 
-interface WaitingFor {
+export interface SignalActor {
+  id: string;
+  type: 'user' | 'service' | 'system';
+}
+
+export interface FrozenToolOperation {
+  toolCallId: string;
+  toolName: string;
+  args: unknown;
+  argsHash: string;
+  effectKey: string;
+  callsite: string;
+  stepIndex?: number;
+  source: 'model' | 'action';
+  flow?: string;
+  node?: string;
+}
+
+export interface InterruptRequest {
+  requestId: string;
+  kind: 'approval' | 'signal';
   signalName: string;
   callsite: string;
-  deadline?: number;
+  /** Durable step key consumed when the suspended call resumes. */
+  resumeKey: string;
+  createdAt: number;
+  deadline: number | null;
   meta?: Record<string, unknown>;
-  approval?: { title: string; description?: string };
+  display: { title: string; description?: string };
+  allowedDecisions: Array<'approve' | 'deny'>;
+  responseSchema: Record<string, unknown>;
+  operation?: FrozenToolOperation;
+  continuation?: ModelMessage[];
+}
+
+export interface InterruptDecisionRecord {
+  requestId: string;
+  signalId: string;
+  actor: SignalActor;
+  decision?: 'approve' | 'deny';
+  reason?: string;
+  decidedAt: number;
+}
+
+export interface PersistedFlowFrame {
+  flow: string;
+  state: Record<string, unknown>;
+}
+
+export interface PersistedFlowPark extends PersistedFlowFrame {
+  node: string;
 }
 
 export interface RunState {
@@ -35,8 +81,12 @@ export interface RunState {
   activeAgentId: string;
   activeFlow?: string;
   activeNode?: string;
+  /** State owned by the active flow. It is persisted independently from root runtime state. */
+  flowFrame?: PersistedFlowFrame;
+  /** Suspended parent flow frames, ordered outermost to innermost. */
+  flowStack?: PersistedFlowPark[];
   state: Record<string, unknown>;
-  waitingFor?: WaitingFor;
+  waitingFor?: InterruptRequest;
   messages: ModelMessage[];
   createdAt: number;
   updatedAt: number;
@@ -50,8 +100,12 @@ export interface RunState {
 
 export interface SignalDelivery {
   signalId: string;
+  requestId: string;
   name: string;
-  payload: unknown;
+  actor: SignalActor;
+  decision?: 'approve' | 'deny';
+  reason?: string;
+  payload?: unknown;
 }
 
 export interface PersistedRun {

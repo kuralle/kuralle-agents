@@ -76,6 +76,8 @@ import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceS
 import { runHookSafely } from './runHookSafely.js';
 import { addSystemNote } from './systemNotes.js';
 import { needsApprovalPolicy, type Policy } from './policies/toolPolicy.js';
+import { currentFlowState } from '../flow/flowState.js';
+import { resolveReplyNode } from '../flow/nodeBuilders.js';
 /**
  * What the user is told when the run hands off to a human and the app has not configured an
  * escalation handler to say something better. Silence is the wrong default: an escalation
@@ -350,6 +352,7 @@ export class Runtime {
           ? buildMemoryService(this.config.memoryService, opened.agent)
           : undefined,
         fs: openingSurface.resolvedWorkspace?.fs,
+        signalDelivery: opts.signalDelivery,
       });
 
       // Session retrieval cache (G6): created once per run, persists across
@@ -368,6 +371,10 @@ export class Runtime {
         opened.session.workingMemory,
       );
       runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
+
+      await runCtx.resumePendingInterrupt(
+        resolvePendingApprovalTool(opened.agent, runCtx.runState),
+      );
 
       await runHookSafely('onStart', () => this.hooks?.onStart?.(runCtx));
 
@@ -1072,4 +1079,16 @@ function appendGoalsPrompt(
     return workingMemoryPrompt;
   }
   return [workingMemoryPrompt, goalsPrompt].filter((part) => part && part.trim()).join('\n\n');
+}
+
+function resolvePendingApprovalTool(
+  agent: AgentConfig,
+  runState: import('./durable/types.js').RunState,
+): AnyTool | undefined {
+  const operation = runState.waitingFor?.operation;
+  if (!operation || !runState.activeFlow || !runState.activeNode) return undefined;
+  const flow = agent.flows?.find((candidate) => candidate.name === runState.activeFlow);
+  const node = flow?.nodes.find((candidate) => candidate.id === runState.activeNode);
+  if (node?.kind !== 'reply') return undefined;
+  return resolveReplyNode(node, currentFlowState(runState)).localTools?.[operation.toolName];
 }

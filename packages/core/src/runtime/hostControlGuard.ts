@@ -2,6 +2,7 @@ import type { LanguageModel } from 'ai';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { TurnControl } from '../types/channel.js';
 import type { RunState } from './durable/types.js';
+import type { RunStore } from './durable/RunStore.js';
 import {
   classifyHostTarget,
   type HostGuardVerdict,
@@ -18,6 +19,7 @@ export function startHostControlGuard(options: {
   classify?: (opts: ClassifyHostOptions) => Promise<HostGuardVerdict>;
   emit?: (part: import('../types/stream.js').StreamPart) => void;
   abortSignal?: AbortSignal;
+  runStore?: RunStore;
 }): Promise<HostGuardVerdict> {
   const classify = options.classify ?? classifyHostTarget;
   return classify({
@@ -27,6 +29,7 @@ export function startHostControlGuard(options: {
     allowKeep: true,
     emit: options.emit,
     abortSignal: options.abortSignal,
+    runStore: options.runStore,
   });
 }
 

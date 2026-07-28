@@ -63,7 +63,10 @@ describe('recoverable tool error inside a flow', () => {
     // (clearFlowCollectCache) that would otherwise wipe this before the action runs.
     runState.activeFlow = 'raise_work_order';
     runState.activeNode = 'gather';
-    runState.state.__collect_gather = { unitId: '12B' };
+    runState.flowFrame = {
+      flow: 'raise_work_order',
+      state: { __collect_gather: { unitId: '12B' } },
+    };
     const ctx = await createRunContext({
       session,
       runState,
@@ -82,7 +85,7 @@ describe('recoverable tool error inside a flow', () => {
     expect(runState.activeNode).toBe('gather');
     // The gather cache was cleared so re-collection actually happens (not an instant
     // re-complete with the bad value).
-    expect(runState.state.__collect_gather).toBeUndefined();
+    expect(runState.flowFrame?.state.__collect_gather).toBeUndefined();
     // The error reaches the model through the system-note channel, NOT the message array —
     // it interpolates tool output containing user-supplied ids, so it must not sit where it
     // could read as an instruction (AI SDK 7 rejects system messages in `messages`).
@@ -163,7 +166,10 @@ describe('recoverable tool error inside a flow', () => {
     const { session, runStore, runState } = await setupDurableHarness('rec-suspend-sess', 'rec-suspend-run');
     runState.activeFlow = 'approve-flow';
     runState.activeNode = 'gather';
-    runState.state.__collect_gather = { x: '1' };
+    runState.flowFrame = {
+      flow: 'approve-flow',
+      state: { __collect_gather: { x: '1' } },
+    };
     const ctx = await createRunContext({
       session,
       runState,

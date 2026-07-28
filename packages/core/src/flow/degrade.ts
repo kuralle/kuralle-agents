@@ -4,6 +4,7 @@ import type { RunContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
 import { SuspendError } from '../runtime/durable/RunStore.js';
 import type { ModelMessage } from 'ai';
+import { emptySignalSchema } from '../runtime/durable/signalSchemas.js';
 
 type DegradedFlowResult =
   | { kind: 'ended'; reason: string }
@@ -45,7 +46,12 @@ export async function degradeFlowError(
     try {
       const transition = await dispatchNode(escalateNode, run, driver, ctx);
       if (transition.kind === 'escalate') {
-        await ctx.signal('__escalate', { meta: { reason: transition.reason } });
+        await ctx.signal('__escalate', {
+          schema: emptySignalSchema,
+          responseSchema: { type: 'object', additionalProperties: false },
+          title: 'Resume human escalation',
+          meta: { reason: transition.reason },
+        });
         return { kind: 'handoff', to: 'human', reason: transition.reason };
       }
     } catch (error) {

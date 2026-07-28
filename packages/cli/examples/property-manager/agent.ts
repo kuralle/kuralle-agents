@@ -49,6 +49,7 @@ import {
   collect,
   action,
   reply,
+  decide,
   buildToolSet,
 } from '@kuralle-agents/core';
 import { InMemoryFs } from '@kuralle-agents/fs';
@@ -290,10 +291,14 @@ const intakeDone = reply({
   // costs an extra model round-trip (~1.2 s measured) fetching data the node must not use.
   toolScope: 'closed',
   instructions: ({ state }) =>
-    `A work order was just created: ${state.workOrderId} for unit ${state.unitId} ` +
-    `(${state.urgency}). Tell the manager it is logged, state the id, and say what happens ` +
-    `next per the policy target for that urgency. Then offer to dispatch a vendor. ` +
-    `Do not claim a vendor is already assigned — none is yet.`,
+    state.reusedExisting
+      ? `The manager confirmed this is the same fault as existing work order ` +
+        `${state.workOrderId}. Tell them you are using that existing work order and did not ` +
+        `create a duplicate. Then offer to dispatch a vendor for it.`
+      : `A work order was just created: ${state.workOrderId} for unit ${state.unitId} ` +
+        `(${state.urgency}). Tell the manager it is logged, state the id, and say what happens ` +
+        `next per the policy target for that urgency. Then offer to dispatch a vendor. ` +
+        `Do not claim a vendor is already assigned — none is yet.`,
   next: () => ({ end: 'work_order_raised' }),
 });
 
@@ -312,11 +317,12 @@ const intakeDone = reply({
  */
 const dispatchDone = reply({
   id: 'dispatch_done',
-  // Closed: deterministic terminal — state.dispatchNote holds the finished sentence;
-  // open tools let the model call list_work_orders before answering (~1.2 s measured).
+  response: (state) => String(state.dispatchNote),
+  // Closed: state.dispatchNote is emitted directly; the prompt exists only as a readable
+  // description for adapters that inspect node instructions.
   toolScope: 'closed',
   instructions: ({ state }) =>
-    `Report exactly this outcome to the manager, adding nothing: ${state.dispatchNote}`,
+    `The deterministic dispatch outcome is: ${state.dispatchNote}`,
   next: () => ({ end: 'dispatched' }),
 });
 
@@ -335,13 +341,24 @@ const confirmDispatch = reply({
   next: (turn, state) => {
     const hit = turn.toolResults.find((r) => r.name === 'dispatch_vendor_with_approval');
     if (!hit) return 'stay';
-    const result = hit.result as { error?: string; vendor?: string; estimateUsd?: number };
+    const result = hit.result as {
+      __denied?: true;
+      message?: string;
+      error?: string;
+      dispatched?: boolean;
+      vendor?: string;
+      estimateUsd?: number;
+    };
     return {
       goto: dispatchDone,
       data: {
-        dispatchNote: result.error
-          ? `Approval request failed: ${result.error}`
-          : `Owner approval requested for ${result.vendor ?? state.pendingVendorId} at $${result.estimateUsd ?? state.pendingEstimateUsd}.`,
+        dispatchNote: result.__denied
+          ? result.message
+          : result.error
+            ? `Approved dispatch failed: ${result.error}`
+            : result.dispatched
+              ? `${result.vendor ?? state.pendingVendorId} dispatched, $${result.estimateUsd ?? state.pendingEstimateUsd}.`
+              : 'Approved dispatch returned no execution result.',
       },
     };
   },
@@ -352,10 +369,8 @@ const dispatchForWorkOrder = action({
   run: async (state, ctx) => {
     const workOrderId = String(state.workOrderId ?? '');
     const wo = WORK_ORDERS.find((w) => w.id === workOrderId.toUpperCase().trim());
-    // Prefer fields collected earlier in this session; fall back to the work order record
-    // so a cold enter_flow (manager names a WO id) still has issue/urgency for trade pick.
-    const issue = String(state.issue ?? wo?.issue ?? '').toLowerCase();
-    const urgency = String(state.urgency ?? wo?.urgency ?? 'routine');
+    const issue = String(wo?.issue ?? '').toLowerCase();
+    const urgency = String(wo?.urgency ?? 'routine');
     const trade = /leak|water|drain|sink|pipe|toilet/.test(issue)
       ? 'plumbing'
       : /light|electric|outlet|power|fan/.test(issue)
@@ -432,6 +447,22 @@ const dispatchFlow = defineFlow({
 const createWorkOrder = action({
   id: 'create_work_order_action',
   run: async (state, ctx) => {
+    const normalizedUnit = String(state.unitId ?? '').toUpperCase().trim();
+    const openOnUnit = WORK_ORDERS.filter(
+      (workOrder) => workOrder.unitId === normalizedUnit && workOrder.status !== 'closed',
+    );
+    if (openOnUnit.length > 0) {
+      return {
+        goto: duplicateQuestion,
+        data: {
+          duplicateCandidates: openOnUnit.map((workOrder) => ({
+            id: workOrder.id,
+            issue: workOrder.issue,
+          })),
+          existingWorkOrderId: openOnUnit[0]!.id,
+        },
+      };
+    }
     // `def` scopes this tool to the flow. Registering it on the agent instead would let
     // the model call it directly, and it did — creating a second work order for one leak.
     const created = await ctx.tool(
@@ -441,6 +472,64 @@ const createWorkOrder = action({
     );
     return { goto: intakeDone, data: { workOrderId: (created as { workOrderId: string }).workOrderId } };
   },
+});
+
+const createDistinctWorkOrder = action({
+  id: 'create_distinct_work_order_action',
+  run: async (state, ctx) => {
+    const created = await ctx.tool(
+      'create_work_order',
+      {
+        unitId: state.unitId,
+        issue: state.issue,
+        urgency: state.urgency,
+        accessNotes: state.accessNotes,
+        alsoDistinct: true,
+      },
+      { def: create_work_order },
+    );
+    return {
+      goto: intakeDone,
+      data: { workOrderId: (created as { workOrderId: string }).workOrderId },
+    };
+  },
+});
+
+const reuseExistingWorkOrder = action({
+  id: 'reuse_existing_work_order_action',
+  run: async (state) => ({
+    goto: intakeDone,
+    data: {
+      workOrderId: state.existingWorkOrderId,
+      reusedExisting: true,
+    },
+  }),
+});
+
+const duplicateDecision = decide({
+  id: 'same_or_distinct_fault',
+  instructions:
+    'Classify the manager response as same when it refers to the existing fault, or ' +
+    'distinct when it confirms a separate fault.',
+  schema: z.object({ fault: z.enum(['same', 'distinct']) }),
+  decide: (data) =>
+    (data as { fault: 'same' | 'distinct' }).fault === 'distinct'
+      ? createDistinctWorkOrder
+      : reuseExistingWorkOrder,
+  choices: [
+    { id: 'distinct', label: 'Separate fault' },
+    { id: 'same', label: 'Same fault' },
+  ],
+});
+
+const duplicateQuestion = reply({
+  id: 'duplicate_fault_question',
+  toolScope: 'closed',
+  instructions: ({ state }) =>
+    `The unit already has open work: ${JSON.stringify(state.duplicateCandidates)}. ` +
+    `Ask exactly whether this new report is a separate fault. Explain that "yes" creates ` +
+    `one new work order and "no" reuses ${state.existingWorkOrderId}.`,
+  next: () => duplicateDecision,
 });
 
 const intake = collect({
@@ -484,7 +573,15 @@ const workOrderFlow = defineFlow({
     'problem that is not already logged. Not for questions about existing work orders.',
   binding: true,
   start: intake,
-  nodes: [intake, createWorkOrder, intakeDone],
+  nodes: [
+    intake,
+    createWorkOrder,
+    duplicateQuestion,
+    duplicateDecision,
+    createDistinctWorkOrder,
+    reuseExistingWorkOrder,
+    intakeDone,
+  ],
 });
 
 // ── The agent ────────────────────────────────────────────────────────────────

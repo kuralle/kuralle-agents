@@ -1,5 +1,6 @@
 import type { ConversationOutcome, ConversationOutcomeMarkedBy } from '../outcomes/types.js';
 import type { ChannelId } from '../types/session.js';
+import type { SignalActor } from '../runtime/durable/types.js';
 
 export interface AuditEntryBase {
   readonly at: string;
@@ -66,6 +67,45 @@ export type ConversationAuditEntry =
       status: 'ok' | 'error';
       errorMessage?: string;
       latencyMs: number;
+    })
+  | (AuditEntryBase & {
+      type: 'interrupt-requested';
+      requestId: string;
+      signalName: string;
+      kind: 'approval' | 'signal';
+      operation?: {
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
+        argsHash: string;
+      };
+      display: { title: string; description?: string };
+      deadline: number | null;
+      allowedDecisions: Array<'approve' | 'deny'>;
+      requestedAt: string;
+    })
+  | (AuditEntryBase & {
+      type: 'interrupt-decided';
+      requestId: string;
+      signalId: string;
+      actor: SignalActor;
+      decision?: 'approve' | 'deny';
+      reason?: string;
+      decidedAt: string;
+    })
+  | (AuditEntryBase & {
+      type: 'interrupt-executed';
+      requestId: string;
+      operation: {
+        toolCallId: string;
+        toolName: string;
+        args: unknown;
+        argsHash: string;
+      };
+      outcome: 'succeeded' | 'failed' | 'denied';
+      resultPreview?: string;
+      errorMessage?: string;
+      executedAt: string;
     })
   | (AuditEntryBase & { type: 'knowledge-citation'; sourceId: string; title?: string; score?: number })
   | (AuditEntryBase & {

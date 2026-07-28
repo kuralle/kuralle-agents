@@ -27,6 +27,7 @@ describe('collect extraction regression', () => {
       description: 'collect name',
       start: collectNode,
       nodes: [collectNode, replyNode],
+      state: { output: (state) => state },
     });
 
     const driver = new TextDriver();
@@ -65,11 +66,11 @@ describe('collect extraction regression', () => {
 
     const result = await runFlow(flow, runState, collectingDriver, ctx);
     expect(result.kind).toBe('ended');
-    expect(schemaSatisfied(collectNode, runState.state)).toBe(true);
+    expect(await schemaSatisfied(collectNode, runState.state)).toBe(true);
     expect(getCollectData(runState.state, collectNode.id).name).toBe('Riley');
   });
 
-  it('projects optional collected fields to onComplete, not just required ones', () => {
+  it('projects optional collected fields to onComplete, not just required ones', async () => {
     // A node may require only `intent` but also collect optional fields (e.g. a
     // welcome step that classifies AND captures occasion/recipient). onComplete
     // must receive those optionals — projecting only `required` silently drops
@@ -88,7 +89,7 @@ describe('collect extraction regression', () => {
       __collect_welcome: { intent: 'gift', occasion: 'birthday', recipient: 'amma' },
     } as Record<string, unknown>;
 
-    const projected = projectCollectData(node, state) as Record<string, unknown>;
+    const projected = await projectCollectData(node, state) as Record<string, unknown>;
     expect(projected.intent).toBe('gift');
     expect(projected.occasion).toBe('birthday');
     expect(projected.recipient).toBe('amma');
@@ -108,7 +109,13 @@ describe('collect extraction is non-speaking (structural backstop)', () => {
       required: ['name'],
       onComplete: () => replyNode,
     });
-    const flow = defineFlow({ name: 'name-flow', description: 'x', start: collectNode, nodes: [collectNode, replyNode] });
+    const flow = defineFlow({
+      name: 'name-flow',
+      description: 'x',
+      start: collectNode,
+      nodes: [collectNode, replyNode],
+      state: { output: (state) => state },
+    });
 
     const parts: StreamPart[] = [];
     const maliciousDriver = {

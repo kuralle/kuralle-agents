@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   return JSON.stringify(value, (_key, val) => {
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       const record = val as Record<string, unknown>;
@@ -12,6 +12,10 @@ function stableStringify(value: unknown): string {
     }
     return val;
   });
+}
+
+export function valueHash(value: unknown): string {
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
 }
 
 export function logicalRunId(runId: string, runEpoch: number | undefined): string {
@@ -29,6 +33,15 @@ export function toolEffectKey(runId: string, callsite: string, name: string, arg
 
 export function pauseEffectKey(runId: string, callsite: string, name: string): string {
   return idempotencyKey(runId, callsite, name);
+}
+
+export function approvalEffectKey(
+  runId: string,
+  effectKey: string,
+  name: string,
+  args: unknown,
+): string {
+  return idempotencyKey(runId, 'approval', { effectKey, name, args });
 }
 
 export function clockEffectKey(runId: string, callsite: string, kind: 'now' | 'uuid'): string {

@@ -20,6 +20,8 @@ import { applyPromptCache } from '../promptCache.js';
 import { resolveStructuredDecide } from '../../flow/choiceMatch.js';
 import { resolveNodeTools } from './resolveNodeTools.js';
 import { addTurnUsage, languageModelId } from './turnUsage.js';
+import { currentFlowState } from '../../flow/flowState.js';
+import { isControlFlowSignal } from '../controlFlowSignal.js';
 
 export interface TextDriverConfig {
   toolDefs?: Record<string, AnyTool>;
@@ -62,16 +64,17 @@ export class TextDriver implements ChannelDriver {
       return { text: blocked, toolResults: [] };
     }
 
-    const scope = resolveNodeGatherScope(replyNode, ctx.runState.state, ctx.runState.messages);
+    const state = currentFlowState(ctx.runState);
+    const scope = resolveNodeGatherScope(replyNode, state, ctx.runState.messages);
     const gather = await runGatherPhase(ctx, scope);
     const out: TurnResult = { text: '', toolResults: [] };
     const toolMessages: ModelMessage[] = [];
     const model = replyNode.model ?? ctx.model;
-    const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
+    const nodeSystem = node.prompt || buildNodePrompt(replyNode, state);
     const stableSystem = composeSystem(
       ctx.baseInstructions,
       nodeSystem,
-      ctx.runState.state,
+      state,
       ctx.skillPrompt,
       ctx.workingMemoryPrompt,
     );
@@ -172,28 +175,35 @@ export class TextDriver implements ChannelDriver {
               ...(ctx.workingMemoryTools ?? {}),
               ...node.localTools,
             };
-            await dispatchModelToolCalls(ctx, toolCalls, mergedTools, ({ call, outcome }) => {
-              const { result: toolResult, control, failed } = outcome;
-              out.toolResults.push({
-                name: call.toolName,
-                args: call.input,
-                result: toolResult,
-                toolCallId: call.toolCallId,
-              });
-              toolCallsMade.push({
-                toolCallId: call.toolCallId,
-                toolName: call.toolName,
-                args: call.input,
-                result: toolResult,
-                success: !failed,
-                timestamp: Date.now(),
-              });
-              out.control ??= control;
+            try {
+              await dispatchModelToolCalls(ctx, toolCalls, mergedTools, ({ call, outcome }) => {
+                const { result: toolResult, control, failed } = outcome;
+                out.toolResults.push({
+                  name: call.toolName,
+                  args: call.input,
+                  result: toolResult,
+                  toolCallId: call.toolCallId,
+                });
+                toolCallsMade.push({
+                  toolCallId: call.toolCallId,
+                  toolName: call.toolName,
+                  args: call.input,
+                  result: toolResult,
+                  success: !failed,
+                  timestamp: Date.now(),
+                });
+                out.control ??= control;
 
-              const resultMessage = toolResultMessage(call, toolResult);
-              messages.push(resultMessage);
-              toolMessages.push(resultMessage);
-            });
+                const resultMessage = toolResultMessage(call, toolResult);
+                messages.push(resultMessage);
+                toolMessages.push(resultMessage);
+              });
+            } catch (error) {
+              if (isControlFlowSignal(error)) {
+                await ctx.attachInterruptContinuation(toolMessages);
+              }
+              throw error;
+            }
 
             if (out.control) {
               break;
@@ -276,10 +286,11 @@ export class TextDriver implements ChannelDriver {
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
+    const state = currentFlowState(ctx.runState);
     const stableSystem = composeSystem(
       ctx.baseInstructions,
-      resolveInstructions(node.instructions, ctx.runState.state),
-      ctx.runState.state,
+      resolveInstructions(node.instructions, state),
+      state,
       ctx.skillPrompt,
       ctx.workingMemoryPrompt,
     );

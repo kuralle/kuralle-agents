@@ -49,6 +49,7 @@ describe('RunState continuity across Runtime.run calls', () => {
       description: 'Collect a name',
       start: nameCollect,
       nodes: [nameCollect, confirm],
+      state: { output: (state) => state },
     });
 
     const agent = defineAgent({

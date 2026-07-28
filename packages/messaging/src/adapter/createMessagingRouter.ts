@@ -278,11 +278,18 @@ function turnResult(parts: StreamPart[]): TurnResult {
   };
 }
 
-function suspendedPart(parts: StreamPart[]): { signalId: string } | undefined {
+function suspendedPart(
+  parts: StreamPart[],
+): { requestId: string; signalName: string } | undefined {
   const paused = parts.find(
     (part): part is Extract<StreamPart, { type: 'paused' }> => part.type === 'paused',
   );
-  return paused ? { signalId: paused.payload.waitingFor } : undefined;
+  return paused
+    ? {
+        requestId: paused.payload.interrupt.requestId,
+        signalName: paused.payload.waitingFor,
+      }
+    : undefined;
 }
 
 async function sendFallback(args: {
