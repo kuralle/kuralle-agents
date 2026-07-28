@@ -214,6 +214,28 @@ async function runFreeConversation(
     resolved.hostControl = { dispatchMode, advisoryDispatch };
   }
 
+  // A binding flow is entered BEFORE the model gets a turn. Offered as `enter_flow`
+  // it is one tool among many, and the model reliably converses instead — doing the
+  // flow's collecting by hand, so the node's schema and `ask` never execute. Routing
+  // decides here; the model does not get the chance to route around it.
+  if (startGuard && (agent.flows ?? []).some((flow) => flow.binding)) {
+    const bindingVerdict = await startGuard();
+    const isBinding =
+      bindingVerdict.action === 'enterFlow' &&
+      (agent.flows ?? []).some((f) => f.name === bindingVerdict.flowName && f.binding);
+    if (isBinding) {
+      const control = resolveHostControl(undefined, bindingVerdict, agent, run, false);
+      if (control) {
+        emitHostGuardTelemetry(ctx, {
+          invoked: true,
+          reason: 'binding-flow',
+          verdict: guardVerdictToTelemetryVerdict(bindingVerdict),
+        });
+        return await executeHostControl(agent, run, driver, ctx, control);
+      }
+    }
+  }
+
   const turn = await driver.runAgentTurn(resolved, ctx);
   await persistTurnUsageFromTurn(ctx, turn);
 
@@ -254,7 +276,13 @@ async function runFreeConversation(
   return { kind: 'turnComplete' };
 }
 
-type HostGuardTelemetryReason = 'answered' | 'main-control' | 'empty-routed' | 'empty-kept';
+type HostGuardTelemetryReason =
+  | 'answered'
+  | 'main-control'
+  | 'empty-routed'
+  | 'empty-kept'
+  /** Routing entered a `binding` flow before the model was given a turn. */
+  | 'binding-flow';
 type HostGuardTelemetryVerdict = 'keep' | 'enterFlow' | 'transfer';
 
 function guardVerdictToTelemetryVerdict(verdict: HostGuardVerdict): HostGuardTelemetryVerdict {

@@ -18,6 +18,22 @@ export interface Flow {
   instructions?: string;
   context?: ContextStrategy;
   maxOscillations?: number;
+  /**
+   * Enter this flow directly when routing says it owns the request, instead of
+   * offering `enter_flow` and letting the model choose.
+   *
+   * Entry is model-discretionary by default, and the model reliably prefers to
+   * converse: measured on an agent whose ONLY tool was `enter_flow`, it still
+   * talked for four turns, gathered every field itself, and entered the flow only
+   * once nothing was left to collect. A `collect` node's schema, `required`,
+   * `maxTurns` and deterministic `ask` therefore almost never run.
+   *
+   * Set this when those must actually execute — an intake form, a compliance
+   * step, anything where "the model handled it conversationally" is not good
+   * enough. Costs one routing call per turn on agents that use it; agents that do
+   * not are unaffected.
+   */
+  binding?: boolean;
 }
 
 export type FlowNode = ReplyNode | CollectNode | ActionNode | DecideNode;
