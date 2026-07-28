@@ -594,14 +594,19 @@ function makeCtx(deps: CtxDeps): RunContext {
     resumePendingInterrupt: async (def) => {
       const request = deps.runState.waitingFor;
       const delivery = deps.signalDelivery;
-      if (!request || !delivery || request.kind !== 'approval') return undefined;
+      if (!request || request.kind !== 'approval') return undefined;
 
-      await recordSignalDelivery(
-        deps.runStore,
-        deps.runState,
-        delivery,
-        { schema: APPROVAL_DELIVERY_SCHEMA, onDecision: recordDecisionAudit },
-      );
+      // A delivery is present on the resume call itself. On any later turn there is none,
+      // but a decision may already be recorded — that is the crash window between the
+      // decision landing and its operation executing, and it must still be recoverable.
+      if (delivery) {
+        await recordSignalDelivery(
+          deps.runStore,
+          deps.runState,
+          delivery,
+          { schema: APPROVAL_DELIVERY_SCHEMA, onDecision: recordDecisionAudit },
+        );
+      }
       const persisted = await deps.runStore.getSteps(deps.runState.runId);
       steps.splice(0, steps.length, ...persisted);
       const decisionStep = findStepByKey(steps, request.resumeKey);
@@ -609,6 +614,8 @@ function makeCtx(deps: CtxDeps): RunContext {
         | { approved: boolean; by?: string; reason?: string }
         | undefined;
       if (!decision) {
+        // Still genuinely waiting on a human; not an error.
+        if (!delivery) return undefined;
         throw new Error(`Approval ${request.requestId} has no recorded decision`);
       }
       const operation = request.operation;
@@ -729,6 +736,9 @@ function makeCtx(deps: CtxDeps): RunContext {
           failed,
         };
       }
+      // The operation has now run (or been denied). The request is finished, so release
+      // it — `recordSignalDelivery` deliberately left it set to survive a crash here.
+      deps.runState.waitingFor = undefined;
       deps.runState.updatedAt = Date.now();
       await deps.runStore.putRunState(deps.runState);
       return resumedToolOutcome;

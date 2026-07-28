@@ -24,6 +24,7 @@ import { createRuntime, isWakeJob, wakeJob, type HarnessConfig, type Runtime } f
 import type {
   PersistentMemoryStore,
   UserInputContent,
+  SignalActor,
   SignalDelivery,
   ScheduledJob,
   Scheduler,
@@ -100,6 +101,20 @@ export abstract class KuralleAgent<
    */
   protected getWorkingMemoryStore(): PersistentMemoryStore | undefined {
     return new SqlPersistentMemoryStore(this.getSql());
+  }
+
+  /**
+   * Who a `/resume` decision is attributed to in the durable audit log.
+   *
+   * Derive this from your own authentication — a signed header, a session lookup, Access
+   * JWT claims. It deliberately does NOT read the request body: a client that could name
+   * its own actor could approve as anyone.
+   *
+   * Left unimplemented, decisions are attributed to the service itself
+   * (`cloudflare-resume`) — honest, but the audit log cannot then say which human decided.
+   */
+  protected async resolveSignalActor(_request: Request): Promise<SignalActor | undefined> {
+    return undefined;
   }
 
   /**
@@ -383,9 +398,14 @@ export abstract class KuralleAgent<
           { status: 400 },
         );
       }
+      // Never from the body — a client that names its own actor can approve as anyone.
+      // Override `resolveSignalActor` to attribute a decision to the real human.
       const { text } = await this.resumeWithSignal({
         ...body,
-        actor: { id: 'cloudflare-resume', type: 'service' },
+        actor: (await this.resolveSignalActor(request)) ?? {
+          id: 'cloudflare-resume',
+          type: 'service',
+        },
       });
       return Response.json({ ok: true, text });
     }

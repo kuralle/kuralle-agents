@@ -13,14 +13,23 @@ import { hasHostControlTargets } from '../runtime/hostControlTools.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
 import { currentFlowState } from './flowState.js';
 
-const MAX_FLOW_PARK_DEPTH = 8;
+export const MAX_FLOW_PARK_DEPTH = 8;
+
+/** Runaway nested flow entry. The structural twin of `FlowOscillationError`, and degraded
+ *  the same way — a bounded limit the framework absorbs, not a crash the caller handles. */
+export class FlowParkOverflowError extends Error {
+  constructor(depth: number) {
+    super(`Flow park depth exceeds ${depth}`);
+    this.name = 'FlowParkOverflowError';
+  }
+}
 
 export type FlowPark = PersistedFlowPark;
 
 export function pushFlowPark(run: RunState, park: FlowPark): void {
   const stack = run.flowStack ?? [];
   if (stack.length >= MAX_FLOW_PARK_DEPTH) {
-    throw new Error(`Flow park depth exceeds ${MAX_FLOW_PARK_DEPTH}`);
+    throw new FlowParkOverflowError(MAX_FLOW_PARK_DEPTH);
   }
   stack.push(park);
   run.flowStack = stack;

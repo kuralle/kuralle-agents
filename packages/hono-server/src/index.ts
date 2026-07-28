@@ -10,6 +10,7 @@ import type {
   RunOptions,
   RuntimeLike,
   Session,
+  SignalActor,
   UserInputContent,
 } from '@kuralle-agents/core';
 
@@ -160,6 +161,17 @@ export type KuralleChatRouterOptions = {
    * @default 'safe'
    */
   streamFilter?: StreamEventFilter;
+  /**
+   * Who a `/api/chat/resume` decision is attributed to in the durable audit log.
+   *
+   * Derive this from your own authentication — a session cookie, a bearer token, the
+   * request context. It is deliberately NOT read from the request body: a client that
+   * could name its own actor could approve as anyone.
+   *
+   * Omitted, decisions are attributed to the service itself (`hono-resume`), which is
+   * honest but means the audit log cannot tell you which human approved.
+   */
+  resolveSignalActor?: (c: Context) => SignalActor | undefined | Promise<SignalActor | undefined>;
 };
 
 export type KuralleRouterOptions = {
@@ -398,6 +410,7 @@ export const createKuralleChatRouter = ({
   sendWidgetWelcomeMessage = true,
   widgetWelcomeMessage,
   streamFilter: streamFilterOption,
+  resolveSignalActor,
 }: KuralleChatRouterOptions): Hono => {
   const streamFilter: StreamEventFilter = streamFilterOption ?? 'safe';
   const app = new Hono();
@@ -535,6 +548,12 @@ export const createKuralleChatRouter = ({
       );
     }
 
+    // Never from the body — a client that names its own actor can approve as anyone.
+    const actor: SignalActor = (await resolveSignalActor?.(c)) ?? {
+      id: 'hono-resume',
+      type: 'service',
+    };
+
     return streamSSE(c, async (stream) => {
       try {
         for await (const part of iterateRuntimeParts(runtime, {
@@ -543,7 +562,7 @@ export const createKuralleChatRouter = ({
             signalId: body.signal.signalId,
             requestId: body.signal.requestId,
             name: body.signal.name,
-            actor: { id: 'hono-resume', type: 'service' },
+            actor,
             decision: body.signal.decision,
             reason: body.signal.reason,
             payload: body.signal.payload,

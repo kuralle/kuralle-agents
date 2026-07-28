@@ -4,8 +4,7 @@ import type {
   SignalDelivery,
   StepRecord,
 } from './types.js';
-import type { RunStore } from './RunStore.js';
-import { pauseEffectKey, logicalRunId } from './idempotency.js';
+import { LogConflictError, type RunStore } from './RunStore.js';
 import type { StandardSchemaV1 } from '../../types/standard-schema.js';
 
 export function findStepByKey(steps: StepRecord[], key: string): StepRecord | undefined {
@@ -78,16 +77,18 @@ export async function recordSignalDelivery(
     result = validation.value;
   }
 
-  // Must match the key pauseEffect used when it suspended: the keystone scopes the
-  // effect-key namespace by logical run (runId#epoch), so the resume-side delivery
-  // key has to use logicalRunId too, else the pause never finds its own decision.
-  const key =
-    waitingFor.resumeKey ??
-    pauseEffectKey(
-      logicalRunId(runState.runId, runState.runEpoch),
-      waitingFor.callsite,
-      delivery.name,
+  // The key pauseEffect used when it suspended. Every request this version creates carries
+  // it, and `resumePendingInterrupt` already dereferences it unconditionally. Deriving it
+  // positionally as a fallback would reinstate call-order identity for exactly the runs
+  // that cannot tolerate it — ones already paused on a durable store when the upgrade
+  // landed. Refuse them by name instead of guessing.
+  const key = waitingFor.resumeKey;
+  if (!key) {
+    throw new Error(
+      `Interrupt ${waitingFor.requestId} has no resumeKey: it was created before ` +
+        `request-bound approvals. Resolve this run out of band; it cannot be resumed safely.`,
     );
+  }
   if (findStepByKey(steps, key)) {
     return false;
   }
@@ -115,8 +116,27 @@ export async function recordSignalDelivery(
     interruptDecision: decision,
   };
 
-  await runStore.appendStep(runState.runId, record);
-  runState.waitingFor = undefined;
+  try {
+    await runStore.appendStep(runState.runId, record);
+  } catch (error) {
+    if (!(error instanceof LogConflictError)) throw error;
+    // Lost an append race. That is only benign if the winner decided THIS request — a
+    // conflict from any other concurrent write is a real failure and must still surface.
+    const latest = await runStore.getSteps(runState.runId);
+    const decided = latest.some(
+      (step) => step.interruptDecision?.requestId === waitingFor.requestId,
+    );
+    if (!decided) throw error;
+    return false;
+  }
+  // A decision and the frozen operation it authorises are two separate durable writes.
+  // Clearing the request here would orphan the operation if the process died in between:
+  // `resumePendingInterrupt` is its only consumer and is reached via `waitingFor`. Keep
+  // the request until the operation has actually run; that path clears it. Requests with
+  // nothing left to execute (custom signals, approvals with no frozen operation) are done.
+  if (!waitingFor.operation) {
+    runState.waitingFor = undefined;
+  }
   runState.status = 'running';
   runState.updatedAt = now;
   await runStore.putRunState(runState);
