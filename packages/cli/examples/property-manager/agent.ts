@@ -448,7 +448,9 @@ const intake = collect({
   schema: z.object({
     unitId: z.string().describe('Unit id, e.g. A-101'),
     issue: z.string().describe('What is wrong, specifically'),
-    urgency: z.enum(['emergency', 'urgent', 'routine']).describe('Per the triage skill'),
+    urgency: z
+      .enum(['emergency', 'urgent', 'routine'])
+      .describe('Urgency explicitly supplied for this report; never infer it from the issue'),
     accessNotes: z.string().optional().describe('Pets, key location, preferred hours'),
   }),
   required: ['unitId', 'issue', 'urgency'],
@@ -458,9 +460,11 @@ const intake = collect({
     // a live distractor: without this the second report re-extracted the first one's unit
     // and issue, and the flow created a verbatim duplicate work order.
     `Extract intake fields for the MOST RECENT maintenance report only — the newest one the ` +
-    `manager raised. Earlier reports in this conversation are already logged; ignore them ` +
-    `entirely, including their unit and issue. Still missing: ${missing.join(', ')}. ` +
-    `Classify urgency using the triage-work-order skill. Do not invent a unit id.`,
+      `manager raised. Earlier reports in this conversation are already logged; ignore them ` +
+      `entirely, including their unit and issue. Still missing: ${missing.join(', ')}. ` +
+      `Only submit urgency when the MOST RECENT user message explicitly says emergency, urgent, ` +
+      `or routine; otherwise leave it missing. Do not infer urgency from the issue. Do not invent ` +
+      `a unit id.`,
   ask: (missing) => {
     const label: Record<string, string> = {
       unitId: 'which unit is this for',
@@ -478,6 +482,7 @@ const workOrderFlow = defineFlow({
   description:
     'Raise a maintenance work order for a unit. Use when someone reports a maintenance ' +
     'problem that is not already logged. Not for questions about existing work orders.',
+  binding: true,
   start: intake,
   nodes: [intake, createWorkOrder, intakeDone],
 });

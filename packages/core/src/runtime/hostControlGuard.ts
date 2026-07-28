@@ -34,7 +34,7 @@ export function isValidControl(control: TurnControl, agent: AgentConfig, run: Ru
   switch (control.type) {
     case 'enterFlow': {
       const flows = availableHostFlows(agent, run);
-      return flows.some((f) => f.name === control.flowName);
+      return flows.some((f) => f.name === control.flowName && !f.binding);
     }
     case 'handoff':
       return collectTransferTargets(agent).some((t) => t.id === control.target);

@@ -94,7 +94,7 @@ export function buildHostControlTools(
   run: RunState,
 ): Record<string, AnyTool> {
   const tools: Record<string, AnyTool> = {};
-  const flows = availableHostFlows(agent, run);
+  const flows = availableHostFlows(agent, run).filter((flow) => !flow.binding);
   if (flows.length > 0) {
     tools.enter_flow = createEnterFlowTool(flows);
   }

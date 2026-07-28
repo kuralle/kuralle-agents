@@ -46,6 +46,9 @@ export async function collectUntilComplete(
   ctx: RunContext,
   options?: { agent?: AgentConfig; activeFlowName?: string },
 ): Promise<NormalizedTransition> {
+  const bindingFlow = options?.agent?.flows?.some(
+    (flow) => flow.name === options.activeFlowName && flow.binding,
+  );
   // A satisfied collect defers completion for ONE pass when there is pending input,
   // so a correction ("no, Tuesday") is re-extracted and overwrites before completing
   // (G14). Bounded to a single pass so the loop cannot spin if a driver's awaitUser
@@ -65,10 +68,12 @@ export async function collectUntilComplete(
     // required fields). On the run's first input-node the turn's input is in
     // `messages` with nothing pending and `turnInputConsumed` false, so we fall
     // through and extract it.
+    let consumedPendingInput = false;
     if (hasPendingUserInput(ctx.session)) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
       pendingConsumed = true;
+      consumedPendingInput = true;
     } else if (ctx.turnInputConsumed) {
       // No fresh input to extract this turn: ask (deterministically) for the
       // fields still missing and wait. Never run extraction over stale context.
@@ -132,6 +137,7 @@ export async function collectUntilComplete(
 
     if (
       !advanced &&
+      (!bindingFlow || consumedPendingInput) &&
       ctx.outOfBandControl &&
       options?.agent &&
       options.activeFlowName

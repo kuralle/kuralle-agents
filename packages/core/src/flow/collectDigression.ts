@@ -8,6 +8,8 @@ import { buildToolSet } from '../tools/effect/defineTool.js';
 import { resolveReplyNode } from './nodeBuilders.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
 import { selectHostTarget } from '../runtime/select.js';
+import type { HostSelection } from '../runtime/select.js';
+import { hasHostControlTargets } from '../runtime/hostControlTools.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
 
 const FLOW_PARK_STACK_KEY = '__flowParkStack';
@@ -116,16 +118,25 @@ export async function runCollectDigression(
     return { kind: 'none' };
   }
 
-  const selection = await select({
-    agent,
-    run,
-    model: agent.routing?.model ?? ctx.controlModel,
-    excludeFlowNames: [activeFlowName],
-  });
+  const bindingFlow = agent.flows?.some(
+    (flow) => flow.name === activeFlowName && flow.binding,
+  );
+  let selection: HostSelection = { kind: 'keep' };
+  if (!bindingFlow || options.select || hasHostControlTargets(agent, run)) {
+    selection = await select({
+      agent,
+      run,
+      model: agent.routing?.model ?? ctx.controlModel,
+      ...(bindingFlow ? {} : { excludeFlowNames: [activeFlowName] }),
+    });
+  }
 
   // Entering another flow still wins: a mid-intake "can you dispatch a vendor?" is a
   // question, but it belongs to a flow, so route it rather than answering it inline.
   if (selection.kind === 'enterFlow') {
+    if (selection.flow.name === activeFlowName) {
+      return { kind: 'none' };
+    }
     pushFlowPark(run.state, { flow: activeFlowName, node: node.id });
     return {
       kind: 'transition',
