@@ -306,3 +306,30 @@ function slugify(name: string): string {
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+function recoveryMessageKey(nodeId: string): string {
+  return `__recoveryMessage_${nodeId}`;
+}
+
+/** Stash author-written copy for the user, to be shown once by the next `ask`. */
+export function setPendingRecoveryMessage(
+  state: FlowState,
+  nodeId: string,
+  message: string | undefined,
+): void {
+  if (message === undefined || !message.trim()) {
+    delete state[recoveryMessageKey(nodeId)];
+    return;
+  }
+  state[recoveryMessageKey(nodeId)] = message;
+}
+
+/** Read and clear it — a reason is shown once, not repeated on every later re-ask. */
+export function takePendingRecoveryMessage(
+  state: FlowState,
+  nodeId: string,
+): string | undefined {
+  const raw = state[recoveryMessageKey(nodeId)];
+  delete state[recoveryMessageKey(nodeId)];
+  return typeof raw === 'string' && raw.trim() ? raw : undefined;
+}

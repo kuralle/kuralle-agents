@@ -4,7 +4,7 @@ import type { ChannelDriver } from '../types/channel.js';
 import type { CollectNode, DecideNode, Flow, FlowNode } from '../types/flow.js';
 import { popFlowPark, runCollectDigression } from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
-import { inferRequiredFields, clearCollectData } from './extraction.js';
+import { inferRequiredFields, clearCollectData, setPendingRecoveryMessage } from './extraction.js';
 import { addSystemNote } from '../runtime/systemNotes.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
@@ -407,6 +407,10 @@ export async function runFlow(
         // action, collectUntilComplete emits its `ask` and parks on awaitingUser — a real
         // re-ask, not an end.
         clearCollectData(run.state, lastCollectNode.id);
+        // Author-written copy for the USER, consumed once by the next `ask`. Without it
+        // a business rejection reaches the model only, and the person is re-asked with
+        // generic copy that never says what actually blocked them.
+        setPendingRecoveryMessage(run.state, lastCollectNode.id, error.userMessage);
         // Carried as a system NOTE, not a message. The text interpolates tool output that
         // itself contains user-supplied ids, so it must not arrive in the message array
         // where it could read as an instruction — the AI SDK warns about exactly this and

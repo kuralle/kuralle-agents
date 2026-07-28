@@ -24,9 +24,20 @@ export class ToolTimeoutError extends Error {
  * by string-matching the message.
  */
 export class RecoverableToolError extends Error {
-  constructor(message: string) {
+  /**
+   * Author-written copy shown to the USER, verbatim, when a flow re-asks after this
+   * error. `message` is for the model; a business rejection ("that unit already has
+   * an open work order") is useless to the person unless someone tells them, and the
+   * collect node's `ask` is deterministic precisely so the model cannot rephrase it.
+   */
+  readonly userMessage?: string;
+
+  constructor(message: string, options?: { userMessage?: string }) {
     super(message);
     this.name = 'RecoverableToolError';
+    if (options?.userMessage !== undefined) {
+      this.userMessage = options.userMessage;
+    }
   }
 }
 

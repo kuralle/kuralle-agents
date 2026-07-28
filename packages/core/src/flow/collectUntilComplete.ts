@@ -18,6 +18,7 @@ import {
   mergeTurnExtraction,
   projectCollectData,
   schemaSatisfied,
+  takePendingRecoveryMessage,
   invalidCollectFields,
   setCollectData,
   wouldCollectSatisfyAfterToolResults,
@@ -180,7 +181,12 @@ function renderCollectAsk(node: CollectNode, missing: string[], state: RunState[
 
 export function emitCollectAsk(node: CollectNode, run: RunState, ctx: RunContext): void {
   const missing = computeMissingFields(node, getCollectData(run.state, node.id));
-  const text = renderCollectAsk(node, missing, run.state);
+  const ask = renderCollectAsk(node, missing, run.state);
+  // A recovery reason is author-written and shown ONCE, ahead of the ask. Both halves
+  // are deterministic copy: the user learns what blocked them without the model getting
+  // an opportunity to rephrase a business rule.
+  const reason = takePendingRecoveryMessage(run.state, node.id);
+  const text = reason ? `${reason}\n\n${ask}`.trim() : ask;
   if (!text.trim()) {
     return;
   }
