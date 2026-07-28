@@ -4,6 +4,7 @@ import type { ChannelDriver } from '../types/channel.js';
 import type { ReplyNode } from '../types/flow.js';
 import type { RunContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
+import { buildToolSet } from '../tools/effect/defineTool.js';
 import { resolveReplyNode } from './nodeBuilders.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
 import { selectHostTarget } from '../runtime/select.js';
@@ -122,13 +123,8 @@ export async function runCollectDigression(
     excludeFlowNames: [activeFlowName],
   });
 
-  if (selection.kind === 'route') {
-    return {
-      kind: 'transition',
-      transition: { kind: 'handoff', to: selection.agentId, reason: selection.reason },
-    };
-  }
-
+  // Entering another flow still wins: a mid-intake "can you dispatch a vendor?" is a
+  // question, but it belongs to a flow, so route it rather than answering it inline.
   if (selection.kind === 'enterFlow') {
     pushFlowPark(run.state, { flow: activeFlowName, node: node.id });
     return {
@@ -141,7 +137,18 @@ export async function runCollectDigression(
     };
   }
 
+  // An answerable aside is answered here, BEFORE the router's transfer verdict is
+  // honoured. Ordered the other way round, `route` returned first and this test was
+  // unreachable: an ordinary "who's the cheapest plumber?" mid-flow handed the caller
+  // to a human and discarded everything already collected. Transfer is for input that
+  // is not a question the agent can simply answer.
   if (!looksLikeOffScriptQuestion(offScriptInput)) {
+    if (selection.kind === 'route') {
+      return {
+        kind: 'transition',
+        transition: { kind: 'handoff', to: selection.agentId, reason: selection.reason },
+      };
+    }
     return { kind: 'none' };
   }
 
@@ -151,7 +158,11 @@ export async function runCollectDigression(
     instructions:
       ctx.baseInstructions ??
       'Answer the user helpfully and concisely. Do not mention internal routing or flows.',
-    tools: ctx.globalTools as ReplyNode['tools'],
+    // `ctx.globalTools` holds RAW tool definitions; `ReplyNode.tools` is a built
+    // ToolSet. Casting between them handed Zod schemas to the provider as if they
+    // were AI SDK tools ("Invalid schema for function 'list_units'"). It went
+    // unnoticed because the router short-circuited before this node ever ran.
+    tools: buildToolSet(ctx.globalTools ?? {}),
     toolScope: 'base',
   };
 
