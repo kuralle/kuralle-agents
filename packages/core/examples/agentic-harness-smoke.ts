@@ -195,16 +195,22 @@ async function collect(handle: import('../src/types/stream.js').TurnHandle) {
     },
   });
 
-  await collect(runtime.run({ sessionId: 'esc-1', input: 'My order 4456 arrived broken.' }));
+  const first = await collect(
+    runtime.run({ sessionId: 'esc-1', input: 'My order 4456 arrived broken.' }),
+  );
   const turn = await collect(
     runtime.run({
       sessionId: 'esc-1',
       input: 'This is useless, I want to talk to a real human right now.',
     }),
   );
-  // A live model may already escalate on the first ("arrived broken") turn —
-  // assert at least one escalation with a complete handoff package.
-  const escalationPart = turn.parts.find((part) => part.type === 'escalation');
+  // A live model may already escalate on the first ("arrived broken") turn — and it does,
+  // routinely. When it does, the second turn is HELD (the agent does not re-run) and
+  // carries no escalation part at all, so looking only at `turn` asserted a state the
+  // runtime is designed never to produce. Take the escalation from whichever turn raised it.
+  const escalationPart = [...first.parts, ...turn.parts].find(
+    (part) => part.type === 'escalation',
+  );
   const lastRequest = requests[requests.length - 1];
   check(
     'live model escalates to human; handler got summary + recent messages',

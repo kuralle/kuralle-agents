@@ -291,8 +291,19 @@ function makeCtx(deps: CtxDeps): RunContext {
     return result;
   };
 
-  const effectRunId = () =>
-    logicalRunId(deps.runState.runId, deps.runState.runEpoch);
+  // `resetCallsites()` rebases the effect ordinal to 0 on every flow entry so a resumed
+  // run anchors its callsites to the flow rather than to the answering turn before it.
+  // That makes callsite 0 ambiguous across flows, so the flow has to be part of the
+  // namespace: without it, two flows in one logical run calling a same-named tool with
+  // the same arguments collide, and the second REPLAYS the first one's result. Live, that
+  // made a handed-off agent replay the previous agent's "hand off to you" instruction and
+  // loop until maxHandoffs. Keyed by name, not by an entry counter, so re-entering the
+  // same flow on resume lands in the same namespace and still replays exactly once.
+  const effectRunId = () => {
+    const base = logicalRunId(deps.runState.runId, deps.runState.runEpoch);
+    const flow = deps.runState.activeFlow;
+    return flow ? `${base}#${flow}` : base;
+  };
 
   let resumedToolOutcome: import('../types/run-context.js').ResumedToolOutcome | undefined;
 
