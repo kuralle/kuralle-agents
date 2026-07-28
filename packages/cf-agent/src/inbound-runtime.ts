@@ -87,7 +87,12 @@ function turnResult(parts: StreamPart[]): TurnResult {
   );
   return {
     parts,
-    suspended: paused ? { signalId: paused.payload.waitingFor } : undefined,
+    suspended: paused
+      ? {
+          requestId: paused.payload.interrupt.requestId,
+          signalName: paused.payload.waitingFor,
+        }
+      : undefined,
     handoffToHuman: parts.some(
       (part) => part.type === 'handoff' && part.payload.targetAgent === 'human',
     ),
