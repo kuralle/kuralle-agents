@@ -13,9 +13,10 @@ function collectTurnsKey(nodeId: string): string {
   return `__collectTurns_${nodeId}`;
 }
 
-export function resetCollect(state: FlowState, nodeId: string): void {
+/** Clear a collect node's gathered fields, preserving its turn counter so
+ *  `maxTurns` still bounds a recovery loop. */
+export function clearCollectData(state: FlowState, nodeId: string): void {
   delete state[collectDataKey(nodeId)];
-  delete state[collectTurnsKey(nodeId)];
 }
 
 export function getCollectData(state: FlowState, nodeId: string): Record<string, unknown> {
@@ -99,6 +100,28 @@ export function schemaSatisfied(node: CollectNode, state: FlowState): boolean {
   return invalidCollectFields(node, data).length === 0;
 }
 
+/** Whether merging tool results into current collect state would satisfy the node. */
+export function wouldCollectSatisfyAfterToolResults(
+  node: CollectNode,
+  state: FlowState,
+  toolResults: Array<{ name: string; result: unknown }>,
+): boolean {
+  const submitName = submitToolName(node.id);
+  let data = getCollectData(state, node.id);
+  for (const record of toolResults) {
+    if (record.name !== submitName) {
+      continue;
+    }
+    const incoming = isPlainRecord(record.result) ? record.result : {};
+    if (isEmptySubmission(incoming) || isNonDataToolResult(incoming)) {
+      continue;
+    }
+    data = mergeExtractionData(data, incoming);
+  }
+  const probeState: FlowState = { ...state, [collectDataKey(node.id)]: data };
+  return schemaSatisfied(node, probeState);
+}
+
 export function projectCollectData(node: CollectNode, state: FlowState): unknown {
   // Hand onComplete EVERY field the node collected (all schema keys present in
   // the collected data) — not just the required subset. Projecting only the
@@ -137,6 +160,10 @@ function isEmptySubmission(args: Record<string, unknown>): boolean {
     }
   }
   return true;
+}
+
+function isNonDataToolResult(result: Record<string, unknown>): boolean {
+  return result.error === true || result.__denied === true;
 }
 
 export function createExtractionSubmitTool(
@@ -193,7 +220,7 @@ export function mergeTurnExtraction(
       continue;
     }
     const incoming = isPlainRecord(record.result) ? record.result : {};
-    if (isEmptySubmission(incoming)) {
+    if (isEmptySubmission(incoming) || isNonDataToolResult(incoming)) {
       continue;
     }
     const next = mergeExtractionData(current, incoming);

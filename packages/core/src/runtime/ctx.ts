@@ -352,23 +352,47 @@ function makeCtx(deps: CtxDeps): RunContext {
         def?.idempotencyKey != null
           ? def.idempotencyKey(args)
           : idempotencyKey(logicalId, callsite, { name, args });
+      const imperative = options?.toolCallId === undefined;
+      const toolCallId = options?.toolCallId ?? randomUUID();
+      if (imperative) {
+        emit({
+          channel: 'internal',
+          type: 'tool-call',
+          payload: { toolName: name, args, toolCallId, imperative: true },
+        });
+      }
       const executeTool = () =>
         toolExecutorHolder.executor.execute({
           name,
           args,
           session: deps.session,
-          toolCallId: options?.toolCallId,
+          toolCallId,
           abortSignal: deps.bargeIn ?? deps.abortSignal,
           def: options?.def,
           toolCtx: options?.toolCtx,
         });
 
+      const finishImperative = async (result: unknown) => {
+        if (imperative) {
+          emit({
+            channel: 'internal',
+            type: 'tool-result',
+            payload: { toolName: name, result, toolCallId, imperative: true },
+          });
+        }
+        return result;
+      };
+
       if (def?.replay === false) {
         const auditKey = `${key}:${steps.length}:${options?.index ?? callsite}`;
-        return replayOrExecute(auditKey, 'tool', name, executeTool, { index: options?.index });
+        return finishImperative(
+          await replayOrExecute(auditKey, 'tool', name, executeTool, { index: options?.index }),
+        );
       }
 
-      return replayOrExecute(key, 'tool', name, executeTool, { index: options?.index });
+      return finishImperative(
+        await replayOrExecute(key, 'tool', name, executeTool, { index: options?.index }),
+      );
     },
     approve: async (req) => {
       return pauseEffect(APPROVAL_SIGNAL, { approval: req }) as Promise<{

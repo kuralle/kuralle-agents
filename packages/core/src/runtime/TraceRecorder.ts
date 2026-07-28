@@ -17,6 +17,7 @@ export class TraceRecorder {
   private currentNode?: AgentSpan;
   private readonly openTools: AgentSpan[] = [];
   private readonly toolCallIds = new Map<AgentSpan, string | undefined>();
+  private readonly openLlms = new Map<string, AgentSpan>();
   private readonly emitted = new Set<string>();
   private readonly onSpan?: (span: AgentSpan) => void;
   private currentAgentId?: string;
@@ -106,6 +107,7 @@ export class TraceRecorder {
               ...(this.currentNode ? { nodeId: nodeName(this.currentNode) } : {}),
               toolName: part.payload.toolName,
               input: toJsonValue(part.payload.args),
+              ...(part.payload.imperative ? { imperative: true } : {}),
             },
           });
           this.toolCallIds.set(span, part.payload.toolCallId);
@@ -134,6 +136,49 @@ export class TraceRecorder {
               },
             });
           span.attributes.output = result;
+          span.endTime = at;
+          this.emitSpan(span);
+          break;
+        }
+        case 'model-call-start': {
+          const parentSpanId = part.payload.controlPath
+            ? this.root.spanId
+            : (this.currentNode?.spanId ?? this.root.spanId);
+          const span = this.openSpan({
+            name: `llm:${part.payload.modelId}`,
+            kind: 'llm',
+            parentSpanId,
+            at,
+            attributes: {
+              ...(this.currentFlow ? { activeFlow: activeFlowName(this.currentFlow) } : {}),
+              ...(this.currentNode ? { nodeId: nodeName(this.currentNode) } : {}),
+              modelId: part.payload.modelId,
+              step: part.payload.step,
+              ...(part.payload.controlPath ? { controlPath: true } : {}),
+            },
+          });
+          this.openLlms.set(part.payload.callId, span);
+          break;
+        }
+        case 'model-call-end': {
+          const span = this.openLlms.get(part.payload.callId);
+          if (!span) break;
+          this.openLlms.delete(part.payload.callId);
+          if (typeof part.payload.inputTokens === 'number') {
+            span.attributes.inputTokens = part.payload.inputTokens;
+          }
+          if (typeof part.payload.outputTokens === 'number') {
+            span.attributes.outputTokens = part.payload.outputTokens;
+          }
+          if (typeof part.payload.cacheReadTokens === 'number') {
+            span.attributes.cacheReadTokens = part.payload.cacheReadTokens;
+          }
+          if (typeof part.payload.cacheWriteTokens === 'number') {
+            span.attributes.cacheWriteTokens = part.payload.cacheWriteTokens;
+          }
+          if (part.payload.finishReason !== undefined) {
+            span.attributes.finishReason = part.payload.finishReason;
+          }
           span.endTime = at;
           this.emitSpan(span);
           break;
@@ -248,8 +293,17 @@ export class TraceRecorder {
     }
   }
 
+  private closeLlms(at: number): void {
+    for (const [callId, span] of this.openLlms) {
+      this.openLlms.delete(callId);
+      span.endTime ??= at;
+      this.emitSpan(span);
+    }
+  }
+
   private closeNode(at: number): void {
     this.closeTools(at);
+    this.closeLlms(at);
     if (this.currentNode) {
       this.currentNode.endTime ??= at;
       this.emitSpan(this.currentNode);

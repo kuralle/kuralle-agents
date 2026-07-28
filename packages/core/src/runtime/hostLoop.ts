@@ -201,6 +201,8 @@ async function runFreeConversation(
           run,
           model: controlModel,
           classify,
+          emit: ctx.emit.bind(ctx),
+          abortSignal: ctx.abortSignal,
         })
     : undefined;
 

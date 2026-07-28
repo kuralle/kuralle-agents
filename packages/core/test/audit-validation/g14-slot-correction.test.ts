@@ -7,8 +7,8 @@ import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 import {
+  clearCollectData,
   getCollectData,
-  resetCollect,
   schemaSatisfied,
 } from '../../src/flow/extraction.js';
 import {
@@ -27,8 +27,8 @@ import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 
-describe('G14: resetCollect clears collected slot', () => {
-  it('clears data and turns so schemaSatisfied is false', () => {
+describe('G14: clearCollectData clears collected slot', () => {
+  it('clears data so schemaSatisfied is false, preserving the turn counter', () => {
     const node = collect({
       id: 'date',
       schema: z.object({ date: z.string(), venue: z.string() }),
@@ -40,9 +40,10 @@ describe('G14: resetCollect clears collected slot', () => {
       __collectTurns_date: 2,
     };
 
-    resetCollect(state, node.id);
+    clearCollectData(state, node.id);
 
     expect(getCollectData(state, node.id)).toEqual({});
+    expect(state.__collectTurns_date).toBe(2);
     expect(schemaSatisfied(node, state)).toBe(false);
   });
 });

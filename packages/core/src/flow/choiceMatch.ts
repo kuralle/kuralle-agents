@@ -1,10 +1,10 @@
-import { generateObject } from 'ai';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import type { DecideNode } from '../types/flow.js';
 import type { ChoiceOption } from '../types/selection.js';
 import type { JSONValue, SystemModelMessage } from 'ai';
 import type { RunContext } from '../types/run-context.js';
+import { instrumentedGenerateObject } from '../runtime/channels/instrumentModelCall.js';
 
 /** Reserved enum member: model declines to pick a listed choice (→ author stay/unmatched). */
 export const CHOICE_NONE = '__none';
@@ -112,16 +112,16 @@ export async function resolveStructuredDecide(
   const useConstrainedChoices = (node.choices?.length ?? 0) > 0 && isChoiceFieldSchema(schema);
 
   if (!useConstrainedChoices) {
-    const { object } = await generateObject({
+    return instrumentedGenerateObject(ctx, {
       model: ctx.controlModel,
       schema,
       system: systemText(system),
       messages: ctx.runState.messages,
       temperature: 0,
       abortSignal: ctx.abortSignal,
+      controlPath: true,
       ...(providerOptions ? { providerOptions } : {}),
     });
-    return object;
   }
 
   const input = latestUserMessageText(ctx.runState.messages);
@@ -133,16 +133,16 @@ export async function resolveStructuredDecide(
   }
 
   const choiceSchema = buildChoiceEnumSchema(node.choices!);
-  const { object } = await generateObject({
+  return instrumentedGenerateObject(ctx, {
     model: ctx.controlModel,
     schema: choiceSchema,
     system: systemText(system),
     messages: ctx.runState.messages,
     temperature: 0,
     abortSignal: ctx.abortSignal,
+    controlPath: true,
     ...(providerOptions ? { providerOptions } : {}),
   });
-  return object;
 }
 
 /**

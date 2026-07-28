@@ -93,6 +93,8 @@ export interface RunContext {
    *  in every speaking turn. */
   baseInstructions?: Instructions;
   globalTools?: Record<string, AnyTool>;
+  /** Agent-scoped tools (`agent.tools`) for `toolScope: 'open'` resolution in flow nodes. */
+  agentTools?: Record<string, AnyTool>;
   /** Level-1 skill metadata injected by `SkillsCapability` when `AgentConfig.skills` is set. */
   skillPrompt?: string;
   /** Frozen persistent memory blocks loaded at session start (`AgentMemory.workingMemory`). */

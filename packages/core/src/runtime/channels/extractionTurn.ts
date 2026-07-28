@@ -1,12 +1,14 @@
-import { streamText, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
+import { streamText, type LanguageModel, type LanguageModelUsage, type ModelMessage } from 'ai';
 import { executeModelToolCall, toolResultMessage } from './executeModelTool.js';
-import type { ResolvedNode, TurnResult } from '../../types/channel.js';
+import type { ResolvedNode, TurnResult, TurnUsageSnapshot } from '../../types/channel.js';
 import type { RunContext } from '../../types/run-context.js';
 import type { ReplyNode } from '../../types/flow.js';
-import { buildToolSet } from '../../tools/effect/index.js';
+import type { AnyTool } from '../../types/effectTool.js';
 import { buildNodePrompt, composeSystem } from '../../flow/nodeBuilders.js';
 import { systemNoteBlocks } from '../systemNotes.js';
 import { applyPromptCache } from '../promptCache.js';
+import { resolveNodeTools } from './resolveNodeTools.js';
+import { addTurnUsage, languageModelId } from './turnUsage.js';
 
 /**
  * Shared, NON-SPEAKING field extraction for `collect` nodes, used by every
@@ -23,6 +25,7 @@ export async function runSilentExtraction(
   ctx: RunContext,
   model: LanguageModel,
   maxSteps: number,
+  agentToolDefs: Record<string, AnyTool> = {},
 ): Promise<TurnResult> {
   const replyNode = node.node as ReplyNode;
   const nodeSystem = node.prompt || buildNodePrompt(replyNode, ctx.runState.state);
@@ -35,8 +38,9 @@ export async function runSilentExtraction(
   );
   const volatileSystemBlocks = systemNoteBlocks(ctx.runState);
   const messages: ModelMessage[] = [...ctx.runState.messages];
-  const aiTools = resolveExtractionTools(node);
+  const aiTools = resolveNodeTools(node, ctx, agentToolDefs);
   const out: TurnResult = { text: '', toolResults: [] };
+  let turnUsage: TurnUsageSnapshot | undefined;
 
   for (let step = 0; step < maxSteps; step += 1) {
     const cached = applyPromptCache({
@@ -47,68 +51,128 @@ export async function runSilentExtraction(
       stableSystem,
       volatileSystemBlocks,
     });
-    const result = streamText({
-      model,
-      ...(cached.system ? { system: cached.system } : {}),
-      messages: cached.messages,
-      tools: cached.tools ?? aiTools,
-      temperature: 0,
-      abortSignal: ctx.abortSignal,
-      ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
+    const callId = crypto.randomUUID();
+    const modelId = languageModelId(model);
+    ctx.emit({
+      channel: 'internal',
+      type: 'model-call-start',
+      payload: { callId, modelId, step },
     });
-
-    for await (const part of result.fullStream) {
-      // Intentionally NOT handling 'text-delta' — extraction never speaks.
-      if (part.type === 'error') {
-        const err = (part as { error?: unknown }).error;
-        const message = err instanceof Error ? err.message : String(err);
-        ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
-        throw err instanceof Error ? err : new Error(message);
-      }
-    }
-
-    const finishReason = await result.finishReason;
-    const response = await result.response;
-    messages.push(...response.messages);
-
-    if (finishReason !== 'tool-calls') {
-      break;
-    }
-
-    const toolCalls = await result.toolCalls;
-    for (const call of toolCalls) {
-      const { result: toolResult } = await executeModelToolCall(
-        ctx,
-        { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-        node.localTools,
-      );
-      out.toolResults.push({
-        name: call.toolName,
-        args: call.input,
-        result: toolResult,
-        toolCallId: call.toolCallId,
+    let stepUsage: LanguageModelUsage | undefined;
+    let finishReason: string | undefined;
+    let ended = false;
+    try {
+      const result = streamText({
+        model,
+        ...(cached.system ? { system: cached.system } : {}),
+        messages: cached.messages,
+        tools: cached.tools ?? aiTools,
+        temperature: 0,
+        abortSignal: ctx.abortSignal,
+        ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
       });
-      messages.push(
-        toolResultMessage(
+
+      for await (const part of result.fullStream) {
+        // Intentionally NOT handling 'text-delta' — extraction never speaks.
+        if (part.type === 'error') {
+          const err = (part as { error?: unknown }).error;
+          const message = err instanceof Error ? err.message : String(err);
+          ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
+          throw err instanceof Error ? err : new Error(message);
+        }
+      }
+
+      finishReason = await result.finishReason;
+      const response = await result.response;
+      messages.push(...response.messages);
+      if (result.totalUsage) {
+        stepUsage = await result.totalUsage;
+        if (stepUsage) {
+          turnUsage = addTurnUsage(turnUsage, stepUsage);
+        }
+      }
+
+      ctx.emit({
+        channel: 'internal',
+        type: 'model-call-end',
+        payload: {
+          callId,
+          ...(finishReason !== undefined ? { finishReason } : {}),
+          ...(typeof stepUsage?.inputTokens === 'number' ? { inputTokens: stepUsage.inputTokens } : {}),
+          ...(typeof stepUsage?.outputTokens === 'number' ? { outputTokens: stepUsage.outputTokens } : {}),
+          ...(typeof stepUsage?.inputTokenDetails?.cacheReadTokens === 'number'
+            ? { cacheReadTokens: stepUsage.inputTokenDetails.cacheReadTokens }
+            : {}),
+          ...(typeof stepUsage?.inputTokenDetails?.cacheWriteTokens === 'number'
+            ? { cacheWriteTokens: stepUsage.inputTokenDetails.cacheWriteTokens }
+            : {}),
+        },
+      });
+      ended = true;
+
+      if (finishReason !== 'tool-calls') {
+        break;
+      }
+
+      const toolCalls = await result.toolCalls;
+      let submitFailed = false;
+      for (const call of toolCalls) {
+        const { result: toolResult, failed } = await executeModelToolCall(
+          ctx,
           { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
-          toolResult,
-        ),
+          node.localTools,
+        );
+        if (
+          failed &&
+          call.toolName.startsWith('submit_') &&
+          call.toolName.endsWith('_data')
+        ) {
+          submitFailed = true;
+        }
+        out.toolResults.push({
+          name: call.toolName,
+          args: call.input,
+          result: toolResult,
+          toolCallId: call.toolCallId,
+        });
+        messages.push(
+          toolResultMessage(
+            { toolName: call.toolName, input: call.input, toolCallId: call.toolCallId },
+            toolResult,
+          ),
+        );
+      }
+
+      const submitReturned = toolCalls.some(
+        (call) => call.toolName.startsWith('submit_') && call.toolName.endsWith('_data'),
       );
+      if (
+        submitReturned &&
+        !submitFailed &&
+        (node.extractionSatisfied?.(out.toolResults) ?? false)
+      ) {
+        break;
+      }
+    } catch (err) {
+      if (!ended) {
+        ctx.emit({
+          channel: 'internal',
+          type: 'model-call-end',
+          payload: {
+            callId,
+            finishReason: 'error',
+            ...(typeof stepUsage?.inputTokens === 'number' ? { inputTokens: stepUsage.inputTokens } : {}),
+            ...(typeof stepUsage?.outputTokens === 'number' ? { outputTokens: stepUsage.outputTokens } : {}),
+          },
+        });
+      }
+      throw err;
     }
+  }
+
+  if (turnUsage && turnUsage.totalTokens > 0) {
+    out.usage = turnUsage;
   }
 
   return out;
-}
-
-/** Tools available to the extraction turn = the node's submit tool only (built
- *  from the resolved node, independent of any driver-level tool defs) so text and
- *  voice resolve an identical toolset. */
-function resolveExtractionTools(resolved: ResolvedNode): ToolSet | undefined {
-  const aiTools: ToolSet = { ...resolved.tools };
-  for (const [name, tool] of Object.entries(resolved.localTools ?? {})) {
-    if (tool && !aiTools[name]) {
-      Object.assign(aiTools, buildToolSet({ [name]: tool }));
-    }
-  }
-  return Object.keys(aiTools).length > 0 ? aiTools : undefined;
 }

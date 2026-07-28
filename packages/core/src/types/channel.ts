@@ -1,7 +1,7 @@
 import type { ModelMessage, ToolSet } from 'ai';
 import type { UserInputContent } from '../runtime/userInput.js';
 import type { RunContext } from './run-context.js';
-import type { FlowNode } from './flow.js';
+import type { FlowNode, NodeToolScope } from './flow.js';
 import type { Tool, AnyTool } from './effectTool.js';
 import type { DispatchMode } from '../runtime/dispatchMode.js';
 import type { EscalationReason } from '../escalation/types.js';
@@ -23,7 +23,11 @@ export interface ResolvedNode {
   localTools?: Record<string, AnyTool>;
   /** Free-conversation reply (host loop): keeps model control tools even when outOfBandControl is on. */
   freeConversation?: boolean;
+  /** Copied from `ReplyNode.toolScope` by `resolveReplyNode`. Default treated as `'open'`. */
+  toolScope?: NodeToolScope;
   hostControl?: HostControlContext;
+  /** When set, extraction breaks early only after a submit tool returns and this is true. */
+  extractionSatisfied?: (toolResults: Array<{ name: string; result: unknown }>) => boolean;
 }
 
 export interface ChannelDriver {

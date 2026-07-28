@@ -22,6 +22,12 @@ export interface Flow {
 
 export type FlowNode = ReplyNode | CollectNode | ActionNode | DecideNode;
 
+/** Which tool layers a reply node exposes to the model. Default `'open'`. */
+export type NodeToolScope =
+  | 'open' // node + workingMemory + globalTools + agent.tools
+  | 'base' // node + workingMemory + globalTools
+  | 'closed'; // node tools only
+
 /** Per-node retrieval/memory scoping (W3). All optional; omitting `grounding`
  *  entirely leaves the node grounded exactly as the agent-wide default. */
 export interface NodeGrounding {
@@ -51,6 +57,8 @@ export interface ReplyNode {
   id: string;
   instructions: Instructions;
   tools?: ToolSet | ((state: FlowState) => ToolSet);
+  /** Which tool layers the model sees on this node. Default `'open'`. */
+  toolScope?: NodeToolScope;
   model?: LanguageModel;
   context?: ContextStrategy;
   grounding?: NodeGrounding;

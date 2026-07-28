@@ -49,6 +49,7 @@ import {
   collect,
   action,
   reply,
+  buildToolSet,
 } from '@kuralle-agents/core';
 import { InMemoryFs } from '@kuralle-agents/fs';
 import { UNITS, VENDORS, WORK_ORDERS, WORKSPACE_FILES, nextWorkOrderId, persist, sideEffects } from './data.js';
@@ -285,6 +286,9 @@ const notify_resident = defineTool({
 
 const intakeDone = reply({
   id: 'intake_done',
+  // Closed: terminal report node — the note is already in state; an open tool surface
+  // costs an extra model round-trip (~1.2 s measured) fetching data the node must not use.
+  toolScope: 'closed',
   instructions: ({ state }) =>
     `A work order was just created: ${state.workOrderId} for unit ${state.unitId} ` +
     `(${state.urgency}). Tell the manager it is logged, state the id, and say what happens ` +
@@ -294,18 +298,64 @@ const intakeDone = reply({
 });
 
 /**
- * Find a vendor and dispatch, with NO model in the loop.
+ * Find a vendor and dispatch, with NO model in the loop for the under-cap path.
  *
  * Before this, the model did these as separate tool round-trips — `find_vendor` then
  * `dispatch_vendor` — at roughly 1.7 s each, and chose the vendor itself (badly: it once
  * called a single-result emergency lookup "the cheapest"). Trade selection is a lookup on
  * the issue text, and cheapest-first is a sort. Neither is a judgement call, so neither
  * needs inference.
+ *
+ * Over-cap (non-emergency) routes to `confirm_dispatch`, which owns
+ * `dispatch_vendor_with_approval` under `toolScope: 'base'` — the tool is unavailable
+ * loosely on the agent and only reachable inside this node.
  */
+const dispatchDone = reply({
+  id: 'dispatch_done',
+  // Closed: deterministic terminal — state.dispatchNote holds the finished sentence;
+  // open tools let the model call list_work_orders before answering (~1.2 s measured).
+  toolScope: 'closed',
+  instructions: ({ state }) =>
+    `Report exactly this outcome to the manager, adding nothing: ${state.dispatchNote}`,
+  next: () => ({ end: 'dispatched' }),
+});
+
+const confirmDispatch = reply({
+  id: 'confirm_dispatch',
+  // `base`: keep ADR 0001 lookups (unit threshold, vendor list) available while the
+  // model requests approval, but do not re-union agent.tools (notify_resident, etc.).
+  toolScope: 'base',
+  tools: buildToolSet({ dispatch_vendor_with_approval }),
+  instructions: ({ state }) =>
+    `The estimate $${state.pendingEstimateUsd} for work order ${state.workOrderId} is above ` +
+    `the unit's approval threshold. Call dispatch_vendor_with_approval with workOrderId ` +
+    `${state.workOrderId}, vendorId ${state.pendingVendorId}, estimateUsd ${state.pendingEstimateUsd}. ` +
+    `Then tell the manager you have requested owner approval and stop — do not describe the ` +
+    `vendor as dispatched while approval is pending.`,
+  next: (turn, state) => {
+    const hit = turn.toolResults.find((r) => r.name === 'dispatch_vendor_with_approval');
+    if (!hit) return 'stay';
+    const result = hit.result as { error?: string; vendor?: string; estimateUsd?: number };
+    return {
+      goto: dispatchDone,
+      data: {
+        dispatchNote: result.error
+          ? `Approval request failed: ${result.error}`
+          : `Owner approval requested for ${result.vendor ?? state.pendingVendorId} at $${result.estimateUsd ?? state.pendingEstimateUsd}.`,
+      },
+    };
+  },
+});
+
 const dispatchForWorkOrder = action({
   id: 'dispatch_action',
   run: async (state, ctx) => {
-    const issue = String(state.issue ?? '').toLowerCase();
+    const workOrderId = String(state.workOrderId ?? '');
+    const wo = WORK_ORDERS.find((w) => w.id === workOrderId.toUpperCase().trim());
+    // Prefer fields collected earlier in this session; fall back to the work order record
+    // so a cold enter_flow (manager names a WO id) still has issue/urgency for trade pick.
+    const issue = String(state.issue ?? wo?.issue ?? '').toLowerCase();
+    const urgency = String(state.urgency ?? wo?.urgency ?? 'routine');
     const trade = /leak|water|drain|sink|pipe|toilet/.test(issue)
       ? 'plumbing'
       : /light|electric|outlet|power|fan/.test(issue)
@@ -313,7 +363,7 @@ const dispatchForWorkOrder = action({
         : /heat|radiator|hvac|cold|boiler/.test(issue)
           ? 'hvac'
           : 'general';
-    const emergency = state.urgency === 'emergency';
+    const emergency = urgency === 'emergency';
     const found = (await ctx.tool(
       'find_vendor',
       { trade, emergencyOnly: emergency },
@@ -326,40 +376,57 @@ const dispatchForWorkOrder = action({
 
     const result = (await ctx.tool(
       'dispatch_vendor',
-      { workOrderId: state.workOrderId, vendorId: vendor.id, estimateUsd: vendor.calloutUsd },
+      { workOrderId, vendorId: vendor.id, estimateUsd: vendor.calloutUsd },
       { def: dispatch_vendor },
     )) as { error?: string; vendor?: string; estimateUsd?: number };
+
+    if (result.error) {
+      return {
+        goto: confirmDispatch,
+        data: {
+          workOrderId,
+          issue,
+          urgency,
+          pendingVendorId: vendor.id,
+          pendingEstimateUsd: vendor.calloutUsd,
+        },
+      };
+    }
 
     return {
       goto: dispatchDone,
       data: {
-        dispatchNote: result.error
-          ? `Dispatch needs approval: ${result.error}`
-          : `${result.vendor} dispatched, $${result.estimateUsd}.`,
+        dispatchNote: `${result.vendor} dispatched, $${result.estimateUsd}.`,
       },
     };
   },
 });
 
-const dispatchDone = reply({
-  id: 'dispatch_done',
-  instructions: ({ state }) =>
-    `Report exactly this outcome to the manager, adding nothing: ${state.dispatchNote}`,
-  next: () => ({ end: 'dispatched' }),
+const dispatchIntake = collect({
+  id: 'dispatch_intake',
+  schema: z.object({
+    workOrderId: z.string().describe('Existing work order id, e.g. WO-2001'),
+  }),
+  required: ['workOrderId'],
+  maxTurns: 4,
+  instructions: (missing) =>
+    `Extract the work order id to dispatch against. Still missing: ${missing.join(', ')}.`,
+  ask: () => 'Which work order should I dispatch a vendor for? (e.g. WO-2001)',
+  onComplete: (data) => ({ goto: dispatchForWorkOrder, data: data as Record<string, unknown> }),
 });
 
 /**
  * Dispatch is its own flow, entered when the manager asks for it — not appended to intake.
  * Raising a work order and sending someone are separate decisions, and the manager owns
- * the second one.
+ * the second one. Starts by collecting the work-order id so a cold `enter_flow` still works.
  */
 const dispatchFlow = defineFlow({
   name: 'dispatch_vendor_for_work_order',
   description:
     'Send a vendor to an existing work order. Use when the manager asks to dispatch, ' +
     'send someone, or get someone out. Requires a work order to already exist.',
-  start: dispatchForWorkOrder,
-  nodes: [dispatchForWorkOrder, dispatchDone],
+  start: dispatchIntake,
+  nodes: [dispatchIntake, dispatchForWorkOrder, confirmDispatch, dispatchDone],
 });
 
 const createWorkOrder = action({
@@ -530,11 +597,10 @@ Be brief. Property managers are busy — lead with the answer, then the detail.`
   flows: [workOrderFlow, dispatchFlow],
 
   tools: {
-    // dispatch_vendor is NOT here. It is consequential, and left loose the model called it
-    // unrequested in two separate runs — once dispatching a $320 emergency vendor for a
-    // bathroom fan. It now runs only inside the flow's dispatch action, the same `def`
-    // scoping that already keeps create_work_order out of the model's reach.
-    dispatch_vendor_with_approval,
+    // Consequential dispatch tools are NOT here. `dispatch_vendor` runs only inside the
+    // flow's action (`def`); `dispatch_vendor_with_approval` lives on the flow's
+    // `confirm_dispatch` node under `toolScope: 'base'`. Left loose, either one let the
+    // model bypass the flow.
     notify_resident,
   },
 

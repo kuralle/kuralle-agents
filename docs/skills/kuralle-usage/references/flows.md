@@ -4,6 +4,7 @@
 
 - When to use flows
 - Flow design rules
+- Per-node `toolScope`
 - Transition tools
 - Example flow JSON
 - Example tool transition
@@ -17,6 +18,30 @@ Use flows when you have SOPs, compliance, validation, or step-by-step processes.
 - One step = one question
 - Do not hide required steps in prompts
 - Always require identity before sensitive actions
+- Put consequential tools on the node that owns them — do not leave them loose on the agent if a flow is meant to gate them
+
+## Per-node `toolScope`
+
+`ReplyNode.toolScope` declares which tool layers the model may see on that node. Default is `'open'` (today's union) and stays the default permanently.
+
+| scope | node tools | working-memory | `globalTools` | agent `tools` |
+|---|---|---|---|---|
+| `'open'` *(default)* | yes | yes | yes | yes |
+| `'base'` | yes | yes | yes | no |
+| `'closed'` | yes | no | no | no |
+
+```ts
+import { reply, buildToolSet } from '@kuralle-agents/core';
+
+reply({
+  id: 'confirm_dispatch',
+  toolScope: 'base',
+  tools: buildToolSet({ dispatch_vendor_with_approval }),
+  instructions: 'Call dispatch_vendor_with_approval, then stop.',
+});
+```
+
+**`toolScope` vs `Policy`:** `toolScope` decides what the model **sees**; `Policy` decides whether a call may **run**. Both apply. Use `toolScope` so a tool is unavailable loosely and available only on the owning node; use `Policy` / `needsApproval` for authorization of calls that were made.
 
 ## Transition tools
 

@@ -58,7 +58,10 @@ function hydrateAccumulator(state: Record<string, unknown>): TokenAccumulator {
 }
 
 /** Record real turn usage onto run state (survives across turns via persistence). */
-export async function persistTurnUsageFromTurn(ctx: RunContext, turn: TurnResult): Promise<void> {
+export async function persistTurnUsageFromTurn(
+  ctx: Pick<RunContext, 'runState' | 'runStore'>,
+  turn: Pick<TurnResult, 'usage'>,
+): Promise<void> {
   if (!turn.usage) {
     return;
   }

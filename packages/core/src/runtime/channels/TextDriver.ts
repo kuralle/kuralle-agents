@@ -6,8 +6,7 @@ import { streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } 
 import type { ReplyNode, DecideNode } from '../../types/flow.js';
 import { buildNodePrompt, resolveInstructions, composeSystem, systemMessagesText } from '../../flow/nodeBuilders.js';
 import { systemNoteBlocks } from '../systemNotes.js';
-import { buildToolSet } from '../../tools/effect/index.js';
-import type { Tool, AnyTool } from '../../types/effectTool.js';
+import type { AnyTool } from '../../types/effectTool.js';
 import { dispatchModelToolCalls, toolResultMessage } from './executeModelTool.js';
 import { consumeAllPendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
@@ -18,8 +17,9 @@ import type { TokenSource } from './streaming/speakGated.js';
 import { resolveStreamMode } from './streaming/mode.js';
 import { resolveNodeGatherScope, runGatherPhase } from '../grounding/index.js';
 import { applyPromptCache } from '../promptCache.js';
-import { isFlowTransitionControlTool } from '../../flow/flowControlTools.js';
 import { resolveStructuredDecide } from '../../flow/choiceMatch.js';
+import { resolveNodeTools } from './resolveNodeTools.js';
+import { addTurnUsage, languageModelId } from './turnUsage.js';
 
 export interface TextDriverConfig {
   toolDefs?: Record<string, AnyTool>;
@@ -99,72 +99,120 @@ export class TextDriver implements ChannelDriver {
             stableSystem,
             volatileSystemBlocks,
           });
-          const result = streamText({
-            model,
-            ...(cached.system ? { system: cached.system } : {}),
-            messages: cached.messages,
-            tools: cached.tools ?? aiTools,
-            abortSignal: ctx.abortSignal,
-            ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
+          const callId = crypto.randomUUID();
+          const modelId = languageModelId(model);
+          ctx.emit({
+            channel: 'internal',
+            type: 'model-call-start',
+            payload: { callId, modelId, step },
           });
+          let stepUsage: LanguageModelUsage | undefined;
+          let finishReason: string | undefined;
+          let ended = false;
+          try {
+            const result = streamText({
+              model,
+              ...(cached.system ? { system: cached.system } : {}),
+              messages: cached.messages,
+              tools: cached.tools ?? aiTools,
+              abortSignal: ctx.abortSignal,
+              ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
+            });
 
-          for await (const part of result.fullStream) {
-            if (part.type === 'text-delta') {
-              yield { delta: part.text };
+            for await (const part of result.fullStream) {
+              if (part.type === 'text-delta') {
+                yield { delta: part.text };
+              }
+              if (part.type === 'error') {
+                const err = (part as { error?: unknown }).error;
+                const message = err instanceof Error ? err.message : String(err);
+                ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
+                throw err instanceof Error ? err : new Error(message);
+              }
             }
-            if (part.type === 'error') {
-              const err = (part as { error?: unknown }).error;
-              const message = err instanceof Error ? err.message : String(err);
-              ctx.emit({ channel: 'client', type: 'error', payload: { error: message } });
-              throw err instanceof Error ? err : new Error(message);
-            }
-          }
 
-          const finishReason = await result.finishReason;
-          const response = await result.response;
-          if (result.totalUsage) {
-            const stepUsage = await result.totalUsage;
-            if (stepUsage) {
-              turnUsage = addTurnUsage(turnUsage, stepUsage);
+            finishReason = await result.finishReason;
+            const response = await result.response;
+            if (result.totalUsage) {
+              stepUsage = await result.totalUsage;
+              if (stepUsage) {
+                turnUsage = addTurnUsage(turnUsage, stepUsage);
+              }
             }
-          }
 
-          if (finishReason !== 'tool-calls') {
+            ctx.emit({
+              channel: 'internal',
+              type: 'model-call-end',
+              payload: {
+                callId,
+                ...(finishReason !== undefined ? { finishReason } : {}),
+                ...(typeof stepUsage?.inputTokens === 'number' ? { inputTokens: stepUsage.inputTokens } : {}),
+                ...(typeof stepUsage?.outputTokens === 'number' ? { outputTokens: stepUsage.outputTokens } : {}),
+                ...(typeof stepUsage?.inputTokenDetails?.cacheReadTokens === 'number'
+                  ? { cacheReadTokens: stepUsage.inputTokenDetails.cacheReadTokens }
+                  : {}),
+                ...(typeof stepUsage?.inputTokenDetails?.cacheWriteTokens === 'number'
+                  ? { cacheWriteTokens: stepUsage.inputTokenDetails.cacheWriteTokens }
+                  : {}),
+              },
+            });
+            ended = true;
+
+            if (finishReason !== 'tool-calls') {
+              messages.push(...response.messages);
+              break;
+            }
+
             messages.push(...response.messages);
-            break;
+            toolMessages.push(...response.messages);
+
+            const toolCalls = await result.toolCalls;
+            const mergedTools = {
+              ...ctx.globalTools,
+              ...(ctx.workingMemoryTools ?? {}),
+              ...node.localTools,
+            };
+            await dispatchModelToolCalls(ctx, toolCalls, mergedTools, ({ call, outcome }) => {
+              const { result: toolResult, control, failed } = outcome;
+              out.toolResults.push({
+                name: call.toolName,
+                args: call.input,
+                result: toolResult,
+                toolCallId: call.toolCallId,
+              });
+              toolCallsMade.push({
+                toolCallId: call.toolCallId,
+                toolName: call.toolName,
+                args: call.input,
+                result: toolResult,
+                success: !failed,
+                timestamp: Date.now(),
+              });
+              out.control ??= control;
+
+              const resultMessage = toolResultMessage(call, toolResult);
+              messages.push(resultMessage);
+              toolMessages.push(resultMessage);
+            });
+
+            if (out.control) {
+              break;
+            }
+          } catch (err) {
+            if (!ended) {
+              ctx.emit({
+                channel: 'internal',
+                type: 'model-call-end',
+                payload: {
+                  callId,
+                  finishReason: 'error',
+                  ...(typeof stepUsage?.inputTokens === 'number' ? { inputTokens: stepUsage.inputTokens } : {}),
+                  ...(typeof stepUsage?.outputTokens === 'number' ? { outputTokens: stepUsage.outputTokens } : {}),
+                },
+              });
+            }
+            throw err;
           }
-
-          messages.push(...response.messages);
-          toolMessages.push(...response.messages);
-
-          const toolCalls = await result.toolCalls;
-          const mergedTools = {
-            ...ctx.globalTools,
-            ...(ctx.workingMemoryTools ?? {}),
-            ...node.localTools,
-          };
-          await dispatchModelToolCalls(ctx, toolCalls, mergedTools, ({ call, outcome }) => {
-            const { result: toolResult, control, failed } = outcome;
-            out.toolResults.push({
-              name: call.toolName,
-              args: call.input,
-              result: toolResult,
-              toolCallId: call.toolCallId,
-            });
-            toolCallsMade.push({
-              toolCallId: call.toolCallId,
-              toolName: call.toolName,
-              args: call.input,
-              result: toolResult,
-              success: !failed,
-              timestamp: Date.now(),
-            });
-            out.control ??= control;
-
-            const resultMessage = toolResultMessage(call, toolResult);
-            messages.push(resultMessage);
-            toolMessages.push(resultMessage);
-          });
         }
       },
     };
@@ -218,7 +266,13 @@ export class TextDriver implements ChannelDriver {
   // voice are identical). The model's prose is discarded; the user-facing
   // question is emitted deterministically by the flow engine (CollectNode.ask).
   runExtraction(node: ResolvedNode, ctx: RunContext): Promise<TurnResult> {
-    return runSilentExtraction(node, ctx, ctx.controlModel, resolveMaxSteps(ctx.limits, this.maxSteps));
+    return runSilentExtraction(
+      node,
+      ctx,
+      ctx.controlModel,
+      resolveMaxSteps(ctx.limits, this.maxSteps),
+      this.agentToolDefs(ctx),
+    );
   }
 
   async runStructured(node: DecideNode, ctx: RunContext): Promise<unknown> {
@@ -246,80 +300,15 @@ export class TextDriver implements ChannelDriver {
     return { type: 'message', input };
   }
 
+  private agentToolDefs(ctx: RunContext): Record<string, AnyTool> {
+    return ctx.agentTools ?? this.toolDefs;
+  }
+
   private resolveTools(resolved: ResolvedNode, ctx: RunContext): ToolSet | undefined {
-    const siloFlowControl = ctx.outOfBandControl && !resolved.freeConversation;
-    const merged: Record<string, AnyTool> = {
-      ...this.toolDefs,
-      ...(ctx.globalTools ?? {}),
-      ...(ctx.workingMemoryTools ?? {}),
-      ...(resolved.localTools ?? {}),
-    };
-    const aiTools: ToolSet = { ...resolved.tools };
-    for (const [name, tool] of Object.entries(merged)) {
-      if (siloFlowControl && isFlowTransitionControlTool(name)) {
-        continue;
-      }
-      if (tool && !aiTools[name]) {
-        const built = buildToolSet({ [name]: tool });
-        Object.assign(aiTools, built);
-      }
-    }
-    if (siloFlowControl) {
-      for (const name of Object.keys(aiTools)) {
-        if (isFlowTransitionControlTool(name)) {
-          delete aiTools[name];
-        }
-      }
-    }
-    if (Object.keys(aiTools).length === 0 && Object.keys(merged).length === 0) {
-      return undefined;
-    }
-    if (Object.keys(aiTools).length === 0) {
-      const filteredMerged = siloFlowControl
-        ? Object.fromEntries(
-            Object.entries(merged).filter(([name]) => !isFlowTransitionControlTool(name)),
-          )
-        : merged;
-      if (Object.keys(filteredMerged).length === 0) {
-        return undefined;
-      }
-      return buildToolSet(filteredMerged);
-    }
-    return aiTools;
+    return resolveNodeTools(resolved, ctx, this.agentToolDefs(ctx));
   }
 }
 
-export function addTurnUsage(
-  current: TurnUsageSnapshot | undefined,
-  usage: LanguageModelUsage,
-): TurnUsageSnapshot {
-  const inputTokens = usage.inputTokens ?? 0;
-  const outputTokens = usage.outputTokens ?? 0;
-  const totalTokens = usage.totalTokens ?? inputTokens + outputTokens;
-  const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens ?? 0;
-  const cacheWriteTokens = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
-  if (!current) {
-    return {
-      inputTokens,
-      outputTokens,
-      totalTokens,
-      cacheReadTokens,
-      cacheWriteTokens,
-      contextTokens: inputTokens,
-    };
-  }
-  return {
-    inputTokens: current.inputTokens + inputTokens,
-    outputTokens: current.outputTokens + outputTokens,
-    totalTokens: current.totalTokens + totalTokens,
-    cacheReadTokens: (current.cacheReadTokens ?? 0) + cacheReadTokens,
-    cacheWriteTokens: (current.cacheWriteTokens ?? 0) + cacheWriteTokens,
-    // PEAK, not last. contextTokens answers "how much window did this turn occupy", and a
-    // multi-step turn occupies the largest single prompt it sent — not the final one, and
-    // not the sum. Assigning the last step made a 24,437-token turn report 2,232 because
-    // its tail step was a small extraction call.
-    contextTokens: Math.max(current.contextTokens ?? 0, inputTokens),
-  };
-}
+export { addTurnUsage, languageModelId } from './turnUsage.js';
 
 export { buildNodePrompt };

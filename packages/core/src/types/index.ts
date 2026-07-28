@@ -58,6 +58,7 @@ export type {
   FlowState,
   Flow,
   FlowNode,
+  NodeToolScope,
   NodeGrounding,
   Transition,
   ReplyNode,

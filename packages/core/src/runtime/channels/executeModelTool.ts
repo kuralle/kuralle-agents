@@ -79,6 +79,14 @@ function isParallelSafeTool(def: AnyTool | undefined): boolean {
   return def?.parallelSafe === true || def?.replay === false;
 }
 
+function resolveToolDef(
+  name: string,
+  localTools: Record<string, AnyTool>,
+  ctx: RunContext,
+): AnyTool | undefined {
+  return localTools[name] ?? ctx.toolExecutor.getTool?.(name);
+}
+
 /**
  * Runs `task` over every item, at most `limit` at a time, preserving result order.
  *
@@ -157,7 +165,7 @@ export async function dispatchModelToolCalls(
     const steps = await ctx.runStore.getSteps(ctx.runState.runId);
     const logicalId = logicalRunId(ctx.runState.runId, ctx.runState.runEpoch);
     const unresolved = parallel.filter((call, i) => {
-      const def = localTools[call.toolName];
+      const def = resolveToolDef(call.toolName, localTools, ctx);
       const key =
         def?.idempotencyKey != null
           ? def.idempotencyKey(call.input)
@@ -173,7 +181,7 @@ export async function dispatchModelToolCalls(
 
     let unresolvedCursor = 0;
     const assignments = parallel.map((call, i) => {
-      const def = localTools[call.toolName];
+      const def = resolveToolDef(call.toolName, localTools, ctx);
       const key =
         def?.idempotencyKey != null
           ? def.idempotencyKey(call.input)
@@ -200,7 +208,7 @@ export async function dispatchModelToolCalls(
 
   for (let cursor = 0; cursor < toolCalls.length;) {
     const call = toolCalls[cursor]!;
-    if (!isParallelSafeTool(localTools[call.toolName])) {
+    if (!isParallelSafeTool(resolveToolDef(call.toolName, localTools, ctx))) {
       const signal = await runOne(call);
       if (signal !== undefined) throw signal;
       cursor += 1;
@@ -210,7 +218,7 @@ export async function dispatchModelToolCalls(
     const parallel: ModelToolCall[] = [];
     while (
       cursor < toolCalls.length &&
-      isParallelSafeTool(localTools[toolCalls[cursor]!.toolName])
+      isParallelSafeTool(resolveToolDef(toolCalls[cursor]!.toolName, localTools, ctx))
     ) {
       parallel.push(toolCalls[cursor]!);
       cursor += 1;

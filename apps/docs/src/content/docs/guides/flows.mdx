@@ -5,6 +5,7 @@ description: Model multi-step procedures as typed node graphs.
 
 import { Aside, Code } from '@astrojs/starlight/components';
 import bookingFlowExample from '../../../examples/flows/booking-flow.ts?raw';
+import toolScopeExample from '../../../examples/flows/tool-scope.ts?raw';
 
 A flow is a small directed graph of typed nodes. Each node owns a slice of the conversation — collecting input, giving a reply, running an action, or making a decision — and returns a transition to the next node when it's done.
 
@@ -111,6 +112,62 @@ After any clear affirmative, you must call complete_order, not re-ask.`,
 <Aside type="tip">
   If a flow "won't finish," it's almost always the prompt, not the graph: the node's instructions are eliciting another question instead of the tool call that drives the transition. Make the completion tool the obvious, mandated response to a clear affirmative.
 </Aside>
+
+## Narrowing tools with `toolScope`
+
+By default a reply node is **open**: the model sees the node's own tools plus `globalTools`, working-memory tools, and the agent's loose `tools`. That means `ReplyNode.tools` only ever *adds* — a consequential tool left on the agent stays callable even while a flow is trying to own it.
+
+`toolScope` declares which layers the model may see on that node:
+
+| scope | node tools | working-memory tools | `globalTools` | agent `tools` |
+|---|---|---|---|---|
+| `'open'` *(default)* | yes | yes | yes | yes |
+| `'base'` | yes | yes | yes | no |
+| `'closed'` | yes | no | no | no |
+
+Flow-transition control tools (`handoff`, `escalate`, …) are governed separately by the out-of-band silo — independent of scope.
+
+**`toolScope` vs `Policy`.** `toolScope` decides what the model **sees**. [`Policy`](/guides/policy) decides whether a call that was made is **allowed to run**. Both apply; neither replaces the other. A denied call still costs a round-trip if the model could see the tool.
+
+### Before / after
+
+A spend-cap approval tool left on the agent can be called without entering the dispatch flow. Move it onto the node that owns it and declare `toolScope: 'base'` so agent tools are not re-unioned:
+
+```typescript
+import { reply, buildToolSet, defineAgent, defineFlow } from '@kuralle-agents/core';
+
+// Before — tool is loose AND on the node; the model can bypass the flow.
+defineAgent({
+  tools: { notify_resident, dispatch_vendor_with_approval },
+  flows: [dispatchFlow],
+});
+
+reply({
+  id: 'confirm_dispatch',
+  tools: buildToolSet({ dispatch_vendor_with_approval }),
+  // resolved set still includes notify_resident + every other agent tool
+});
+
+// After — tool belongs only to this node.
+defineAgent({
+  tools: { notify_resident },
+  globalTools: { lookup_unit },
+  flows: [dispatchFlow],
+});
+
+reply({
+  id: 'confirm_dispatch',
+  toolScope: 'base',
+  tools: buildToolSet({ dispatch_vendor_with_approval }),
+  // resolved set: approval tool + globalTools + working-memory tools
+});
+```
+
+`'open'` stays the default permanently — existing nodes are unchanged until you opt in. Use `'closed'` when the node should see exactly what you declared (collect extraction already does this internally). Use `'base'` when the ADR 0001 lookups should stay available mid-flow but consequential agent tools should not.
+
+Full worked sample:
+
+<Code code={toolScopeExample} lang="typescript" title="tool-scope.ts" />
 
 ## Holding position across turns
 

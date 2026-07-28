@@ -6,6 +6,8 @@ import type { Flow } from '../types/flow.js';
 import type { Route } from '../types/route.js';
 import type { RunState } from './durable/types.js';
 import { availableHostFlows, collectTransferTargets } from './hostControlTools.js';
+import { instrumentedGenerateObject } from './channels/instrumentModelCall.js';
+import type { StreamPart } from '../types/stream.js';
 
 export type HostSelection =
   | { kind: 'enterFlow'; flow: Flow }
@@ -45,6 +47,8 @@ export interface ClassifyHostOptions {
   excludeFlowNames?: string[];
   /** How many recent messages to include in the classifier prompt. Default: 6. */
   contextMessageLimit?: number;
+  emit?: (part: StreamPart) => void;
+  abortSignal?: AbortSignal;
 }
 
 export async function classifyHostTarget(options: ClassifyHostOptions): Promise<HostGuardVerdict> {
@@ -89,24 +93,50 @@ export async function classifyHostTarget(options: ClassifyHostOptions): Promise<
     ? 'Return keep, enterFlow with flowName, or transfer with agentId.'
     : 'Return enterFlow with flowName or transfer with agentId. Do not return keep.';
 
-  const { object } = await generateObject({
-    model,
-    schema,
-    temperature: 0,
-    system:
-      'You are an internal routing classifier. Choose exactly one action. ' +
-      'Output schema fields only — never user-facing prose. ' +
-      'Reason over semantic descriptions only; never match keywords or substrings.',
-    prompt:
-      (recentContext
-        ? `Recent conversation:\n${recentContext}\n\n`
-        : `User message:\n${latestUser}\n\n`) +
-      (completedFlows.length > 0 ? `Completed flows: ${completedFlows.join(', ')}\n\n` : '') +
-      (flowLines ? `Available flows:\n${flowLines}\n\n` : '') +
-      (routeLines ? `Routes:\n${routeLines}\n\n` : '') +
-      (transferLines ? `Transfer targets:\n${transferLines}\n\n` : '') +
-      actionHint,
-  });
+  const { object } = options.emit
+    ? {
+        object: await instrumentedGenerateObject(
+          { emit: options.emit, abortSignal: options.abortSignal },
+          {
+            model,
+            schema,
+            temperature: 0,
+            controlPath: true,
+            system:
+              'You are an internal routing classifier. Choose exactly one action. ' +
+              'Output schema fields only — never user-facing prose. ' +
+              'Reason over semantic descriptions only; never match keywords or substrings.',
+            prompt:
+              (recentContext
+                ? `Recent conversation:\n${recentContext}\n\n`
+                : `User message:\n${latestUser}\n\n`) +
+              (completedFlows.length > 0 ? `Completed flows: ${completedFlows.join(', ')}\n\n` : '') +
+              (flowLines ? `Available flows:\n${flowLines}\n\n` : '') +
+              (routeLines ? `Routes:\n${routeLines}\n\n` : '') +
+              (transferLines ? `Transfer targets:\n${transferLines}\n\n` : '') +
+              actionHint,
+            abortSignal: options.abortSignal,
+          },
+        ),
+      }
+    : await generateObject({
+        model,
+        schema,
+        temperature: 0,
+        system:
+          'You are an internal routing classifier. Choose exactly one action. ' +
+          'Output schema fields only — never user-facing prose. ' +
+          'Reason over semantic descriptions only; never match keywords or substrings.',
+        prompt:
+          (recentContext
+            ? `Recent conversation:\n${recentContext}\n\n`
+            : `User message:\n${latestUser}\n\n`) +
+          (completedFlows.length > 0 ? `Completed flows: ${completedFlows.join(', ')}\n\n` : '') +
+          (flowLines ? `Available flows:\n${flowLines}\n\n` : '') +
+          (routeLines ? `Routes:\n${routeLines}\n\n` : '') +
+          (transferLines ? `Transfer targets:\n${transferLines}\n\n` : '') +
+          actionHint,
+      });
 
   const rawConfidence = allowKeep && 'confidence' in object ? object.confidence : null;
   const confidence =

@@ -20,6 +20,7 @@ import {
   schemaSatisfied,
   invalidCollectFields,
   setCollectData,
+  wouldCollectSatisfyAfterToolResults,
 } from './extraction.js';
 import { normalizeTransition } from './normalizeTransition.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
@@ -111,6 +112,8 @@ export async function collectUntilComplete(
       userMessage: peekLatestUserMessage(run),
     });
     const resolved = resolveCollectExtractionNode(node, missingBefore, run.state, submitTool);
+    resolved.extractionSatisfied = (toolResults) =>
+      wouldCollectSatisfyAfterToolResults(node, run.state, toolResults);
     // Non-speaking extraction: the model's prose is DISCARDED (never emitted or
     // appended), so a collect turn cannot author narration that contradicts flow
     // state. Falls back to runAgentTurn for drivers without runExtraction; its

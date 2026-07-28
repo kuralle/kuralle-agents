@@ -16,6 +16,8 @@ export function startHostControlGuard(options: {
   run: RunState;
   model: LanguageModel;
   classify?: (opts: ClassifyHostOptions) => Promise<HostGuardVerdict>;
+  emit?: (part: import('../types/stream.js').StreamPart) => void;
+  abortSignal?: AbortSignal;
 }): Promise<HostGuardVerdict> {
   const classify = options.classify ?? classifyHostTarget;
   return classify({
@@ -23,6 +25,8 @@ export function startHostControlGuard(options: {
     run: options.run,
     model: options.model,
     allowKeep: true,
+    emit: options.emit,
+    abortSignal: options.abortSignal,
   });
 }
 

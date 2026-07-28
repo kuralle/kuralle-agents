@@ -20,8 +20,9 @@ This skill is a map. Read only the sections you need and follow the checklists.
 |---------|-----|
 | Agent | `defineAgent({ id, instructions, model, tools, globalTools, flows, routes, handoffs, agents })` |
 | Flow | `defineFlow({ name, description, start, nodes, hybrid? })` |
-| Nodes | `reply`, `collect`, `action`, `decide` |
+| Nodes | `reply` (optional `toolScope`: `'open'` \| `'base'` \| `'closed'`, default `'open'`), `collect`, `action`, `decide` |
 | Tools | `defineTool` + `buildToolSet` for model; `tools` for durable `ctx.tool` |
+| Visibility vs auth | `toolScope` = what the model **sees**; `Policy` / `needsApproval` = whether a call may **run** |
 | Runtime | `createRuntime({ agents, defaultAgentId })` |
 | Turn | `runtime.run({ sessionId, input, driver? })` → `TurnHandle` |
 | Text channel | default `TextDriver` |

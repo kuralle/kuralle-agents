@@ -360,6 +360,7 @@ export class Runtime {
       // Agent base layer (ADR 0001): composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = openingSurface.globalTools;
+      runCtx.agentTools = opened.agent.tools ?? {};
       runCtx.outOfBandControl = resolveOutOfBandControl(opened.agent);
       runCtx.skillPrompt = openingSurface.skillPrompt;
       runCtx.workingMemoryPrompt = appendGoalsPrompt(
@@ -543,6 +544,7 @@ export class Runtime {
               ? buildAutoRetrieveProvider(knowledgeProvider, target)
               : undefined;
             runCtx.globalTools = targetSurface.globalTools;
+            runCtx.agentTools = target.tools ?? {};
             runCtx.skillPrompt = targetSurface.skillPrompt;
             runCtx.workingMemoryPrompt = appendGoalsPrompt(
               targetSurface.workingMemoryPrompt,

@@ -4,7 +4,7 @@ import type { ChannelDriver } from '../types/channel.js';
 import type { CollectNode, DecideNode, Flow, FlowNode } from '../types/flow.js';
 import { popFlowPark, runCollectDigression } from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
-import { inferRequiredFields, resetCollect } from './extraction.js';
+import { inferRequiredFields, clearCollectData } from './extraction.js';
 import { addSystemNote } from '../runtime/systemNotes.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
@@ -399,12 +399,14 @@ export async function runFlow(
       if (isRecoverableToolError(error) && lastCollectNode) {
         // The action node called a tool imperatively, so there is no model tool-call to
         // attach a result to. Carry the message to the model as a system note (the next
-        // extraction/reply turn reads it from history), clear the offending collect's cache
-        // so re-entry genuinely re-collects instead of re-completing with the bad value, and
-        // return to that node. With the cache cleared and the turn's input already consumed
-        // by the collect that fed this action, collectUntilComplete emits its `ask` and
-        // parks on awaitingUser — a real re-ask, not an end.
-        resetCollect(run.state, lastCollectNode.id);
+        // extraction/reply turn reads it from history), clear the offending collect's
+        // field cache so re-entry genuinely re-collects instead of re-completing with the
+        // bad value, and return to that node — but preserve the turn counter so maxTurns
+        // can still bound a recovery that re-supplies the same values. With the cache
+        // cleared and the turn's input already consumed by the collect that fed this
+        // action, collectUntilComplete emits its `ask` and parks on awaitingUser — a real
+        // re-ask, not an end.
+        clearCollectData(run.state, lastCollectNode.id);
         // Carried as a system NOTE, not a message. The text interpolates tool output that
         // itself contains user-supplied ids, so it must not arrive in the message array
         // where it could read as an instruction — the AI SDK warns about exactly this and

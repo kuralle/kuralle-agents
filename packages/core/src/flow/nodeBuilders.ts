@@ -2,7 +2,7 @@ import type { SystemModelMessage, ToolSet } from 'ai';
 import type { Instructions } from '../types/agentConfig.js';
 import type { FlowState, ReplyNode, CollectNode } from '../types/flow.js';
 import type { ResolvedNode } from '../types/channel.js';
-import type { Tool } from '../types/effectTool.js';
+import type { AnyTool } from '../types/effectTool.js';
 import { buildToolSet, rawToolsFromSet } from '../tools/effect/defineTool.js';
 
 export function resolveInstructions(instructions: Instructions, state: FlowState): string {
@@ -109,6 +109,7 @@ export function resolveReplyNode(
     // Recover the raw executors from the node's `buildToolSet` tools so they run
     // in-flow (with run context) — without also needing `agent.tools`.
     localTools: rawToolsFromSet(tools),
+    ...(node.toolScope !== undefined && { toolScope: node.toolScope }),
     ...(options?.freeConversation && { freeConversation: true }),
   };
 }
@@ -117,7 +118,7 @@ export function resolveCollectExtractionNode(
   collectNode: CollectNode,
   missing: string[],
   state: FlowState,
-  submitTool: Tool,
+  submitTool: AnyTool,
 ): ResolvedNode {
   const instructions =
     collectNode.instructions?.(missing, state) ??
@@ -126,6 +127,7 @@ export function resolveCollectExtractionNode(
     kind: 'reply',
     id: `${collectNode.id}__extract`,
     instructions,
+    toolScope: 'closed',
   };
 
   return {
@@ -133,6 +135,7 @@ export function resolveCollectExtractionNode(
     prompt: resolveInstructions(instructions, state),
     tools: buildToolSet({ [submitTool.name]: submitTool }),
     localTools: { [submitTool.name]: submitTool },
+    toolScope: 'closed',
   };
 }
 

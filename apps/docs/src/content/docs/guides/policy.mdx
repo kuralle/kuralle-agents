@@ -8,6 +8,10 @@ import toolPolicyExample from '../../../examples/tools/tool-policy.ts?raw';
 
 A `Policy` decides what happens when an agent tries to call a tool: it **runs**, it **asks** a human first, or it is **refused**.
 
+<Aside type="note" title="Visibility vs authorization">
+`toolScope` on a reply node decides what the model **sees**. `Policy` decides whether a call is **allowed to run**. They are separate layers — narrowing visibility does not replace a policy, and a policy does not hide a tool the model should never have been offered. See [Flows → Narrowing tools with toolScope](/guides/flows#narrowing-tools-with-toolscope).
+</Aside>
+
 ```ts
 interface Policy {
   decide(req: PolicyRequest): PolicyDecision | Promise<PolicyDecision>;

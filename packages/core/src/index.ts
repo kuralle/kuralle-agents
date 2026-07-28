@@ -398,6 +398,8 @@ export type {
   TextCancelPayload,
   ToolCallPayload,
   ToolResultPayload,
+  ModelCallStartPayload,
+  ModelCallEndPayload,
   FlowEnterPayload,
   FlowEndPayload,
   NodeEnterPayload,

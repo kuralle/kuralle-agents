@@ -152,6 +152,7 @@ export async function runCollectDigression(
       ctx.baseInstructions ??
       'Answer the user helpfully and concisely. Do not mention internal routing or flows.',
     tools: ctx.globalTools as ReplyNode['tools'],
+    toolScope: 'base',
   };
 
   const turn = await driver.runAgentTurn(

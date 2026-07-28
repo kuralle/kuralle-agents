@@ -15,6 +15,10 @@ function readNarrowedPayload(part: StreamPart): unknown {
       return part.payload.args;
     case 'tool-result':
       return part.payload.result;
+    case 'model-call-start':
+      return part.payload.callId;
+    case 'model-call-end':
+      return part.payload.callId;
     case 'flow-enter':
       return part.payload.flow;
     case 'flow-end':
@@ -75,7 +79,7 @@ function readNarrowedPayload(part: StreamPart): unknown {
 
 describe('public StreamPart export', () => {
   it('classifies every publicly exported variant', () => {
-    expect(Object.keys(PART_CHANNEL)).toHaveLength(32);
+    expect(Object.keys(PART_CHANNEL)).toHaveLength(34);
     expect(readNarrowedPayload).toBeFunction();
   });
 });

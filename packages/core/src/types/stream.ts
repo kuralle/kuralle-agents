@@ -30,6 +30,8 @@ export interface ToolCallPayload {
   toolName: string;
   args: unknown;
   toolCallId?: string;
+  /** Set when the call originated from imperative `ctx.tool`, not the model. */
+  imperative?: boolean;
 }
 
 export interface ToolResultPayload {
@@ -38,6 +40,27 @@ export interface ToolResultPayload {
   toolCallId?: string;
   /** A chunk from a still-running async-iterable tool. The final result follows without it. */
   preliminary?: boolean;
+  /** Set when the call originated from imperative `ctx.tool`, not the model. */
+  imperative?: boolean;
+}
+
+export interface ModelCallStartPayload {
+  /** Correlates start/end; mirrors ToolCallPayload.toolCallId. */
+  callId: string;
+  modelId: string;
+  /** 0-based index within this runAgentTurn / extraction / decide loop. */
+  step: number;
+  /** Out-of-node routing / decide / guard calls parent to the turn span. */
+  controlPath?: boolean;
+}
+
+export interface ModelCallEndPayload {
+  callId: string;
+  finishReason?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface FlowEnterPayload {
@@ -186,6 +209,8 @@ interface StreamPayloadMap {
   'text-cancel': TextCancelPayload;
   'tool-call': ToolCallPayload;
   'tool-result': ToolResultPayload;
+  'model-call-start': ModelCallStartPayload;
+  'model-call-end': ModelCallEndPayload;
   'flow-enter': FlowEnterPayload;
   'flow-end': FlowEndPayload;
   'node-enter': NodeEnterPayload;
@@ -240,6 +265,8 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   'text-cancel': 'client',
   'tool-call': 'internal',
   'tool-result': 'internal',
+  'model-call-start': 'internal',
+  'model-call-end': 'internal',
   'flow-enter': 'internal',
   'flow-end': 'internal',
   'node-enter': 'internal',

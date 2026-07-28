@@ -1,7 +1,7 @@
-import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { LanguageModel, ModelMessage } from 'ai';
 import type { RunContext } from '../types/run-context.js';
+import { instrumentedGenerateObject } from './channels/instrumentModelCall.js';
 
 export const GOALS_KEY = '__goals';
 
@@ -193,10 +193,11 @@ export async function updateGoalsFromTurn(
           )
           .join('\n');
 
-  const { object } = await generateObject({
+  const object = await instrumentedGenerateObject(ctx, {
     model,
     schema: goalPatchSchema,
     temperature: 0,
+    controlPath: true,
     system:
       'You track conversational threads (goals/topics the user may circle back to). ' +
       'Given the latest exchange and current tracked threads, return only schema fields. ' +

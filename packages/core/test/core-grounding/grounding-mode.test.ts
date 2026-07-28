@@ -119,10 +119,6 @@ describe('declared grounding contract', () => {
         ],
       },
       {
-        finishReason: 'stop',
-        toolCalls: [],
-      },
-      {
         finishReason: 'tool-calls',
         toolCalls: [
           {
@@ -246,7 +242,6 @@ describe('declared grounding contract', () => {
           },
         ],
       },
-      { finishReason: 'stop', toolCalls: [] },
       {
         finishReason: 'tool-calls',
         toolCalls: [
@@ -287,7 +282,7 @@ describe('declared grounding contract', () => {
         ...actual,
         streamText: (opts: { tools?: Record<string, unknown>; system?: unknown }) => {
           seenToolSets.push(Object.keys(opts.tools ?? {}).sort());
-          if (seenToolSets.length >= 3) {
+          if (seenToolSets.length >= 2) {
             capturedSpecialistSystem =
               typeof opts.system === 'string'
                 ? opts.system
