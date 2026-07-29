@@ -359,10 +359,32 @@ const runtime = createRuntime({
   hooks,                                 // lifecycle hooks for logging/metrics/tracing
   compaction,                            // optional: auto-summarize long histories
   escalation,                            // optional: human-handoff handler (see Engagement guide)
+  driver,                                // optional: PiDriver (recommended) or Core's AI SDK default
 });
 ```
 
 That's the whole runtime surface you'll touch day to day. Now let's get it online.
+
+For production applications, put Pi's model/tool loop behind that same runtime boundary:
+
+```typescript
+import { createModels } from '@earendil-works/pi-ai';
+import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import { PiDriver } from '@kuralle-agents/pi-driver';
+
+const models = createModels();
+models.setProvider(openaiProvider());
+const piModel = models.getModel('openai', 'gpt-4.1-mini');
+if (!piModel) throw new Error('Pi model is not registered');
+
+const runtime = createRuntime({
+  agents: [triage, pharmacist, billing],
+  defaultAgentId: 'triage',
+  driver: new PiDriver({ model: piModel, models }),
+});
+```
+
+Pi owns model-facing iteration; Kuralle still owns every tool call, approval, flow transition, session write, trace, and stream event. See [Pi Driver](/guides/pi-driver).
 
 ## Deploy it
 
@@ -432,9 +454,7 @@ Cloudflare — same `defineAgent`, no runtime differences. (Durable HITL on CF: 
 signal by POSTing to the agent's `…/resume` route, which resumes the suspended run and
 broadcasts the result.) See [Deployment](/guides/deployment#cloudflare-workers).
 
-The complete pharmacy agent from this guide — prescription image intake, inventory tools,
-cart, and the durable pay-link checkout on a Durable Object — is implemented end to end in
-the repo at `apps/playground/pharmacy-rx-agent/`.
+The [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) runs a complete pharmacy agent on both Vercel and a Pi-powered Durable Object. The focused [multichannel pharmacy playground](https://github.com/kuralle/kuralle-agents/tree/main/apps/playground/pharmacy-rx-agent) isolates prescription-image and payment-signal behavior.
 
 ### Vercel — Next.js
 
@@ -495,3 +515,5 @@ You now have the whole map. Each stop has a guide that goes deeper than this tou
 - [Multimodal Input](/guides/multimodal) — images, files, and voice notes end to end.
 - [Engagement & Messaging](/guides/engagement) — WhatsApp/Instagram delivery.
 - [Deployment](/guides/deployment) — the full endpoint set and production wiring.
+- [Pi Driver](/guides/pi-driver) — the recommended model/tool loop and its runtime boundaries.
+- [Examples](/examples/) — complete runnable systems and focused substrate labs.

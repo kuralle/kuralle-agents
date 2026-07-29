@@ -1,0 +1,7 @@
+{
+  "checks": [
+    { "name": "TypeScript", "command": ["bun", "run", "typecheck"] },
+    { "name": "Lint", "command": ["bun", "run", "lint"] },
+    { "name": "Tests", "command": ["bun", "test"] }
+  ]
+}

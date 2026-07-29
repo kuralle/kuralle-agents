@@ -283,6 +283,25 @@
         margin-inline-start: 0.35rem;
       }
     }
+
+    .aria-hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .aria-hero-secondary {
+      color: var(--aria-title-color) !important;
+      font-size: var(--sl-text-sm);
+      font-weight: 600;
+      text-decoration: none !important;
+
+      &:hover,
+      &:focus {
+        color: var(--aria-primary) !important;
+      }
+    }
   }
 
   .sl-markdown-content .expressive-code {

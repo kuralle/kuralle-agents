@@ -27,10 +27,11 @@ From there, the fields you add determine the behavior:
 
 | Add these fields | The agent becomes |
 |---|---|
-| `tools` + `tools` | A tool-calling agent |
+| `tools` | A durable tool-calling agent |
 | `flows` | A structured flow agent |
 | `routes` + `routing` | A triage router |
 | `agents` + `handoffs` | A composition wrapper |
+| `workspace` + `skills` | A file-native, progressively instructed agent |
 
 These aren't mutually exclusive. An agent can have tools, a flow, and route to specialists at the same time.
 
@@ -43,8 +44,9 @@ defineAgent({
   description?: string,
   instructions?: Instructions,              // string | AgentPrompt | (ctx) => Instructions
   model?: LanguageModel,
-  tools?: ToolSet,                          // AI SDK ToolSet — what the model sees and can call
-  tools?: Record<string, EffectTool>, // durable executors (from defineTool)
+  controlModel?: LanguageModel,             // deterministic routing/extraction model
+  tools?: Record<string, AnyTool>,           // durable model-callable effects
+  globalTools?: Record<string, AnyTool>,     // safe tools visible in every speaking node
   flows?: Flow[],                           // structured flow graphs
   routes?: Route[],                         // route entries for triage
   routing?: RoutingPolicy,                  // routing config — see Routing guide
@@ -54,6 +56,11 @@ defineAgent({
   memory?: AgentMemory,                     // long-term memory
   guardrails?: Guardrails,                  // input / output guardrails
   limits?: Limits,                          // step / turn limits
+  validate?: ValidationCapability[],        // post-turn validation
+  refine?: RefinementCapability[],          // pre-turn refinement
+  policy?: Policy,                          // allow / ask / deny tool calls
+  workspace?: AgentWorkspaceConfig,         // portable or per-session filesystem
+  skills?: SkillSource,                     // progressively disclosed procedures
 })
 ```
 
@@ -78,9 +85,21 @@ defineAgent({
 });
 ```
 
+Use `globalTools` only for safe, non-consequential capabilities that should remain visible in every speaking flow node. Mutating or narrowly scoped tools belong in `tools` or on the specific flow node that authorizes them. Raw AI SDK tools must be converted with `wrapAiSdkTool()` before they enter either record.
+
 <Aside type="note">
   Tool effects are logged in an append-only effect log. On retry, the runtime replays log entries rather than re-executing — a payment tool won't charge twice.
 </Aside>
+
+### `controlModel`
+
+`controlModel` handles routing, decisions, and extraction at deterministic temperature while `model` remains the speaking model. It defaults to `model`; set it when you want the control path pinned independently from the user-facing model.
+
+### `workspace` and `skills`
+
+`workspace` attaches a Kuralle filesystem directly or resolves one per session. The model receives read-only traversal by default; executor writes and model writes are separate capabilities. `skills` publishes a validated discovery snapshot and adds `load_skill` / `read_skill_resource` tools for progressive disclosure.
+
+See [Workspaces](/guides/workspace), [Skills](/guides/skills), and the complete [Release Governance Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/release-governance-agent) for an immutable repository mount, writable artifact mount, filesystem skill, and custom policy working together.
 
 ### `flows`
 

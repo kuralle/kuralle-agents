@@ -1,45 +1,34 @@
-# docs
+# Kuralle documentation
 
-This is a Next.js application generated with
-[Create Fumadocs](https://github.com/fuma-nama/fumadocs).
+The documentation site is built with Astro 6 and Starlight. Hand-authored content lives in `src/content/docs`; TypeDoc API pages are generated at build time from the package entry points configured in `astro.config.mjs`.
 
-Run development server:
+## Run locally
+
+From the repository root:
 
 ```bash
-npm run dev
-# or
-pnpm dev
-# or
-yarn dev
+bun install
+bun run --cwd apps/docs dev
 ```
 
-Open http://localhost:3000 with your browser to see the result.
+Open `http://localhost:4321`.
 
-## Explore
+## Production build
 
-In the project, you can see:
+```bash
+bun run --cwd apps/docs build
+bun run --cwd apps/docs preview
+```
 
-- `lib/source.ts`: Code for content source adapter, [`loader()`](https://fumadocs.dev/docs/headless/source-api) provides the interface to access your content.
-- `lib/layout.shared.tsx`: Shared options for layouts, optional but preferred to keep.
+The build validates MDX, navigation, TypeDoc generation, and the static output. Generated API pages should be changed through package source or TypeDoc configuration, not edited directly under `src/content/docs/api`.
 
-| Route                     | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| `app/(home)`              | The route group for your landing page and other pages. |
-| `app/docs`                | The documentation layout and pages.                    |
-| `app/api/search/route.ts` | The Route Handler for search.                          |
+## Content map
 
-### Fumadocs MDX
+- `src/content/docs/index.mdx` — product overview
+- `src/content/docs/examples/` — runnable examples catalogue
+- `src/content/docs/guides/` — task, concept, and operations documentation
+- `src/examples/` — raw code imported into MDX
+- `src/components/` — docs-only Astro presentation components
+- `src/styles/global.css` — Starlight theme overrides
 
-A `source.config.ts` config file has been included, you can customise different options like frontmatter schema.
-
-Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
-
-## Learn More
-
-To learn more about Next.js and Fumadocs, take a look at the following
-resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js
-  features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [Fumadocs](https://fumadocs.dev) - learn about Fumadocs
+Edit links point to the corresponding file on the `main` branch of [kuralle/kuralle-agents](https://github.com/kuralle/kuralle-agents).

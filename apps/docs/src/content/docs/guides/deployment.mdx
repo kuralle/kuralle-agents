@@ -61,16 +61,18 @@ See `packages/messaging-meta/examples/whatsapp-server/README.md` and the [Engage
 `@kuralle-agents/cf-agent` runs Kuralle agents on Cloudflare Workers with Durable Objects. Subclass `KuralleAgent`, implement two methods, and Cloudflare handles SQLite persistence, multi-client sync, and stream resumability.
 
 ```bash
-npm install @kuralle-agents/cf-agent
+npm install @kuralle-agents/cf-agent agents zod
 ```
 
 ```typescript
 import { KuralleAgent } from '@kuralle-agents/cf-agent';
 import { defineAgent } from '@kuralle-agents/core';
 import { createOpenAI } from '@ai-sdk/openai';
+import { routeAgentRequest } from 'agents';
 
 interface Env {
   OPENAI_API_KEY: string;
+  SupportAgent: DurableObjectNamespace;
 }
 
 export class SupportAgent extends KuralleAgent<Env> {
@@ -90,22 +92,49 @@ export class SupportAgent extends KuralleAgent<Env> {
   }
 }
 
-export default SupportAgent;
+export default {
+  async fetch(request: Request, env: Env) {
+    return (await routeAgentRequest(request, env, { cors: true }))
+      ?? new Response('Not found', { status: 404 });
+  },
+} satisfies ExportedHandler<Env>;
 ```
 
-Declare the Durable Object in `wrangler.toml`:
+Declare the Durable Object in `wrangler.jsonc`:
 
-```toml
-[[durable_objects.bindings]]
-name = "SUPPORT_AGENT"
-class_name = "SupportAgent"
-
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["SupportAgent"]
+```jsonc
+{
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "SupportAgent", "class_name": "SupportAgent" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SupportAgent"] }]
+}
 ```
 
-Flows, tools, and derived routing all work identically on Cloudflare — the same `defineAgent` primitive, no runtime differences.
+The public native endpoint is `/agents/support-agent/{instance}`. One instance name resolves to one Durable Object and therefore one single-writer session boundary. Authenticate and authorize that instance name at your Worker boundary; do not accept an arbitrary tenant id merely because it matches the URL shape.
+
+Flows, tools, derived routing, the [Pi driver](/guides/pi-driver#cloudflare-durable-objects), and persistent [`SqlFileSystem`](/guides/workspace/#on-cloudflare-a-persistent-workspace-inside-a-cf-agent) work through this same `KuralleAgent` runtime.
+
+## Drive a deployed agent from the CLI
+
+Kuralle's CLI can save either the completion-oriented HTTP endpoint or the native Cloudflare Agents transport:
+
+```bash
+# Next.js, Hono, or a Worker exposing POST /api/chat
+kuralle connect https://my-agent.example.com
+
+# Native Cloudflare Agents WebSocket protocol
+kuralle connect https://my-agent.workers.dev \
+  --transport cloudflare \
+  --agent-name support-agent
+
+kuralle chat --session customer-42
+```
+
+The hosted runtime owns credentials, state, tools, and workspaces. The CLI stores only the non-secret server/transport selection. Provide a bearer token with `KURALLE_TOKEN`; see [CLI & Devtools](/guides/cli#hosted-runtimes).
 
 ## HTTP streaming
 
@@ -159,3 +188,9 @@ return new Response(handle.toResponseStream('sse'), {
 <Aside type="note">
   For production, pair the Hono server or CF agent with a durable `SessionStore`. See [Sessions & State](/guides/sessions).
 </Aside>
+
+## Production references
+
+- [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) — the same application on Next.js/Vercel and a Pi-powered `KuralleAgent` Durable Object, with hosted CLI access.
+- [Postgres Hacker Starter](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/postgres-hacker-starter) — Next.js/Hono, signed identity, Postgres sessions and memory, pgvector retrieval, and approvals.
+- [Examples](/examples/) — every runnable production system and deployment lab.

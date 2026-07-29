@@ -1,0 +1,31 @@
+---
+title: Examples
+description: Run complete Kuralle systems and focused substrate labs from their source on GitHub.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import ExampleCatalogue from '../../../components/ExampleCatalogue.astro';
+
+These are runnable applications, not disconnected snippets. Start with a production example when you want to understand how Kuralle's agent, policy, persistence, workspace, skills, transports, and operating boundaries compose. Use a playground when you want to isolate one mechanism.
+
+<Aside type="tip" title="Start with release governance">
+  The [Release Governance Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/release-governance-agent) is the most complete authority-bound example: a real Git repository, deterministic checks, an immutable source mount, durable candidate revisions, native approval, and draft-only GitHub publication. Choose another card when its substrate better matches your application.
+</Aside>
+
+Before running an example, clone the monorepo and install once:
+
+```bash
+git clone https://github.com/kuralle/kuralle-agents.git
+cd kuralle-agents
+bun install
+```
+
+Provider-backed examples read credentials from the repository root `.env` or their local `.env.example`. Focused deterministic tests do not require a model key.
+
+<ExampleCatalogue />
+
+## How to read the catalogue
+
+**Production examples** own a full user journey and document their trust boundary, state substrate, tests, and operating procedure. **Playgrounds** are intentionally narrower; they prove portability or make one tradeoff measurable. A playground can be deployed, but it should not be mistaken for a production contract without adding identity, authorization, retention, and operational ownership appropriate to your application.
+
+All examples use Kuralle primitives directly. They do not introduce a second agent runtime or bypass Kuralle's tool policy, durable journal, session state, or stream contract.

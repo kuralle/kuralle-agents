@@ -38,7 +38,7 @@ const agent = defineAgent({
 
 ## The `workspace` tool
 
-`AgentConfig.workspace` accepts a `FileSystem` (read-only) or `{ fs, shell?, readOnly? }`. The model
+`AgentConfig.workspace` accepts a `FileSystem` (read-only), a workspace definition, or a per-session resolver. The model
 sees one tool named `workspace` with these ops:
 
 | Op | Purpose |
@@ -54,11 +54,26 @@ Output is **capped** — reads truncate at 2000 lines / 50KB (use `offset`/`limi
 each line at 500 chars — and truncation is flagged with `truncated: true`. `edit` throws on an
 ambiguous match; pass `replaceAll: true` for multi-match replaces. Tools return **data only**.
 
-<Aside type="note">
-The workspace defaults to **read-only** and is exposed to the model. A **writable** workspace
-(`{ fs, readOnly: false }`) is registered on the executor but not auto-exposed — opt in by adding
-`createFsTool({ fs, readOnly: false })` to `agent.tools` or a flow node.
+<Aside type="note" title="Executor write access is not model write access">
+The workspace defaults to **read-only**. `{ fs, readOnly: false }` lets trusted action/tool code write through `ctx.fs`, while the model still receives a read-only `workspace` tool. Add `modelWritable: true` only when the application intentionally gives the model write/edit operations. Mount-level read-only wrappers remain authoritative.
 </Aside>
+
+Resolve the workspace at turn time when each tenant or session needs a different filesystem:
+
+```typescript
+const agent = defineAgent({
+  id: 'case-worker',
+  model,
+  workspace: ({ session }) => ({
+    fs: workspaceForSession(session.id),
+    readOnly: false,
+    modelWritable: true,
+    instructions: 'Immutable policy is under /policy. Write only under /cases.',
+  }),
+});
+```
+
+The resolver receives the authoritative persisted `Session` and agent id. Use it to choose a pre-authorized substrate; do not let a user message supply an arbitrary host path.
 
 ## Skills on the filesystem
 
@@ -206,7 +221,7 @@ in `getAgents()`, and its files persist in the same DO across turns and restarts
 
 ```typescript
 import { KuralleAgent } from '@kuralle-agents/cf-agent';
-import { sqlFileSystem, createFsTool } from '@kuralle-agents/fs';
+import { sqlFileSystem } from '@kuralle-agents/fs';
 import { defineAgent } from '@kuralle-agents/core';
 
 export class WorkspaceAgent extends KuralleAgent<Env> {
@@ -217,8 +232,7 @@ export class WorkspaceAgent extends KuralleAgent<Env> {
         id: 'workspace-agent',
         model,
         instructions: 'You have a persistent workspace. Use the workspace tool to read/write files.',
-        workspace: { fs, readOnly: false },
-        tools: { workspace: createFsTool({ fs, readOnly: false }) },
+        workspace: { fs, readOnly: false, modelWritable: true },
       }),
     ];
   }
@@ -226,8 +240,7 @@ export class WorkspaceAgent extends KuralleAgent<Env> {
 }
 ```
 
-See the live demo in `apps/playground/fs-demo-cf` (deployed to Cloudflare Workers). For large files,
-pass `{ blobs: r2BlobStore(env.BUCKET) }`; for D1 instead of DO SQLite, `sqlFileSystem(env.DB)`.
+See the [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) for per-session mounts on a production-shaped `KuralleAgent`, and the focused [Cloudflare filesystem lab](https://github.com/kuralle/kuralle-agents/tree/main/apps/playground/fs-demo-cf) for direct persistence checks. For large files, pass `{ blobs: r2BlobStore(env.BUCKET) }`; for D1 instead of DO SQLite, use `sqlFileSystem(env.DB)`.
 
 ## Composite workspaces
 
@@ -251,3 +264,4 @@ const fs = new CompositeFileSystem({
 - [Durable Execution](/guides/durable-execution/) — fs and shell tools execute fresh (`replay: false`)
   rather than replaying a cached result; a persistent `SqlFileSystem` keeps the fs and the journal in sync.
 - [Tools](/guides/tools/) — how the `workspace` and `bash` tools fit the durable tool model.
+- [Examples](/examples/) — complete workspace systems and focused persistence labs.

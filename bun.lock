@@ -164,6 +164,21 @@
         "typescript": "^5.9.0",
       },
     },
+    "apps/examples/release-governance-agent": {
+      "name": "@kuralle-examples/release-governance-agent",
+      "version": "1.0.0",
+      "dependencies": {
+        "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/fs": "workspace:*",
+        "@kuralle-examples/shared": "workspace:*",
+        "ai": "6.0.237",
+        "zod": "^4.0.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.3.0",
+      },
+    },
     "apps/playground/_shared": {
       "name": "@kuralle-playground/shared",
       "dependencies": {
@@ -1249,6 +1264,8 @@
     "@kuralle-examples/pharmacy-rx-agent": ["@kuralle-examples/pharmacy-rx-agent@workspace:apps/examples/pharmacy-rx-agent"],
 
     "@kuralle-examples/postgres-hacker-starter": ["@kuralle-examples/postgres-hacker-starter@workspace:apps/examples/postgres-hacker-starter"],
+
+    "@kuralle-examples/release-governance-agent": ["@kuralle-examples/release-governance-agent@workspace:apps/examples/release-governance-agent"],
 
     "@kuralle-examples/shared": ["@kuralle-examples/shared@workspace:apps/examples/_shared"],
 

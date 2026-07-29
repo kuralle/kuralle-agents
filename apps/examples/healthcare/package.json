@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "chat": "bun ../../../packages/cli/src/cli.ts chat --agent src/kuralle.ts --trace --store",
-    "chat:default": "KURALLE_DRIVER=default bun ../../../packages/cli/src/cli.ts chat --agent src/kuralle.ts --trace --store",
+    "chat:ai-sdk": "KURALLE_DRIVER=ai-sdk bun ../../../packages/cli/src/cli.ts chat --agent src/kuralle.ts --trace --store",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit"

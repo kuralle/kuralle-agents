@@ -1,0 +1,153 @@
+---
+title: Pi Driver
+description: Use pi-agent-core as Kuralle's production model/tool loop while Kuralle retains flows, policy, durability, sessions, and streaming.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`@kuralle-agents/pi-driver` runs Pi's agent/model/tool loop inside Kuralle. Pi decides the model-facing tool sequence; Kuralle remains the application runtime and the only authority for flows, policy, approvals, durable effects, session state, routing, and output streaming.
+
+```text
+input → Kuralle policy phases → Pi model/tool loop → Kuralle validation → persistence
+                                     │
+                                     └─ tool calls return through ctx.tool()
+                                        policy · approval · journal · trace
+```
+
+This is the recommended driver for Kuralle applications. Core's AI SDK driver remains available as the portability baseline.
+
+## Install
+
+```bash
+npm install @kuralle-agents/core @kuralle-agents/pi-driver \
+  @earendil-works/pi-agent-core @earendil-works/pi-ai
+```
+
+Pi `0.82.1` requires Node 22.19 or newer on Node. Cloudflare Workers run on workerd; use `nodejs_compat` and a current compatibility date there.
+
+## Configure a runtime
+
+Register only the provider you use, resolve its Pi model, then pass `PiDriver` at the runtime boundary. The agent's AI SDK model remains available to Kuralle control services such as routing, optional memory extraction, and compaction.
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { createModels } from '@earendil-works/pi-ai';
+import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import { createRuntime, defineAgent } from '@kuralle-agents/core';
+import { PiDriver } from '@kuralle-agents/pi-driver';
+
+const models = createModels();
+models.setProvider(openaiProvider());
+
+const piModel = models.getModel('openai', 'gpt-4.1-mini');
+if (!piModel) throw new Error('Pi model is not registered');
+
+const agent = defineAgent({
+  id: 'support',
+  model: openai('gpt-4.1-mini'),
+  instructions: 'Help the customer clearly and concisely.',
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: agent.id,
+  driver: new PiDriver({ model: piModel, models }),
+});
+```
+
+The runtime-level driver applies to normal messages, typed flow turns, wake turns, resumes, HTTP adapters, and the Cloudflare agent bridge. `runtime.run({ driver })` can still override it for one run.
+
+## Typed flow execution
+
+Pi owns all model-facing flow work by default:
+
+| `typedFlows` | Reply nodes | `collect` extraction | `decide` output |
+| --- | --- | --- | --- |
+| `'pi'` (default) | Pi | private Pi submit tool | schema-validated Pi submit tool |
+| `'ai-sdk'` | Pi | AI SDK | AI SDK structured generation |
+
+```typescript
+const driver = new PiDriver({
+  model: piModel,
+  models,
+  typedFlows: 'ai-sdk',
+});
+```
+
+Use the hybrid mode only when a provider's structured tool calling has not passed your evaluations. Pi-native collection never leaks model prose: the authored `collect.ask` remains the user-facing question, while a private required tool submits the extracted value. Decisions preserve Kuralle's authored choice set and schema validation.
+
+## Tools do not bypass Kuralle
+
+Every Pi tool call crosses Kuralle's normal effect boundary. That preserves:
+
+- argument validation and tool visibility;
+- `Policy` allow/ask/deny decisions and native approval suspension;
+- durable effect keys, replay, and exactly-once semantics for replayable tools;
+- fresh execution for observation tools marked `replay: false`;
+- parallel-safe batching and deterministic journal ordinals;
+- Kuralle control results such as flow entry, handoff, end, and escalation;
+- model usage, tool spans, TTFT, and turn traces.
+
+<Aside type="caution" title="Author Kuralle tools">
+  Provider-defined AI SDK tools cannot be adapted by the Pi driver. Use Kuralle `defineTool`; that is what gives a tool policy, approval, journal, timeout, tracing, and flow semantics.
+</Aside>
+
+## Per-purpose model routing
+
+The model resolver receives the original AI SDK model, current node, run context, and call purpose. Use it to keep structured work on a smaller model while leaving open-ended speaking turns on a larger one.
+
+```typescript
+const driver = new PiDriver({
+  models,
+  model: ({ purpose, node }) => {
+    const id = purpose === 'structured' ? 'gpt-4.1-mini' : 'gpt-5.2';
+    const selected = models.getModel('openai', id);
+    if (!selected) throw new Error(`Missing Pi model for ${node.id}`);
+    return selected;
+  },
+});
+```
+
+## Cloudflare Durable Objects
+
+Return the driver from `KuralleAgent.getRuntimeConfig()`. The same driver then handles chat, scheduled wake, and durable resume paths.
+
+```typescript
+import { createModels } from '@earendil-works/pi-ai';
+import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import { PiDriver } from '@kuralle-agents/pi-driver';
+
+protected getRuntimeConfig() {
+  const models = createModels();
+  models.setProvider(openaiProvider());
+  const model = models.getModel('openai', 'gpt-4.1-mini');
+  if (!model) throw new Error('Missing Pi model');
+
+  return {
+    driver: new PiDriver({
+      model,
+      models,
+      getApiKey: () => this.env.OPENAI_API_KEY,
+    }),
+  };
+}
+```
+
+Import a provider-specific module such as `providers/openai`; importing `providers/all` puts every provider SDK in the Worker graph. The Durable Object owns single-writer session state, Kuralle owns the effect journal, and Pi's transcript exists only for the current node call—there is no competing persistence system.
+
+## Current boundaries
+
+- Text and base64/data-URL images translate to Pi. Remote images are not fetched by the driver; resolve them before the turn. Non-image files become attachment metadata unless your application extracts their contents.
+- Pi steering and follow-up queues are not exposed. Kuralle's session inbox, wake scheduler, and host loop own cross-turn coordination.
+- Explicit AI SDK prompt-cache options are not translated. Pi receives Kuralle's stable prefix followed by volatile blocks, so provider automatic prefix caching can still apply.
+- Pi's higher-level `AgentHarness` is intentionally not used because its recovery and persistence model would overlap Kuralle's accepted journal and session authority.
+
+## Verify parity
+
+The [Pi Driver Stress Matrix](https://github.com/kuralle/kuralle-agents/tree/main/apps/playground/pi-driver-stress) runs every Core flow example plus workspace, skill, OKF, parallel-tool, and OTLP assertions through both drivers:
+
+```bash
+bun run --cwd apps/playground/pi-driver-stress smoke
+```
+
+For complete applications that default to Pi, see [Examples](/examples/).

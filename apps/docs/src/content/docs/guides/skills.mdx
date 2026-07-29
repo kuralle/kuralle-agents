@@ -116,9 +116,24 @@ override earlier roots by frontmatter `name`; the winning root supplies the body
 const skills = fsSkillStore(fs, ['/skills/shared', '/skills/project']);
 ```
 
+## Validation, caching, and audit hashes
+
+Filesystem skills are behavior-bearing content, so Kuralle fails loudly when a discovered `SKILL.md` has invalid frontmatter. A malformed skill cannot silently disappear from an agent's available capability list.
+
+`fsSkillStore` discovers a snapshot, parses each `SKILL.md` once for that discovery, and serves body loads from the parsed snapshot. Resources remain lazy filesystem reads. Every filesystem or inline skill body receives a SHA-256 content hash. Kuralle also hashes the ordered skill set and records that snapshot on the root turn span:
+
+```typescript
+const trace = await runtime.getTrace(traceId);
+console.log(trace?.attributes.skillContentHash);
+console.log(trace?.attributes.skillContentHashes); // one snapshot per agent touched by the turn
+```
+
+The hash identifies the exact `SKILL.md` instruction bodies available during the run. It is evidence for audit and cache identity; it does not embed those bodies in the trace and does not currently cover lazily loaded resource-file bytes.
+
+To hot-update skills on a persistent filesystem, write the new content before the next turn. Discovery refreshes when the runtime wires that turn; an already wired turn intentionally keeps one stable instruction snapshot rather than changing behavior halfway through execution.
+
 ## Where it runs
 
 Skills are pure data + two tools, so they run identically on Node and Cloudflare Workers. The
 workerd parity test verifies a skill body loads byte-identically inside the
-Cloudflare runtime, and a `KuralleAgent` Durable Object does `load_skill` over a deployed Worker with
-no changes (see `examples-deploy/kuralle-skill-smoke`).
+Cloudflare runtime, and a `KuralleAgent` Durable Object loads the same filesystem skill without an adapter. See the [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) and [Examples](/examples/).

@@ -9,6 +9,9 @@ const [coreTypeDoc, coreTypeDocSidebar] = createStarlightTypeDocPlugin();
 const [honoTypeDoc, honoTypeDocSidebar] = createStarlightTypeDocPlugin();
 const [toolsTypeDoc, toolsTypeDocSidebar] = createStarlightTypeDocPlugin();
 const [ragTypeDoc, ragTypeDocSidebar] = createStarlightTypeDocPlugin();
+const [fsTypeDoc, fsTypeDocSidebar] = createStarlightTypeDocPlugin();
+const [piDriverTypeDoc, piDriverTypeDocSidebar] = createStarlightTypeDocPlugin();
+const [cfAgentTypeDoc, cfAgentTypeDocSidebar] = createStarlightTypeDocPlugin();
 
 const typeDocConfig = {
   useCodeBlocks: true,
@@ -48,6 +51,27 @@ const plugins = [
     tsconfig: '../../packages/rag/tsconfig.json',
     typeDoc: typeDocConfig,
   }),
+  fsTypeDoc({
+    sidebar: { label: '@kuralle-agents/fs' },
+    entryPoints: ['../../packages/fs/src/index.ts'],
+    output: 'api/fs',
+    tsconfig: '../../packages/fs/tsconfig.json',
+    typeDoc: typeDocConfig,
+  }),
+  piDriverTypeDoc({
+    sidebar: { label: '@kuralle-agents/pi-driver' },
+    entryPoints: ['../../packages/pi-driver/src/index.ts'],
+    output: 'api/pi-driver',
+    tsconfig: '../../packages/pi-driver/tsconfig.json',
+    typeDoc: typeDocConfig,
+  }),
+  cfAgentTypeDoc({
+    sidebar: { label: '@kuralle-agents/cf-agent' },
+    entryPoints: ['../../packages/cf-agent/src/index.ts'],
+    output: 'api/cf-agent',
+    tsconfig: '../../packages/cf-agent/tsconfig.json',
+    typeDoc: typeDocConfig,
+  }),
   starlightLlmsTxt({
     projectName: 'Kuralle',
     customSets: [
@@ -55,6 +79,11 @@ const plugins = [
         label: 'Guides',
         description: 'Guides for using Kuralle',
         paths: ['guides/**'],
+      },
+      {
+        label: 'Examples',
+        description: 'Runnable production examples and focused integration labs',
+        paths: ['examples/**'],
       },
       {
         label: 'API Reference',
@@ -67,26 +96,46 @@ const plugins = [
 
 const sidebar = [
   { label: 'Overview', link: '/' },
-  { label: 'Quickstart', link: '/guides/quickstart' },
-  { label: 'Build an Agent', link: '/guides/build-an-agent' },
-  { label: 'Templates', link: '/guides/templates' },
+  { label: 'Examples', link: '/examples/' },
   {
-    label: 'Guides',
+    label: 'Start',
+    collapsed: false,
+    items: [
+      { label: 'Quickstart', link: '/guides/quickstart' },
+      { label: 'Build an Agent', link: '/guides/build-an-agent' },
+      { label: 'Templates', link: '/guides/templates' },
+    ],
+  },
+  {
+    label: 'Core model',
     collapsed: false,
     items: [
       { label: 'Agents', link: '/guides/agents' },
       { label: 'Flows', link: '/guides/flows' },
       { label: 'Flow Execution Model', link: '/guides/flow-execution' },
       { label: 'Tools', link: '/guides/tools' },
-      { label: 'Multimodal Input', link: '/guides/multimodal' },
-      { label: 'Tool Policy', link: '/guides/policy' },
-      { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Routing & Handoffs', link: '/guides/routing' },
+    ],
+  },
+  {
+    label: 'Context & state',
+    collapsed: false,
+    items: [
       { label: 'Sessions & State', link: '/guides/sessions' },
       { label: 'Memory', link: '/guides/memory' },
       { label: 'Knowledge & Retrieval', link: '/guides/knowledge' },
       { label: 'Skills', link: '/guides/skills' },
       { label: 'Workspace (Filesystem & Shell)', link: '/guides/workspace' },
+      { label: 'Multimodal Input', link: '/guides/multimodal' },
+    ],
+  },
+  {
+    label: 'Production',
+    collapsed: false,
+    items: [
+      { label: 'Pi Driver', link: '/guides/pi-driver' },
+      { label: 'Tool Policy', link: '/guides/policy' },
+      { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Engagement & Messaging', link: '/guides/engagement' },
       { label: 'Deployment', link: '/guides/deployment' },
       { label: 'Observability', link: '/guides/observability' },
@@ -116,6 +165,21 @@ const sidebar = [
         label: '@kuralle-agents/rag',
         collapsed: true,
         items: [ragTypeDocSidebar],
+      },
+      {
+        label: '@kuralle-agents/fs',
+        collapsed: true,
+        items: [fsTypeDocSidebar],
+      },
+      {
+        label: '@kuralle-agents/pi-driver',
+        collapsed: true,
+        items: [piDriverTypeDocSidebar],
+      },
+      {
+        label: '@kuralle-agents/cf-agent',
+        collapsed: true,
+        items: [cfAgentTypeDocSidebar],
       },
     ],
   },

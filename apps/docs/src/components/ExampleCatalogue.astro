@@ -1,0 +1,245 @@
+---
+const github = 'https://github.com/kuralle/kuralle-agents/tree/main/';
+
+const production = [
+  {
+    index: '01',
+    title: 'Release Governance Agent',
+    kicker: 'Flagship operator',
+    description: 'Audits a real Git repository, runs release gates, persists a revision-bound candidate, and creates an approval-gated GitHub draft without exposing a shell or gaining tag and publication authority.',
+    interface: 'Terminal TUI',
+    substrate: 'Git · local artifacts · GitHub API',
+    tags: ['Pi', 'policy', 'workspace', 'idempotency'],
+    path: 'apps/examples/release-governance-agent',
+    command: 'bun run --cwd apps/examples/release-governance-agent chat',
+    featured: true,
+  },
+  {
+    index: '02',
+    title: 'Pharmacy Workspace Agent',
+    kicker: 'Durable edge + web',
+    description: 'Runs the same safe pharmacy agent on Next.js/Vercel and a Cloudflare Durable Object with per-session workspaces, progressive skills, and hosted CLI access.',
+    interface: 'Web + hosted CLI',
+    substrate: 'Vercel · Durable Object SQLite',
+    tags: ['cf-agent', 'workspace', 'skills', 'multimodal'],
+    path: 'apps/examples/pharmacy-rx-agent',
+    command: 'bun run --cwd apps/examples/pharmacy-rx-agent dev',
+    live: 'https://pharmacy-rx-agent.vercel.app',
+  },
+  {
+    index: '03',
+    title: 'Postgres Hacker Starter',
+    kicker: 'Full-stack starter',
+    description: 'A Next.js workbench backed by PostgreSQL and pgvector, with signed identity, hybrid retrieval, persistent memory, and approval-gated account operations.',
+    interface: 'Next.js web app',
+    substrate: 'PostgreSQL · pgvector',
+    tags: ['identity', 'retrieval', 'memory', 'approval'],
+    path: 'apps/examples/postgres-hacker-starter',
+    command: 'bun run --cwd apps/examples/postgres-hacker-starter db:up && bun run --cwd apps/examples/postgres-hacker-starter dev',
+  },
+  {
+    index: '04',
+    title: 'Local Content Desk',
+    kicker: 'File-native workflow',
+    description: 'Turns local Markdown sources and filesystem skills into revisioned drafts with deterministic style checks, explicit approvals, and conflict-safe publication.',
+    interface: 'Terminal TUI',
+    substrate: 'Caller-owned Markdown',
+    tags: ['NodeFileSystem', 'skills', 'revisions', 'approval'],
+    path: 'apps/examples/content-agent',
+    command: 'bun run --cwd apps/examples/content-agent chat',
+  },
+  {
+    index: '05',
+    title: 'Healthcare Operations',
+    kicker: 'Authenticated workflow',
+    description: 'A terminal healthcare operator for appointment, billing, and escalation work with authenticated records, durable SQLite state, and bounded actions.',
+    interface: 'Terminal TUI',
+    substrate: 'Local SQLite',
+    tags: ['authentication', 'flows', 'billing', 'escalation'],
+    path: 'apps/examples/healthcare',
+    command: 'bun run --cwd apps/examples/healthcare chat',
+  },
+  {
+    index: '06',
+    title: 'Hotel Receptionist',
+    kicker: 'Policy-grounded service',
+    description: 'Handles verified bookings and hotel operations against a real SQLite service layer and policy handbook, with privacy and emergency boundaries.',
+    interface: 'Terminal TUI',
+    substrate: 'SQLite · policy Markdown',
+    tags: ['flows', 'policy', 'identity', 'durability'],
+    path: 'apps/examples/hotel-receptionist',
+    command: 'bun run --cwd apps/examples/hotel-receptionist chat',
+  },
+];
+
+const labs = [
+  {
+    title: 'ACME Support Agent',
+    description: 'Three-tier compiled, cached, and hybrid retrieval with multi-hop decomposition, reranking, quality checks, specialist routing, and benchmarks.',
+    path: 'apps/playground/acme-support-agent',
+    command: 'bun run --cwd apps/playground/acme-support-agent ingest && bun run --cwd apps/playground/acme-support-agent cli',
+    tags: ['RAG', 'cache', 'quality'],
+  },
+  {
+    title: 'Vector RAG',
+    description: 'End-to-end ingestion and vector retrieval with interchangeable in-memory, PostgreSQL/pgvector, and Redis Search stores plus Hono SSE/WebSockets.',
+    path: 'apps/playground/rag-demo',
+    command: 'bun run --cwd apps/playground/rag-demo cli',
+    tags: ['RAG', 'stores', 'Hono'],
+  },
+  {
+    title: 'Cache-Augmented Generation',
+    description: 'A compact restaurant knowledge agent where the model ranks a bounded corpus directly—useful for comparing CAG with vector retrieval.',
+    path: 'apps/playground/cag-demo',
+    command: 'bun run --cwd apps/playground/cag-demo cli',
+    tags: ['CAG', 'knowledge', 'Hono'],
+  },
+  {
+    title: 'Langfuse Export',
+    description: 'A routed support conversation exported through Kuralle OTLP spans and the Langfuse OpenTelemetry processor, with a credential-free smoke lane.',
+    path: 'apps/playground/langfuse-demo',
+    command: 'bun run --cwd apps/playground/langfuse-demo run',
+    tags: ['traces', 'OTLP', 'Langfuse'],
+  },
+  {
+    title: 'Pi Driver Stress Matrix',
+    description: 'Runs every Core flow example plus workspace, skill, OKF, parallel-tool, trace, and latency assertions through both Pi and the AI SDK driver.',
+    path: 'apps/playground/pi-driver-stress',
+    command: 'bun run --cwd apps/playground/pi-driver-stress smoke',
+    tags: ['Pi', 'flows', 'parity'],
+  },
+  {
+    title: 'Filesystem on Cloudflare',
+    description: 'A persistent Kuralle workspace inside a real Cloudflare AIChatAgent Durable Object using its own SQLite storage.',
+    path: 'apps/playground/fs-demo-cf',
+    command: 'bun run --cwd apps/playground/fs-demo-cf dev',
+    live: 'https://kuralle-fs-demo.mithushancj.workers.dev',
+    tags: ['cf-agent', 'DO SQLite', 'filesystem'],
+  },
+  {
+    title: 'Filesystem on Vercel',
+    description: 'The same SqlFileSystem contract on a stateless serverless platform, persisted through a fetch-only libSQL/Turso backend.',
+    path: 'apps/playground/fs-demo-vercel',
+    command: 'See the deployment recipe in the README',
+    live: 'https://fs-demo-vercel.vercel.app',
+    tags: ['Vercel', 'libSQL', 'filesystem'],
+  },
+  {
+    title: 'Multichannel Pharmacy',
+    description: 'A focused Cloudflare playground for multimodal prescription intake and durable payment-signal resume across web chat and WhatsApp.',
+    path: 'apps/playground/pharmacy-rx-agent',
+    command: 'bun run --cwd apps/playground/pharmacy-rx-agent dev',
+    live: 'https://pharmacy-rx-agent.mithushancj.workers.dev',
+    tags: ['WhatsApp', 'multimodal', 'signals'],
+  },
+];
+---
+
+<section class="catalogue" aria-labelledby="production-examples">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Reference systems</p>
+      <h2 id="production-examples">Production examples</h2>
+    </div>
+    <p>Complete applications with explicit data ownership, durable effects, failure boundaries, tests, and operating notes.</p>
+  </div>
+
+  <div class="production-grid">
+    {production.map((item) => (
+      <article class:list={['example-card', item.featured && 'featured']}>
+        <header>
+          <span class="index" aria-hidden="true">{item.index}</span>
+          <span class="kicker">{item.kicker}</span>
+        </header>
+        <h3>{item.title}</h3>
+        <p class="description">{item.description}</p>
+        <dl>
+          <div><dt>Interface</dt><dd>{item.interface}</dd></div>
+          <div><dt>Substrate</dt><dd>{item.substrate}</dd></div>
+        </dl>
+        <ul class="tags" aria-label="Kuralle capabilities">
+          {item.tags.map((tag) => <li>{tag}</li>)}
+        </ul>
+        <code class="command">{item.command}</code>
+        <footer>
+          <a href={`${github}${item.path}`}>View source <span aria-hidden="true">↗</span></a>
+          {item.live && <a class="secondary" href={item.live}>Open live <span aria-hidden="true">↗</span></a>}
+        </footer>
+      </article>
+    ))}
+  </div>
+</section>
+
+<section class="catalogue labs" aria-labelledby="focused-labs">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Focused proof</p>
+      <h2 id="focused-labs">Playgrounds and integration labs</h2>
+    </div>
+    <p>Smaller runnable surfaces for studying one substrate, transport, retrieval strategy, or compatibility boundary.</p>
+  </div>
+
+  <div class="lab-list">
+    {labs.map((item) => (
+      <article class="lab-card">
+        <div class="lab-copy">
+          <h3>{item.title}</h3>
+          <p>{item.description}</p>
+          <ul class="tags" aria-label="Capabilities">
+            {item.tags.map((tag) => <li>{tag}</li>)}
+          </ul>
+        </div>
+        <div class="lab-actions">
+          <code>{item.command}</code>
+          <div>
+            <a href={`${github}${item.path}`}>GitHub ↗</a>
+            {item.live && <a href={item.live}>Live ↗</a>}
+          </div>
+        </div>
+      </article>
+    ))}
+  </div>
+</section>
+
+<style>
+  .catalogue { margin-block: 2.5rem 4.5rem; }
+  .section-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 28rem); gap: 2rem; align-items: end; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--aria-gray-1); }
+  .section-heading h2 { margin: 0; font-size: clamp(1.55rem, 3vw, 2.35rem) !important; letter-spacing: -0.035em; }
+  .section-heading > p { margin: 0; color: var(--aria-secondary); font-size: .9rem; line-height: 1.6; }
+  .eyebrow { margin: 0 0 .4rem; color: var(--aria-primary); font: 700 .68rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; text-transform: uppercase; }
+  .production-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; min-width: 0; }
+  .example-card { position: relative; display: flex; flex-direction: column; min-width: 0; max-width: 100%; min-height: 29rem; padding: 1.35rem; overflow: hidden; border: 1px solid var(--aria-gray-1); border-radius: 1rem; background: color-mix(in srgb, var(--aria-gray-05) 80%, transparent); }
+  .example-card.featured { grid-column: 1 / -1; min-height: 25rem; background: radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--aria-primary) 20%, transparent), transparent 36%), linear-gradient(145deg, color-mix(in srgb, var(--aria-gray-05) 94%, transparent), color-mix(in srgb, var(--aria-background) 84%, var(--aria-primary) 16%)); }
+  .example-card header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3rem; }
+  .index { color: var(--aria-gray-2); font: 500 .72rem/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .kicker { padding: .35rem .55rem; border: 1px solid var(--aria-gray-1); border-radius: 999px; color: var(--aria-nav-category-text); font-size: .66rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .example-card h3, .lab-card h3 { margin: 0; color: var(--aria-title-color); letter-spacing: -.025em; }
+  .example-card h3 { max-width: 25ch; font-size: 1.45rem !important; }
+  .description { max-width: 66ch; margin: .8rem 0 1.4rem; color: var(--aria-secondary); font-size: .88rem; line-height: 1.65; }
+  dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin: 0 0 1.2rem; }
+  dl div { border-left: 2px solid var(--aria-gray-1); padding-left: .65rem; }
+  dt { color: var(--aria-nav-category-text); font: 700 .62rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+  dd { margin: .3rem 0 0; color: var(--aria-text-primary); font-size: .78rem; line-height: 1.35; }
+  .tags { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 1.25rem; padding: 0; list-style: none; }
+  .tags li { padding: .25rem .45rem; border-radius: .35rem; background: var(--aria-gray-1); color: var(--aria-nav-category-text); font: 600 .65rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .command, .lab-actions code { display: block; box-sizing: border-box; width: 100%; max-width: 100%; overflow-x: auto; padding: .75rem; border: 1px solid var(--aria-code-border-color); border-radius: .55rem; background: var(--aria-code-background); color: var(--aria-text-primary); font-size: .68rem; line-height: 1.5; white-space: nowrap; }
+  .example-card footer { display: flex; gap: 1rem; align-items: center; margin-top: auto; padding-top: 1.25rem; }
+  .example-card a, .lab-card a { color: var(--aria-primary) !important; font-size: .78rem; font-weight: 700; text-decoration: none; }
+  .example-card a.secondary { color: var(--aria-nav-category-text) !important; }
+  .lab-list { min-width: 0; border-top: 1px solid var(--aria-gray-1); }
+  .lab-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, .85fr); gap: 2rem; min-width: 0; padding: 1.35rem 0; border-bottom: 1px solid var(--aria-gray-1); }
+  .lab-card h3 { font-size: 1rem !important; }
+  .lab-card p { max-width: 65ch; margin: .45rem 0 .8rem; color: var(--aria-secondary); font-size: .8rem; line-height: 1.55; }
+  .lab-card .tags { margin-bottom: 0; }
+  .lab-copy, .lab-actions { min-width: 0; }
+  .lab-actions { display: flex; flex-direction: column; justify-content: center; gap: .65rem; }
+  .lab-actions div { display: flex; gap: 1rem; }
+  @media (max-width: 48rem) {
+    .section-heading, .lab-card { grid-template-columns: 1fr; gap: .8rem; }
+    .production-grid { grid-template-columns: 1fr; }
+    .example-card.featured { grid-column: auto; }
+    .example-card { min-height: 0; }
+    .example-card header { margin-bottom: 2rem; }
+    dl { grid-template-columns: 1fr; }
+  }
+</style>
