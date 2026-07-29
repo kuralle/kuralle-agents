@@ -1,13 +1,16 @@
 ---
-"@kuralle-agents/core": major
-"@kuralle-agents/messaging": major
-"@kuralle-agents/hono-server": major
-"@kuralle-agents/cf-agent": major
+"@kuralle-agents/core": minor
+"@kuralle-agents/messaging": minor
+"@kuralle-agents/hono-server": minor
+"@kuralle-agents/cf-agent": minor
 ---
 
 Flow contracts are enforced, human approval is a real decision, and flow state is owned.
 
 ## Breaking changes — what a consumer must do
+
+This is a `minor` bump because the packages are pre-1.0, where semver permits breaking
+changes on a minor. It IS a breaking release; read this section before upgrading.
 
 **Flow state is an isolated frame.** A flow no longer reads or writes the run's root state
 record. Nothing crosses a flow boundary unless the flow declares it:
