@@ -110,7 +110,7 @@ describe('collect recovery livelock', () => {
       try {
         const result = await runFlow(flow, runState, driver, ctx);
         if (result.kind === 'awaitingUser') {
-          const raw = runState.state.__collectTurns_gather;
+          const raw = runState.flowFrame?.state.__collectTurns_gather;
           const turns = typeof raw === 'number' ? raw : 0;
           turnSamples.push(turns);
           const asks = parts.filter(

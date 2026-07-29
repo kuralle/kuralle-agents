@@ -174,6 +174,7 @@ describe('binding flow entry', () => {
       binding: true,
       start: gather,
       nodes: [gather],
+      state: { output: (state) => state },
     });
     const unrequestedEffect = action({
       id: 'unrequested_effect',

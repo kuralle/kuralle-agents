@@ -28,19 +28,31 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const deny = argv.includes('--deny');
   const signalName = flag(argv, '--signal');
   const by = flag(argv, '--approve') ?? flag(argv, '--deny') ?? 'cli';
+  const store = fileSessionStore(storePath);
+  const stored = await store.get(sessionId);
+  const waitingFor = (
+    stored as unknown as {
+      durableRuns?: Record<
+        string,
+        { runState?: { waitingFor?: { requestId?: string; signalName?: string } } }
+      >;
+    }
+  )?.durableRuns?.[sessionId]?.runState?.waitingFor;
   const signalDelivery =
     approve || deny
       ? {
-          // A fresh id per delivery: recordSignalDelivery dedupes on it, so reusing one
-          // would make a second decision a silent no-op.
           signalId: `cli-${Date.now()}`,
+          requestId: waitingFor?.requestId ?? '',
           name: '__approval',
-          payload: { approved: approve, by },
+          actor: { id: by, type: 'user' as const },
+          decision: approve ? 'approve' as const : 'deny' as const,
         }
       : signalName
         ? {
             signalId: `cli-${Date.now()}`,
+            requestId: waitingFor?.requestId ?? '',
             name: signalName,
+            actor: { id: 'cli', type: 'service' as const },
             payload: JSON.parse(flag(argv, '--payload') ?? '{}') as Record<string, unknown>,
           }
         : undefined;
@@ -61,7 +73,6 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
     .join(' ')
     .trim();
 
-  const store = fileSessionStore(storePath);
   // Traces must be file-backed too. `send` is one turn per process, so a MemoryTraceStore
   // (what the loader defaults to whenever a session store is supplied) is discarded on
   // exit and `kuralle trace --store` finds nothing — the exact sidecar `chat --store`
@@ -96,7 +107,14 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
     else if (part.type === 'flow-enter') events.push(`enter:${part.payload.flow}`);
     else if (part.type === 'flow-end') events.push(`end:${part.payload.flow}`);
     else if (part.type === 'handoff') events.push(`handoff:${part.payload.targetAgent}`);
-    else if (part.type === 'paused') events.push(`paused:${part.payload.waitingFor}`);
+    else if (part.type === 'paused') {
+      const operation = part.payload.interrupt.operation;
+      events.push(
+        operation
+          ? `approval-pending:${part.payload.interrupt.requestId}:${operation.toolName}`
+          : `paused:${part.payload.interrupt.requestId}:${part.payload.waitingFor}`,
+      );
+    }
     else if (part.type === 'error') events.push(`error:${part.payload.error}`);
   }
   const res = await handle;

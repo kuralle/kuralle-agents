@@ -2,7 +2,11 @@ import type { ModelMessage } from 'ai';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
 import type { CollectNode, DecideNode, Flow, FlowNode } from '../types/flow.js';
-import { popFlowPark, runCollectDigression } from './collectDigression.js';
+import {
+  popFlowPark,
+  pushFlowPark,
+  runCollectDigression,
+} from './collectDigression.js';
 import { parseConfirmation } from './confirmParse.js';
 import { inferRequiredFields, clearCollectData, setPendingRecoveryMessage } from './extraction.js';
 import { addSystemNote } from '../runtime/systemNotes.js';
@@ -33,6 +37,12 @@ import {
   degradeFlowError,
   findEscalateNode,
 } from './degrade.js';
+import {
+  currentFlowState,
+  enterFlowState,
+  exportFlowState,
+} from './flowState.js';
+import { emptySignalSchema } from '../runtime/durable/signalSchemas.js';
 
 export type FlowResult =
   | { kind: 'ended'; reason: string }
@@ -139,6 +149,22 @@ function appendAssistantMessage(run: RunState, text: string): void {
   run.messages = [...run.messages, message];
 }
 
+function deterministicReply(node: Extract<FlowNode, { kind: 'reply' }>, run: RunState, ctx: RunContext) {
+  const text = node.response?.(currentFlowState(run));
+  if (text === undefined) {
+    return undefined;
+  }
+  if (text.trim()) {
+    const id = crypto.randomUUID();
+    ctx.emit({ channel: 'client', type: 'text-start', payload: { id } });
+    ctx.emit({ channel: 'client', type: 'text-delta', payload: { id, delta: text } });
+    ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
+    appendAssistantMessage(run, text);
+  }
+  ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
+  return { text, toolResults: [] };
+}
+
 async function dispatchNode(
   node: FlowNode,
   run: RunState,
@@ -147,8 +173,9 @@ async function dispatchNode(
   agent: AgentConfig | undefined,
   flow: Flow,
 ): Promise<NormalizedTransition> {
+  const state = currentFlowState(run);
   if (isActionNode(node)) {
-    return normalizeTransition(await node.run(run.state, toActionContext(ctx)));
+    return normalizeTransition(await node.run(state, toActionContext(ctx)));
   }
 
   if (isCollectNode(node)) {
@@ -189,10 +216,44 @@ async function dispatchNode(
     // This decide consumes the turn's input for its decision.
     ctx.turnInputConsumed = true;
     const structured = await driver.runStructured(node, ctx);
-    return normalizeTransition(await node.decide(structured, run.state));
+    return normalizeTransition(await node.decide(structured, state));
   }
 
   if (isReplyNode(node)) {
+    const resumed = ctx.takeResumedToolOutcome(node.id);
+    if (resumed) {
+      const turn = {
+        text: '',
+        toolResults: [
+          {
+            name: resumed.toolName,
+            args: resumed.args,
+            result: resumed.result,
+            toolCallId: resumed.toolCallId,
+          },
+        ],
+      };
+      if (ctx.outOfBandControl) {
+        const decision = await evaluateReplyControl({
+          node,
+          turn,
+          state,
+          interrupted: false,
+        });
+        return decision.kind === 'transition' ? decision.transition : { kind: 'stay' };
+      }
+      return node.next
+        ? normalizeTransition(await node.next(turn, state))
+        : { kind: 'stay' };
+    }
+
+    const rendered = deterministicReply(node, run, ctx);
+    if (rendered) {
+      return node.next
+        ? normalizeTransition(await node.next(rendered, state))
+        : { kind: 'stay' };
+    }
+
     // Consume input here ONLY to feed the out-of-band digression check below, and
     // only for input this turn genuinely fresh to THIS reply — gated on both:
     //   !turnInputConsumed: a prior node (e.g. a collect) already took the turn's
@@ -227,14 +288,14 @@ async function dispatchNode(
       }
     }
 
-    const turn = await driver.runAgentTurn(resolveReplyNode(node, run.state), ctx);
+    const turn = await driver.runAgentTurn(resolveReplyNode(node, state), ctx);
     await persistTurnUsageFromTurn(ctx, turn);
 
     if (ctx.outOfBandControl) {
       const decision = await evaluateReplyControl({
         node,
         turn,
-        state: run.state,
+        state,
         interrupted: !!turn.interrupted,
       });
       if (decision.kind === 'redispatch') {
@@ -310,7 +371,7 @@ async function dispatchNode(
     }
 
     if (node.next) {
-      return normalizeTransition(await node.next(turn, run.state));
+      return normalizeTransition(await node.next(turn, state));
     }
     return { kind: 'stay' };
   }
@@ -355,6 +416,8 @@ export async function runFlow(
   }
 
   if (!run.activeNode) {
+    const source = currentFlowState(run);
+    const state = enterFlowState(run, flow, source);
     // Fresh entry, not a resume. A collect node caches its extraction under
     // `__collect_<nodeId>` and that cache is SUPPOSED to survive turn boundaries — it is how
     // fields accumulate across several user turns mid-flow. But it must not survive the flow
@@ -366,12 +429,14 @@ export async function runFlow(
     //
     // Cleared here rather than on completion so mid-flow accumulation is untouched — which
     // is what `continuity.test.ts` and the G14 slot-correction test encode.
-    clearFlowCollectCache(run.state, flow);
+    clearFlowCollectCache(state, flow);
     run.activeNode = node.id;
     run.activeFlow = flow.name;
     ctx.emit({ channel: 'internal', type: 'flow-enter', payload: { flow: flow.name } });
     ctx.emit({ channel: 'internal', type: 'node-enter', payload: { nodeName: node.id } });
-    emitInteractiveOnNodeEnter(node, run.state, ctx.emit);
+    emitInteractiveOnNodeEnter(node, state, ctx.emit);
+  } else if (run.flowFrame?.flow !== flow.name) {
+    enterFlowState(run, flow);
   }
 
   const edgeCounts = new Map<string, number>();
@@ -406,11 +471,11 @@ export async function runFlow(
         // cleared and the turn's input already consumed by the collect that fed this
         // action, collectUntilComplete emits its `ask` and parks on awaitingUser — a real
         // re-ask, not an end.
-        clearCollectData(run.state, lastCollectNode.id);
+        clearCollectData(currentFlowState(run), lastCollectNode.id);
         // Author-written copy for the USER, consumed once by the next `ask`. Without it
         // a business rejection reaches the model only, and the person is re-asked with
         // generic copy that never says what actually blocked them.
-        setPendingRecoveryMessage(run.state, lastCollectNode.id, error.userMessage);
+        setPendingRecoveryMessage(currentFlowState(run), lastCollectNode.id, error.userMessage);
         // Carried as a system NOTE, not a message. The text interpolates tool output that
         // itself contains user-supplied ids, so it must not arrive in the message array
         // where it could read as an instruction — the AI SDK warns about exactly this and
@@ -434,7 +499,28 @@ export async function runFlow(
       );
     }
 
+    const steps = await loadRecordedSteps(ctx.runStore, run.runId);
+    try {
+      await runNodeVerify(node, {
+        state: currentFlowState(run),
+        steps,
+        data: transition.kind === 'goto' ? transition.data : undefined,
+      });
+    } catch (error) {
+      if (error instanceof VerifyBlockedError) {
+        ctx.emit({ channel: 'client', type: 'error', payload: { error: error.message } });
+        await ctx.runStore.putRunState(run);
+        return { kind: 'awaitingUser' };
+      }
+      throw error;
+    }
+
     if (transition.kind === 'switchFlow') {
+      pushFlowPark(run, {
+        flow: flow.name,
+        node: run.activeNode ?? node.id,
+        state: currentFlowState(run),
+      });
       run.activeFlow = transition.flow.name;
       run.activeNode = undefined;
       await ctx.runStore.putRunState(run);
@@ -442,10 +528,14 @@ export async function runFlow(
     }
 
     if (transition.kind === 'end') {
-      const park = popFlowPark(run.state);
+      const finishedState = currentFlowState(run);
+      const output = exportFlowState(flow, finishedState);
+      const park = popFlowPark(run);
       if (park && agent) {
         const parkedFlow = agent.flows?.find((candidate) => candidate.name === park.flow);
         if (parkedFlow) {
+          Object.assign(park.state, output);
+          run.flowFrame = { flow: park.flow, state: park.state };
           run.activeFlow = park.flow;
           run.activeNode = park.node;
           await ctx.runStore.putRunState(run);
@@ -457,6 +547,8 @@ export async function runFlow(
           return runFlow(parkedFlow, run, driver, ctx, agent);
         }
       }
+      Object.assign(run.state, output);
+      run.flowFrame = undefined;
       ctx.emit({
         channel: 'internal',
         type: 'flow-end',
@@ -475,7 +567,15 @@ export async function runFlow(
     }
 
     if (transition.kind === 'escalate') {
-      await ctx.signal('__escalate', { meta: { reason: transition.reason } });
+      await ctx.signal('__escalate', {
+        schema: emptySignalSchema,
+        responseSchema: {
+          type: 'object',
+          additionalProperties: false,
+        },
+        title: 'Resume human escalation',
+        meta: { reason: transition.reason },
+      });
       return { kind: 'handoff', to: 'human', reason: transition.reason };
     }
 
@@ -493,21 +593,6 @@ export async function runFlow(
     const target = transition.node;
     if (!registry.has(target.id)) {
       registry.set(target.id, target);
-    }
-
-    const steps = await loadRecordedSteps(ctx.runStore, run.runId);
-    try {
-      await runNodeVerify(node, {
-        state: run.state,
-        steps,
-        data: transition.data,
-      });
-    } catch (error) {
-      if (error instanceof VerifyBlockedError) {
-        ctx.emit({ channel: 'client', type: 'error', payload: { error: error.message } });
-        return { kind: 'awaitingUser' };
-      }
-      throw error;
     }
 
     const oscillation = bumpOscillation(edgeCounts, node.id, target.id);

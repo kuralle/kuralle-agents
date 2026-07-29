@@ -102,6 +102,9 @@ async function runPureDispatcher(
     run,
     model,
     allowKeep: false,
+    emit: ctx.emit,
+    abortSignal: ctx.abortSignal,
+    runStore: ctx.runStore,
   });
 
   return await executeHostControl(agent, run, driver, ctx, guardVerdictToControl(verdict, agent));
@@ -142,6 +145,8 @@ async function runActiveFlow(
     // resume a flow that belongs to the source agent (G17).
     run.activeFlow = undefined;
     run.activeNode = undefined;
+    run.flowFrame = undefined;
+    run.flowStack = undefined;
     await ctx.runStore.putRunState(run);
     return { kind: 'handoff', to: result.to, reason: result.reason };
   }
@@ -168,6 +173,8 @@ async function runActiveFlow(
 
   run.activeFlow = undefined;
   run.activeNode = undefined;
+  run.flowFrame = undefined;
+  run.flowStack = undefined;
   await ctx.runStore.putRunState(run);
 
   return { kind: 'turnComplete' };
@@ -203,6 +210,7 @@ async function runFreeConversation(
           classify,
           emit: ctx.emit.bind(ctx),
           abortSignal: ctx.abortSignal,
+          runStore: ctx.runStore,
         })
     : undefined;
 

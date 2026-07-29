@@ -28,7 +28,7 @@ import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 
 describe('G14: clearCollectData clears collected slot', () => {
-  it('clears data so schemaSatisfied is false, preserving the turn counter', () => {
+  it('clears data so schemaSatisfied is false, preserving the turn counter', async () => {
     const node = collect({
       id: 'date',
       schema: z.object({ date: z.string(), venue: z.string() }),
@@ -44,7 +44,7 @@ describe('G14: clearCollectData clears collected slot', () => {
 
     expect(getCollectData(state, node.id)).toEqual({});
     expect(state.__collectTurns_date).toBe(2);
-    expect(schemaSatisfied(node, state)).toBe(false);
+    expect(await schemaSatisfied(node, state)).toBe(false);
   });
 });
 
@@ -203,7 +203,10 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
     const { session, runStore, runState } = await setupDurableHarness('g14-e2e', 'g14-e2e-run');
     runState.activeFlow = fullFlow.name;
     runState.activeNode = 'confirm';
-    runState.state['__collect_date'] = { date: 'Thursday', venue: 'Main Hall' };
+    runState.flowFrame = {
+      flow: fullFlow.name,
+      state: { __collect_date: { date: 'Thursday', venue: 'Main Hall' } },
+    };
     runState.messages = [{ role: 'user', content: correction }];
 
     let extractionCalls = 0;
@@ -250,8 +253,8 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
     expect(extractionCalls).toBe(1);
     expect(completed).toHaveLength(1);
     expect(completed[0]).toEqual({ date: 'Tuesday', venue: 'Main Hall' });
-    expect(getCollectData(runState.state, dateCollect.id).date).toBe('Tuesday');
-    expect(getCollectData(runState.state, dateCollect.id).venue).toBe('Main Hall');
+    expect(getCollectData(runState.flowFrame!.state, dateCollect.id).date).toBe('Tuesday');
+    expect(getCollectData(runState.flowFrame!.state, dateCollect.id).venue).toBe('Main Hall');
   });
 
   it('accepts affirmation on the turn after a correction readback', async () => {
@@ -282,6 +285,7 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
       description: 'Book and confirm an appointment',
       start: dateCollect,
       nodes: [dateCollect, readback, review, done],
+      state: { output: (state) => state },
     });
     const agent = defineAgent({
       id: 'clinic',

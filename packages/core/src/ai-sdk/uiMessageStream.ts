@@ -28,7 +28,12 @@ export type KuralleDataParts = {
     userFacingMessage?: string;
   };
   'kuralle-outcome': { outcome: ConversationOutcome };
-  'kuralle-control': { event: 'interrupted' | 'paused'; reason?: string; waitingFor?: string };
+  'kuralle-control': {
+    event: 'interrupted' | 'paused';
+    reason?: string;
+    waitingFor?: string;
+    interrupt?: import('../types/stream.js').HitlInterrupt;
+  };
   'kuralle-custom': { name: string; data: unknown };
 };
 
@@ -159,7 +164,11 @@ function writeHarnessPart(
     case 'paused':
       writer.write({
         type: 'data-kuralle-control',
-        data: { event: 'paused', waitingFor: part.payload.waitingFor },
+        data: {
+          event: 'paused',
+          waitingFor: part.payload.waitingFor,
+          interrupt: part.payload.interrupt,
+        },
         transient: true,
       });
       break;

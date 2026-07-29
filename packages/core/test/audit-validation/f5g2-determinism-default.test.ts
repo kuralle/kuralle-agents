@@ -232,6 +232,6 @@ describe('F5/G2: determinism defaults and routing context', () => {
 
     expect(result.kind).not.toBe('ended');
     expect(runState.activeFlow).toBe('billing');
-    expect(getFlowPark(runState.state)).toEqual({ flow: 'intake', node: 'greet' });
+    expect(getFlowPark(runState)).toMatchObject({ flow: 'intake', node: 'greet' });
   });
 });

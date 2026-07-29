@@ -62,7 +62,11 @@ describe('needsApproval tool gating', () => {
     expect(spy.count).toBe(0); // gate held — tool did NOT run
 
     await recordSignalDelivery(runStore, paused, {
-      signalId: 'sig-na-approve', name: '__approval', payload: { approved: true, by: 'mgr' },
+      signalId: 'sig-na-approve',
+      requestId: paused.waitingFor!.requestId,
+      name: '__approval',
+      actor: { id: 'mgr', type: 'user' },
+      decision: 'approve',
     });
 
     const resumed = (await runStore.getRunState(runState.runId))!;
@@ -88,7 +92,11 @@ describe('needsApproval tool gating', () => {
 
     const paused = (await runStore.getRunState(runState.runId))!;
     await recordSignalDelivery(runStore, paused, {
-      signalId: 'sig-na-deny', name: '__approval', payload: { approved: false, by: 'mgr' },
+      signalId: 'sig-na-deny',
+      requestId: paused.waitingFor!.requestId,
+      name: '__approval',
+      actor: { id: 'mgr', type: 'user' },
+      decision: 'deny',
     });
 
     const resumed = (await runStore.getRunState(runState.runId))!;

@@ -12,6 +12,17 @@ import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
 import type { Instructions } from './agentConfig.js';
 import type { AgentKnowledgeOverrides, SourceRef, RetrievalCacheAdapter } from './knowledge.js';
+import type { StandardSchemaV1 } from './standard-schema.js';
+
+export interface ResumedToolOutcome {
+  requestId: string;
+  node?: string;
+  toolName: string;
+  args: unknown;
+  toolCallId: string;
+  result: unknown;
+  failed: boolean;
+}
 
 export interface GatherScope {
   query?: string;
@@ -117,7 +128,17 @@ export interface RunContext {
     },
   ): Promise<unknown>;
   approve(req: { title: string; description?: string }): Promise<{ approved: boolean; by?: string }>;
-  signal(name: string, opts?: { deadline?: number; meta?: Record<string, unknown> }): Promise<unknown>;
+  signal<T>(
+    name: string,
+    opts: {
+      schema: StandardSchemaV1<unknown, T>;
+      responseSchema?: Record<string, unknown>;
+      title?: string;
+      description?: string;
+      deadline?: number;
+      meta?: Record<string, unknown>;
+    },
+  ): Promise<T>;
   now(): Promise<number>;
   uuid(): Promise<string>;
   /** Rebase durable effect callsites to 0. The runtime calls this at flow entry so
@@ -126,6 +147,12 @@ export interface RunContext {
   resetCallsites(): void;
   /** Reserve N contiguous effect callsite ordinals for parallel-safe tool batches (G9). */
   reserveCallsites(count: number): string[];
+  /** @internal Persist model messages needed to continue after a tool approval pause. */
+  attachInterruptContinuation(messages: ModelMessage[]): Promise<void>;
+  /** @internal Validate a pending approval and execute its frozen operation. */
+  resumePendingInterrupt(def?: AnyTool): Promise<ResumedToolOutcome | undefined>;
+  /** @internal Consume a directly resumed model-tool outcome at its source flow node. */
+  takeResumedToolOutcome(nodeId: string): ResumedToolOutcome | undefined;
 }
 
 export type ActionContext = Pick<

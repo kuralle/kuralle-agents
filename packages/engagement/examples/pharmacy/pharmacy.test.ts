@@ -6,6 +6,7 @@ import {
   type ChannelDriver,
   type RunState,
   type Session,
+  currentFlowState,
 } from '@kuralle-agents/core';
 import { createMockRuntime } from '@kuralle-agents/core/testing';
 import type { StreamPart } from '@kuralle-agents/core';
@@ -264,8 +265,9 @@ describe('pharmacy_example', () => {
 
     const session = await sessionStore.get(sessionId);
     const run = persistedRunState(session, sessionId);
-    expect(run?.state.fullName).toBe('Jane Demo');
-    expect(run?.state.dob).toBe('1990-05-15');
+    const flowState = run ? currentFlowState(run) : {};
+    expect(flowState.fullName).toBe('Jane Demo');
+    expect(flowState.dob).toBe('1990-05-15');
     expect(run?.activeNode).toBe('chooseRx');
   });
 

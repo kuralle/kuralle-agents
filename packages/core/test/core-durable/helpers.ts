@@ -62,6 +62,7 @@ export async function buildCtx(
     fs?: import('../../src/types/filesystem.js').FileSystem;
     clock?: { now(): number; uuid(): string };
     emit?: (part: import('../../src/types/stream.js').StreamPart) => void;
+    signalDelivery?: import('../../src/runtime/durable/types.js').SignalDelivery;
   },
 ) {
   const steps = await loadRecordedSteps(args.runStore, args.runState.runId);
@@ -77,6 +78,7 @@ export async function buildCtx(
     fs: args.fs,
     clock: args.clock,
     emit: args.emit,
+    signalDelivery: args.signalDelivery,
   });
 }
 

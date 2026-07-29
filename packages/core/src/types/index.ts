@@ -56,6 +56,7 @@ export type { SkillMeta, SkillLike, SkillStoreLike, SkillSource } from './skills
 export { reply, collect, action, decide, confirmGate, defineFlow } from './flow.js';
 export type {
   FlowState,
+  FlowStateBoundary,
   Flow,
   FlowNode,
   NodeToolScope,
@@ -123,6 +124,7 @@ export type {
   FlowTransitionPayload,
   HandoffPayload,
   InterruptedPayload,
+  HitlInterrupt,
   PausedPayload,
   ConversationOutcomePayload,
   InteractivePayload,

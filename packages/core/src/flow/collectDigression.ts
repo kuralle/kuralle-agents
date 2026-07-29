@@ -3,7 +3,7 @@ import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
 import type { ReplyNode } from '../types/flow.js';
 import type { RunContext } from '../types/run-context.js';
-import type { RunState } from '../runtime/durable/types.js';
+import type { PersistedFlowPark, RunState } from '../runtime/durable/types.js';
 import { buildToolSet } from '../tools/effect/defineTool.js';
 import { resolveReplyNode } from './nodeBuilders.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
@@ -11,67 +11,42 @@ import { selectHostTarget } from '../runtime/select.js';
 import type { HostSelection } from '../runtime/select.js';
 import { hasHostControlTargets } from '../runtime/hostControlTools.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
+import { currentFlowState } from './flowState.js';
 
-const FLOW_PARK_STACK_KEY = '__flowParkStack';
-const LEGACY_FLOW_PARK_KEY = '__flowPark';
-const MAX_FLOW_PARK_DEPTH = 8;
+export const MAX_FLOW_PARK_DEPTH = 8;
 
-export interface FlowPark {
-  flow: string;
-  node: string;
-}
-
-function isFlowPark(raw: unknown): raw is FlowPark {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return false;
+/** Runaway nested flow entry. The structural twin of `FlowOscillationError`, and degraded
+ *  the same way — a bounded limit the framework absorbs, not a crash the caller handles. */
+export class FlowParkOverflowError extends Error {
+  constructor(depth: number) {
+    super(`Flow park depth exceeds ${depth}`);
+    this.name = 'FlowParkOverflowError';
   }
-  const flow = (raw as FlowPark).flow;
-  const node = (raw as FlowPark).node;
-  return typeof flow === 'string' && typeof node === 'string';
 }
 
-function getFlowParkStack(state: Record<string, unknown>): FlowPark[] | undefined {
-  const raw = state[FLOW_PARK_STACK_KEY];
-  if (!Array.isArray(raw)) {
-    return undefined;
+export type FlowPark = PersistedFlowPark;
+
+export function pushFlowPark(run: RunState, park: FlowPark): void {
+  const stack = run.flowStack ?? [];
+  if (stack.length >= MAX_FLOW_PARK_DEPTH) {
+    throw new FlowParkOverflowError(MAX_FLOW_PARK_DEPTH);
   }
-  const stack = raw.filter(isFlowPark);
-  return stack.length > 0 ? stack : undefined;
-}
-
-export function pushFlowPark(state: Record<string, unknown>, park: FlowPark): void {
-  const stack = getFlowParkStack(state) ?? [];
   stack.push(park);
-  while (stack.length > MAX_FLOW_PARK_DEPTH) {
-    stack.shift();
-  }
-  state[FLOW_PARK_STACK_KEY] = stack;
+  run.flowStack = stack;
 }
 
-export function popFlowPark(state: Record<string, unknown>): FlowPark | undefined {
-  const stack = getFlowParkStack(state);
-  if (!stack) {
-    return undefined;
-  }
+export function popFlowPark(run: RunState): FlowPark | undefined {
+  const stack = run.flowStack;
+  if (!stack?.length) return undefined;
   const park = stack.pop();
   if (stack.length === 0) {
-    delete state[FLOW_PARK_STACK_KEY];
-  } else {
-    state[FLOW_PARK_STACK_KEY] = stack;
+    run.flowStack = undefined;
   }
   return park;
 }
 
-export function getFlowPark(state: Record<string, unknown>): FlowPark | undefined {
-  const stack = getFlowParkStack(state);
-  if (stack) {
-    return stack[stack.length - 1];
-  }
-  const legacy = state[LEGACY_FLOW_PARK_KEY];
-  if (isFlowPark(legacy)) {
-    return legacy;
-  }
-  return undefined;
+export function getFlowPark(run: RunState): FlowPark | undefined {
+  return run.flowStack?.at(-1);
 }
 
 function appendAssistantMessage(run: RunState, text: string): void {
@@ -128,6 +103,9 @@ export async function runCollectDigression(
       run,
       model: agent.routing?.model ?? ctx.controlModel,
       ...(bindingFlow ? {} : { excludeFlowNames: [activeFlowName] }),
+      emit: ctx.emit,
+      abortSignal: ctx.abortSignal,
+      runStore: ctx.runStore,
     });
   }
 
@@ -137,7 +115,6 @@ export async function runCollectDigression(
     if (selection.flow.name === activeFlowName) {
       return { kind: 'none' };
     }
-    pushFlowPark(run.state, { flow: activeFlowName, node: node.id });
     return {
       kind: 'transition',
       transition: {
@@ -178,7 +155,7 @@ export async function runCollectDigression(
   };
 
   const turn = await driver.runAgentTurn(
-    resolveReplyNode(replyNode, run.state, { freeConversation: true }),
+    resolveReplyNode(replyNode, currentFlowState(run), { freeConversation: true }),
     ctx,
   );
   await persistTurnUsageFromTurn(ctx, turn);

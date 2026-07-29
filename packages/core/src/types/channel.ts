@@ -27,7 +27,9 @@ export interface ResolvedNode {
   toolScope?: NodeToolScope;
   hostControl?: HostControlContext;
   /** When set, extraction breaks early only after a submit tool returns and this is true. */
-  extractionSatisfied?: (toolResults: Array<{ name: string; result: unknown }>) => boolean;
+  extractionSatisfied?: (
+    toolResults: Array<{ name: string; result: unknown }>,
+  ) => boolean | Promise<boolean>;
 }
 
 export interface ChannelDriver {

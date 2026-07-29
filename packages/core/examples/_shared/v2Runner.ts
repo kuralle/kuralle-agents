@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
+import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LanguageModel } from 'ai';
@@ -10,6 +11,16 @@ import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
 import type { AgentConfig } from '../../src/authoring/defineAgent.js';
 import type { StreamPart } from '../../src/types/stream.js';
+
+/** Opt-in JSONL capture of every StreamPart. Set KURALLE_EXAMPLE_TRACE to a file path;
+ *  unset, this is inert and the run is unchanged. */
+function traceSink(): ((part: StreamPart, turn: number) => void) | undefined {
+  const path = process.env.KURALLE_EXAMPLE_TRACE?.trim();
+  if (!path) return undefined;
+  return (part, turn) => {
+    appendFileSync(path, `${JSON.stringify({ turn, type: part.type, payload: part.payload })}\n`);
+  };
+}
 
 export function loadExampleEnv(importMetaUrl: string): void {
   const dir = dirname(fileURLToPath(importMetaUrl));
@@ -118,6 +129,8 @@ export async function runV2Conversation(opts: {
 
   const sessionId = newSessionId();
   const transcript: string[] = [];
+  const trace = traceSink();
+  let turn = 0;
   let shouldStop = false;
   let flowTerminal: { flow: string; reason: string } | null = null;
 
@@ -130,10 +143,12 @@ export async function runV2Conversation(opts: {
     console.log(`\n${sep}\nUser: ${input}\n${sep}`);
     transcript.push(`user: ${input}`);
 
+    turn += 1;
     const handle = runtime.run({ sessionId, input });
     let response = '';
 
     for await (const part of handle.events) {
+      trace?.(part, turn);
       opts.onPart?.(part);
       if (part.type === 'text-delta') response += part.payload.delta;
       if (part.type === 'node-enter') console.log(`[Node] ${part.payload.nodeName}`);

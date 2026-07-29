@@ -4,6 +4,7 @@ import type { RunState } from '../runtime/durable/types.js';
 import type { StreamPart } from '../types/stream.js';
 import { applyContextStrategy, resolveContextStrategy } from './contextStrategy.js';
 import { emitInteractiveOnNodeEnter } from './emitInteractive.js';
+import { currentFlowState } from './flowState.js';
 
 export interface ReduceTransitionInput {
   fromNodeId: string;
@@ -25,6 +26,7 @@ function resolveNodeContext(toNode: FlowNode, flow: Flow): ReturnType<typeof res
 
 export async function reduceTransition(input: ReduceTransitionInput): Promise<void> {
   const { fromNodeId, toNode, run, flow, model, data, emit, abortSignal } = input;
+  const state = currentFlowState(run);
 
   emit({ channel: 'internal', type: 'node-exit', payload: { nodeName: fromNodeId } });
   emit({
@@ -33,7 +35,7 @@ export async function reduceTransition(input: ReduceTransitionInput): Promise<vo
     payload: { from: fromNodeId, to: toNode.id },
   });
   emit({ channel: 'internal', type: 'node-enter', payload: { nodeName: toNode.id } });
-  emitInteractiveOnNodeEnter(toNode, run.state, emit);
+  emitInteractiveOnNodeEnter(toNode, state, emit);
 
   await applyContextStrategy({
     strategy: resolveNodeContext(toNode, flow),
@@ -44,7 +46,7 @@ export async function reduceTransition(input: ReduceTransitionInput): Promise<vo
   });
 
   if (data) {
-    Object.assign(run.state, data);
+    Object.assign(state, data);
   }
 
   run.activeNode = toNode.id;

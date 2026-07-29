@@ -6,6 +6,7 @@ import {
   type ChannelDriver,
   type RunState,
   type Session,
+  currentFlowState,
 } from '@kuralle-agents/core';
 import type {
   OutboundSink,
@@ -245,7 +246,8 @@ describe('clothing_example', () => {
       { input: 'navy', driver: clothingDriver({ colorChoice: 'navy' }) },
       { input: 'remove last', driver: clothingDriver({ cartChoice: 'remove' }) },
     ]);
-    expect((run?.state.cart as unknown[] | undefined)?.length).toBe(1);
+    const cartState = run ? currentFlowState(run) : {};
+    expect((cartState.cart as unknown[] | undefined)?.length).toBe(1);
   });
 
   it('size_list_renders_per_channel', () => {

@@ -6,6 +6,7 @@ import {
   type ChannelDriver,
   type RunState,
   type Session,
+  currentFlowState,
 } from '@kuralle-agents/core';
 import type {
   OutboundSink,
@@ -170,9 +171,10 @@ describe('booking_example', () => {
 
     const session = await sessionStore.get(sessionId);
     const run = persistedRunState(session, sessionId);
-    expect(run?.state.partySize).toBe(4);
-    expect(run?.state.date).toBe('2026-06-12');
-    expect(run?.state.time).toBe('19:00');
+    const flowState = run ? currentFlowState(run) : {};
+    expect(flowState.partySize).toBe(4);
+    expect(flowState.date).toBe('2026-06-12');
+    expect(flowState.time).toBe('19:00');
     expect(run?.activeNode).toBe('pickSlot');
   });
 
@@ -349,9 +351,10 @@ describe('booking_example', () => {
     const session = await sessionStore.get(sessionId);
     const run = persistedRunState(session, sessionId);
     expect(run?.activeNode).toBe('confirm');
-    expect(run?.state.partySize).toBe(4);
-    expect(run?.state.date).toBe('2026-06-12');
-    expect(run?.state.confirmedTime).toBe('19:00');
+    const flowState = run ? currentFlowState(run) : {};
+    expect(flowState.partySize).toBe(4);
+    expect(flowState.date).toBe('2026-06-12');
+    expect(flowState.confirmedTime).toBe('19:00');
   });
 
   it('open_window_sends_freeform', async () => {

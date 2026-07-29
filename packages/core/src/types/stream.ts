@@ -95,8 +95,26 @@ export interface InterruptedPayload {
   lastStep: number;
 }
 
+export interface HitlInterrupt {
+  requestId: string;
+  kind: 'approval' | 'signal';
+  signalName: string;
+  operation?: {
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+    argsHash: string;
+  };
+  display: { title: string; description?: string };
+  responseSchema: Record<string, unknown>;
+  deadline: number | null;
+  allowedDecisions: Array<'approve' | 'deny'>;
+  createdAt: number;
+}
+
 export interface PausedPayload {
   waitingFor: string;
+  interrupt: HitlInterrupt;
 }
 
 export interface ConversationOutcomePayload {

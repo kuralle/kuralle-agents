@@ -66,6 +66,16 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
     // back a fresh snapshot here, and the previous mutator never copied handoffHistory
     // across — so isHandoffOscillating's cross-turn safeguard never saw prior turns.
     latest.handoffHistory = session.handoffHistory;
+    if (session.metadata?.audit) {
+      latest.metadata ??= {
+        createdAt: latest.createdAt,
+        lastActiveAt: latest.updatedAt,
+        totalTokens: 0,
+        totalSteps: 0,
+        handoffHistory: [],
+      };
+      latest.metadata.audit = [...session.metadata.audit];
+    }
     syncPendingUserInput(ctx.session, latest);
   });
 }

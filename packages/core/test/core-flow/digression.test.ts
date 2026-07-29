@@ -25,6 +25,7 @@ function makeCollectFlow(id = 'name') {
     description: 'Collect a name',
     start: ask,
     nodes: [ask, done],
+    state: { output: (state) => state },
   });
   return { ask, done, flow };
 }
@@ -209,7 +210,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
     const result = await runFlow(flow, runState, noAdvanceDriver(), ctx, agent);
 
     expect(result).toEqual({ kind: 'awaitingUser' });
-    expect(getFlowPark(runState.state)).toEqual({ flow: 'intake', node: ask.id });
+    expect(getFlowPark(runState)).toMatchObject({ flow: 'intake', node: ask.id });
     expect(runState.activeFlow).toBe('billing');
     expect(runState.activeNode).toBe('bill-reply');
   });
@@ -299,7 +300,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const result2 = await runFlow(flow, runState, resumeDriver, ctx, agent);
     expect(result2.kind).toBe('ended');
-    expect(schemaSatisfied(ask, runState.state)).toBe(true);
+    expect(await schemaSatisfied(ask, runState.state)).toBe(true);
     expect(getCollectData(runState.state, ask.id).name).toBe('Riley');
   });
 

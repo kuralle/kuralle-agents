@@ -69,7 +69,23 @@ const FULL_HARNESS_SEQUENCE: StreamPart[] = [
   },
   { channel: 'client', type: 'conversation-outcome', payload: { outcome: 'resolved' } },
   { channel: 'internal', type: 'interrupted', payload: { reason: 'timeout', lastStep: 2 } },
-  { channel: 'internal', type: 'paused', payload: { waitingFor: 'user-input' } },
+  {
+    channel: 'internal',
+    type: 'paused',
+    payload: {
+      waitingFor: 'user-input',
+      interrupt: {
+        requestId: 'interrupt-1',
+        kind: 'signal',
+        signalName: 'user-input',
+        display: { title: 'Waiting for input' },
+        responseSchema: { type: 'object' },
+        deadline: null,
+        allowedDecisions: [],
+        createdAt: 1,
+      },
+    },
+  },
   { channel: 'internal', type: 'custom', payload: { name: 'metric', data: { ms: 12 } } },
   { channel: 'internal', type: 'turn-end', payload: {} },
   { channel: 'client', type: 'done', payload: { sessionId: 'sess-1' } },
@@ -199,7 +215,20 @@ describe('harnessToUIMessageStream', () => {
       },
       {
         type: 'data-kuralle-control',
-        data: { event: 'paused', waitingFor: 'user-input' },
+        data: {
+          event: 'paused',
+          waitingFor: 'user-input',
+          interrupt: {
+            requestId: 'interrupt-1',
+            kind: 'signal',
+            signalName: 'user-input',
+            display: { title: 'Waiting for input' },
+            responseSchema: { type: 'object' },
+            deadline: null,
+            allowedDecisions: [],
+            createdAt: 1,
+          },
+        },
         transient: true,
       },
     ]);

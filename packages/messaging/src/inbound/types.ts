@@ -28,12 +28,12 @@ export type InboundEvent =
       kind: 'signal';
       id: string;
       ts: number;
-      data: { name: string; signalId: string; payload?: unknown };
+      data: SignalDelivery;
     };
 
 export interface TurnResult {
   parts: StreamPart[];
-  suspended?: { signalId: string };
+  suspended?: { requestId: string; signalName: string };
   handoffToHuman?: boolean;
 }
 
@@ -81,7 +81,7 @@ export interface InboundRuntime {
 
 export type InboundOutcome =
   | { kind: 'ran'; parts: StreamPart[] }
-  | { kind: 'suspended'; signalId: string }
+  | { kind: 'suspended'; requestId: string; signalName: string }
   | { kind: 'buffered' }
   | {
       kind: 'short';
@@ -113,4 +113,3 @@ export interface InboundMiddleware {
   readonly name: string;
   handle(ctx: InboundContext, next: InboundNext): Promise<InboundOutcome>;
 }
-

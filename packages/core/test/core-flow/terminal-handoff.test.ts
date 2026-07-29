@@ -70,7 +70,9 @@ describe('terminal handoff targets', () => {
       sessionId,
       signalDelivery: {
         signalId: `sig-escalate-${sessionId}`,
+        requestId: paused!.waitingFor!.requestId,
         name: '__escalate',
+        actor: { id: 'handoff-service', type: 'service' },
         payload: {},
       },
       driver,

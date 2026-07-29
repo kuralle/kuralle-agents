@@ -65,8 +65,10 @@ describe('declined approval routing', () => {
     const paused = (await runStore.getRunState(runState.runId))!;
     await recordSignalDelivery(runStore, paused, {
       signalId: 'sig-decline',
+      requestId: paused.waitingFor!.requestId,
       name: '__approval',
-      payload: { approved: false, by: 'supervisor' },
+      actor: { id: 'supervisor', type: 'user' },
+      decision: 'deny',
     });
 
     const resumed = (await runStore.getRunState(runState.runId))!;
@@ -153,8 +155,10 @@ describe('approved approval round-trip', () => {
     // Deliver approval=true.
     await recordSignalDelivery(runStore, paused, {
       signalId: 'sig-approve',
+      requestId: paused.waitingFor!.requestId,
       name: '__approval',
-      payload: { approved: true, by: 'supervisor' },
+      actor: { id: 'supervisor', type: 'user' },
+      decision: 'approve',
     });
 
     // Turn 2: resumes; the post-approval tool fires exactly once.

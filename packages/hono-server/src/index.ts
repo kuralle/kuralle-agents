@@ -10,6 +10,7 @@ import type {
   RunOptions,
   RuntimeLike,
   Session,
+  SignalActor,
   UserInputContent,
 } from '@kuralle-agents/core';
 
@@ -65,7 +66,14 @@ export type ChatResponse = {
  */
 export type ResumeRequest = {
   sessionId: string;
-  signal: { signalId: string; name: string; payload?: unknown };
+  signal: {
+    signalId: string;
+    requestId: string;
+    name: string;
+    decision?: 'approve' | 'deny';
+    reason?: string;
+    payload?: unknown;
+  };
 };
 
 export type FlowRequest = {
@@ -153,6 +161,17 @@ export type KuralleChatRouterOptions = {
    * @default 'safe'
    */
   streamFilter?: StreamEventFilter;
+  /**
+   * Who a `/api/chat/resume` decision is attributed to in the durable audit log.
+   *
+   * Derive this from your own authentication — a session cookie, a bearer token, the
+   * request context. It is deliberately NOT read from the request body: a client that
+   * could name its own actor could approve as anyone.
+   *
+   * Omitted, decisions are attributed to the service itself (`hono-resume`), which is
+   * honest but means the audit log cannot tell you which human approved.
+   */
+  resolveSignalActor?: (c: Context) => SignalActor | undefined | Promise<SignalActor | undefined>;
 };
 
 export type KuralleRouterOptions = {
@@ -391,6 +410,7 @@ export const createKuralleChatRouter = ({
   sendWidgetWelcomeMessage = true,
   widgetWelcomeMessage,
   streamFilter: streamFilterOption,
+  resolveSignalActor,
 }: KuralleChatRouterOptions): Hono => {
   const streamFilter: StreamEventFilter = streamFilterOption ?? 'safe';
   const app = new Hono();
@@ -516,9 +536,23 @@ export const createKuralleChatRouter = ({
 
   app.post('/api/chat/resume', async (c) => {
     const body = await parseJsonBody<ResumeRequest>(c);
-    if (!body?.sessionId || !body.signal?.signalId || !body.signal?.name) {
-      return c.json({ error: 'sessionId and signal { signalId, name } required' }, 400);
+    if (
+      !body?.sessionId ||
+      !body.signal?.signalId ||
+      !body.signal?.requestId ||
+      !body.signal?.name
+    ) {
+      return c.json(
+        { error: 'sessionId and signal { signalId, requestId, name } required' },
+        400,
+      );
     }
+
+    // Never from the body — a client that names its own actor can approve as anyone.
+    const actor: SignalActor = (await resolveSignalActor?.(c)) ?? {
+      id: 'hono-resume',
+      type: 'service',
+    };
 
     return streamSSE(c, async (stream) => {
       try {
@@ -526,7 +560,11 @@ export const createKuralleChatRouter = ({
           sessionId: body.sessionId,
           signalDelivery: {
             signalId: body.signal.signalId,
+            requestId: body.signal.requestId,
             name: body.signal.name,
+            actor,
+            decision: body.signal.decision,
+            reason: body.signal.reason,
             payload: body.signal.payload,
           },
         })) {

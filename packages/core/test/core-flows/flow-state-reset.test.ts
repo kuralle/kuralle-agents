@@ -64,14 +64,14 @@ describe('clearFlowCollectCache', () => {
     expect(state.accessNotes).toBeUndefined();
   });
 
-  it('does not clear at flow completion — nothing calls it there, so agents can still read', () => {
+  it('clears only the active flow frame on entry', () => {
     // Guards the call-site contract itself: if a future change starts clearing on
     // completion, the values an agent reads after a flow ends vanish.
     const src = readFileSync(
       new URL('../../src/flow/runFlow.ts', import.meta.url),
       'utf8',
     );
-    const calls = src.split('clearFlowCollectCache(run.state').length - 1;
+    const calls = src.split('clearFlowCollectCache(state, flow)').length - 1;
     expect(calls).toBe(1);
   });
 

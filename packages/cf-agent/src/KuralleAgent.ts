@@ -24,6 +24,7 @@ import { createRuntime, isWakeJob, wakeJob, type HarnessConfig, type Runtime } f
 import type {
   PersistentMemoryStore,
   UserInputContent,
+  SignalActor,
   SignalDelivery,
   ScheduledJob,
   Scheduler,
@@ -100,6 +101,20 @@ export abstract class KuralleAgent<
    */
   protected getWorkingMemoryStore(): PersistentMemoryStore | undefined {
     return new SqlPersistentMemoryStore(this.getSql());
+  }
+
+  /**
+   * Who a `/resume` decision is attributed to in the durable audit log.
+   *
+   * Derive this from your own authentication — a signed header, a session lookup, Access
+   * JWT claims. It deliberately does NOT read the request body: a client that could name
+   * its own actor could approve as anyone.
+   *
+   * Left unimplemented, decisions are attributed to the service itself
+   * (`cloudflare-resume`) — honest, but the audit log cannot then say which human decided.
+   */
+  protected async resolveSignalActor(_request: Request): Promise<SignalActor | undefined> {
+    return undefined;
   }
 
   /**
@@ -369,13 +384,29 @@ export abstract class KuralleAgent<
     const url = new URL(request.url);
 
     // Durable resume: deliver a signal to a suspended run (e.g. a paid checkout
-    // link). Body: { signalId: string, name: string, payload?: unknown }.
+    // link). Body: { signalId, requestId, name, decision?, reason?, payload? }.
     if (request.method === 'POST' && url.pathname.endsWith('/resume')) {
       const body = (await request.json().catch(() => null)) as SignalDelivery | null;
-      if (!body || typeof body.signalId !== 'string' || typeof body.name !== 'string') {
-        return Response.json({ error: 'signalId and name are required' }, { status: 400 });
+      if (
+        !body ||
+        typeof body.signalId !== 'string' ||
+        typeof body.requestId !== 'string' ||
+        typeof body.name !== 'string'
+      ) {
+        return Response.json(
+          { error: 'signalId, requestId, and name are required' },
+          { status: 400 },
+        );
       }
-      const { text } = await this.resumeWithSignal(body);
+      // Never from the body — a client that names its own actor can approve as anyone.
+      // Override `resolveSignalActor` to attribute a decision to the real human.
+      const { text } = await this.resumeWithSignal({
+        ...body,
+        actor: (await this.resolveSignalActor(request)) ?? {
+          id: 'cloudflare-resume',
+          type: 'service',
+        },
+      });
       return Response.json({ ok: true, text });
     }
 
