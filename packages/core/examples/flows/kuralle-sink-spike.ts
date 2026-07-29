@@ -30,8 +30,6 @@ const outDir = resolve(here, 'out');
 const streamPath = join(outDir, 'stream.jsonl');
 const hooksPath = join(outDir, 'hooks.jsonl');
 
-await mkdir(outDir, { recursive: true });
-
 async function logHook(name: string, payload: unknown) {
   await appendFile(
     hooksPath,
@@ -125,7 +123,7 @@ const greet = collect({
   onComplete: () => book,
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'kuralle-sink-spike',
   name: 'Kuralle Sink Spike',
   instructions:
@@ -154,34 +152,39 @@ const agent = defineAgent({
   ],
 });
 
-const runtime = createRuntime({
-  agents: [agent],
-  defaultAgentId: agent.id,
-  defaultModel: model,
-  sessionStore: new MemoryStore(),
-  hooks,
-});
+export default agent;
 
-const prompts = [
-  "Hi, I'd like to book an appointment.",
-  'My name is Sarah.',
-  'Next Tuesday at 10am.',
-];
+if (import.meta.main) {
+  await mkdir(outDir, { recursive: true });
+  const runtime = createRuntime({
+    agents: [agent],
+    defaultAgentId: agent.id,
+    defaultModel: model,
+    sessionStore: new MemoryStore(),
+    hooks,
+  });
 
-const sessionId = newSessionId();
-console.log('--- Kuralle sink spike (v2) ---');
+  const prompts = [
+    "Hi, I'd like to book an appointment.",
+    'My name is Sarah.',
+    'Next Tuesday at 10am.',
+  ];
 
-for (const input of prompts) {
-  console.log('\nUser: ' + input);
-  let response = '';
-  const handle = runtime.run({ sessionId, input });
-  for await (const part of handle.events) {
-    if (part.type === 'text-delta') response += part.payload.delta;
+  const sessionId = newSessionId();
+  console.log('--- Kuralle sink spike (v2) ---');
+
+  for (const input of prompts) {
+    console.log('\nUser: ' + input);
+    let response = '';
+    const handle = runtime.run({ sessionId, input });
+    for await (const part of handle.events) {
+      if (part.type === 'text-delta') response += part.payload.delta;
+    }
+    await handle;
+    console.log('Assistant: ' + response.trim());
   }
-  await handle;
-  console.log('Assistant: ' + response.trim());
-}
 
-console.log('\nDone. Logs at:');
-console.log('  ' + streamPath);
-console.log('  ' + hooksPath);
+  console.log('\nDone. Logs at:');
+  console.log('  ' + streamPath);
+  console.log('  ' + hooksPath);
+}

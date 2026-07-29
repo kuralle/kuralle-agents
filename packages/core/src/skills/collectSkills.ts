@@ -1,9 +1,10 @@
 import type { AnyTool } from '../types/effectTool.js';
 import type { FileSystem } from '../types/filesystem.js';
-import type { SkillEntry, SkillLike, SkillSource, SkillStoreLike } from '../types/skills.js';
+import type { SkillEntry, SkillLike, SkillMeta, SkillSource, SkillStoreLike } from '../types/skills.js';
 import { InlineSkillStore } from './inlineSkillStore.js';
 import { CompositeSkillStore } from './compositeSkillStore.js';
 import { fsSkillStore } from './fsSkillStore.js';
+import { canonicalSkillContent, sha256 } from './contentHash.js';
 
 export interface SkillWireAgent {
   skills?: SkillSource;
@@ -22,21 +23,32 @@ export function isSkillStore(value: SkillEntry | SkillSource): value is SkillSto
   );
 }
 
-async function collectSkillsFromSource(source: SkillStoreLike): Promise<SkillLike[]> {
-  if (typeof source.getAllSkills === 'function') {
-    const all = source.getAllSkills();
-    return Array.isArray(all) ? all : await all;
-  }
-  if (typeof source.loadAllSkills === 'function') {
-    return source.loadAllSkills();
-  }
+async function collectSkillsFromSource(
+  source: SkillStoreLike,
+): Promise<{ metas: SkillMeta[]; skills: SkillLike[] }> {
   const metas = await source.list();
   const skills: SkillLike[] = [];
   for (const meta of metas) {
     const body = await source.loadBody(meta.name);
-    skills.push({ name: meta.name, description: meta.description, body });
+    skills.push({
+      name: meta.name,
+      description: meta.description,
+      body,
+      ...(meta.allowedTools ? { allowedTools: meta.allowedTools } : {}),
+      ...(meta.contentHash ? { contentHash: meta.contentHash } : {}),
+      ...(meta.path ? { path: meta.path } : {}),
+    });
   }
-  return skills;
+  return { metas, skills };
+}
+
+async function hashSkillSnapshot(skills: readonly SkillLike[]): Promise<string> {
+  const entries = await Promise.all(
+    [...skills]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(async (skill) => `${skill.name}:${skill.contentHash ?? await sha256(canonicalSkillContent(skill))}`),
+  );
+  return sha256(entries.join('\n'));
 }
 
 export function collectRegisteredNames(agent: SkillWireAgent): Set<string> {
@@ -73,7 +85,12 @@ export function validateSkillAllowedTools(skills: SkillLike[], registered: Set<s
 export async function prepareSkillStore(
   source: SkillSource,
   fs?: FileSystem,
-): Promise<{ store: SkillStoreLike; skills: SkillLike[] }> {
+): Promise<{
+  store: SkillStoreLike;
+  metas: SkillMeta[];
+  skills: SkillLike[];
+  contentHash: string;
+}> {
   const entries: SkillEntry[] = Array.isArray(source)
     ? [...source]
     : [source as SkillEntry];
@@ -82,7 +99,8 @@ export async function prepareSkillStore(
   // nothing to compose, and lose any extra capability the store exposes.
   if (entries.length === 1 && isSkillStore(entries[0]!)) {
     const only = entries[0] as SkillStoreLike;
-    return { store: only, skills: await collectSkillsFromSource(only) };
+    const collected = await collectSkillsFromSource(only);
+    return { store: only, ...collected, contentHash: await hashSkillSnapshot(collected.skills) };
   }
 
   const stores: SkillStoreLike[] = [];
@@ -118,9 +136,11 @@ export async function prepareSkillStore(
 
   if (stores.length === 1) {
     const only = stores[0]!;
-    return { store: only, skills: await collectSkillsFromSource(only) };
+    const collected = await collectSkillsFromSource(only);
+    return { store: only, ...collected, contentHash: await hashSkillSnapshot(collected.skills) };
   }
 
   const store = new CompositeSkillStore(stores);
-  return { store, skills: await collectSkillsFromSource(store) };
+  const collected = await collectSkillsFromSource(store);
+  return { store, ...collected, contentHash: await hashSkillSnapshot(collected.skills) };
 }

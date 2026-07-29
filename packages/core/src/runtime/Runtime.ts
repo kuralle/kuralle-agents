@@ -106,6 +106,8 @@ export interface TracingConfig {
 export interface HarnessConfig {
   agents: AgentConfig[];
   defaultAgentId: string;
+  /** Default channel driver for every run. `RunOptions.driver` overrides it per call. */
+  driver?: ChannelDriver;
   sessionStore?: SessionStore;
   defaultModel?: LanguageModel;
   maxHandoffs?: number;
@@ -288,6 +290,9 @@ export class Runtime {
         knowledgeProvider,
         defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
       });
+      if (openingSurface.skillContentHash) {
+        recorder?.recordSkillSnapshot(opened.agent.id, openingSurface.skillContentHash);
+      }
 
       const toolExecutor = new CoreToolExecutor({
         tools: openingSurface.executorTools,
@@ -382,7 +387,7 @@ export class Runtime {
         emit({ channel: 'internal', type: 'wake', payload: { reason: opts.wake.reason } });
       }
 
-      const driver = opts.driver ?? new TextDriver();
+      const driver = opts.driver ?? this.config.driver ?? new TextDriver();
 
       let activeAgent = opened.agent;
       let loopResult: HostLoopResult = { kind: 'turnComplete' };
@@ -547,6 +552,9 @@ export class Runtime {
               knowledgeProvider,
               defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
             });
+            if (targetSurface.skillContentHash) {
+              recorder?.recordSkillSnapshot(target.id, targetSurface.skillContentHash);
+            }
             runCtx.autoRetrieve = knowledgeProvider
               ? buildAutoRetrieveProvider(knowledgeProvider, target)
               : undefined;

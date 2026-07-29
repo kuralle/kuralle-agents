@@ -40,7 +40,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "bun test ./test",
+    "test": "bun test ./test/",
     "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json"
   },
   "publishConfig": {

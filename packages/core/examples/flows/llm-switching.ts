@@ -32,7 +32,7 @@ function createProviderFlow(currentAgentId: string, model: ReturnType<typeof ope
   const summary = reply({
     id: 'summary',
     instructions:
-      'Say the conversation summary, which was already retrieved (do not invoke summarize_conversation again).',
+      'Say the conversation summary, which was already retrieved (do not invoke summarize_conversation again). For a new weather request, call get_current_weather before answering.',
     context: 'reset_with_summary',
     model,
     tools: buildToolSet({
@@ -68,7 +68,8 @@ function createProviderFlow(currentAgentId: string, model: ReturnType<typeof ope
 
   const main = reply({
     id: 'main',
-    instructions: 'Say a brief hello.',
+    instructions:
+      'Respond briefly to the user. For weather questions, call get_current_weather and report its result. For provider switch requests, call switch_llm. Do not promise to look something up without calling the matching tool.',
     model,
     tools: buildToolSet({
       switch_llm: defineTool({
@@ -130,7 +131,7 @@ function switchProvider(currentAgentId: string, llm: ProviderName): HandoffResul
   };
 }
 
-const model = openai('gpt-4o-mini');
+const model = openai(process.env.OPENAI_MODEL ?? 'gpt-4.1-mini');
 
 function createProviderAgent(id: string, name: string): AgentConfig {
   return defineAgent({
@@ -139,32 +140,65 @@ function createProviderAgent(id: string, name: string): AgentConfig {
     description: `${name} provider persona.`,
     instructions: rolePrompt,
     model,
+    // Provider handoffs end the source agent's flow. Keep the core demo tools
+    // on the agent surface as well, so the target can answer the very next turn
+    // without requiring an artificial re-entry into its provider-demo flow.
+    tools: {
+      switch_llm: defineTool({
+        name: 'switch_llm',
+        description: 'Switch the current LLM service.',
+        input: z.object({ llm: z.enum(['OpenAI', 'Google', 'Anthropic', 'AWS']) }),
+        execute: async ({ llm }) => switchProvider(id, llm),
+      }),
+      get_current_weather: defineTool({
+        name: 'get_current_weather',
+        description: 'Get the current weather for a location and format. Always use for weather questions.',
+        input: z.object({
+          location: z.string(),
+          format: z.enum(['celsius', 'fahrenheit']),
+        }),
+        execute: async ({ format }) => ({
+          status: 'success',
+          conditions: 'sunny',
+          temperature: format === 'fahrenheit' ? 75 : 24,
+        }),
+      }),
+    },
     flows: [createProviderFlow(id, model)],
     handoffs: Object.values(providerToAgent).filter((target) => target !== id),
   });
 }
 
-const agents: AgentConfig[] = [
+export const agents: AgentConfig[] = [
   createProviderAgent('llm-openai', 'OpenAI'),
   createProviderAgent('llm-google', 'Google'),
   createProviderAgent('llm-anthropic', 'Anthropic'),
   createProviderAgent('llm-aws', 'AWS'),
 ];
 
-runV2Conversation({
-  title: 'Pipecat LLM Switching (v2)',
-  agent: agents[0]!,
-  agents,
-  model,
-  prompts: [
-    'Hi there',
-    'Please use switch_llm and switch to Google.',
-    'What is the weather in San Francisco in fahrenheit?',
-    'Please summarize this conversation so far',
-    'Please use switch_llm and switch to AWS.',
-    'Give me a quick creative goodbye',
-  ],
-}).catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const cliAgent: AgentConfig = {
+  ...agents[0]!,
+  agents: agents.slice(1),
+};
+
+export default cliAgent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat LLM Switching (v2)',
+    agent: agents[0]!,
+    agents,
+    model,
+    prompts: [
+      'Hi there',
+      'Please use switch_llm and switch to Google.',
+      'What is the weather in San Francisco in fahrenheit?',
+      'Please summarize this conversation so far',
+      'Please use switch_llm and switch to AWS.',
+      'Give me a quick creative goodbye',
+    ],
+  }).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

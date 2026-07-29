@@ -1,0 +1,964 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-29T09:38:08.074Z",
+  "model": "openai:gpt-4.1-mini",
+  "configuration": {
+    "runsPerDriver": 3,
+    "warmupsPerDriver": 1,
+    "alternatingOrder": true,
+    "ttftDefinition": "milliseconds from runtime.run() to the first client text-delta",
+    "defaultDriver": "Kuralle TextDriver using Vercel AI SDK",
+    "candidateDriver": "@kuralle-agents/pi-driver using @earendil-works/pi-agent-core"
+  },
+  "substrate": {
+    "core": true,
+    "fs": "InMemoryFs + createFsTool",
+    "skills": "fsSkillStore + SKILL.md body + reference",
+    "rag": "RagPipeline + InMemoryVectorStore + HashingEmbedder (3 documents)",
+    "tools": "createVectorRetrievalTool"
+  },
+  "task": "ACME-42 checkout errors rose immediately after a deploy. Before answering, do all four evidence steps: 1. load the incident-response skill; 2. read its references/escalation.md resource; 3. read /accounts/ACME-42.md with the workspace tool; 4. semantically search the knowledge base for the checkout recovery playbook. Then report the account region, incident severity, acknowledgement-time target, and playbook codename.",
+  "requiredTools": [
+    "load_skill",
+    "read_skill_resource",
+    "workspace",
+    "semantic_search"
+  ],
+  "comparison": {
+    "default": {
+      "driver": "default",
+      "runs": 3,
+      "correct": 3,
+      "ttftMs": {
+        "mean": 4657.203472333334,
+        "median": 3954.8329169999997,
+        "min": 3896.279792000001,
+        "max": 6120.497707999999
+      },
+      "totalMs": {
+        "mean": 5385.4351806666655,
+        "median": 4718.316624999996,
+        "min": 4623.669875,
+        "max": 6814.319042000001
+      },
+      "meanModelCalls": 2,
+      "meanToolCalls": 4,
+      "inputTokens": 5725,
+      "outputTokens": 519
+    },
+    "pi": {
+      "driver": "pi",
+      "runs": 3,
+      "correct": 3,
+      "ttftMs": {
+        "mean": 3230.201555333333,
+        "median": 3196.7267079999983,
+        "min": 2905.123875000001,
+        "max": 3588.754083
+      },
+      "totalMs": {
+        "mean": 3792.581542,
+        "median": 3859.510792000001,
+        "min": 3347.637834000001,
+        "max": 4170.595999999998
+      },
+      "meanModelCalls": 2,
+      "meanToolCalls": 4,
+      "inputTokens": 5667,
+      "outputTokens": 436
+    },
+    "medianDelta": {
+      "ttftMs": -758.1062090000014,
+      "totalMs": -858.8058329999949
+    },
+    "pairedMedianDelta": {
+      "ttftMs": -1049.7090419999986,
+      "totalMs": -1276.0320409999986
+    },
+    "piVsDefaultPercent": {
+      "ttft": -19.169108402563683,
+      "total": -18.20153036041738
+    }
+  },
+  "warmups": [
+    {
+      "driver": "default",
+      "ordinal": 0,
+      "sessionId": "pi-loop-eval-warmup-default-0-47b126e8-b458-48f0-ae8a-6e8164ef4e56",
+      "ttftMs": 4790.042709,
+      "totalMs": 5489.270584,
+      "answer": "The ACME-42 account is in the ap-south-1 region; the incident is severity SEV-2; the acknowledgement-time target is 15 minutes; and the recovery playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md",
+            "pattern": "",
+            "root": "",
+            "glob": "",
+            "flags": "",
+            "content": "",
+            "find": "",
+            "replace": "",
+            "offset": 0,
+            "limit": 0,
+            "replaceAll": false
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook",
+            "topK": 1
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "a0882449-6159-4480-81b3-556a309745c5",
+          "modelId": "gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 14.258583999999985,
+          "durationMs": 3664.9772909999997,
+          "finishReason": "tool-calls",
+          "inputTokens": 758,
+          "outputTokens": 129,
+          "cacheReadTokens": 0
+        },
+        {
+          "callId": "33285a86-116f-4839-8ca2-3d3350007a58",
+          "modelId": "gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 3688.863042,
+          "durationMs": 1798.6725420000002,
+          "finishReason": "stop",
+          "inputTokens": 1150,
+          "outputTokens": 49,
+          "cacheReadTokens": 1024
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    },
+    {
+      "driver": "pi",
+      "ordinal": 0,
+      "sessionId": "pi-loop-eval-warmup-pi-0-ba06174c-7bff-4583-a4fd-7c24a064deec",
+      "ttftMs": 3504.8174169999993,
+      "totalMs": 4131.793999999999,
+      "answer": "The ACME-42 incident is in region ap-south-1 with severity SEV-2, an acknowledgement-time target of 15 minutes, and the playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md"
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook",
+            "topK": 1
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "82e7ca57-a9b7-4d2a-b5a6-5265a373d68a",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 5.990499999999884,
+          "durationMs": 2678.4005000000006,
+          "finishReason": "toolUse",
+          "inputTokens": 754,
+          "outputTokens": 102
+        },
+        {
+          "callId": "e7d58beb-93a6-49d7-a7e4-a58600931925",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 2684.426917,
+          "durationMs": 1445.0534580000003,
+          "finishReason": "stop",
+          "inputTokens": 1119,
+          "outputTokens": 44
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "driver": "default",
+      "ordinal": 1,
+      "sessionId": "pi-loop-eval-measured-default-1-09390828-d5d7-462e-9d88-58dcd88c67fa",
+      "ttftMs": 6120.497707999999,
+      "totalMs": 6814.319042000001,
+      "answer": "The account region is ap-south-1, the incident severity is SEV-2, the acknowledgement-time target is 15 minutes, and the playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md",
+            "pattern": "",
+            "root": "",
+            "glob": "",
+            "flags": "",
+            "content": "",
+            "find": "",
+            "replace": "",
+            "offset": 0,
+            "limit": 0,
+            "replaceAll": false
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook",
+            "topK": 1
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "ac7ce01c-00af-4c06-92bb-625e0351a4b3",
+          "modelId": "gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 11.12395800000013,
+          "durationMs": 5342.385624999999,
+          "finishReason": "tool-calls",
+          "inputTokens": 758,
+          "outputTokens": 129,
+          "cacheReadTokens": 0
+        },
+        {
+          "callId": "ae558acf-d730-483a-aa17-1a27cec464e0",
+          "modelId": "gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 5358.6455829999995,
+          "durationMs": 1454.3068749999984,
+          "finishReason": "stop",
+          "inputTokens": 1150,
+          "outputTokens": 42,
+          "cacheReadTokens": 1024
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    },
+    {
+      "driver": "pi",
+      "ordinal": 1,
+      "sessionId": "pi-loop-eval-measured-pi-1-7d591a96-055c-44fd-b7bf-1e97999282a1",
+      "ttftMs": 3196.7267079999983,
+      "totalMs": 3859.510792000001,
+      "answer": "The account ACME-42 is in the ap-south-1 region, the incident severity is SEV-2, the acknowledgement-time target is 15 minutes, and the playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md"
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook",
+            "topK": 1
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "fdea5f17-1f8a-4436-ae08-cee601e88131",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 1.912625000000844,
+          "durationMs": 2240.188374999998,
+          "finishReason": "toolUse",
+          "inputTokens": 754,
+          "outputTokens": 102
+        },
+        {
+          "callId": "58531434-552c-4c45-8d77-bba1251b25d8",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 2242.1325829999987,
+          "durationMs": 1616.4411670000009,
+          "finishReason": "stop",
+          "inputTokens": 1119,
+          "outputTokens": 48
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    },
+    {
+      "driver": "pi",
+      "ordinal": 2,
+      "sessionId": "pi-loop-eval-measured-pi-2-ebdd9941-64e0-454e-b2c2-c3adb820f16b",
+      "ttftMs": 2905.123875000001,
+      "totalMs": 3347.637834000001,
+      "answer": "The account region is ap-south-1, the incident severity is SEV-2, the acknowledgement-time target is 15 minutes, and the playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md"
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook"
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              },
+              {
+                "id": "catalog-recovery:section",
+                "text": "The catalog indexing recovery playbook is LATTICE-3.\nUse it for stale search results and delayed product indexing.",
+                "score": 0.25819888974716115,
+                "sourceId": "catalog-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "67420434-cf2b-4d1a-9e35-9fba6aea8640",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 1.2597089999981108,
+          "durationMs": 2104.564250000003,
+          "finishReason": "toolUse",
+          "inputTokens": 754,
+          "outputTokens": 97
+        },
+        {
+          "callId": "06293f03-47e1-4266-9f8e-40607110364f",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 2105.84,
+          "durationMs": 1240.9507919999996,
+          "finishReason": "stop",
+          "inputTokens": 1167,
+          "outputTokens": 42
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    },
+    {
+      "driver": "default",
+      "ordinal": 2,
+      "sessionId": "pi-loop-eval-measured-default-2-86227b31-8f1d-4bcf-8be7-e32b1ee483ea",
+      "ttftMs": 3954.8329169999997,
+      "totalMs": 4623.669875,
+      "answer": "The account region is ap-south-1, the incident severity is SEV-2, the acknowledgement-time target is 15 minutes, and the playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md",
+            "pattern": "",
+            "root": "",
+            "glob": "",
+            "flags": "",
+            "content": "",
+            "find": "",
+            "replace": "",
+            "offset": 0,
+            "limit": 1000,
+            "replaceAll": false
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook",
+            "topK": 1
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "1ae2f018-ae2c-45e4-aa94-b065bc0001cf",
+          "modelId": "gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 1.2781250000007276,
+          "durationMs": 2908.4628749999974,
+          "finishReason": "tool-calls",
+          "inputTokens": 758,
+          "outputTokens": 130,
+          "cacheReadTokens": 0
+        },
+        {
+          "callId": "81384b31-cb51-490e-9e54-ae505efd0d61",
+          "modelId": "gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 2915.7118329999976,
+          "durationMs": 1706.3824170000007,
+          "finishReason": "stop",
+          "inputTokens": 1151,
+          "outputTokens": 42,
+          "cacheReadTokens": 0
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    },
+    {
+      "driver": "default",
+      "ordinal": 3,
+      "sessionId": "pi-loop-eval-measured-default-3-eb0cb8b1-2acc-4c83-a89d-aa7981e424f5",
+      "ttftMs": 3896.279792000001,
+      "totalMs": 4718.316624999996,
+      "answer": "The account ACME-42 is in region ap-south-1, the incident severity is SEV-2, the acknowledgement-time target is 15 minutes, and the playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md",
+            "pattern": "",
+            "root": "",
+            "glob": "",
+            "flags": "",
+            "content": "",
+            "find": "",
+            "replace": "",
+            "offset": 0,
+            "limit": 0,
+            "replaceAll": false
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook",
+            "topK": 1
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "e52fab1d-6519-4c1b-86e4-bdf16bc67755",
+          "modelId": "gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 2.640332999999373,
+          "durationMs": 2906.7151669999985,
+          "finishReason": "tool-calls",
+          "inputTokens": 758,
+          "outputTokens": 129,
+          "cacheReadTokens": 0
+        },
+        {
+          "callId": "d5600e5b-68d5-47a5-bde4-6b7c212a2396",
+          "modelId": "gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 2912.1993330000005,
+          "durationMs": 1805.1130419999972,
+          "finishReason": "stop",
+          "inputTokens": 1150,
+          "outputTokens": 47,
+          "cacheReadTokens": 0
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    },
+    {
+      "driver": "pi",
+      "ordinal": 3,
+      "sessionId": "pi-loop-eval-measured-pi-3-7b493122-701e-4d58-96c7-0bccbfa8c5aa",
+      "ttftMs": 3588.754083,
+      "totalMs": 4170.595999999998,
+      "answer": "The ACME-42 incident is in the ap-south-1 region with severity SEV-2, an acknowledgement-time target of 15 minutes, and the playbook codename is ORBIT-7.",
+      "toolCalls": [
+        {
+          "name": "load_skill",
+          "args": {
+            "name": "incident-response"
+          },
+          "result": {
+            "body": "# Incident response\n\n- A checkout failure spike immediately following a deploy is **SEV-2** until impact is disproved.\n- Inspect the affected account before recommending action.\n- Retrieve the matching recovery playbook instead of guessing rollback steps.\n- Read `references/escalation.md` before stating the paging target.\n"
+          }
+        },
+        {
+          "name": "read_skill_resource",
+          "args": {
+            "name": "incident-response",
+            "path": "references/escalation.md"
+          },
+          "result": {
+            "content": "# Escalation targets\n\nFor a SEV-2 checkout incident, the on-call acknowledgement target is **15 minutes**.\nPage the commerce reliability rotation in #orbit-ops."
+          }
+        },
+        {
+          "name": "workspace",
+          "args": {
+            "op": "cat",
+            "path": "/accounts/ACME-42.md"
+          },
+          "result": {
+            "op": "cat",
+            "ok": true,
+            "path": "/accounts/ACME-42.md",
+            "content": "# ACME-42\n\n- Region: ap-south-1\n- Plan: enterprise\n- Checkout path: edge-checkout-v3\n- Change window: active"
+          }
+        },
+        {
+          "name": "semantic_search",
+          "args": {
+            "query": "checkout recovery playbook",
+            "topK": 1
+          },
+          "result": {
+            "results": [
+              {
+                "id": "checkout-recovery:section",
+                "text": "The checkout recovery playbook codename is ORBIT-7.\nUse it for elevated checkout errors immediately after a deployment.\nRollback the checkout feature flag, verify the payment queue drains, then compare error rate to the pre-deploy baseline.",
+                "score": 0.5353033790313106,
+                "sourceId": "checkout-recovery"
+              }
+            ]
+          }
+        }
+      ],
+      "modelCalls": [
+        {
+          "callId": "793f2704-5ee3-44ea-a67e-08a7103bd1b8",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 0,
+          "startedMs": 2.062832999996317,
+          "durationMs": 2587.3946670000005,
+          "finishReason": "toolUse",
+          "inputTokens": 754,
+          "outputTokens": 102
+        },
+        {
+          "callId": "2850f0eb-1615-446e-8800-85d813308c71",
+          "modelId": "openai:gpt-4.1-mini",
+          "step": 1,
+          "startedMs": 2589.4965420000008,
+          "durationMs": 1580.1999159999978,
+          "finishReason": "stop",
+          "inputTokens": 1119,
+          "outputTokens": 45
+        }
+      ],
+      "errors": [],
+      "assessment": {
+        "passed": true,
+        "score": 14,
+        "total": 14,
+        "checks": {
+          "noErrors": true,
+          "emittedAnswer": true,
+          "loadedIncidentSkill": true,
+          "readEscalationResource": true,
+          "readAccountFile": true,
+          "searchedRag": true,
+          "fsEvidenceReturned": true,
+          "skillEvidenceReturned": true,
+          "resourceEvidenceReturned": true,
+          "ragEvidenceReturned": true,
+          "answerHasRegion": true,
+          "answerHasSeverity": true,
+          "answerHasAcknowledgement": true,
+          "answerHasPlaybook": true
+        }
+      }
+    }
+  ]
+}

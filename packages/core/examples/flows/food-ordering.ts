@@ -179,7 +179,7 @@ const kitchenCheck = action({
   },
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'food-ordering',
   name: 'Food Ordering (Pipecat parity)',
   instructions: initialRole,
@@ -194,11 +194,15 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Food Ordering (v2)',
-  agent,
-  prompts: ['Hi there', 'I want pizza', 'Large pepperoni please', 'Can I get a delivery estimate?', 'That order sounds right'],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Food Ordering (v2)',
+    agent,
+    prompts: ['Hi there', 'I want pizza', 'Large pepperoni please', 'Can I get a delivery estimate?', 'That order sounds right'],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

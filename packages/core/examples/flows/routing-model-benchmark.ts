@@ -32,6 +32,16 @@ const inputs = [
 const mainModel = openai('gpt-4o');
 const miniModel = openai('gpt-4o-mini');
 const intakeFlow = createBenchmarkIntakeFlow();
+const cliModel = openai(process.env.OPENAI_MODEL ?? 'gpt-4.1-mini');
+
+export const agent = defineAgent({
+  id: 'routing-model-cli',
+  instructions: 'You are a helpful receptionist.',
+  model: cliModel,
+  flows: [createBenchmarkIntakeFlow()],
+});
+
+export default agent;
 
 async function runBenchmark(label: string, agent: AgentConfig) {
   const runtime = createRuntime({
@@ -100,7 +110,9 @@ async function main() {
   console.log(`  Savings: ${savings}ms (${pct}%) across ${inputs.length} turns`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

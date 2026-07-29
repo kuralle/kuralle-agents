@@ -134,9 +134,12 @@ const muteCustomer = action({
   },
 });
 
-function customerNext(turn: import('../../src/types/channel.js').TurnResult, continued: ReturnType<typeof reply>) {
+function customerNext(
+  turn: import('../../src/types/channel.js').TurnResult,
+  afterStoreLookup: ReturnType<typeof reply> | 'stay',
+) {
   if (turn.toolResults.some((r) => r.name === 'end_customer_conversation')) return endCustomerConversation;
-  if (turn.toolResults.some((r) => r.name === 'check_store_location_and_hours_of_operation')) return continued;
+  if (turn.toolResults.some((r) => r.name === 'check_store_location_and_hours_of_operation')) return afterStoreLookup;
   if (turn.toolResults.some((r) => r.name === 'start_order')) return muteCustomer;
   return 'stay';
 }
@@ -156,7 +159,10 @@ If the customer wants to end the conversation, call the end_customer_conversatio
     start_order: startOrder,
     end_customer_conversation: endCustomerTool,
   }),
-  next: (turn) => customerNext(turn, continuedCustomerInteraction),
+  // Already on the continued-interaction node: park for fresh user input after
+  // reporting the lookup. A self-goto would replay the stale request until the
+  // flow oscillation guard fired.
+  next: (turn) => customerNext(turn, 'stay'),
 });
 
 const customerInteraction = reply({
@@ -177,7 +183,7 @@ If the customer wants to end the conversation, call the end_customer_conversatio
   next: (turn) => customerNext(turn, continuedCustomerInteraction),
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'warm-transfer-flow',
   name: 'Warm Transfer (Pipecat parity)',
   instructions: roleMessage,
@@ -204,16 +210,20 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Warm Transfer (v2)',
-  agent,
-  prompts: [
-    'Hi, can you tell me your store location and hours?',
-    'Thanks, now I want to place an order.',
-    'Okay, I can hold. The human agent has joined.',
-    'Agent here. I am ready to connect to the customer.',
-  ],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Warm Transfer (v2)',
+    agent,
+    prompts: [
+      'Hi, can you tell me your store location and hours?',
+      'Thanks, now I want to place an order.',
+      'Okay, I can hold. The human agent has joined.',
+      'Agent here. I am ready to connect to the customer.',
+    ],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

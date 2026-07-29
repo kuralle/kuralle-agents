@@ -1,0 +1,19 @@
+services:
+  database:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: kuralle_hacker
+      POSTGRES_USER: kuralle
+      POSTGRES_PASSWORD: kuralle
+    ports:
+      - "55432:5432"
+    volumes:
+      - kuralle-hacker-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kuralle -d kuralle_hacker"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  kuralle-hacker-data:

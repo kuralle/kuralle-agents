@@ -154,7 +154,7 @@ const initial = reply({
   },
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'insurance-quote-flow',
   name: 'Insurance Quote (Pipecat parity)',
   instructions: roleMessage,
@@ -171,11 +171,15 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Insurance Quote (v2)',
-  agent,
-  prompts: ['Hi, I need a quote.', 'I am 28.', 'Married.', 'Can we change to 500000 coverage and 2000 deductible?', 'Looks good. End quote.'],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Insurance Quote (v2)',
+    agent,
+    prompts: ['Hi, I need a quote.', 'I am 28.', 'Married.', 'Can we change to 500000 coverage and 2000 deductible?', 'Looks good. End quote.'],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

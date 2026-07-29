@@ -16,7 +16,7 @@ tier() {
 
 tier rag http-client analytics-sdk eval widget                                             # T0 leaves
 tier core                                                                                  # T1 hub
-tier cli fs commerce trace-ui                                                       # T2 (need core)
+tier cli fs commerce trace-ui pi-driver                                             # T2 (need core)
 tier tools messaging                                                                       # T2 (need core/rag)
 tier rag-loaders lancedb-store postgres-store redis-store upstash-store \
      vectorize-store hono-server cf-agent messaging-meta engagement                        # T3 (need core/rag/tools)

@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { SkillsCapability } from '../../src/skills/SkillsCapability.js';
 
-/**
- * The catalog names a skill and tells the model where to read it. Without the path the
- * model knows a skill exists but must infer its location — which is guessing, and the
- * failure mode we saw live was an agent asserting a rule was absent rather than reading
- * the file that held it.
- */
 const store = {
   list: async () => [],
   loadBody: async () => '',
@@ -14,15 +8,18 @@ const store = {
 };
 
 describe('available-skills catalog', () => {
-  it('includes the path for file-backed skills', () => {
+  it('routes file-backed skills through load_skill without leaking a workspace path', () => {
     const cap = new SkillsCapability(store as never, [
       { name: 'triage', description: 'Classify by urgency.', path: '/skills/triage/SKILL.md' },
     ]);
     const text = cap.getPromptSections().map((s) => s.content).join('\n');
-    expect(text).toContain('- triage: Classify by urgency. (path: /skills/triage/SKILL.md)');
+    expect(text).toContain('- triage: Classify by urgency.');
+    expect(text).toContain('call load_skill');
+    expect(text).not.toContain('/skills/triage/SKILL.md');
+    expect(text).not.toContain('path:');
   });
 
-  it('omits the path for inline skills, which have no file', () => {
+  it('lists inline skills, which have no file', () => {
     const cap = new SkillsCapability(store as never, [
       { name: 'inline', description: 'Defined in code.' },
     ]);

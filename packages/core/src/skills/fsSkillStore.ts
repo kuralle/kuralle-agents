@@ -1,6 +1,7 @@
 import type { FileSystem } from '../types/filesystem.js';
 import type { SkillMeta, SkillStoreLike } from '../types/skills.js';
 import { parseSkillFrontmatter } from './parseSkillFrontmatter.js';
+import { sha256 } from './contentHash.js';
 
 const DEFAULT_ROOT = '/skills';
 
@@ -16,17 +17,31 @@ export function fsSkillStore(
   orderedRoots: readonly string[] = [DEFAULT_ROOT],
 ): SkillStoreLike {
   const roots = [...orderedRoots];
+  let snapshot = new Map<string, SkillLocation>();
+  let refresh: Promise<Map<string, SkillLocation>> | undefined;
+
+  const discover = (): Promise<Map<string, SkillLocation>> => {
+    refresh ??= discoverSkills(fs, roots).then((next) => {
+      snapshot = next;
+      return next;
+    }).finally(() => {
+      refresh = undefined;
+    });
+    return refresh;
+  };
+
+  const current = (name: string): SkillLocation | undefined => snapshot.get(name);
 
   return {
     async list(): Promise<SkillMeta[]> {
-      const skills = await discoverSkills(fs, roots, true);
+      const skills = await discover();
       return [...skills.values()]
         .map((skill) => skill.meta)
         .sort((a, b) => a.name.localeCompare(b.name));
     },
 
     async loadBody(name: string): Promise<string> {
-      const skill = (await discoverSkills(fs, roots, false)).get(name);
+      const skill = current(name) ?? (await discover()).get(name);
       if (!skill) {
         throw new Error(`[skills] Skill "${name}" not found.`);
       }
@@ -34,7 +49,7 @@ export function fsSkillStore(
     },
 
     async loadResource(name: string, path: string): Promise<string | Uint8Array> {
-      const skill = (await discoverSkills(fs, roots, false)).get(name);
+      const skill = current(name) ?? (await discover()).get(name);
       if (!skill) {
         throw new Error(`[skills] Skill "${name}" not found.`);
       }
@@ -60,7 +75,6 @@ export function fsSkillStore(
 async function discoverSkills(
   fs: FileSystem,
   roots: readonly string[],
-  warnInvalid: boolean,
 ): Promise<Map<string, SkillLocation>> {
   const skills = new Map<string, SkillLocation>();
 
@@ -85,22 +99,21 @@ async function discoverSkills(
       const skillPath = fs.resolvePath(root, `${entry}/SKILL.md`);
       if (!(await fs.exists(skillPath))) continue;
 
-      try {
-        const content = await fs.readFile(skillPath);
-        const parsed = parseSkillFrontmatter(content, { path: skillPath });
-        skills.set(parsed.name, {
-          root,
-          folder: entry,
-          meta: { name: parsed.name, description: parsed.description, path: skillPath },
-          body: parsed.body,
-        });
-      } catch (err) {
-        if (warnInvalid) {
-          console.warn(
-            `[skills] Skipping ${skillPath}: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
+      const content = await fs.readFile(skillPath);
+      const parsed = parseSkillFrontmatter(content, { path: skillPath });
+      const contentHash = await sha256(content);
+      skills.set(parsed.name, {
+        root,
+        folder: entry,
+        meta: {
+          name: parsed.name,
+          description: parsed.description,
+          path: skillPath,
+          contentHash,
+          ...(parsed.allowedTools ? { allowedTools: parsed.allowedTools } : {}),
+        },
+        body: parsed.body,
+      });
     }
   }
 

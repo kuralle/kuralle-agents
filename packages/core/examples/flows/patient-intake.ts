@@ -185,7 +185,7 @@ const start = reply({
   },
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'patient-intake-flow',
   name: 'Patient Intake (Pipecat parity)',
   instructions: roleMessage,
@@ -200,19 +200,23 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Patient Intake (v2)',
-  agent,
-  prompts: [
-    'Hi',
-    'My birthday is 1983-01-01',
-    'Lisinopril 10mg and Metformin 500mg',
-    'Penicillin',
-    'Type 2 diabetes',
-    'Annual physical checkup',
-    'Yes everything is correct',
-  ],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Patient Intake (v2)',
+    agent,
+    prompts: [
+      'Hi',
+      'My birthday is 1983-01-01',
+      'Lisinopril 10mg and Metformin 500mg',
+      'Penicillin',
+      'Type 2 diabetes',
+      'Annual physical checkup',
+      'Yes everything is correct',
+    ],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

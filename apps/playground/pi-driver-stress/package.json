@@ -1,0 +1,29 @@
+{
+  "name": "pi-driver-stress",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "run": "bun run run.ts",
+    "smoke": "bun run run.ts --scenario kitchen-sink --scenario okf",
+    "test": "bun test",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.89",
+    "@earendil-works/pi-ai": "0.82.1",
+    "@kuralle-agents/cli": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/fs": "workspace:*",
+    "@kuralle-agents/pi-driver": "workspace:*",
+    "ai": "^6.0.0",
+    "dotenv": "^17.4.2",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22.13.4",
+    "typescript": "^5.8.2"
+  }
+}

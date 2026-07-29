@@ -1,0 +1,58 @@
+{
+  "name": "@kuralle-agents/pi-driver",
+  "version": "0.19.0",
+  "description": "Pi agent-core model/tool loop for Kuralle agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
+    "example:full-stack-eval": "bun examples/full-stack-eval/benchmark.ts",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.82.1",
+    "@earendil-works/pi-ai": "0.82.1",
+    "@kuralle-agents/core": "workspace:*",
+    "ai": "^6.0.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai": "^3.0.89",
+    "@kuralle-agents/fs": "workspace:*",
+    "@kuralle-agents/rag": "workspace:*",
+    "@kuralle-agents/tools": "workspace:*",
+    "@types/node": "^22.13.4",
+    "dotenv": "^17.4.2",
+    "typescript": "^5.8.2",
+    "zod": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuralle/kuralle-agents.git",
+    "directory": "packages/pi-driver"
+  }
+}

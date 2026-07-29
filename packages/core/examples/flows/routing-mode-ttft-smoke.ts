@@ -57,7 +57,7 @@ const billingChild = defineAgent({
   model,
 });
 
-function buildAnsweringAgent() {
+export function buildAnsweringAgent() {
   return defineAgent({
     id: 'university',
     model,
@@ -182,7 +182,11 @@ async function main() {
   console.log(`transfer_to_agent: ${xferOk ? 'PASS' : 'FAIL'}`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+export default buildAnsweringAgent();
+
+if (import.meta.main) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

@@ -83,6 +83,14 @@ protected getRuntimeConfig() {
 
 Attach `flows` for structured SOPs or `routes`/`agents` for triage — same `defineAgent` primitive as Node/Bun. No runtime differences.
 
+## Pi driver
+
+`getRuntimeConfig()` is the single driver boundary for chat, scheduled wake, and
+durable resume paths. Return `driver: new PiDriver(...)` there to use Pi by
+default throughout the Durable Object. Use `nodejs_compat`, a current compatibility
+date, and import only the Pi provider module you need so the Worker bundle does
+not pull every provider SDK.
+
 ## Related
 
 - [`@kuralle-agents/core`](https://www.npmjs.com/package/@kuralle-agents/core) — runtime and agent primitives.

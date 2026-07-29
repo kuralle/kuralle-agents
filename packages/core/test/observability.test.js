@@ -29,6 +29,28 @@ test('tracing: sink receives completed tool and turn spans', () => {
   assert.equal(spans[1].attributes.agentId, 'support');
 });
 
+test('tracing: records client-observable TTFT once on the first non-empty text delta', () => {
+  const originalNow = Date.now;
+  let now = 100;
+  Date.now = () => now;
+  try {
+    const recorder = new TraceRecorder({ sessionId: 'trace-ttft', agentId: 'support' });
+    now = 110;
+    recorder.record({ channel: 'client', type: 'text-delta', payload: { id: 't', delta: '' } });
+    now = 125;
+    recorder.record({ channel: 'client', type: 'text-delta', payload: { id: 't', delta: 'first' } });
+    now = 190;
+    recorder.record({ channel: 'client', type: 'text-delta', payload: { id: 't', delta: 'second' } });
+    now = 200;
+    recorder.record({ channel: 'client', type: 'done', payload: { sessionId: 'trace-ttft' } });
+    const trace = recorder.finish({ text: 'firstsecond', toolResults: [] });
+    const ttft = trace.spans.find((span) => span.kind === 'turn').attributes.ttftMs;
+    assert.equal(ttft, 25);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('tracing: handoff changes child attribution without rewriting the turn', () => {
   const recorder = new TraceRecorder({ sessionId: 'trace-handoff', agentId: 'triage' });
   recorder.record({

@@ -11,12 +11,12 @@
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/fs": "workspace:*",
     "@ai-sdk/openai": "3.0.70",
-    "agents": "^0.15.0",
-    "ai": "6.0.193",
+    "agents": "^0.20.1",
+    "ai": "6.0.237",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250214.0",
+    "@cloudflare/workers-types": "^5.20260729.1",
     "wrangler": "^4.0.0"
   }
 }

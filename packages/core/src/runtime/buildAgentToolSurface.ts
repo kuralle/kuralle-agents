@@ -18,6 +18,7 @@ export interface AgentToolSurface {
   workingMemoryTools?: Record<string, AnyTool>;
   workingMemoryPrompt?: string;
   skillPrompt?: string;
+  skillContentHash?: string;
   resolvedWorkspace?: ResolvedAgentWorkspace;
 }
 
@@ -62,6 +63,7 @@ export async function buildAgentToolSurface(
   }
 
   let skillPrompt: string | undefined;
+  let skillContentHash: string | undefined;
   let skillTools: Record<string, AnyTool> = {};
   if (agent.skills) {
     const wired = await wireAgentSkills(agent, resolvedWorkspace?.fs);
@@ -69,6 +71,7 @@ export async function buildAgentToolSurface(
       skillTools = wired.tools;
       Object.assign(executorTools, wired.tools);
       skillPrompt = wired.promptSections.map((s) => s.content).join('\n\n');
+      skillContentHash = wired.contentHash;
     }
   }
 
@@ -94,6 +97,7 @@ export async function buildAgentToolSurface(
       ? { memory_block: wiredWorkingMemory.memoryBlockTool }
       : undefined,
     skillPrompt,
+    skillContentHash,
     resolvedWorkspace,
   };
 }

@@ -108,34 +108,13 @@ export async function resolveStructuredDecide(
   system: string | SystemModelMessage[],
   providerOptions?: Record<string, Record<string, JSONValue>>,
 ): Promise<unknown> {
-  const schema = node.schema as z.ZodType;
-  const useConstrainedChoices = (node.choices?.length ?? 0) > 0 && isChoiceFieldSchema(schema);
+  const prepared = prepareStructuredDecide(node, ctx);
+  if (prepared.kind === 'immediate') return prepared.value;
+  const schema = prepared.schema;
 
-  if (!useConstrainedChoices) {
-    return instrumentedGenerateObject(ctx, {
-      model: ctx.controlModel,
-      schema,
-      system: systemText(system),
-      messages: ctx.runState.messages,
-      temperature: 0,
-      abortSignal: ctx.abortSignal,
-      controlPath: true,
-      ...(providerOptions ? { providerOptions } : {}),
-    });
-  }
-
-  const input = latestUserMessageText(ctx.runState.messages);
-  if (input) {
-    const matched = matchChoiceFromInput(input, node.choices!);
-    if (matched) {
-      return { choice: matched };
-    }
-  }
-
-  const choiceSchema = buildChoiceEnumSchema(node.choices!);
   return instrumentedGenerateObject(ctx, {
     model: ctx.controlModel,
-    schema: choiceSchema,
+    schema,
     system: systemText(system),
     messages: ctx.runState.messages,
     temperature: 0,
@@ -143,6 +122,33 @@ export async function resolveStructuredDecide(
     controlPath: true,
     ...(providerOptions ? { providerOptions } : {}),
   });
+}
+
+export type PreparedStructuredDecision =
+  | { kind: 'immediate'; value: unknown }
+  | { kind: 'model'; schema: z.ZodType };
+
+/** Resolve deterministic choice matches and the exact schema used by model-backed decide nodes. */
+export function prepareStructuredDecide(
+  node: DecideNode,
+  ctx: Pick<RunContext, 'runState'>,
+): PreparedStructuredDecision {
+  const schema = node.schema as z.ZodType;
+  const useConstrainedChoices = (node.choices?.length ?? 0) > 0 && isChoiceFieldSchema(schema);
+
+  if (!useConstrainedChoices) {
+    return { kind: 'model', schema };
+  }
+
+  const input = latestUserMessageText(ctx.runState.messages);
+  if (input) {
+    const matched = matchChoiceFromInput(input, node.choices!);
+    if (matched) {
+      return { kind: 'immediate', value: { choice: matched } };
+    }
+  }
+
+  return { kind: 'model', schema: buildChoiceEnumSchema(node.choices!) };
 }
 
 /**

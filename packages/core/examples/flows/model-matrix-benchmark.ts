@@ -29,6 +29,16 @@ const inputs = [
 
 const gpt4o = openai('gpt-4o');
 const gpt4oMini = openai('gpt-4o-mini');
+const cliModel = openai(process.env.OPENAI_MODEL ?? 'gpt-4.1-mini');
+
+export const agent = defineAgent({
+  id: 'model-matrix-cli',
+  instructions: 'You are a helpful receptionist.',
+  model: cliModel,
+  flows: [createBenchmarkIntakeFlow()],
+});
+
+export default agent;
 
 interface TurnResult {
   input: string;
@@ -157,7 +167,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

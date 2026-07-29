@@ -163,7 +163,7 @@ const kitchenCheck = action({
   },
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'food-ordering-direct-functions',
   name: 'Food Ordering Direct Functions (Pipecat parity)',
   instructions: roleMessage,
@@ -178,11 +178,15 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Food Ordering Direct Functions (v2)',
-  agent,
-  prompts: ['Hi', 'Sushi please', '2 spicy tuna rolls', 'What is the delivery estimate?', 'Looks good'],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Food Ordering Direct Functions (v2)',
+    agent,
+    prompts: ['Hi', 'Sushi please', '2 spicy tuna rolls', 'What is the delivery estimate?', 'Looks good'],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

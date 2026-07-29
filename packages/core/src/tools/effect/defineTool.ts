@@ -84,6 +84,11 @@ export function toolToAiSdk<TInput = unknown, TOutput = unknown>(
 // in-flow execution without separately registering them on `agent.tools`.
 // (see `resolveReplyNode`). The WeakMap is GC-friendly and invisible to callers.
 const rawToolsBySet = new WeakMap<ToolSet, Record<string, AnyTool>>();
+const RAW_TOOLS = Symbol.for('@kuralle-agents/core.raw-tools-by-set');
+
+type ToolSetWithRawTools = ToolSet & {
+  [RAW_TOOLS]?: Record<string, AnyTool>;
+};
 
 export function buildToolSet(tools: Record<string, AnyTool>): ToolSet {
   const set: ToolSet = {};
@@ -94,12 +99,23 @@ export function buildToolSet(tools: Record<string, AnyTool>): ToolSet {
     byName[name] = def;
   }
   rawToolsBySet.set(set, byName);
+  // A CLI or dev loader can legitimately have two Core module instances in one
+  // process (for example, a built runtime loading a source-tree AgentConfig).
+  // WeakMap identity is local to one module instance, so attach the same data
+  // through a process-global symbol as well. Non-enumerable keeps it out of the
+  // AI SDK tool schema and JSON serialization.
+  Object.defineProperty(set, RAW_TOOLS, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: byName,
+  });
   return set;
 }
 
 /** Recover the raw effect tools (with executors) from a `buildToolSet` output. */
 export function rawToolsFromSet(set: ToolSet): Record<string, AnyTool> | undefined {
-  return rawToolsBySet.get(set);
+  return rawToolsBySet.get(set) ?? (set as ToolSetWithRawTools)[RAW_TOOLS];
 }
 
 function inferToolName(description: string): string {

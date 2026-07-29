@@ -5,11 +5,13 @@
   "type": "module",
   "workspaces": [
     "packages/*",
+    "apps/examples/*",
     "apps/playground/rag-demo",
     "apps/playground/cag-demo",
     "apps/playground/_shared",
     "apps/playground/acme-support-agent",
     "apps/playground/langfuse-demo",
+    "apps/playground/pi-driver-stress",
     "apps/playground/pharmacy-rx-agent",
     "apps/playground/fs-demo-cf",
     "apps/playground/fs-demo-vercel"
@@ -37,8 +39,8 @@
     "release": "pnpm changeset:version && pnpm changeset:publish"
   },
   "devDependencies": {
-    "@ai-sdk/openai": "^3.0.25",
-    "@changesets/cli": "^2.30.0",
+    "@ai-sdk/openai": "^3.0.89",
+    "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
     "@kuralle-agents/core": "workspace:*",
     "@types/node": "^20.11.0",
@@ -48,26 +50,54 @@
     "knip": "^6.29.0",
     "typescript": "^5.3.0",
     "typescript-eslint": "^8.60.0",
-    "ws": "^8.19.0"
+    "ws": "^8.21.1"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.52",
     "@ai-sdk/xai": "^3.0.73",
     "@openrouter/ai-sdk-provider": "^2.3.3",
-    "wrangler": "^4.61.1"
+    "wrangler": "^4.115.0"
   },
   "overrides": {
-    "ai": "6.0.193",
-    "@ai-sdk/provider": "3.0.10",
-    "@ai-sdk/provider-utils": "4.0.27",
-    "hono": "4.12.12"
+    "ai": "6.0.237",
+    "@ai-sdk/provider": "3.0.14",
+    "@ai-sdk/provider-utils": "4.0.40",
+    "hono": "4.12.32",
+    "@hono/node-server": "2.0.12",
+    "body-parser": "2.3.0",
+    "brace-expansion": "5.0.8",
+    "esbuild": "0.28.1",
+    "fast-uri": "4.1.1",
+    "form-data": "4.0.6",
+    "fast-xml-parser": "5.10.1",
+    "ip-address": "10.3.1",
+    "postcss": "8.5.25",
+    "protobufjs": "7.6.5",
+    "sharp": "0.35.3",
+    "undici": "7.28.0",
+    "vite": "8.1.5",
+    "ws": "8.21.1"
   },
   "pnpm": {
     "overrides": {
-      "ai": "6.0.193",
-      "@ai-sdk/provider": "3.0.10",
-      "@ai-sdk/provider-utils": "4.0.27",
-      "hono": "4.12.12"
+      "ai": "6.0.237",
+      "@ai-sdk/provider": "3.0.14",
+      "@ai-sdk/provider-utils": "4.0.40",
+      "hono": "4.12.32",
+      "@hono/node-server": "2.0.12",
+      "body-parser": "2.3.0",
+      "brace-expansion": "5.0.8",
+      "esbuild": "0.28.1",
+      "fast-uri": "4.1.1",
+      "form-data": "4.0.6",
+      "fast-xml-parser": "5.10.1",
+      "ip-address": "10.3.1",
+      "postcss": "8.5.25",
+      "protobufjs": "7.6.5",
+      "sharp": "0.35.3",
+      "undici": "7.28.0",
+      "vite": "8.1.5",
+      "ws": "8.21.1"
     }
   }
 }

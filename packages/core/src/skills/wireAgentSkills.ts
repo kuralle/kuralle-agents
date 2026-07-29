@@ -14,6 +14,7 @@ export interface WiredAgentSkills {
   capability: SkillsCapability;
   tools: Record<string, AnyTool>;
   promptSections: PromptSection[];
+  contentHash: string;
 }
 
 export async function wireAgentSkills(
@@ -22,10 +23,9 @@ export async function wireAgentSkills(
 ): Promise<WiredAgentSkills | undefined> {
   if (!agent.skills) return undefined;
 
-  const { store, skills } = await prepareSkillStore(agent.skills, fs);
+  const { store, metas, skills, contentHash } = await prepareSkillStore(agent.skills, fs);
   validateSkillAllowedTools(skills, collectRegisteredNames(agent));
 
-  const metas = await store.list();
   const capability = new SkillsCapability(store, metas);
   const tools: Record<string, AnyTool> = {};
 
@@ -42,5 +42,6 @@ export async function wireAgentSkills(
     capability,
     tools,
     promptSections: capability.getPromptSections(),
+    contentHash,
   };
 }

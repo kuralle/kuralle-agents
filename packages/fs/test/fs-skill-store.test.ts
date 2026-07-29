@@ -136,6 +136,68 @@ Project gamma body.`,
       const reversed = fsSkillStore(fs, ['/skills/project', '/skills/base']);
       expect(await reversed.loadBody('alpha')).toBe('Base alpha body.');
     });
+
+    it('fails loudly when a discovered SKILL.md is invalid', async () => {
+      const fs = new InMemoryFs({
+        '/skills/broken/SKILL.md': '---\nname: broken\n---\nMissing description.',
+      });
+
+      await expect(fsSkillStore(fs).list()).rejects.toThrow(/broken\/SKILL\.md.*description/i);
+    });
+
+    it('reuses one validated discovery snapshot across catalog and body loads', async () => {
+      const fs = new InMemoryFs({ '/skills/alpha/SKILL.md': validSkill });
+      const originalRead = fs.readFile.bind(fs);
+      let reads = 0;
+      fs.readFile = async (...args) => {
+        reads += 1;
+        return originalRead(...args);
+      };
+
+      const store = fsSkillStore(fs);
+      await store.list();
+      await store.loadBody('alpha');
+      await store.loadBody('alpha');
+      expect(reads).toBe(1);
+    });
+
+    it('refreshes on the next catalog snapshot and keys it by content hash', async () => {
+      const fs = new InMemoryFs({ '/skills/alpha/SKILL.md': validSkill });
+      const store = fsSkillStore(fs);
+
+      const first = (await store.list())[0]!;
+      expect(await store.loadBody('alpha')).toContain('Do alpha things.');
+
+      await fs.writeFile('/skills/alpha/SKILL.md', `---
+name: alpha
+description: Updated alpha instructions.
+---
+
+# Updated body
+Do the new thing.
+`);
+
+      const second = (await store.list())[0]!;
+      expect(second.description).toBe('Updated alpha instructions.');
+      expect(second.contentHash).not.toBe(first.contentHash);
+      expect(await store.loadBody('alpha')).toContain('Do the new thing.');
+    });
+
+    it('preserves allowed-tools enforcement metadata outside the model catalog', async () => {
+      const fs = new InMemoryFs({
+        '/skills/alpha/SKILL.md': `---
+name: alpha
+description: Alpha skill instructions.
+allowed-tools: [lookup, checkout]
+---
+
+Use the registered tools.`,
+      });
+
+      const meta = (await fsSkillStore(fs).list())[0]!;
+      expect(meta.allowedTools).toEqual(['lookup', 'checkout']);
+      expect(meta.contentHash).toMatch(/^[a-f0-9]{64}$/);
+    });
   });
 
   describe('defineSkill', () => {

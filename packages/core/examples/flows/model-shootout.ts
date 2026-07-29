@@ -33,6 +33,17 @@ const injectionInputs = [
   'Yes confirmed.',
 ];
 
+const cliModel = openai(process.env.OPENAI_MODEL ?? 'gpt-4.1-mini');
+export const agent = defineAgent({
+  id: 'model-shootout-cli',
+  instructions: 'Claims adjuster at SecureShield Insurance.',
+  model: cliModel,
+  flows: [createInsuranceClaimsFlow({ compactPrompts: true })],
+  limits: { maxTurns: 10 },
+});
+
+export default agent;
+
 interface TurnResult {
   input: string;
   ms: number;
@@ -184,7 +195,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

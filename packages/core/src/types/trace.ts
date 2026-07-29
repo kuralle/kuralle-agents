@@ -38,6 +38,8 @@ export interface AgentSpan {
     finishReason?: string;
     /** Context-window occupancy at this turn (last prompt tokens — a snapshot, not a delta). */
     contextTokens?: number;
+    /** Milliseconds from Runtime.run() trace start to the first non-empty client text delta. */
+    ttftMs?: number;
     /** Prompt-cache read tokens for this turn (delta). */
     cacheReadTokens?: number;
     /** Prompt-cache write / creation tokens for this turn (delta). */
@@ -46,6 +48,10 @@ export interface AgentSpan {
     controlPath?: boolean;
     /** Imperative `ctx.tool` call (not model-issued). */
     imperative?: boolean;
+    /** SHA-256 of the initiating agent's validated skill snapshot. */
+    skillContentHash?: string;
+    /** Skill snapshot hashes observed across all agents in this turn, including handoffs. */
+    skillContentHashes?: Record<string, string>;
   };
 }
 

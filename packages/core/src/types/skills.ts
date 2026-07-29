@@ -2,11 +2,15 @@ export interface SkillMeta {
   name: string;
   description: string;
   /**
-   * Where the skill's SKILL.md lives, when it is file-backed. Surfaced in the available-skills
-   * catalog so the model can read the file directly rather than inferring a location.
-   * Undefined for inline skills, which have no file.
+   * Where the skill's SKILL.md lives, when it is file-backed. Internal diagnostic metadata;
+   * it is intentionally not disclosed in the model catalog because bodies must be loaded
+   * through `load_skill` even when the skill store is not the agent workspace.
    */
   path?: string;
+  /** SHA-256 of the source content used to build this catalog entry. */
+  contentHash?: string;
+  /** Enforcement metadata; never rendered into the model-facing catalog. */
+  allowedTools?: string[];
 }
 
 export interface SkillLike {
@@ -15,6 +19,10 @@ export interface SkillLike {
   body: string;
   resources?: Record<string, string | Uint8Array>;
   allowedTools?: string[];
+  /** Internal audit/cache metadata propagated by content-backed stores. */
+  contentHash?: string;
+  /** Source path for diagnostics; never rendered into the model prompt. */
+  path?: string;
 }
 
 export interface SkillStoreLike {

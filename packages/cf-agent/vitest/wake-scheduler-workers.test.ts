@@ -2,7 +2,7 @@ import { env, runDurableObjectAlarm } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { getAgentByName } from 'agents';
 import type { ScheduledJob } from '@kuralle-agents/core';
-import type { TestWakeAgent } from './worker.js';
+import type { TestWakeAgent } from './cf-agent-worker.js';
 
 interface TestWakeEnv {
   TEST_WAKE_AGENT: DurableObjectNamespace<TestWakeAgent>;

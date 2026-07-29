@@ -99,10 +99,16 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   }
 
   const events: string[] = [];
+  const started = performance.now();
+  let ttftMs: number | null = null;
   const handle = demo.runtime.run({ sessionId, input: message, ...(signalDelivery ? { signalDelivery } : {}) });
   let text = '';
   for await (const part of handle.events as AsyncIterable<StreamPart>) {
-    if (part.type === 'text-delta') { text += part.payload.delta; process.stdout.write(part.payload.delta); }
+    if (part.type === 'text-delta') {
+      if (part.payload.delta && ttftMs === null) ttftMs = performance.now() - started;
+      text += part.payload.delta;
+      process.stdout.write(part.payload.delta);
+    }
     else if (part.type === 'tool-call') events.push(`tool:${part.payload.toolName}`);
     else if (part.type === 'flow-enter') events.push(`enter:${part.payload.flow}`);
     else if (part.type === 'flow-end') events.push(`end:${part.payload.flow}`);
@@ -121,5 +127,9 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   if (!text && typeof (res as { text?: string }).text === 'string') text = (res as { text: string }).text;
   if (!text.endsWith('\n')) process.stdout.write('\n');
   if (events.length) console.log(`[events] ${events.join(' ')}`);
+  console.log(
+    `[timing] TTFT=${ttftMs === null ? 'none' : `${Math.round(ttftMs)}ms`} ` +
+    `total=${Math.round(performance.now() - started)}ms`,
+  );
   console.log(await readState());
 }

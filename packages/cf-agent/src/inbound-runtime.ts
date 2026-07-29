@@ -498,7 +498,7 @@ export class QueuedTurnRunner implements TurnRunner {
 
   constructor(
     private readonly inner: TurnRunner,
-    private readonly queue = new TurnQueue(),
+    private readonly queue: TurnQueueLike = new TurnQueue(),
     private readonly messageConcurrency: MessageConcurrency = 'queue',
   ) {}
 
@@ -561,12 +561,25 @@ export class QueuedTurnRunner implements TurnRunner {
   }
 }
 
+/**
+ * Structural boundary for Cloudflare's queue. Keeping the dependency's concrete
+ * class out of our public options avoids nominal private-field incompatibility
+ * when an application and this package resolve separate copies of `agents`.
+ */
+export interface TurnQueueLike {
+  enqueue<T>(
+    requestId: string,
+    task: () => Promise<T>,
+  ): Promise<{ status: 'completed'; value: T } | { status: 'stale' }>;
+  waitForIdle(): Promise<void>;
+}
+
 export interface DurableObjectInboundRuntimeOptions {
   sql: SqlExecutor;
   runtime: RuntimeLike;
   media: MediaResolver;
   sender: OutboundSender;
-  queue?: TurnQueue;
+  queue?: TurnQueueLike;
   messageConcurrency?: MessageConcurrency;
   scheduler?: CoalesceScheduler;
   clock?: Clock;

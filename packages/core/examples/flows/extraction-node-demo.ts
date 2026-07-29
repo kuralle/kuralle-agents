@@ -69,7 +69,7 @@ const greeting = reply({
   next: (turn) => (turn.toolResults.some((r) => r.name === 'start_collection') ? collectInfo : 'stay'),
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'extraction-demo',
   name: 'Extraction Node Demo',
   instructions: 'You are a friendly receptionist at a medical clinic.',
@@ -84,19 +84,23 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'ExtractionNode Demo (v2 collect)',
-  agent,
-  prompts: [
-    'Hi there!',
-    'What are your opening hours?',
-    'Oh right, my name is Sarah Chen.',
-    'banana',
-    'Sorry, my phone is 555-0123.',
-    'I need a follow-up for my knee.',
-    'Yes, that is all correct.',
-  ],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'ExtractionNode Demo (v2 collect)',
+    agent,
+    prompts: [
+      'Hi there!',
+      'What are your opening hours?',
+      'Oh right, my name is Sarah Chen.',
+      'banana',
+      'Sorry, my phone is 555-0123.',
+      'I need a follow-up for my knee.',
+      'Yes, that is all correct.',
+    ],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

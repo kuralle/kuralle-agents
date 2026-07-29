@@ -98,6 +98,10 @@ const server = serve({ fetch: app.fetch, port: 3000 });
 injectWebSocket(server);
 ```
 
+The router never selects or replaces a channel driver. Configure Pi once on the
+runtime with `driver: new PiDriver(...)`; HTTP, native UI-message SSE, raw SSE,
+WebSocket, OpenAI-compatible, and resume paths all use that same driver.
+
 `POST /api/chat/sse` accepts `useChat`-shaped bodies (`{ messages: UIMessage[] }`) and returns a native `UIMessageStream`. No `StreamPart` → `UIMessageChunk` bridge required.
 
 ## Raw JSON-SSE (`?format=raw`)

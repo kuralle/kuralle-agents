@@ -288,6 +288,20 @@ describe('harnessToUIMessageStream', () => {
     });
   });
 
+  it('redacts unexpected stream failures instead of leaking implementation details', async () => {
+    async function* failingSource(): AsyncIterable<StreamPart> {
+      yield { channel: 'client', type: 'text-start', payload: { id: 't1' } };
+      throw new Error('postgres://admin:secret@internal.example/agents');
+    }
+
+    const chunks = await collectChunks(
+      harnessToUIMessageStream(failingSource()) as ReadableStream<StreamChunk>,
+    );
+    expect(chunksOfType(chunks, 'error')).toEqual([
+      { type: 'error', errorText: 'An error occurred.' },
+    ]);
+  });
+
   it('TurnHandle.toUIMessageStreamResponse returns a UI message SSE response', async () => {
     const bus = createEventBus();
     const handle = createTurnHandle({

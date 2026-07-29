@@ -39,6 +39,9 @@ export type KuralleDataParts = {
 
 export type KuralleUIMessage = UIMessage<KuralleMetadata, KuralleDataParts>;
 
+/** An error that the harness has explicitly classified for client delivery. */
+class ClientStreamError extends Error {}
+
 function writeHarnessPart(
   part: StreamPart,
   writer: UIMessageStreamWriter<KuralleUIMessage>,
@@ -180,7 +183,7 @@ function writeHarnessPart(
       });
       break;
     case 'error':
-      throw new Error(part.payload.error);
+      throw new ClientStreamError(part.payload.error);
     case 'done':
     case 'turn-end':
       break;
@@ -201,6 +204,11 @@ export function harnessToUIMessageStream(
   opts?: { sessionId?: string },
 ): ReadableStream {
   return createUIMessageStream<KuralleUIMessage>({
+    // AI SDK deliberately redacts thrown errors by default. Preserve the
+    // harness's explicit client error contract without leaking unexpected
+    // iterator, adapter, or implementation failures.
+    onError: (error) =>
+      error instanceof ClientStreamError ? error.message : 'An error occurred.',
     execute: async ({ writer }) => {
       let doneSessionId = opts?.sessionId;
 

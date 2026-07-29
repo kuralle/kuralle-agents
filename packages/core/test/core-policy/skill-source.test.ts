@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { defineSkill } from '../../src/skills/defineSkill.js';
 import { prepareSkillStore } from '../../src/skills/collectSkills.js';
+import { wireAgentSkills } from '../../src/skills/wireAgentSkills.js';
 import type { FileSystem } from '../../src/types/filesystem.js';
 
 function skillMd(name: string, description: string, body: string): string {
@@ -124,5 +125,23 @@ describe('defineSkill validates like a SKILL.md on disk', () => {
     expect(() =>
       defineSkill({ name: 'ok', description: 'x'.repeat(1025), instructions: 'y' }),
     ).toThrow(/1024/);
+  });
+});
+
+describe('filesystem skill policy metadata', () => {
+  it('fails startup when allowed-tools names an unavailable tool', async () => {
+    const fs = memFs({
+      '/skills/org/restricted/SKILL.md': `---
+name: restricted
+description: Uses one required tool.
+allowed-tools: missing-tool
+---
+
+Call the tool.`,
+    });
+
+    await expect(wireAgentSkills({ skills: '/skills/org' }, fs)).rejects.toThrow(
+      /skill restricted: unknown tool missing-tool/,
+    );
   });
 });

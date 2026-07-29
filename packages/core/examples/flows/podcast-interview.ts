@@ -57,11 +57,15 @@ const interview = reply({
       execute: async () => ({ wrap: true }),
     }),
   }),
-  next: (turn) => {
+  next: (turn, state) => {
     if (turn.toolResults.some((r) => r.name === 'wrap_up')) return conclusion;
     const nextQ = turn.toolResults.find((r) => r.name === 'next_question');
-    if (nextQ?.result) {
-      return { goto: interview, data: nextQ.result as Record<string, unknown> };
+    if (nextQ?.result && typeof nextQ.result === 'object') {
+      // This node owns a multi-turn conversation. Persist the counter in place
+      // and park for the next user turn; a self-goto would immediately invoke
+      // the same model again on stale input until the oscillation guard fires.
+      Object.assign(state, nextQ.result);
+      return 'stay';
     }
     return 'stay';
   },
@@ -108,7 +112,7 @@ const introduction = reply({
   },
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'podcast-interview-flow',
   name: 'Podcast Interview (Pipecat parity)',
   instructions: introRole,
@@ -124,18 +128,22 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Podcast Interview (v2)',
-  agent,
-  prompts: [
-    'Hi, I am Sam, product designer focused on creative tooling.',
-    'Let us talk about designing delightful AI interfaces.',
-    'First aspect is reducing friction in onboarding. Move to the next aspect after this.',
-    'Second aspect is building trust with transparent controls. Move to the next aspect.',
-    'Third aspect is balancing speed and craft. Please wrap up after this.',
-    'My final thought is to keep listening to users. You can end the interview.',
-  ],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Podcast Interview (v2)',
+    agent,
+    prompts: [
+      'Hi, I am Sam, product designer focused on creative tooling.',
+      'Let us talk about designing delightful AI interfaces.',
+      'First aspect is reducing friction in onboarding. Move to the next aspect after this.',
+      'Second aspect is building trust with transparent controls. Move to the next aspect.',
+      'Third aspect is balancing speed and craft. Please wrap up after this.',
+      'My final thought is to keep listening to users. You can end the interview.',
+    ],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

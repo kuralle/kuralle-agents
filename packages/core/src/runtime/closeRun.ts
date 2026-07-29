@@ -56,6 +56,11 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
   await mutateSessionWithRetry(sessionStore, session.id, (latest) => {
     latest.currentAgent = runState.activeAgentId;
     latest.activeAgentId = runState.activeAgentId;
+    // Tool and driver code receives the live Session through RunContext. Persist
+    // its working-memory mutations alongside the canonical transcript; otherwise
+    // values set during a tool call disappear after this turn because journal
+    // writes operate on separately cloned SessionStore snapshots.
+    latest.workingMemory = structuredClone(ctx.session.workingMemory);
     // Sync the session-level message mirror to the canonical run record — it
     // otherwise lacks assistant turns and keeps pre-guardrail (unredacted)
     // user input written at openRun.

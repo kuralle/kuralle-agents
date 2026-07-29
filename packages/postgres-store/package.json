@@ -34,7 +34,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "bun test ./test ./src/__tests__",
+    "test": "bun test ./test/ ./src/__tests__/",
     "clean": "rm -rf dist",
     "prebuild": "rm -rf dist",
     "prepublishOnly": "npm run build"

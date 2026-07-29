@@ -6,12 +6,14 @@ export interface DeferredTokenSource {
   source: TokenSource;
   push(delta: string): void;
   close(reason?: DeferredCloseReason): void;
+  fail(error: unknown): void;
 }
 
 export function createDeferredTokenSource(): DeferredTokenSource {
   const queue: { delta: string }[] = [];
   let closed = false;
   let closeReason: DeferredCloseReason | undefined;
+  let failure: unknown;
   const waiters: Array<() => void> = [];
 
   const notify = (): void => {
@@ -28,6 +30,9 @@ export function createDeferredTokenSource(): DeferredTokenSource {
         if (closed) {
           if (closeReason === 'interrupted') {
             throw new Error('interrupted');
+          }
+          if (closeReason === 'error') {
+            throw failure;
           }
           return;
         }
@@ -49,6 +54,13 @@ export function createDeferredTokenSource(): DeferredTokenSource {
       if (closed) return;
       closed = true;
       closeReason = reason;
+      notify();
+    },
+    fail(error: unknown): void {
+      if (closed) return;
+      failure = error;
+      closed = true;
+      closeReason = 'error';
       notify();
     },
   };

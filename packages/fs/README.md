@@ -120,9 +120,13 @@ import { sqlFileSystem, r2BlobStore } from '@kuralle-agents/fs';
 const fs = sqlFileSystem(this.ctx.storage.sql, { blobs: r2BlobStore(env.BUCKET) });
 // or:  sqlFileSystem(env.DB)   // D1
 
-// Node (built-in node:sqlite, Node >= 22.5)
+// Node virtual workspace persisted in built-in node:sqlite (Node >= 22.5)
 import { nodeSqlFileSystem } from '@kuralle-agents/fs/node';
 const fs = nodeSqlFileSystem('/data/agent.db');
+
+// Node directory exposed as confined virtual paths; files remain ordinary files
+import { nodeFileSystem } from '@kuralle-agents/fs/node/fs';
+const localMarkdown = nodeFileSystem('/data/content-workspace');
 
 // Bun / anything — wrap the SQLite handle in a 3-line SqlBackend
 import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
@@ -186,7 +190,8 @@ fs and shell tools are **non-replayed** (`replay: false`): they always execute f
 - `InMemoryFs` — in-memory tree, seed with `new InMemoryFs({ '/path': 'content' })`
 - `CompositeFileSystem` — path-routed mount table over multiple `FileSystem` backends
 - `createFsTool` — durable, capped, read-only-by-default workspace tool factory
-- `SqlFileSystem`, `sqlFileSystem` (DO SQLite / D1 auto-detect), `r2BlobStore`, `nodeSqlFileSystem` (`/node`) — persistent, platform-chosen backends
+- `SqlFileSystem`, `sqlFileSystem` (DO SQLite / D1 auto-detect), `r2BlobStore`, `nodeSqlFileSystem` (`/node`) — persistent virtual, platform-chosen backends
+- `NodeFileSystem`, `nodeFileSystem` (`/node`) — real local files confined to a caller-owned root, including symlink-escape protection
 - `fsSkillStore`, `defineSkill`, `parseSkillFrontmatter` — SKILL.md skills on a filesystem
 - `okfBundleToFs`, `listOkfConcepts`, `parseOkfConcept` — Open Knowledge Format (OKF v0.1) bundles
 - `virtualShell` / `bashShell` (`/shell`), `nodeShell` (`/node`), `cloudflareShell` (`/cloudflare`) — `Shell` backends

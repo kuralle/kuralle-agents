@@ -28,7 +28,7 @@ const initial = collect({
   onComplete: () => end,
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'quickstart-hello-world',
   name: 'Quickstart Hello World',
   instructions: initialRole,
@@ -43,11 +43,15 @@ const agent = defineAgent({
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Quickstart Hello World (v2)',
-  agent,
-  prompts: ['Hi!', 'My favorite color is blue.'],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Quickstart Hello World (v2)',
+    agent,
+    prompts: ['Hi!', 'My favorite color is blue.'],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

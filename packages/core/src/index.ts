@@ -486,8 +486,21 @@ export type {
 } from './runtime/durable/types.js';
 export { DURABLE_RUNS_KEY } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
-export type { ChannelDriver, TextDriver } from './runtime/channels/index.js';
-export type { TurnResult } from './types/channel.js';
+export {
+  TextDriver,
+  AiSdkModelTurnLoop,
+  type ChannelDriver,
+  type TextDriverConfig,
+  type ModelTurnLoop,
+  type ModelTurnLoopInput,
+  type ModelTurnLoopState,
+} from './runtime/channels/index.js';
+export type {
+  TurnResult,
+  ToolResultRecord,
+  ResolvedNode,
+  UserSignal,
+} from './types/channel.js';
 export type { RunContext, ToolContext, ActionContext } from './types/run-context.js';
 export type { AnyTool } from './types/effectTool.js';
 export {

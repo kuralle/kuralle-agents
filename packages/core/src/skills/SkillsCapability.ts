@@ -41,18 +41,16 @@ export class SkillsCapability implements Capability {
 
   getPromptSections(): PromptSection[] {
     if (!this.metas.length) return [];
-    // Include the path for file-backed skills so the model can read SKILL.md directly
-    // instead of guessing a location — the difference between dispatching a skill by
-    // reference and merely naming it.
     const lines = this.metas
-      .map((m) => `- ${m.name}: ${m.description}${m.path ? ` (path: ${m.path})` : ''}`)
+      .map((m) => `- ${m.name}: ${m.description}`)
       .join('\n');
     return [
       {
         role: 'context',
         content: [
           '## Available skills',
-          'Load a skill with load_skill when its description matches the task:',
+          'When a description matches the task, call load_skill with its name before acting.',
+          'Skill bodies and resources belong to the skill capability, not the workspace: do not locate or read SKILL.md with workspace.',
           lines,
         ].join('\n'),
       },

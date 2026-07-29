@@ -16,7 +16,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 - **Flows** — node graphs (`reply`, `collect`, `action`, `decide`) where each node returns its next transition. Your SOP becomes a typed state machine you didn't have to hand-write.
 - **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
 - **Routing / Handoffs** — model-reasoned routing (`routes`/`agents`, derived from agent shape) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
-- **Runtime** — `createRuntime` wires agents, sessions, and streaming. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `StreamPart` JSON-SSE.
+- **Runtime** — `createRuntime` wires agents, sessions, and streaming. Pi is the recommended application driver; Core keeps a portable AI SDK loop as its zero-configuration fallback. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `StreamPart` JSON-SSE.
 - **Observability** — every run is captured as a structured `AgentTrace`. `runtime.runOnce()` returns one complete trace for evals; tracing is on by default (`MemoryTraceStore`), durable on Redis/Postgres/Cloudflare DO-SQLite, exportable to OTLP/Langfuse, and inspectable via `kuralle trace` or the embeddable `@kuralle-agents/trace-ui` viewer.
 
 ## Why Kuralle
@@ -30,7 +30,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 ## Installation
 
 ```bash
-npm install @kuralle-agents/core @ai-sdk/openai ai zod
+npm install @kuralle-agents/core @kuralle-agents/pi-driver @earendil-works/pi-ai @ai-sdk/openai ai zod
 ```
 
 Peer dependencies: `ai@^6`, `zod`. Bring your own provider package (`@ai-sdk/openai`, `@ai-sdk/anthropic`, etc.).
@@ -39,8 +39,11 @@ Peer dependencies: `ai@^6`, `zod`. Bring your own provider package (`@ai-sdk/ope
 
 ```ts
 import { openai } from '@ai-sdk/openai';
+import { createModels } from '@earendil-works/pi-ai';
+import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import { PiDriver } from '@kuralle-agents/pi-driver';
 import { z } from 'zod';
-import { defineAgent, defineTool, createRuntime, buildToolSet } from '@kuralle-agents/core';
+import { defineAgent, defineTool, createRuntime } from '@kuralle-agents/core';
 
 const echo = defineTool({
   name: 'echo',
@@ -54,13 +57,22 @@ const agent = defineAgent({
   name: 'Support Agent',
   instructions: 'Helpful support agent. Use the echo tool when asked.',
   model: openai('gpt-4o-mini'),
-  tools: buildToolSet({ echo }),   // make the tool model-visible
-  tools: { echo },           // wire the durable executor
+  tools: { echo }, // model-visible and wired through the durable executor
 });
+
+const models = createModels();
+models.setProvider(openaiProvider());
+const piModel = models.getModel('openai', 'gpt-4o-mini');
+if (!piModel) throw new Error('Pi model is not registered');
 
 const runtime = createRuntime({
   agents: [agent],
   defaultAgentId: 'support',
+  driver: new PiDriver({
+    model: piModel,
+    models,
+    getApiKey: () => process.env.OPENAI_API_KEY,
+  }),
 });
 
 let sessionId: string | undefined;
@@ -91,7 +103,8 @@ More examples: `packages/core/examples/agents/` — form-filler, transfer-agent,
 
 | Package | Use when |
 |---------|----------|
-| [`@kuralle-agents/core`](https://www.npmjs.com/package/@kuralle-agents/core) | Always — agents, flows, runtime, session, tools |
+| [`@kuralle-agents/core`](https://www.npmjs.com/package/@kuralle-agents/core) | Always — agents, flows, runtime, session, tools, and the portable AI SDK fallback |
+| [`@kuralle-agents/pi-driver`](https://www.npmjs.com/package/@kuralle-agents/pi-driver) | Recommended model/tool loop for production applications |
 | [`@kuralle-agents/hono-server`](https://www.npmjs.com/package/@kuralle-agents/hono-server) | Serving agents over HTTP/SSE/WebSocket on Node.js or Bun |
 | [`@kuralle-agents/cf-agent`](https://www.npmjs.com/package/@kuralle-agents/cf-agent) | Deploying to Cloudflare Workers with Durable Objects |
 | [`@kuralle-agents/tools`](https://www.npmjs.com/package/@kuralle-agents/tools) | CAG tools for grounded retrieval and answering |

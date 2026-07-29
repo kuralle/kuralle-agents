@@ -99,8 +99,10 @@ export function formatTrace(trace: AgentTrace): string {
   const start = trace.startedAt;
   const end = trace.endedAt ?? Math.max(...trace.spans.map((span) => span.endTime ?? span.startTime));
   const duration = Math.max(1, end - start);
+  const ttft = trace.spans.find((span) => span.kind === 'turn')?.attributes.ttftMs;
   const lines = [
-    `trace ${trace.traceId}  session ${trace.sessionId}  ${formatDuration(end - start)}`,
+    `trace ${trace.traceId}  session ${trace.sessionId}  ${formatDuration(end - start)}` +
+      `${ttft === undefined ? '' : `  TTFT ${formatDuration(ttft)}`}`,
     '  offset    duration  span',
   ];
   for (const span of trace.spans) {

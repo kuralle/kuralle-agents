@@ -97,7 +97,12 @@ const noAvailability = reply({
   tools: buildToolSet({ check_availability: checkAvailability, end_conversation: endConversation }),
   next(turn) {
     if (turn.toolResults.some((r) => r.name === 'end_conversation')) return end;
-    return availabilityNext(turn, noAvailability);
+    const result = turn.toolResults.find((item) => item.name === 'check_availability');
+    if (!result?.result || typeof result.result !== 'object') return 'stay';
+    const data = result.result as Record<string, unknown>;
+    // Do not create a no_availability -> no_availability edge when the model
+    // redundantly re-checks the rejected time in the same turn.
+    return data.available ? { goto: confirm, data } : 'stay';
   },
 });
 
@@ -121,7 +126,7 @@ const initial = reply({
   },
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'restaurant-reservation',
   name: 'Restaurant Reservation (Pipecat parity)',
   instructions: roleMessage,
@@ -130,17 +135,22 @@ const agent = defineAgent({
     defineFlow({
       name: 'reservation',
       description: 'Book a table at La Maison',
+      binding: true,
       start: initial,
       nodes: [initial, getTime, confirm, noAvailability, end],
     }),
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Restaurant Reservation (v2)',
-  agent,
-  prompts: ['Hi, I need a reservation', 'Party of 4', '7:00 PM', 'How about 6:00 PM then?', 'That works, thanks'],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Restaurant Reservation (v2)',
+    agent,
+    prompts: ['Hi, I need a reservation', 'Party of 4', '7:00 PM', 'How about 6:00 PM then?', 'That works, thanks'],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

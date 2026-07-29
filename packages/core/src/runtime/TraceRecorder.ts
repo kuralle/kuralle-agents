@@ -58,11 +58,21 @@ export class TraceRecorder {
     this.root.attributes.agentId = agentId;
   }
 
+  recordSkillSnapshot(agentId: string, contentHash: string): void {
+    const hashes = this.root.attributes.skillContentHashes ?? {};
+    hashes[agentId] = contentHash;
+    this.root.attributes.skillContentHashes = hashes;
+    this.root.attributes.skillContentHash ??= contentHash;
+  }
+
   record(part: StreamPart): void {
     try {
       const at = Date.now();
       switch (part.type) {
         case 'text-delta':
+          if (part.payload.delta && this.root.attributes.ttftMs === undefined) {
+            this.root.attributes.ttftMs = at - this.root.startTime;
+          }
           this.trace.answer += part.payload.delta;
           break;
         case 'flow-enter':

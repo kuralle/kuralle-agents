@@ -15,6 +15,7 @@ Then read the [documentation](../apps/docs) and the [root README](../README.md).
 | Package | Description |
 |---------|-------------|
 | [`@kuralle-agents/core`](kuralle-core) | Runtime, agents, flows, tools, sessions — the framework core. |
+| [`@kuralle-agents/pi-driver`](pi-driver) | Recommended Pi agent-core model/tool loop; Core retains an AI SDK fallback. |
 | [`@kuralle-agents/hono-server`](kuralle-hono-server) | Hono router to host `createRuntime()` over HTTP, SSE, and WebSocket. |
 | [`@kuralle-agents/cf-agent`](kuralle-cf-agent) | Cloudflare Workers / Durable Objects integration. |
 

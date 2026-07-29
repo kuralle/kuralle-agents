@@ -96,7 +96,13 @@ const noAvailability = reply({
   tools: buildToolSet({ check_availability: checkAvailability, end_conversation: endConversation }),
   next(turn) {
     if (turn.toolResults.some((r) => r.name === 'end_conversation')) return end;
-    return availabilityNext(turn, noAvailability);
+    const result = turn.toolResults.find((item) => item.name === 'check_availability');
+    if (!result?.result || typeof result.result !== 'object') return 'stay';
+    const data = result.result as Record<string, unknown>;
+    // A model may redundantly re-check the already rejected time while writing
+    // the alternatives prompt. Park instead of self-transitioning back into
+    // this node; a later user-supplied available time still advances normally.
+    return data.available ? { goto: confirm, data } : 'stay';
   },
 });
 
@@ -120,7 +126,7 @@ const initial = reply({
   },
 });
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'restaurant-reservation-direct-functions',
   name: 'Restaurant Reservation Direct Functions (Pipecat parity)',
   instructions: roleMessage,
@@ -129,17 +135,22 @@ const agent = defineAgent({
     defineFlow({
       name: 'reservation',
       description: 'Book a table at La Maison',
+      binding: true,
       start: initial,
       nodes: [initial, getTime, confirm, noAvailability, end],
     }),
   ],
 });
 
-runV2Conversation({
-  title: 'Pipecat Restaurant Reservation Direct Functions (v2)',
-  agent,
-  prompts: ['Hello', '2 people', '8:00 PM', 'Try 9:00 PM', 'Done'],
-}).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  runV2Conversation({
+    title: 'Pipecat Restaurant Reservation Direct Functions (v2)',
+    agent,
+    prompts: ['Hello', '2 people', '8:00 PM', 'Try 9:00 PM', 'Done'],
+  }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

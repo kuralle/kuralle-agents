@@ -14,7 +14,7 @@
     "@astrojs/starlight": "^0.38.4",
     "@tailwindcss/vite": "^4.2.4",
     "astro": "^6.1.10",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "starlight-llms-txt": "^0.8.1",
     "starlight-typedoc": "^0.21.5",
     "typedoc": "^0.28.19",
@@ -23,10 +23,10 @@
     "typedoc-plugin-zod": "^1.4.3"
   },
   "devDependencies": {
-    "@hono/node-server": "^1.19.11",
+    "@hono/node-server": "^2.0.12",
     "@hono/node-ws": "^1.1.1",
     "@types/pg": "^8.20.0",
-    "hono": "^4.12.5",
+    "hono": "^4.12.32",
     "pg": "^8.22.0",
     "redis": "^5.5.6",
     "tailwindcss": "^4.2.4"

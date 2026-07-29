@@ -88,4 +88,18 @@ describe('TraceRecorder sinks', () => {
     expect(turn?.attributes.cacheWriteTokens).toBe(150);
     expect(turn?.attributes.tokensIn).toBe(1000);
   });
+
+  test('records auditable skill snapshots for the initiating agent and handoff targets', () => {
+    const recorder = new TraceRecorder({ sessionId: 'session-skills', agentId: 'support' });
+    recorder.recordSkillSnapshot('support', 'hash-support');
+    recorder.recordSkillSnapshot('billing', 'hash-billing');
+    recorder.record({ channel: 'client', type: 'done', payload: { sessionId: 'session-skills' } });
+
+    const turn = recorder.finish({ text: '', toolResults: [] }).spans.find((span) => span.kind === 'turn');
+    expect(turn?.attributes.skillContentHash).toBe('hash-support');
+    expect(turn?.attributes.skillContentHashes).toEqual({
+      support: 'hash-support',
+      billing: 'hash-billing',
+    });
+  });
 });

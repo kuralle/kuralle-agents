@@ -1,0 +1,24 @@
+{
+  "name": "@kuralle-examples/hotel-receptionist",
+  "private": true,
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "chat": "bun ../../../packages/cli/src/cli.ts chat --agent src/kuralle.ts --trace --store",
+    "chat:default": "KURALLE_DRIVER=default bun ../../../packages/cli/src/cli.ts chat --agent src/kuralle.ts --trace --store",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kuralle-examples/shared": "workspace:*",
+    "@kuralle-agents/core": "workspace:*",
+    "ai": "6.0.237",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.3.0"
+  }
+}

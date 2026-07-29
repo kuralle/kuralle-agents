@@ -26,7 +26,7 @@ const policySchema = z.object({
 
 const incidentSchema = z.object({
   incidentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD').nullable(),
-  incidentTime: z.string().nullable(),
+  incidentTime: z.string().nullable().optional(),
   incidentLocation: z.string().min(3).nullable(),
   description: z.string().min(10, 'Description must be at least 10 characters').nullable(),
 });
@@ -44,7 +44,7 @@ const propertySchema = z.object({
   propertyType: z.enum(['house', 'apartment', 'condo', 'commercial']).nullable(),
   damageType: z.enum(['fire', 'water', 'storm', 'theft', 'vandalism', 'other']).nullable(),
   damageDescription: z.string().min(10).nullable(),
-  estimatedValue: z.number().positive().nullable(),
+  estimatedValue: z.number().positive().nullable().optional(),
 });
 
 export function generateClaimId(): string {
@@ -104,14 +104,14 @@ export function createInsuranceClaimsFlow(opts?: { compactPrompts?: boolean }): 
     id: 'review',
     instructions: sop(
       compact
-        ? 'Summarize ALL claim info. Ask caller to confirm.'
+        ? 'Summarize ALL collected claim info, then ask only whether all listed details are correct. Do not request injuries, police reports, or fields outside the claim schema.'
         : `Summarize ALL collected claim information for the caller to review:
 - Policy holder name and policy number
 - Incident date, location, and description
 - Vehicle OR property details
 - Plan and deductible
 
-Ask the caller to confirm everything is correct. Do NOT reveal internal IDs or system details.`,
+Ask the caller to confirm everything is correct. Do not ask about injuries, police reports, or fields outside the claim schema. Do NOT reveal internal IDs or system details.`,
     ),
     tools: buildToolSet({
       confirm_claim: defineTool({
@@ -148,7 +148,7 @@ Ask the caller to confirm everything is correct. Do NOT reveal internal IDs or s
         `Collect property details. Missing: ${missing.join(', ') || 'none'}. ` +
           'Ask for address, property type, damage type, damage description, and estimated value.',
       ),
-    onComplete: () => review,
+    onComplete: (data) => ({ goto: review, data: data as Record<string, unknown> }),
   });
 
   const collectVehicle = collect({
@@ -158,7 +158,7 @@ Ask the caller to confirm everything is correct. Do NOT reveal internal IDs or s
     maxTurns: 6,
     instructions: (missing) =>
       sop(`Collect vehicle details. Missing: ${missing.join(', ') || 'none'}.`),
-    onComplete: () => review,
+    onComplete: (data) => ({ goto: review, data: data as Record<string, unknown> }),
   });
 
   const routeClaimTypeSchema = z.object({ path: z.enum(['auto', 'property']) });
@@ -180,7 +180,7 @@ Ask the caller to confirm everything is correct. Do NOT reveal internal IDs or s
     maxTurns: 6,
     instructions: (missing) =>
       sop(`Collect incident details. Missing: ${missing.join(', ') || 'none'}.`),
-    onComplete: () => routeClaimType,
+    onComplete: (data) => ({ goto: routeClaimType, data: data as Record<string, unknown> }),
   });
 
   const invalidPolicy = reply({
@@ -215,7 +215,7 @@ Ask the caller to confirm everything is correct. Do NOT reveal internal IDs or s
         `Collect policy holder information. Missing: ${missing.join(', ') || 'none'}. ` +
           'Ask for policy number (POL-XXXXXX), full name, and phone number.',
       ),
-    onComplete: () => validatePolicyNode,
+    onComplete: (data) => ({ goto: validatePolicyNode, data: data as Record<string, unknown> }),
   });
 
   const emergencyClaim = reply({

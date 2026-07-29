@@ -35,7 +35,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "test": "bun test ./test",
+    "test": "bun test ./test/",
     "prepublishOnly": "npm run build"
   },
   "publishConfig": {

@@ -1,4 +1,5 @@
 import type { SkillLike, SkillMeta, SkillStoreLike } from '../types/skills.js';
+import { canonicalSkillContent, sha256 } from './contentHash.js';
 
 export class InlineSkillStore implements SkillStoreLike {
   private readonly byName: Map<string, SkillLike>;
@@ -8,10 +9,13 @@ export class InlineSkillStore implements SkillStoreLike {
   }
 
   async list(): Promise<SkillMeta[]> {
-    return [...this.byName.values()].map((s) => ({
+    return Promise.all([...this.byName.values()].map(async (s) => ({
       name: s.name,
       description: s.description,
-    }));
+      contentHash: s.contentHash ?? await sha256(canonicalSkillContent(s)),
+      ...(s.allowedTools ? { allowedTools: s.allowedTools } : {}),
+      ...(s.path ? { path: s.path } : {}),
+    })));
   }
 
   async loadBody(name: string): Promise<string> {

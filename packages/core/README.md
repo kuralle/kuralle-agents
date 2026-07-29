@@ -10,6 +10,13 @@ npm install @kuralle-agents/core
 
 Peers: `ai@^6 zod` and a provider, e.g. `@ai-sdk/openai`.
 
+Core includes a portable AI SDK channel loop so a minimal installation works on
+Node 20, Bun, and workerd. For production agent applications, the recommended
+driver is the companion `@kuralle-agents/pi-driver`; configure it once through
+`HarnessConfig.driver`, and every normal, flow, wake, resume, Hono, and Cloudflare
+entry point uses it. Pi stays in a companion package because it requires a Pi
+provider model and Node 22.19 on Node, while Core cannot safely invent either.
+
 ## What it does
 
 One tagless primitive — `defineAgent` — derives behavior from the fields you populate: attach `flows` for structured node graphs, `routes` and `routing` for triage, or `agents` for composition. The runtime handles sessions, streaming, handoffs, and durable tool execution.
@@ -80,6 +87,10 @@ const verdict = await groundingJudge(judgeContext);
 console.log(verdict, trace.usedTool, trace.traceId);
 ```
 
+The root `turn` span records `attributes.ttftMs`, measured from trace creation to
+the first non-empty client `text-delta`. This is client-observable TTFT: routing,
+flow entry, and tool work performed before speech are intentionally included.
+
 `runOnce` executes exactly one normal runtime turn and observes its existing event
 stream. Runtime tracing also captures normal `run()` calls; trace persistence is
 physically separate from the session store and durable effect journal.
@@ -143,7 +154,8 @@ const runtime = createRuntime({
 ```
 
 Endpoints may include `/v1/traces`; otherwise the sink appends it. For self-hosted
-Langfuse, pass its OTLP base URL as `endpoint`.
+Langfuse, pass its OTLP base URL as `endpoint`. Native span attributes, including
+turn `ttftMs`, are exported with the `kuralle.` prefix (`kuralle.ttftMs`).
 
 ## Flows
 

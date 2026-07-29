@@ -21,7 +21,7 @@ if (!process.env.OPENAI_API_KEY) {
 
 const model = openai('gpt-4.1-mini');
 
-const agent = defineAgent({
+export const agent = defineAgent({
   id: 'insurance-claims',
   name: 'Insurance Claims Adjuster',
   instructions: 'You are a claims adjuster at SecureShield Insurance.',
@@ -126,7 +126,11 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export default agent;
+
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -41,9 +41,11 @@ function TracePanel({ trace }: { trace: AgentTrace | null }): React.ReactElement
   const tin = turn?.attributes.tokensIn;
   const tout = turn?.attributes.tokensOut;
   const ctx = turn?.attributes.contextTokens;
+  const ttft = turn?.attributes.ttftMs;
   const parts: string[] = [];
   if (tin !== undefined || tout !== undefined) parts.push(`turn ${tin ?? '?'}↓/${tout ?? '?'}↑ tok`);
   if (ctx !== undefined) parts.push(`ctx ${ctx} tok`);
+  if (ttft !== undefined) parts.push(`TTFT ${ttft}ms`);
   const tokensLine = parts.length > 0 ? parts.join(' · ') : undefined;
   return (
     <Box flexDirection="column" width={46} borderStyle="round" borderColor="gray" paddingX={1}>
@@ -79,12 +81,18 @@ async function runTurn(
   input: string,
   onText: (t: string) => void,
   onEvent: (e: string) => void,
-): Promise<string> {
+): Promise<{ answer: string; ttftMs: number | null; totalMs: number }> {
+  const started = performance.now();
   const handle = demo.runtime.run({ sessionId: demo.sessionId, input });
+  let ttftMs: number | null = null;
   let text = '';
   try {
     for await (const part of handle.events as AsyncIterable<StreamPart>) {
-      if (part.type === 'text-delta') { text += part.payload.delta; onText(text); }
+      if (part.type === 'text-delta') {
+        if (part.payload.delta && ttftMs === null) ttftMs = performance.now() - started;
+        text += part.payload.delta;
+        onText(text);
+      }
       else if (part.type === 'tool-call') onEvent(`⚙ tool ${part.payload.toolName}`);
       else if (part.type === 'flow-enter') onEvent(`▸ enter flow ${part.payload.flow}`);
       else if (part.type === 'flow-end') onEvent(`■ end flow ${part.payload.flow}`);
@@ -97,7 +105,7 @@ async function runTurn(
   } catch (e) {
     onEvent(`✖ ${e instanceof Error ? e.message : String(e)}`);
   }
-  return text.trim();
+  return { answer: text.trim(), ttftMs, totalMs: performance.now() - started };
 }
 
 function App({ scripted, buildRuntime, showTrace, persist }: { scripted?: string[]; buildRuntime: BuildRuntime; showTrace?: boolean; persist?: Persist }) {
@@ -142,10 +150,14 @@ function App({ scripted, buildRuntime, showTrace, persist }: { scripted?: string
     push(line('user', text));
     setBusy(true); setEvents([]); setLive('');
     const turnEvents: string[] = [];
-    const answer = await runTurn(demoRef.current, text, setLive, (e) => { turnEvents.push(e); setEvents([...turnEvents]); });
+    const timing = await runTurn(demoRef.current, text, setLive, (e) => { turnEvents.push(e); setEvents([...turnEvents]); });
     setLive('');
     for (const e of turnEvents) push(line('event', e));
-    push(line('assistant', answer || '(no text)'));
+    push(line('assistant', timing.answer || '(no text)'));
+    push(line(
+      'system',
+      `TTFT ${timing.ttftMs === null ? 'none' : `${Math.round(timing.ttftMs)}ms`} · total ${Math.round(timing.totalMs)}ms`,
+    ));
     setBusy(false);
     await refreshStatus();
     if (showTrace) {

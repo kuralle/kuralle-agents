@@ -17,17 +17,15 @@ import { createBenchmarkIntakeFlow } from '../_shared/benchmarkIntakeFlow.js';
 
 loadExampleEnv(import.meta.url);
 
-const openrouterKey = process.env.OPENROUTER_API_KEY;
-if (!openrouterKey) {
-  console.error('OPENROUTER_API_KEY is required');
-  process.exit(1);
-}
+const cliModel = openai(process.env.OPENAI_MODEL ?? 'gpt-4.1-mini');
+export const agent = defineAgent({
+  id: 'openrouter-benchmark-cli',
+  instructions: 'You are a helpful receptionist.',
+  model: cliModel,
+  flows: [createBenchmarkIntakeFlow()],
+});
 
-const openrouter = createOpenRouter({ apiKey: openrouterKey });
-const grok41Fast = openrouter('x-ai/grok-4.1-fast');
-const grok4Fast = openrouter('x-ai/grok-4-fast');
-const gpt4oMini = openai('gpt-4o-mini');
-const intakeFlow = createBenchmarkIntakeFlow();
+export default agent;
 
 const inputs = [
   'Hi there',
@@ -83,6 +81,13 @@ async function runBenchmark(
 }
 
 async function main() {
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (!openrouterKey) throw new Error('OPENROUTER_API_KEY is required');
+  const openrouter = createOpenRouter({ apiKey: openrouterKey });
+  const grok41Fast = openrouter('x-ai/grok-4.1-fast');
+  const grok4Fast = openrouter('x-ai/grok-4-fast');
+  const gpt4oMini = openai('gpt-4o-mini');
+  const intakeFlow = createBenchmarkIntakeFlow();
   console.log('=== OpenRouter + Grok Model Benchmark (v2) ===');
   console.log(`Inputs: ${inputs.length} turns (hybrid intake flow)\n`);
 
@@ -177,7 +182,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
