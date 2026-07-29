@@ -1,10 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { HarnessConfig, ScheduledJob } from '@kuralle-agents/core';
+import type { ChannelDriver, HarnessConfig, ScheduledJob } from '@kuralle-agents/core';
 import { SqlPersistentMemoryStore } from '../src/SqlPersistentMemoryStore.js';
 import { createSqlExecutor } from '../src/sqlExecutor.js';
 import { KuralleAgent } from '../src/KuralleAgent.js';
 import { SqlTraceStore } from '../src/SqlTraceStore.js';
 import { OtelTraceSink } from '@kuralle-agents/core';
+import type { LanguageModel } from 'ai';
 
 export class TestMemoryDO extends DurableObject {
   async fetch(request: Request): Promise<Response> {
@@ -84,6 +85,34 @@ export class TestWakeAgent extends KuralleAgent {
       return Response.json({ job });
     }
     return super.onRequest(request);
+  }
+}
+
+const approvalDriver = (): ChannelDriver => ({
+  async runAgentTurn(_node, ctx) {
+    const approval = await ctx.approve({
+      title: 'Create support case?',
+      description: 'Send the reviewed summary to a human support queue.',
+    });
+    return { text: approval.approved ? 'created' : 'cancelled', toolResults: [] };
+  },
+  async awaitUser() {
+    return { type: 'message' as const, input: '' };
+  },
+});
+
+/** Regression fixture for the completion-oriented HTTP approval contract. */
+export class TestApprovalAgent extends KuralleAgent {
+  protected getAgents(): HarnessConfig['agents'] {
+    return [{ id: 'support', instructions: 'Request approval.', model: {} as LanguageModel }];
+  }
+
+  protected getDefaultAgentId(): string {
+    return 'support';
+  }
+
+  protected getRuntimeConfig(): Partial<HarnessConfig> {
+    return { driver: approvalDriver() };
   }
 }
 

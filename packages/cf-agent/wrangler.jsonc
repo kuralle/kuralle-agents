@@ -14,11 +14,13 @@
   "durable_objects": {
     "bindings": [
       { "name": "TEST_MEMORY_DO", "class_name": "TestMemoryDO" },
-      { "name": "TEST_WAKE_AGENT", "class_name": "TestWakeAgent" }
+      { "name": "TEST_WAKE_AGENT", "class_name": "TestWakeAgent" },
+      { "name": "TEST_APPROVAL_AGENT", "class_name": "TestApprovalAgent" }
     ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["TestMemoryDO"] },
-    { "tag": "v2", "new_sqlite_classes": ["TestWakeAgent"] }
+    { "tag": "v2", "new_sqlite_classes": ["TestWakeAgent"] },
+    { "tag": "v3", "new_sqlite_classes": ["TestApprovalAgent"] }
   ]
 }

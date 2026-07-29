@@ -16,6 +16,17 @@ const production = [
   },
   {
     index: '02',
+    title: 'Customer Support Agent',
+    kicker: 'Swappable production template',
+    description: 'Ships one Pi-backed support core across Vercel/Postgres and Cloudflare Durable Objects, with config-owned knowledge, signed identity, approval-gated writes, grounding validation, and human escalation.',
+    interface: 'Next.js web + Worker API',
+    substrate: 'PostgreSQL · Durable Object SQLite',
+    tags: ['Pi', 'identity', 'RAG', 'approval'],
+    path: 'apps/examples/customer-support-agent',
+    command: 'bun run --cwd apps/examples/customer-support-agent dev',
+  },
+  {
+    index: '03',
     title: 'Pharmacy Workspace Agent',
     kicker: 'Durable edge + web',
     description: 'Runs the same safe pharmacy agent on Next.js/Vercel and a Cloudflare Durable Object with per-session workspaces, progressive skills, and hosted CLI access.',
@@ -27,7 +38,7 @@ const production = [
     live: 'https://pharmacy-rx-agent.vercel.app',
   },
   {
-    index: '03',
+    index: '04',
     title: 'Postgres Hacker Starter',
     kicker: 'Full-stack starter',
     description: 'A Next.js workbench backed by PostgreSQL and pgvector, with signed identity, hybrid retrieval, persistent memory, and approval-gated account operations.',
@@ -38,7 +49,7 @@ const production = [
     command: 'bun run --cwd apps/examples/postgres-hacker-starter db:up && bun run --cwd apps/examples/postgres-hacker-starter dev',
   },
   {
-    index: '04',
+    index: '05',
     title: 'Local Content Desk',
     kicker: 'File-native workflow',
     description: 'Turns local Markdown sources and filesystem skills into revisioned drafts with deterministic style checks, explicit approvals, and conflict-safe publication.',
@@ -49,7 +60,7 @@ const production = [
     command: 'bun run --cwd apps/examples/content-agent chat',
   },
   {
-    index: '05',
+    index: '06',
     title: 'Healthcare Operations',
     kicker: 'Authenticated workflow',
     description: 'A terminal healthcare operator for appointment, billing, and escalation work with authenticated records, durable SQLite state, and bounded actions.',
@@ -60,7 +71,7 @@ const production = [
     command: 'bun run --cwd apps/examples/healthcare chat',
   },
   {
-    index: '06',
+    index: '07',
     title: 'Hotel Receptionist',
     kicker: 'Policy-grounded service',
     description: 'Handles verified bookings and hotel operations against a real SQLite service layer and policy handbook, with privacy and emergency boundaries.',

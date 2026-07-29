@@ -22,6 +22,7 @@
 import { AIChatAgent } from '@cloudflare/ai-chat';
 import { createRuntime, isWakeJob, wakeJob, type HarnessConfig, type Runtime } from '@kuralle-agents/core';
 import type {
+  HitlInterrupt,
   PersistentMemoryStore,
   UserInputContent,
   SignalActor,
@@ -69,6 +70,14 @@ export abstract class KuralleAgent<
   State = unknown,
 > extends AIChatAgent<Env, State> {
   private runtime: Runtime | null = null;
+  /** Last approval surfaced by the completion-oriented HTTP chat facade. */
+  private lastHttpInterrupt: HitlInterrupt | undefined;
+
+  private consumeHttpInterrupt(): HitlInterrupt | undefined {
+    const interrupt = this.lastHttpInterrupt;
+    this.lastHttpInterrupt = undefined;
+    return interrupt;
+  }
 
   /**
    * Required: Define the agents for this runtime.
@@ -205,8 +214,12 @@ export abstract class KuralleAgent<
       ...this.getStreamConfig(),
     };
 
+    const owner = this;
     async function* parts(): AsyncGenerator<StreamPart> {
       for await (const part of handle.events) {
+        if (part.type === 'paused' && part.payload.interrupt.kind === 'approval') {
+          owner.lastHttpInterrupt = part.payload.interrupt;
+        }
         yield part;
       }
     }
@@ -410,8 +423,15 @@ export abstract class KuralleAgent<
         role: 'user',
         parts: [{ type: 'text', text: body.message.trim() }],
       };
+      const previousAssistantId = [...this.messages]
+        .reverse()
+        .find((message) => message.role === 'assistant')?.id;
+      this.lastHttpInterrupt = undefined;
       const result = await this.saveMessages((messages) => [...messages, userMessage]);
-      const assistant = [...this.messages].reverse().find((message) => message.role === 'assistant');
+      const pendingApproval = this.consumeHttpInterrupt();
+      const assistant = [...this.messages]
+        .reverse()
+        .find((message) => message.role === 'assistant' && message.id !== previousAssistantId);
       const text = assistant?.parts
         .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
         .map((part) => part.text)
@@ -420,9 +440,16 @@ export abstract class KuralleAgent<
       return Response.json({
         sessionId: this.getSessionId(),
         response: text,
-        status: result.status,
+        status: pendingApproval ? 'approval-required' : result.status,
         requestId: result.requestId,
         messageCount: this.messages.length,
+        ...(pendingApproval ? {
+          pendingApproval: {
+            requestId: pendingApproval.requestId,
+            title: pendingApproval.display.title,
+            description: pendingApproval.display.description,
+          },
+        } : {}),
         ...(result.error ? { error: result.error } : {}),
       }, { status: result.status === 'error' ? 502 : 200 });
     }

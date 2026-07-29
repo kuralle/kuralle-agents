@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "kuralle-customer-support-agent",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "SupportAgent", "class_name": "SupportAgent" }
+    ]
+  },
+  "exports": {
+    "SupportAgent": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "OPENAI_MODEL": "gpt-4.1-mini",
+    "ALLOWED_ORIGINS": "https://support.example.com"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

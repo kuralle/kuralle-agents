@@ -5,6 +5,7 @@ These applications are complete, text-first Kuralle systems with durable side ef
 | Example | Interface | Durable substrate | Core boundary |
 | --- | --- | --- | --- |
 | [Release governance agent](release-governance-agent/README.md) | terminal TUI | real Git repository + local artifacts | checked, revision-bound GitHub draft releases |
+| [Customer-support agent](customer-support-agent/README.md) | Next.js web + Worker API | PostgreSQL or Durable Object SQLite | signed identity, retrieval, approvals, human escalation |
 | [Healthcare](healthcare/README.md) | terminal TUI | local SQLite | authenticated appointments and billing |
 | [Hotel receptionist](hotel-receptionist/README.md) | terminal TUI | local SQLite + policy Markdown | verified bookings and hotel operations |
 | [Postgres hacker starter](postgres-hacker-starter/README.md) | Next.js web app | local PostgreSQL + pgvector | signed identity, retrieval, memory, approvals |
