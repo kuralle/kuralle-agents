@@ -48,6 +48,21 @@ refuse by name rather than doing something unsafe:
 
 Runs outside a flow, and runs with nothing journaled, upgrade silently.
 
+Find them before you deploy, not after:
+
+```ts
+import { findUnresumableRuns } from '@kuralle-agents/core';
+
+const stuck = await findUnresumableRuns(sessionStore);
+for (const run of stuck) {
+  console.log(run.sessionId, run.reason, `${run.recordedSteps} effects already run`);
+}
+```
+
+Each result needs a decision: let the conversation finish on the old version, or resolve
+it out of band. There is deliberately no flag to force one through — the two outcomes it
+avoids are an approval decided by call order, and a payment or dispatch executed twice.
+
 ## Fixes
 
 **An approved operation could be lost forever.** A decision and the operation it authorises

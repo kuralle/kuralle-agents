@@ -393,6 +393,13 @@ export type { ConfirmVerdict } from './flow/confirmParse.js';
  *  in-flight flow. Values only reach the root state when the flow declares
  *  `state.output`. Falls back to root state when no flow is active. */
 export { currentFlowState } from './flow/flowState.js';
+/** Find persisted runs this version refuses to resume, so they can be drained before an
+ *  upgrade instead of failing under a user mid-conversation. */
+export { findUnresumableRuns } from './runtime/durable/findUnresumableRuns.js';
+export type {
+  UnresumableRun,
+  UnresumableReason,
+} from './runtime/durable/findUnresumableRuns.js';
 export type { Route } from './types/route.js';
 export { PART_CHANNEL } from './types/stream.js';
 export type {
