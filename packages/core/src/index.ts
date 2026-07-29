@@ -388,6 +388,11 @@ export type {
 } from './types/flow.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
+/** Read the state of the flow a run is currently in. Flow state lives in an isolated
+ *  frame, so `runState.state` no longer holds it — this is how a caller inspects an
+ *  in-flight flow. Values only reach the root state when the flow declares
+ *  `state.output`. Falls back to root state when no flow is active. */
+export { currentFlowState } from './flow/flowState.js';
 export type { Route } from './types/route.js';
 export { PART_CHANNEL } from './types/stream.js';
 export type {

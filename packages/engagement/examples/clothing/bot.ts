@@ -365,6 +365,18 @@ export function buildClothingBot(model: LanguageModel) {
     name: 'shop',
     description:
       'Clothing store: catalog, size/color picks, cart, address extraction, checkout.',
+    // Flow state is an isolated frame; only what is declared here survives completion.
+    // The order details are the flow's product — a caller inspecting a finished checkout
+    // needs them, so publish exactly those and nothing else.
+    state: {
+      output: (state) => ({
+        name: state.name,
+        street: state.street,
+        city: state.city,
+        zip: state.zip,
+        orderNumber: state.orderNumber,
+      }),
+    },
     maxOscillations: 12,
     start: browse,
     nodes: [

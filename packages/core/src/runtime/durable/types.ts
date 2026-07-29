@@ -94,6 +94,12 @@ export interface RunState {
    *  Scopes the durable effect-key namespace so a new turn re-executes rather than replaying a
    *  prior turn's cached result (F6/G8). Absent on legacy runs → treat as 0. */
   runEpoch?: number;
+  /** Which effect-key scheme this run's journal was written under. Version 1 scopes a
+   *  flow's effects by flow name; before it, callsites were rebased to 0 on every flow
+   *  entry with no flow in the key, so a resumed in-flow run would not find its own
+   *  recorded steps and would re-execute their side effects. Absent on a run journaled
+   *  before the change — see `assertResumableEffectKeys`. */
+  effectKeyVersion?: number;
   /** Inbound message idempotency keys already accepted (H2 webhook-retry dedup). */
   processedInboundKeys?: string[];
 }

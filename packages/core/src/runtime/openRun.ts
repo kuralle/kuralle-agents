@@ -7,6 +7,7 @@ import type { AgentConfig } from '../types/agentConfig.js';
 import type { SignalDelivery } from './durable/types.js';
 import { setPendingUserInput } from './channels/inputBuffer.js';
 import { SessionRunStore } from './durable/SessionRunStore.js';
+import { assertResumableEffectKeys, EFFECT_KEY_VERSION } from './durable/effectKeyVersion.js';
 import type { RunState } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { resetTurnCount } from './policies/limits.js';
@@ -63,6 +64,7 @@ export async function openRun(
       messages: [...initialMessages],
       createdAt: now,
       updatedAt: now,
+      effectKeyVersion: EFFECT_KEY_VERSION,
     };
     await runStore.initRun(runState);
     if (initialMessages.length > 0) {
@@ -70,6 +72,16 @@ export async function openRun(
         latest.messages = [...initialMessages];
       });
     }
+  }
+
+  // A run journaled before effects were scoped by flow cannot resume inside one: its
+  // recorded steps are keyed without the flow, so none would match and every effect it
+  // already performed would run again. Refuse rather than re-charge a card.
+  assertResumableEffectKeys(runState, await runStore.getSteps(runId));
+  if (runState.effectKeyVersion !== EFFECT_KEY_VERSION) {
+    runState.effectKeyVersion = EFFECT_KEY_VERSION;
+    runState.updatedAt = Date.now();
+    await runStore.putRunState(runState);
   }
 
   if (options.historyDelta?.length) {
