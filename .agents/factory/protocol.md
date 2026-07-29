@@ -9,16 +9,72 @@ The deterministic contract between the supervising agent (the engine) and any
 worker CLI. There is no SDK binding: the only contract is files in, one JSON
 shape out — any CLI agent that can follow instructions satisfies it.
 
+## The result contract — put this in every brief, verbatim
+
+Everything below is engine-side detail. This is the part the worker must not
+miss, so it goes first here and near the top of the brief:
+
+```json
+{
+  "status": "done | blocked",
+  "claims": [{ "command": "<gate or check actually run>", "exit_code": 0 }],
+  "question": "<only when blocked: what decision or input is needed>"
+}
+```
+
+Written to `runs/result-<task>.json`, before the worker finishes, whatever the
+outcome. Three ways it is invalid, all treated as a failed dispatch:
+
+- **No file.** Absent means unfinished, regardless of what the process reported.
+- **`status: done` with no claims.** A claim is the only evidence that exists.
+- **A status outside `done | blocked`.** Observed: a result written as
+  `status: "passed"` with zero claims — a dispatch that looked successful in
+  the directory listing and proved nothing.
+
 ## Dispatch (engine side)
 
 1. Pick a worker file from [workers/](workers/) whose `probe` exits 0 on this
    machine. Never assume a worker exists; never invoke flags from memory —
    only the file's `command` template, with `{prompt_file}` substituted.
    Which worker suits which task is data: [routing.md](routing.md).
-2. Write the brief to `runs/brief-<task>.md`: the gate command(s) to satisfy and
-   the result contract below. **Do not paste the task's spec into the brief** —
-   link it, so the worker reads live state instead of a copy that drifts.
+2. Write the brief to `runs/brief-<task>.md`. It carries five things:
+
+   | section | content | live or frozen |
+   | --- | --- | --- |
+   | the bar | [workmanship.md](workmanship.md), pasted in full | frozen |
+   | the result contract | the JSON above, verbatim | frozen |
+   | the ground | absolute repo path, and the gate command(s) to satisfy | frozen |
+   | the plan | the WBS snapshot below | **frozen, deliberately** |
+   | the spec | `Context: <markdown_url>` from `create_share_link` | **live** |
+
+   The last two pull in opposite directions on purpose. **The spec is linked,
+   never pasted** — a human editing it mid-flight should reach the worker.
+   **The WBS is pasted, never linked** — a board re-ordered mid-dispatch must
+   not silently redirect a worker that is already building.
 3. Run the command. One process per dispatch, headless.
+
+### The WBS snapshot
+
+A worker is handed one task and can call no MCP tool, so without this it infers
+the plan from a single node. Derive it from `list_tasks` + `list_edges` at
+dispatch time and paste it in:
+
+```markdown
+## Where this sits
+
+| # | task | lane | depends on | status |
+| --- | --- | --- | --- | --- |
+| 1 | t-4b2 Add the schema column | auto | — | done |
+| 2 | **t-9c1 Backfill existing rows ← YOU ARE HERE** | approve | t-4b2 | in_progress |
+| 3 | t-7d8 Read the column in the API | full | t-9c1 | todo |
+
+Owned by later items — do not touch: `src/api/routes/*.ts`
+```
+
+That last line is the one that changes behaviour. A worker given one task and no
+map will helpfully finish the next one too, and the following dispatch then opens
+on a tree it did not write and cannot account for. Naming the paths a later item
+owns costs one line and prevents that.
 
 ### Dispatch mechanics
 
@@ -46,21 +102,10 @@ common cause of a run that produces code but no verifiable result.
   what the process reported. Say this in the brief in those words — the runs
   that omit the result file are the ones whose brief left it implicit.
 
-## Result (worker side)
-
-The brief instructs the worker to end by writing `runs/result-<task>.json`:
-
-```json
-{
-  "status": "done | blocked",
-  "claims": [{ "command": "<gate or check run>", "exit_code": 0 }],
-  "question": "<only when blocked: what decision or input is needed>"
-}
-```
-
 ## Verification (engine side — deterministic, no model judgment)
 
-- `status: done` with no `claims` is invalid — treat as failed.
+- Reject an invalid result outright (see the result contract above) — no file,
+  no claims, or an unknown status all mean failed, before anything is re-run.
 - **Verify gate integrity BEFORE re-running any claim.** Re-running a command
   proves nothing if the command's configuration moved:
 

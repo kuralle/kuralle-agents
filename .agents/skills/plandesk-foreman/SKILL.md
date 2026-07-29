@@ -1,5 +1,5 @@
 ---
-name: factory-foreman
+name: plandesk-foreman
 description: "Runs the Plan Desk board floor — takes one task or a whole frontier of todos, grooms each into a build contract, cuts slices, dispatches implementation to worker CLIs, verifies their claims, commits each verified slice, and stops at the risk lane. Use whenever asked to work a task, ship a ticket, take the next task, clear the todos, run the board, or hand implementation to a worker — even when the factory is not named."
 user-invocable: true
 argument-hint: "<task id | 'next' | 'all todo' | goal name> [--to <worker>]"
@@ -7,7 +7,7 @@ argument-hint: "<task id | 'next' | 'all todo' | goal name> [--to <worker>]"
 
 # Foreman
 
-Takes board work to committed. The Curator plans, the Foreman runs the floor,
+Takes board work to committed. Planning fills the board, the foreman runs the floor,
 workers build, a human decides what merges.
 
 The policy this runs on lives beside it and is not repeated here — the cycle
@@ -33,11 +33,11 @@ contract in [factory.md](../../factory/factory.md), dispatch and verification in
    waiting on a human and are not yours to release. Read each task's linked
    spec before judging it.
 
-3. **Groom inline — do not dispatch this.** A task is ready when a worker with
-   no session history could build it: a stated outcome, the context to find the
-   code, the constraints that must not change, testable acceptance criteria, and
-   the exact commands that prove it. Rewrite anything short of that with
-   `update_task` yourself. Grooming is judgment about intent, and shipping that
+3. **Groom inline — do not dispatch this.** Judge each task against the
+   Definition of Ready in [groom-task](../plandesk-groom-task/SKILL.md) and rewrite
+   anything short of it with `update_task` yourself, following that skill's
+   procedure — it is the one readiness bar this project keeps, so do not invent
+   a second one here. Grooming is judgment about intent, and shipping that
    judgment to a worker is how a plan drifts from what was actually wanted. If a
    task cannot be groomed without a decision you do not own, return it to
    `scope` with a comment naming the decision, and carry on with the rest.
@@ -46,19 +46,19 @@ contract in [factory.md](../../factory/factory.md), dispatch and verification in
    slicing. Several become deliverable units per
    [slicing.md](../../factory/slicing.md) — complete paths through the layers
    they touch, sized to one worker's context, grouped so parallel workers do not
-   edit the same lines. Write the grouping to `runs/wbs-<slice>.md`; the task
-   descriptions already hold the build contract, so do not restate the work
-   there.
+   edit the same lines. The grouping goes in each brief's WBS snapshot, not in a
+   file of its own — the task descriptions already hold the build contract, so
+   do not restate the work anywhere.
 
 5. **Dispatch implementation.** One dispatch per tree, per
    [protocol.md](../../factory/protocol.md). Pick the worker from
    [routing.md](../../factory/routing.md) unless one was named; a named worker
-   wins, and several named workers split the slices across worktrees. Prepend
-   [workmanship.md](../../factory/workmanship.md) to the brief so the worker
-   knows the bar before it starts. Pass context as a live share link —
-   `create_share_link` on the task or its WBS document, `markdown_url` in the
-   brief — rather than pasting a spec that goes stale the moment someone edits
-   the board.
+   wins, and several named workers split the slices across worktrees. Build the
+   brief to protocol.md's five-section contract — the bar, the result contract,
+   the ground, the WBS snapshot, and a live `Context:` link. Derive the snapshot
+   from `list_tasks` + `list_edges` so the worker sees the agreed order and the
+   paths a later item owns; a worker given one node and no map finishes the next
+   one too.
 
 6. **Stage the moment a worker returns, before reading anything.** Review takes
    minutes and unstaged work is defenceless for all of them; staged work
@@ -110,6 +110,8 @@ happened is worse than no status, because the next run trusts it.
 ## Boundaries
 
 - Groom inline, dispatch implementation. Reversing this is the common failure.
+- Do not restate the readiness bar; it lives in
+  [groom-task](../plandesk-groom-task/SKILL.md) and a second copy would drift from it.
 - Do not restate the task's spec in a brief — link it live.
 - Do not run two dispatches in one tree; give concurrent slices their own
   worktrees.
