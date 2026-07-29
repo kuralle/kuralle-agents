@@ -1,11 +1,16 @@
 import type { HarnessConfig } from '@kuralle-agents/core';
 import type { Connection, WSMessage } from 'agents';
 import type { UIMessage } from 'ai';
-import type { SqlExecutor } from './types.js';
+import type { DurableSqlStorage, SqlExecutor } from './types.js';
 
 export interface DurableObjectAgentSurface<Env = unknown, State = unknown> {
   readonly sql: SqlExecutor;
-  readonly ctx: { id: { toString(): string } };
+  readonly ctx: {
+    id: { toString(): string };
+    storage: {
+      sql: DurableSqlStorage;
+    };
+  };
   readonly env: Env;
   readonly state: State;
   readonly messages: UIMessage[];

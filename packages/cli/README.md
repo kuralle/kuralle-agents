@@ -2,8 +2,42 @@
 
 Kuralle's interactive chat, send, simulation, and trace inspection CLI.
 
+## Hosted runtimes (default after connect)
+
+Connect once to a deployed Next.js/Hono/Worker HTTP endpoint. Subsequent `chat`
+and `send` commands execute in that hosted runtime, so the server—not the CLI
+process—owns conversation state, tools, credentials, and workspaces.
+
 ```bash
-kuralle chat --agent ./agent.ts --trace --store runs/demo.json
+kuralle connect https://my-agent.vercel.app
+kuralle send --session customer-42 "What is in my cart?"
+kuralle chat --session customer-42
+```
+
+Cloudflare Agents can also use their native WebSocket protocol, including the
+standard `/agents/{agent-name}/{instance-name}` identity boundary:
+
+```bash
+kuralle connect https://my-agent.workers.dev \
+  --transport cloudflare --agent-name pharmacy-agent
+kuralle chat --session customer-42 --auto "hello|check amoxicillin 500 mg|what did I ask for?"
+```
+
+`kuralle connection` shows the saved non-secret connection and `kuralle
+disconnect` removes it. Use `--local` to opt into the in-process agent while a
+hosted server is connected. `--server`/`KURALLE_SERVER` provide a one-command
+override. Auth tokens are never saved in the connection file; provide
+`KURALLE_TOKEN` (preferred) or `--token`.
+
+The HTTP transport first uses `POST /api/chat` with `{ sessionId, message }` and
+falls back to Kuralle's Hono SSE endpoint at `/api/chat/sse`. The Cloudflare
+transport speaks the native Agents chat protocol, accepts its direct AI SDK JSON
+parts, and prefers a final persisted-message broadcast when the server sends one.
+
+## Local runtimes
+
+```bash
+kuralle chat --local --agent ./agent.ts --trace --store runs/demo.json
 kuralle chat --agent ./agent.ts --auto "hello|yes, continue" --trace --store runs/demo.json
 kuralle trace session-42
 kuralle trace session-42 --last

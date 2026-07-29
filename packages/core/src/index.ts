@@ -190,6 +190,7 @@ export {
 } from './runtime/grounding/workingMemory.js';
 export {
   resolveAgentWorkspace,
+  resolveAgentWorkspaceForSession,
   type ResolvedAgentWorkspace,
 } from './runtime/resolveAgentWorkspace.js';
 
@@ -375,7 +376,14 @@ export {
 } from './tools/effect/index.js';
 export type { Tool as EffectTool } from './types/effectTool.js';
 export type { AgentRoute } from './types/processors.js';
-export type { AgentConfig, AgentWorkspaceConfig, Instructions } from './types/agentConfig.js';
+export type {
+  AgentConfig,
+  AgentWorkspaceConfig,
+  AgentWorkspaceDefinition,
+  AgentWorkspaceResolver,
+  AgentWorkspaceResolverContext,
+  Instructions,
+} from './types/agentConfig.js';
 export type {
   Flow,
   FlowNode,

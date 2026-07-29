@@ -37,7 +37,7 @@ import { BridgeSessionStore } from './BridgeSessionStore.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
 import { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
 import { createSSEResponse } from './StreamAdapter.js';
-import type { StreamAdapterConfig, SqlExecutor } from './types.js';
+import type { DurableSqlStorage, StreamAdapterConfig, SqlExecutor } from './types.js';
 import { DEFAULT_STREAM_CONFIG } from './types.js';
 import { durableAgentSurface } from './durable-agent-surface.js';
 import { lastUserInputFromMessages } from './cfMessageInput.js';
@@ -132,6 +132,15 @@ export abstract class KuralleAgent<
    */
   protected getSqlExecutor(): SqlExecutor {
     return this.getSql();
+  }
+
+  /**
+   * The native Durable Object SQLite handle. Pass this directly to
+   * `sqlFileSystem()` to give each agent instance a durable workspace without
+   * reaching through undocumented Agents SDK internals in application code.
+   */
+  protected getSqlStorage(): DurableSqlStorage {
+    return durableAgentSurface<Env, State>(this).ctx.storage.sql;
   }
 
   /**
@@ -382,6 +391,41 @@ export abstract class KuralleAgent<
    */
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    // HTTP counterpart to the native Agents WebSocket chat protocol. This is
+    // intentionally completion-oriented JSON: browser clients should use
+    // useAgentChat for resumable streams, while CLIs, webhooks, and server-side
+    // Next.js routes can take a durable turn without implementing the WS wire format.
+    if (request.method === 'POST' && url.pathname.endsWith('/chat')) {
+      const body = (await request.json().catch(() => null)) as { message?: unknown } | null;
+      if (!body || typeof body.message !== 'string' || !body.message.trim()) {
+        return Response.json({ error: 'message is required' }, { status: 400 });
+      }
+      if (body.message.length > 64_000) {
+        return Response.json({ error: 'message exceeds 64000 characters' }, { status: 413 });
+      }
+
+      const userMessage: UIMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        parts: [{ type: 'text', text: body.message.trim() }],
+      };
+      const result = await this.saveMessages((messages) => [...messages, userMessage]);
+      const assistant = [...this.messages].reverse().find((message) => message.role === 'assistant');
+      const text = assistant?.parts
+        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .map((part) => part.text)
+        .join('') ?? '';
+
+      return Response.json({
+        sessionId: this.getSessionId(),
+        response: text,
+        status: result.status,
+        requestId: result.requestId,
+        messageCount: this.messages.length,
+        ...(result.error ? { error: result.error } : {}),
+      }, { status: result.status === 'error' ? 502 : 200 });
+    }
 
     // Durable resume: deliver a signal to a suspended run (e.g. a paid checkout
     // link). Body: { signalId, requestId, name, decision?, reason?, payload? }.

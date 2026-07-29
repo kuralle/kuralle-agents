@@ -11,10 +11,31 @@ import type { AnyTool } from './effectTool.js';
 import type { FileSystem } from './filesystem.js';
 import type { Shell } from './shell.js';
 import type { SkillSource } from './skills.js';
+import type { Session } from './session.js';
 
-export type AgentWorkspaceConfig =
+export type AgentWorkspaceDefinition =
   | FileSystem
-  | { fs: FileSystem; shell?: Shell; readOnly?: boolean };
+  | {
+      fs: FileSystem;
+      shell?: Shell;
+      readOnly?: boolean;
+      /** Expose workspace mutation operations to the model. Defaults false even when executor code may write. */
+      modelWritable?: boolean;
+      /** Model-facing path and mount guidance appended to the workspace tool description. */
+      instructions?: string;
+    };
+
+export interface AgentWorkspaceResolverContext {
+  session: Session;
+  agentId: string;
+}
+
+/** Resolve a tenant/session-specific workspace at turn time. */
+export type AgentWorkspaceResolver = (
+  context: AgentWorkspaceResolverContext,
+) => AgentWorkspaceDefinition | Promise<AgentWorkspaceDefinition>;
+
+export type AgentWorkspaceConfig = AgentWorkspaceDefinition | AgentWorkspaceResolver;
 
 export type Instructions =
   | string
@@ -63,9 +84,10 @@ export interface AgentConfig {
      *  Default ON when the agent declares `flows`; OFF for answering-only agents. Override explicitly to opt out. */
     outOfBandControl?: boolean;
   };
-  /** Portable workspace filesystem; auto-registers the durable `workspace` tool when set.
-   *  Defaults to read-only; pass `{ fs, readOnly: false }` for write/edit. Read-only workspaces
-   *  are exposed in globalTools (ADR 0001); read-write ones are executor-only. */
+  /** Portable workspace filesystem (or per-session resolver); auto-registers the durable `workspace` tool when set.
+   *  Defaults to read-only. `{ fs, readOnly: false }` lets trusted executor code write while the
+   *  model gets a read-only traversal surface; add `modelWritable: true` to expose write/edit/mv/rm
+   *  to the model as well. Filesystem/mount enforcement remains authoritative. */
   workspace?: AgentWorkspaceConfig;
   /** Bundled procedural skills (Anthropic Agent Skill model): Level-1 name+description in prompt,
    *  body via `load_skill`, resources via `read_skill_resource`. Scripts = `allowedTools` only. */

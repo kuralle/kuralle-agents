@@ -21,6 +21,7 @@ export type {
 } from '@kuralle-agents/core';
 export { InMemoryFs, type FsData } from './in-memory-fs.js';
 export { CompositeFileSystem, type CompositeFileSystemConfig } from './composite-fs.js';
+export { ReadOnlyFileSystem, readOnlyFileSystem } from './read-only-fs.js';
 export {
   normalizePath,
   validatePath,

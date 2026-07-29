@@ -1,0 +1,8 @@
+.next/
+.vercel/
+.wrangler/
+.dev.vars
+.env*
+!.env.example
+*.tsbuildinfo
+.vercel

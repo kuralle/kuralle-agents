@@ -8,6 +8,8 @@ export interface CreateFsToolOptions {
   fs: FileSystem;
   readOnly?: boolean;
   timeoutMs?: number;
+  /** Model-facing mount/path guidance. Keep secrets and implementation details out. */
+  instructions?: string;
 }
 
 const DEFAULT_READ_ONLY = true;
@@ -32,7 +34,7 @@ export interface FsWithSearch extends FileSystem {
 }
 
 const workspaceInput = z.object({
-  op: z.enum(['ls', 'cat', 'grep', 'find', 'read', 'write', 'edit']),
+  op: z.enum(['ls', 'cat', 'grep', 'find', 'read', 'stat', 'mkdir', 'write', 'edit', 'mv', 'rm']),
   path: z.string().optional(),
   pattern: z.string().optional(),
   root: z.string().optional(),
@@ -44,6 +46,9 @@ const workspaceInput = z.object({
   offset: z.number().optional(),
   limit: z.number().optional(),
   replaceAll: z.boolean().optional(),
+  destination: z.string().optional(),
+  recursive: z.boolean().optional(),
+  force: z.boolean().optional(),
 });
 
 type WorkspaceInput = z.infer<typeof workspaceInput>;
@@ -193,6 +198,7 @@ async function grepFiles(
  */
 export function createFsTool(opts: CreateFsToolOptions): AnyTool {
   const { fs, readOnly = DEFAULT_READ_ONLY, timeoutMs } = opts;
+  const guidance = opts.instructions?.trim();
 
   return defineTool({
     name: 'workspace',
@@ -201,8 +207,9 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
       'grep for exact terms, names, codes, or keywords (returns matching lines only), ' +
       'cat/read for full file contents. Prefer grep over semantic knowledge search when ' +
       'the user mentions an exact term or identifier — it is faster, cheaper, and exact. ' +
-      'Ops: ls, cat, grep, find, read, write, edit. grep is CASE-SENSITIVE by default — pass '+
-      'flags:"i" when searching prose, or a heading like "Entry notice" will not match "entry notice".',
+      'Ops: ls, cat, grep, find, read, stat, mkdir, write, edit, mv, rm. grep is CASE-SENSITIVE by default — pass ' +
+      'flags:"i" when searching prose, or a heading like "Entry notice" will not match "entry notice".' +
+      (guidance ? ` Workspace guidance: ${guidance}` : ''),
     timeoutMs,
     input: workspaceInput,
     execute: async (args: WorkspaceInput) => {
@@ -266,6 +273,17 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
             ...(truncated ? { truncated: true as const } : {}),
           };
         }
+        case 'stat': {
+          const path = requireField(args, 'path', args.op);
+          const stat = await fs.stat(path);
+          return { op: args.op, ok: true as const, path, stat };
+        }
+        case 'mkdir': {
+          const path = requireField(args, 'path', args.op);
+          assertWritable(readOnly, path);
+          await fs.mkdir(path, { recursive: args.recursive ?? true });
+          return { op: args.op, ok: true as const, path };
+        }
         case 'write': {
           const path = requireField(args, 'path', args.op);
           const content = requireField(args, 'content', args.op);
@@ -302,6 +320,21 @@ export function createFsTool(opts: CreateFsToolOptions): AnyTool {
           }
           const next = current.replace(find, replace);
           await fs.writeFile(path, next);
+          return { op: args.op, ok: true as const, path };
+        }
+        case 'mv': {
+          const path = requireField(args, 'path', args.op);
+          const destination = requireField(args, 'destination', args.op);
+          assertWritable(readOnly, path);
+          assertWritable(readOnly, destination);
+          await fs.mv(path, destination);
+          return { op: args.op, ok: true as const, path, destination };
+        }
+        case 'rm': {
+          const path = requireField(args, 'path', args.op);
+          assertWritable(readOnly, path);
+          if (path === '/') throw new Error('EINVAL: refusing to remove workspace root');
+          await fs.rm(path, { recursive: args.recursive, force: args.force });
           return { op: args.op, ok: true as const, path };
         }
         default: {

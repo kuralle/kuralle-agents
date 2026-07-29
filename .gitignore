@@ -80,3 +80,4 @@ kh-*-implementation-notes.md
 .plandesk/*.key
 # Factory transient machine state (see .agents/factory/factory.md)
 runs/
+.vercel

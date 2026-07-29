@@ -8,7 +8,7 @@ import { wireAgentSkills } from '../skills/wireAgentSkills.js';
 import type { KnowledgeProvider } from './KnowledgeProvider.js';
 import { buildKnowledgeTool, wireWorkingMemory } from './grounding/index.js';
 import {
-  resolveAgentWorkspace,
+  resolveAgentWorkspaceForSession,
   type ResolvedAgentWorkspace,
 } from './resolveAgentWorkspace.js';
 
@@ -39,14 +39,26 @@ export async function buildAgentToolSurface(
     ...(agent.globalTools ?? {}),
   };
 
-  const resolvedWorkspace = resolveAgentWorkspace(agent.workspace);
+  const resolvedWorkspace = await resolveAgentWorkspaceForSession(agent.workspace, {
+    session,
+    agentId: agent.id,
+  });
   let workspaceTool: AnyTool | undefined;
+  let modelWorkspaceTool: AnyTool | undefined;
   if (resolvedWorkspace) {
     workspaceTool = createFsTool({
       fs: resolvedWorkspace.fs,
       readOnly: resolvedWorkspace.readOnly,
+      instructions: resolvedWorkspace.instructions,
     });
     executorTools.workspace = workspaceTool;
+    modelWorkspaceTool = resolvedWorkspace.readOnly || resolvedWorkspace.modelWritable
+      ? workspaceTool
+      : createFsTool({
+          fs: resolvedWorkspace.fs,
+          readOnly: true,
+          instructions: resolvedWorkspace.instructions,
+        });
   }
 
   if (resolvedWorkspace?.shell) {
@@ -84,7 +96,7 @@ export async function buildAgentToolSurface(
 
   const globalTools: Record<string, AnyTool> = {
     ...(agent.globalTools ?? {}),
-    ...(workspaceTool && resolvedWorkspace?.readOnly !== false ? { workspace: workspaceTool } : {}),
+    ...(modelWorkspaceTool ? { workspace: modelWorkspaceTool } : {}),
     ...skillTools,
     ...(knowledgeTool ? { knowledge_search: knowledgeTool } : {}),
   };

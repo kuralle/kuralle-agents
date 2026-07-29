@@ -1,5 +1,16 @@
 import type { HarnessConfig, Session, SessionDurableRuns } from '@kuralle-agents/core';
 
+export type DurableSqlValue = string | number | boolean | null;
+
+/** Structural subset shared by Durable Object SQLite and `@kuralle-agents/fs`. */
+export interface DurableSqlStorage {
+  exec(
+    query: string,
+    ...bindings: DurableSqlValue[]
+  ): Iterable<Record<string, DurableSqlValue | ArrayBuffer>>;
+  readonly databaseSize: number;
+}
+
 /**
  * SQL executor type matching Cloudflare's Durable Object sql binding.
  *

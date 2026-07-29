@@ -1,4 +1,5 @@
 packages:
   - packages/*
+  - apps/examples/pharmacy-rx-agent
   - apps/templates/*
   - apps/templates/_shared/*

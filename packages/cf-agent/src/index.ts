@@ -45,6 +45,8 @@ export {
 } from './inbound-runtime.js';
 
 export type {
+  DurableSqlStorage,
+  DurableSqlValue,
   StreamAdapterConfig,
   OrchestrationState,
   SqlExecutor,

@@ -1,0 +1,12 @@
+**/node_modules
+**/.next
+**/.vercel
+**/.wrangler
+**/coverage
+.handoff
+runs
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example

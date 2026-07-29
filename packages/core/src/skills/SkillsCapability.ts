@@ -27,7 +27,9 @@ export class SkillsCapability implements Capability {
       } as ToolDeclaration,
       {
         name: 'read_skill_resource',
-        description: 'Read a bundled resource file from a skill (reference docs, checklists, etc.).',
+        description:
+          'Read a bundled resource file that belongs to a loaded skill (references, checklists, templates). ' +
+          'The path is relative to that skill package. Never use this for absolute workspace paths or /knowledge and /notes mounts.',
         parameters: z.object({
           name: z.string().describe('Skill name'),
           path: z.string().describe('Relative resource path within the skill folder'),
@@ -51,6 +53,7 @@ export class SkillsCapability implements Capability {
           '## Available skills',
           'When a description matches the task, call load_skill with its name before acting.',
           'Skill bodies and resources belong to the skill capability, not the workspace: do not locate or read SKILL.md with workspace.',
+          'Conversely, files under absolute workspace mounts such as /knowledge or /notes are not skill resources: use workspace for those paths.',
           lines,
         ].join('\n'),
       },

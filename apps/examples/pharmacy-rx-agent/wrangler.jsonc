@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "kuralle-pharmacy-workspace-agent",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "PharmacyAgent", "class_name": "PharmacyAgent" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PharmacyAgent"] }
+  ],
+  "vars": {
+    "PUBLIC_URL": "https://kuralle-pharmacy-workspace-agent.mithushancj.workers.dev",
+    "MODEL_ID": "gpt-4.1-mini"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

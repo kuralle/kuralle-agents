@@ -28,7 +28,14 @@ export type {
   AgentCapabilityDescriptor,
 } from './processors.js';
 export { defineAgent } from './agentConfig.js';
-export type { AgentWorkspaceConfig, Instructions, AgentConfig } from './agentConfig.js';
+export type {
+  AgentWorkspaceConfig,
+  AgentWorkspaceDefinition,
+  AgentWorkspaceResolver,
+  AgentWorkspaceResolverContext,
+  Instructions,
+  AgentConfig,
+} from './agentConfig.js';
 export { fsErrorCode } from './filesystem.js';
 export type {
   FileSystemEntryType,

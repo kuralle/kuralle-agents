@@ -7,6 +7,7 @@
  *   kuralle resume <session> [--store <file>] [--summary <text>]
  *   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
  *   kuralle trace <session> [--last] [--json] [--web] [--port N]
+ *   kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]
  */
 import { resolveBuildRuntime } from './agentLoader.js';
 import { runChat } from './chat.js';
@@ -14,6 +15,14 @@ import { runResume } from './resume.js';
 import { runSend } from './send.js';
 import { runSim } from './sim.js';
 import { runTrace } from './trace.js';
+import {
+  clearHostedConnection,
+  connectionFromArgs,
+  readHostedConnection,
+  resolveHostedConnection,
+  saveHostedConnection,
+} from './hostedConnection.js';
+import { runHostedChat, runHostedSend } from './hostedCommands.js';
 
 const HELP = `kuralle — Kuralle agent CLI
 
@@ -23,6 +32,9 @@ Usage:
   kuralle resume <session> [--store <file>] [--summary <text>]
   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
   kuralle trace <session> [--last] [--json] [--web] [--port N]
+  kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]
+  kuralle connection
+  kuralle disconnect
 
 Options:
   --agent <path.ts>   Load a Runtime, defineAgent export, or buildRuntime factory
@@ -32,6 +44,15 @@ Options:
   --store <file>      Persist the session + traces to JSON files so chat survives across launches (chat only)
   --session <id>      Session id to resume with --store (default: "default")
   --summary <text>    Resolution note appended on resume (seen by the agent post-resume)
+  --server <url>      Use this hosted server for the command (or KURALLE_SERVER)
+  --transport <kind>  Hosted transport: http (Next/Hono/Worker JSON) or cloudflare (native Agents WS)
+  --agent-name <name> Cloudflare Agent class URL name, e.g. pharmacy-agent
+  --token <token>     Per-command bearer/query token; prefer KURALLE_TOKEN to avoid shell history
+  --local             Ignore the saved hosted connection and run the local agent
+
+Hosted mode:
+  'kuralle connect' saves a default server. Chat and send then use that hosted
+  runtime automatically; --local is the explicit escape hatch.
 `;
 
 function flag(argv: string[], name: string): string | undefined {
@@ -61,14 +82,44 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  const sub = rawArgv[0];
+  const rawSubArgv = rawArgv.slice(1);
+
+  if (sub === 'connect') {
+    const connection = await saveHostedConnection(connectionFromArgs(rawSubArgv));
+    process.stdout.write(`Connected to ${connection.transport} ${connection.server}` +
+      (connection.agentName ? ` (${connection.agentName})` : '') + '\n');
+    return;
+  }
+  if (sub === 'connection') {
+    const connection = await readHostedConnection();
+    process.stdout.write(connection
+      ? `${connection.transport} ${connection.server}${connection.agentName ? ` (${connection.agentName})` : ''}\n`
+      : 'No hosted server is connected.\n');
+    return;
+  }
+  if (sub === 'disconnect') {
+    process.stdout.write((await clearHostedConnection()) ? 'Disconnected hosted server.\n' : 'No hosted server was connected.\n');
+    return;
+  }
+
+  if (sub === 'chat' || sub === 'send') {
+    const connection = await resolveHostedConnection(rawArgv);
+    if (connection) {
+      if (sub === 'chat') await runHostedChat(rawSubArgv, connection);
+      else await runHostedSend(rawSubArgv, connection);
+      return;
+    }
+  }
+
   const { rest, agentPath } = stripGlobalFlags(rawArgv);
-  const sub = rest[0];
+  const localSub = rest[0];
   const subArgv = rest.slice(1);
   const buildRuntime = await resolveBuildRuntime(agentPath ?? flag(rawArgv, '--agent'), {
     modelFlag: flag(rawArgv, '--model'),
   });
 
-  switch (sub) {
+  switch (localSub) {
     case 'chat':
       runChat(subArgv, buildRuntime);
       break;
@@ -85,7 +136,7 @@ async function main(): Promise<void> {
       await runTrace(subArgv, buildRuntime);
       break;
     default:
-      console.error(`Unknown command: ${sub}\n`);
+      console.error(`Unknown command: ${localSub}\n`);
       process.stdout.write(HELP);
       process.exit(2);
   }
