@@ -1,0 +1,51 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "kuralle-agentic-commerce",
+  "main": "cloudflare/worker.ts",
+  "workers_dev": true,
+  "preview_urls": true,
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public",
+    "run_worker_first": ["/agents/*", "/admin/*", "/healthz"]
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "CommerceAgent", "class_name": "CommerceAgent" }
+    ]
+  },
+  "exports": {
+    "CommerceAgent": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "hyperdrive": [
+    { "binding": "HYPERDRIVE", "id": "25d7e7bdf7ca4b2db9cb5ab1da883ad3" }
+  ],
+  "workflows": [
+    { "name": "kuralle-catalog-sync", "binding": "CATALOG_SYNC_WORKFLOW", "class_name": "CatalogSyncWorkflow" },
+    { "name": "kuralle-checkout", "binding": "CHECKOUT_WORKFLOW", "class_name": "CheckoutWorkflow" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "COMMERCE_EVENTS", "queue": "kuralle-commerce-events" }
+    ],
+    "consumers": [
+      { "queue": "kuralle-commerce-events", "max_batch_size": 20, "max_batch_timeout": 5, "max_retries": 5, "dead_letter_queue": "kuralle-commerce-events-dlq" }
+    ]
+  },
+  "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "a8fe2d60bcdf7954d347214ebab95c1a",
+    "CLOUDFLARE_GATEWAY_ID": "kuralle-gateway",
+    "OPENAI_MODEL": "gpt-4o-mini",
+    "OPENAI_EMBEDDING_MODEL": "text-embedding-3-small",
+    "PORULLE_URL": "https://porulle-agentic-commerce-origin.mithushancj.workers.dev",
+    "STRIPE_PAYMENT_METHOD_TOKEN": "pm_card_visa",
+    "ENVIRONMENT": "staging"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

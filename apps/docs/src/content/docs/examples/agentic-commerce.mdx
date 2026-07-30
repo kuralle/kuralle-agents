@@ -1,0 +1,165 @@
+---
+title: Build an Agentic Commerce Assistant
+description: Run one retrieval-led Kuralle shopping agent on Node/Bun or Cloudflare with Samesake, Porulle, Stripe, and PostgreSQL.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The [Agentic Commerce Assistant](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/agentic-commerce-assistant) is a complete reference application, not a chat wrapper around a product API. It retrieves through Samesake, revalidates commercial facts through Porulle, pauses before checkout through Kuralle, and sends only a tokenized payment method to Stripe.
+
+<Aside type="caution" title="The model is not the transaction boundary">
+  The language model may interpret intent and propose tools. It does not own price, inventory, cart state, approval, idempotency, order state, or payment success.
+</Aside>
+
+## Understand the substrates
+
+| Substrate | What it owns |
+| --- | --- |
+| Kuralle Core | Typed tools, policy, durable run state, approval/resume, replay, and traces |
+| Pi Driver | Pi's provider-native model/tool loop behind Kuralle's runtime contract |
+| `cf-agent` | One Durable Object coordination atom per shopper session |
+| Durable Object SQLite | Conversation-local messages, cart state, approval interrupt, and effect journal |
+| PostgreSQL + pgvector | Shared Porulle records, Samesake indexes, and Node/Bun sessions |
+| Samesake | Candidate generation, hybrid retrieval, filters, grounding, and constraint traces |
+| Porulle | Current catalog entity, price, inventory, cart, order, and checkout truth |
+| Stripe | Tokenized payment confirmation |
+| AI Gateway | One governed route for OpenAI chat and embeddings |
+| Queue + Workflows | Buffered catalog events and retryable multi-step indexing/checkout work |
+| Hyperdrive | Cloudflare-to-PostgreSQL connection pooling |
+
+This boundary is why `@earendil-works/pi-agent-core` fits without becoming the application framework. Pi runs the model/tool turn protocol. Kuralle still intercepts tool calls, applies policy, stores the resumable run, records the human decision, and guards effect replay. The flow would become unsafe if a direct Pi tool callback bypassed that Kuralle boundary.
+
+## Run the local path
+
+Clone and install Kuralle and Porulle:
+
+```bash
+git clone https://github.com/kuralle/kuralle-agents.git
+git clone https://github.com/asyncdotengineering/porulle.git
+
+cd kuralle-agents && bun install
+cd ../porulle && bun install
+```
+
+Create a shared PostgreSQL database:
+
+```bash
+createdb kuralle_agentic_commerce
+psql kuralle_agentic_commerce -c 'CREATE EXTENSION IF NOT EXISTS vector'
+```
+
+Configure and seed the Porulle origin:
+
+```bash
+cd porulle/apps/agentic-commerce-origin
+cp .env.example .env
+bun run db:push
+bun run seed
+bun run start
+```
+
+Before seeding, set `STRIPE_SECRET_KEY` to your account's test-mode secret and keep `PUBLIC_URL=http://localhost:4000`. The seed output includes a scoped `storefrontKey`; handle it as a secret.
+
+In another terminal, configure the Kuralle app:
+
+```bash
+cd kuralle-agents/apps/examples/agentic-commerce-assistant
+cp .env.example .env
+```
+
+Set the shared `DATABASE_URL`, your Cloudflare account/gateway details, the Porulle URL and scoped key, and an application-specific Samesake key. Use `pm_card_visa` only in Stripe test mode.
+
+Generate a local Cloudflare token with:
+
+```bash
+wrangler auth token
+```
+
+Verify the gateway independently:
+
+```bash
+curl --request POST \
+  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/ai/run" \
+  --header "Authorization: Bearer $CLOUDFLARE_API_KEY" \
+  --header "cf-aig-gateway-id: $CLOUDFLARE_GATEWAY_ID" \
+  --header 'Content-Type: application/json' \
+  --data '{"model":"openai/gpt-4.1","input":{"messages":[{"role":"user","content":"Reply with gateway-ok"}],"max_tokens":32}}'
+```
+
+The probe uses Cloudflare's account-level AI Run API. The application uses AI Gateway's provider-native OpenAI endpoint because Pi's adapter needs that streaming protocol; embeddings travel through the same gateway.
+
+Bootstrap Samesake and start the portable server:
+
+```bash
+bun run bootstrap
+bun run node
+```
+
+Open `http://localhost:8787` and ask:
+
+```text
+Find a weatherproof daypack under $120, add the best match, show my cart, and check out.
+```
+
+Discovery is retrieval-led. `cart_add` reads Porulle again, and `create_order` pauses. Only an explicit approval resumes checkout.
+
+## Deploy the Cloudflare path
+
+Use a dedicated Neon database or branch and enable `vector`. Apply the Porulle schema, seed the catalog, and run the Samesake bootstrap against the Neon connection string. Direct Node/Bun connections should use `sslmode=verify-full`.
+
+Create the edge resources:
+
+```bash
+bunx wrangler hyperdrive create kuralle-agentic-commerce-db \
+  --connection-string='your_neon_connection_string'
+bunx wrangler queues create kuralle-commerce-events
+bunx wrangler queues create kuralle-commerce-events-dlq
+```
+
+Put the Hyperdrive ID into each `wrangler.jsonc`, replace example URLs and account values, then upload secrets interactively:
+
+```bash
+cd porulle/apps/agentic-commerce-origin
+bunx wrangler secret put STRIPE_SECRET_KEY
+bun run worker:deploy
+
+cd ../../../kuralle-agents/apps/examples/agentic-commerce-assistant
+bunx wrangler secret put CLOUDFLARE_API_KEY
+bunx wrangler secret put SAMESAKE_API_KEY
+bunx wrangler secret put PORULLE_STOREFRONT_KEY
+bunx wrangler secret put ADMIN_TOKEN
+bun run cf:deploy
+```
+
+The deployment provisions the Durable Object and Workflows from configuration. The Queue must exist before deployment. Hyperdrive supplies the PostgreSQL connection to Workers without putting the database password in Worker variables.
+
+## Exercise approval and recovery
+
+Cloudflare's browser client calls:
+
+```text
+POST /agents/commerce-agent/:sessionId/chat
+POST /agents/commerce-agent/:sessionId/resume
+```
+
+When checkout pauses, preserve `pendingApproval.requestId`. Resume with a new `signalId`, that exact request ID, `name: "__approval"`, and `decision: "approve"` or `"deny"`.
+
+The Durable Object journals the pending interrupt independently of the HTTP response. A reconnect or another chat request therefore surfaces the same outstanding approval instead of losing it or starting an unauthorized checkout.
+
+## Verify the contracts
+
+```bash
+cd kuralle-agents
+bun run --cwd apps/examples/agentic-commerce-assistant typecheck
+bun run --cwd apps/examples/agentic-commerce-assistant test
+bun run --cwd apps/examples/agentic-commerce-assistant cf:check
+
+cd ../porulle
+bun run --cwd packages/core check-types
+bun run --cwd packages/adapter-stripe test
+bun run --cwd apps/agentic-commerce-origin check-types
+bun run --cwd apps/agentic-commerce-origin test
+bun run --cwd apps/agentic-commerce-origin worker:check
+```
+
+Read the example's [full operating guide](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/agentic-commerce-assistant#readme) for the environment reference, direct HTTP examples, catalog synchronization, and production-hardening checklist.

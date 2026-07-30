@@ -29,4 +29,36 @@ describe('completion-oriented HTTP chat approvals', () => {
       description: 'Send the reviewed summary to a human support queue.',
     });
   });
+
+  it('resumes the frozen run with the same completion-oriented response shape', async () => {
+    const bindings = env as unknown as ApprovalEnv;
+    const stub = await getAgentByName(bindings.TEST_APPROVAL_AGENT, 'http-resume');
+    const paused = await stub.fetch('http://do/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'Please create the case.' }),
+    });
+    const pausedBody = await paused.json() as {
+      pendingApproval: { requestId: string };
+    };
+
+    const resumed = await stub.fetch('http://do/resume', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        signalId: crypto.randomUUID(),
+        requestId: pausedBody.pendingApproval.requestId,
+        name: '__approval',
+        decision: 'approve',
+      }),
+    });
+
+    expect(resumed.ok).toBe(true);
+    await expect(resumed.json()).resolves.toMatchObject({
+      ok: true,
+      text: 'created',
+      response: 'created',
+      status: 'completed',
+    });
+  });
 });

@@ -16,6 +16,18 @@ const production = [
   },
   {
     index: '02',
+    title: 'Agentic Commerce Assistant',
+    kicker: 'Retrieval to checkout',
+    description: 'Finds products through Samesake, revalidates price and stock in Porulle, and pauses an idempotent Stripe checkout for explicit approval across Node/Postgres and Cloudflare Durable Objects.',
+    interface: 'Web + Worker API',
+    substrate: 'PostgreSQL · Durable Objects · Workflows',
+    tags: ['Pi', 'commerce', 'retrieval', 'approval'],
+    path: 'apps/examples/agentic-commerce-assistant',
+    guide: '/examples/agentic-commerce/',
+    command: 'bun run --cwd apps/examples/agentic-commerce-assistant node',
+  },
+  {
+    index: '03',
     title: 'Customer Support Agent',
     kicker: 'Swappable production template',
     description: 'Ships one Pi-backed support core across Vercel/Postgres and Cloudflare Durable Objects, with config-owned knowledge, signed identity, approval-gated writes, grounding validation, and human escalation.',
@@ -26,7 +38,7 @@ const production = [
     command: 'bun run --cwd apps/examples/customer-support-agent dev',
   },
   {
-    index: '03',
+    index: '04',
     title: 'Pharmacy Workspace Agent',
     kicker: 'Durable edge + web',
     description: 'Runs the same safe pharmacy agent on Next.js/Vercel and a Cloudflare Durable Object with per-session workspaces, progressive skills, and hosted CLI access.',
@@ -38,7 +50,7 @@ const production = [
     live: 'https://pharmacy-rx-agent.vercel.app',
   },
   {
-    index: '04',
+    index: '05',
     title: 'Postgres Hacker Starter',
     kicker: 'Full-stack starter',
     description: 'A Next.js workbench backed by PostgreSQL and pgvector, with signed identity, hybrid retrieval, persistent memory, and approval-gated account operations.',
@@ -49,7 +61,7 @@ const production = [
     command: 'bun run --cwd apps/examples/postgres-hacker-starter db:up && bun run --cwd apps/examples/postgres-hacker-starter dev',
   },
   {
-    index: '05',
+    index: '06',
     title: 'Local Content Desk',
     kicker: 'File-native workflow',
     description: 'Turns local Markdown sources and filesystem skills into revisioned drafts with deterministic style checks, explicit approvals, and conflict-safe publication.',
@@ -60,7 +72,7 @@ const production = [
     command: 'bun run --cwd apps/examples/content-agent chat',
   },
   {
-    index: '06',
+    index: '07',
     title: 'Healthcare Operations',
     kicker: 'Authenticated workflow',
     description: 'A terminal healthcare operator for appointment, billing, and escalation work with authenticated records, durable SQLite state, and bounded actions.',
@@ -71,7 +83,7 @@ const production = [
     command: 'bun run --cwd apps/examples/healthcare chat',
   },
   {
-    index: '07',
+    index: '08',
     title: 'Hotel Receptionist',
     kicker: 'Policy-grounded service',
     description: 'Handles verified bookings and hotel operations against a real SQLite service layer and policy handbook, with privacy and emergency boundaries.',
@@ -174,6 +186,7 @@ const labs = [
         <code class="command">{item.command}</code>
         <footer>
           <a href={`${github}${item.path}`}>View source <span aria-hidden="true">↗</span></a>
+          {item.guide && <a class="secondary" href={item.guide}>Build guide <span aria-hidden="true">→</span></a>}
           {item.live && <a class="secondary" href={item.live}>Open live <span aria-hidden="true">↗</span></a>}
         </footer>
       </article>

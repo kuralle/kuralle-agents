@@ -89,11 +89,12 @@ export function createCartTools(options: CartToolsOptions): Record<string, AnyTo
       if (!product) {
         return { error: 'product_not_found', productId: args.productId };
       }
-      if (product.stock !== undefined && product.stock < args.quantity) {
-        return { error: 'insufficient_stock', productId: args.productId, available: product.stock };
-      }
       const cart = readCart(toolCtx);
       const existing = cart.items.find((item) => item.productId === args.productId);
+      const requestedQuantity = (existing?.quantity ?? 0) + args.quantity;
+      if (product.stock !== undefined && product.stock < requestedQuantity) {
+        return { error: 'insufficient_stock', productId: args.productId, available: product.stock };
+      }
       const items = existing
         ? cart.items.map((item) =>
             item.productId === args.productId

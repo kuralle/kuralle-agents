@@ -22,10 +22,20 @@ export interface OrderLedger {
   get(contentKey: string): Promise<Order | null>;
   /** Store the order for its content key; first write wins. Returns the stored order. */
   putIfAbsent(contentKey: string, order: Order): Promise<Order>;
+  /**
+   * Atomically return an existing order or run and store `create` once.
+   *
+   * Production ledgers should implement this with a per-key Durable Object,
+   * database advisory lock, or equivalent serialization primitive. The
+   * callback can be retried after a crash, so the downstream submitter must
+   * also honor `contentKey` as its idempotency key.
+   */
+  runOnce?(contentKey: string, create: () => Promise<Order>): Promise<Order>;
 }
 
 export function createInMemoryOrderLedger(): OrderLedger {
   const orders = new Map<string, Order>();
+  const pending = new Map<string, Promise<Order>>();
   return {
     async get(contentKey) {
       return orders.get(contentKey) ?? null;
@@ -35,6 +45,24 @@ export function createInMemoryOrderLedger(): OrderLedger {
       if (existing) return existing;
       orders.set(contentKey, order);
       return order;
+    },
+    async runOnce(contentKey, create) {
+      const existing = orders.get(contentKey);
+      if (existing) return existing;
+      const active = pending.get(contentKey);
+      if (active) return active;
+      const submission = create().then((order) => {
+        const raced = orders.get(contentKey);
+        if (raced) return raced;
+        orders.set(contentKey, order);
+        return order;
+      });
+      pending.set(contentKey, submission);
+      try {
+        return await submission;
+      } finally {
+        pending.delete(contentKey);
+      }
     },
   };
 }
@@ -64,6 +92,8 @@ export interface CreateOrderToolOptions {
   submit: (args: SubmitOrderArgs) => Promise<{ orderId: string; metadata?: Record<string, unknown> }>;
   /** Cross-turn dedupe ledger. Default: in-memory (single process — use a durable ledger in production). */
   ledger?: OrderLedger;
+  /** Require runtime human approval before executing. Defaults to true. */
+  needsApproval?: boolean;
 }
 
 const createOrderInput = z.object({
@@ -98,7 +128,7 @@ export function createOrderTool(options: CreateOrderToolOptions): AnyTool {
       return pending;
     }
 
-    const submission = (async () => {
+    const create = async (): Promise<Order> => {
       const total = cartTotal(cart.items);
       const result = await options.submit({
         sessionId,
@@ -119,10 +149,14 @@ export function createOrderTool(options: CreateOrderToolOptions): AnyTool {
         createdAt: new Date().toISOString(),
         metadata: result.metadata,
       };
-      const stored = await ledger.putIfAbsent(contentKey, order);
-      if (stored.id === order.id) {
-        clearCart(ctx);
-      }
+      return order;
+    };
+
+    const submission = (async () => {
+      const stored = ledger.runOnce
+        ? await ledger.runOnce(contentKey, create)
+        : await ledger.putIfAbsent(contentKey, await create());
+      clearCart(ctx);
       return stored;
     })();
 
@@ -139,6 +173,7 @@ export function createOrderTool(options: CreateOrderToolOptions): AnyTool {
     description:
       'Place the order for the current cart. Idempotent: resubmitting the same cart returns the existing order instead of ordering twice.',
     input: createOrderInput,
+    needsApproval: options.needsApproval ?? true,
     execute: async (args, ctx) => {
       if (!ctx?.runState) {
         throw new Error('create_order requires a run context (runState)');

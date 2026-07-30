@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="A retrieval-led Kuralle shopping assistant backed by Samesake, Porulle, and Stripe.">
+  <title>Kuralle Mercantile</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap');
+    :root{--paper:#f2ead8;--ink:#161813;--red:#d2432f;--green:#235948;--line:rgba(22,24,19,.22);--muted:#6b685f;--shadow:8px 8px 0 #161813}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:"DM Mono",monospace;min-height:100vh;background-image:linear-gradient(rgba(22,24,19,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(22,24,19,.035) 1px,transparent 1px);background-size:24px 24px}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.17;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E")}
+    .shell{width:min(1180px,calc(100% - 32px));margin:24px auto;display:grid;grid-template-columns:270px 1fr;min-height:calc(100vh - 48px);border:2px solid var(--ink);background:rgba(242,234,216,.94);box-shadow:var(--shadow);animation:arrive .55s ease-out both}
+    aside{border-right:2px solid var(--ink);padding:28px 22px;display:flex;flex-direction:column}.mark{font:700 34px/1 "Fraunces",serif;letter-spacing:-1.7px}.stamp{display:inline-block;margin-top:12px;padding:5px 8px;border:2px solid var(--red);color:var(--red);font-size:10px;text-transform:uppercase;letter-spacing:1.4px;transform:rotate(-2deg)}
+    .ledger{margin-top:46px;border-top:1px solid var(--line)}.ledger div{padding:14px 0;border-bottom:1px solid var(--line)}.k{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:1.3px;margin-bottom:5px}.v{font-size:11px;line-height:1.5}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:7px;box-shadow:0 0 0 3px rgba(35,89,72,.13)}
+    .new{margin-top:auto;background:transparent;border:1px solid var(--ink);padding:11px;font:500 10px "DM Mono";text-transform:uppercase;letter-spacing:1px;cursor:pointer;transition:.16s}.new:hover{background:var(--ink);color:var(--paper);transform:translate(-2px,-2px);box-shadow:3px 3px 0 var(--red)}
+    main{display:grid;grid-template-rows:auto 1fr auto;min-width:0}.mast{padding:26px 30px 22px;border-bottom:2px solid var(--ink);display:flex;align-items:end;justify-content:space-between;gap:20px}.mast h1{font:500 clamp(28px,5vw,58px)/.94 "Fraunces",serif;letter-spacing:-2.7px;margin:0;max-width:620px}.mast p{font-size:9px;text-transform:uppercase;line-height:1.6;letter-spacing:1px;max-width:190px;margin:0;color:var(--muted)}
+    #messages{padding:30px;overflow:auto;max-height:calc(100vh - 245px);scrollbar-color:var(--ink) transparent}.message{max-width:78%;margin:0 0 22px;animation:rise .3s ease-out both}.who{font-size:9px;text-transform:uppercase;letter-spacing:1.1px;color:var(--muted);margin-bottom:7px}.bubble{border:1px solid var(--ink);padding:14px 16px;background:#f8f1e3;line-height:1.65;font-size:13px;white-space:pre-wrap}.user{margin-left:auto}.user .who{text-align:right}.user .bubble{background:var(--ink);color:var(--paper);box-shadow:4px 4px 0 var(--red)}
+    .approval{border:2px solid var(--red);padding:17px;background:#f8f1e3;box-shadow:5px 5px 0 var(--red)}.approval b{font:700 22px "Fraunces",serif;display:block}.approval p{font-size:11px;line-height:1.5;color:var(--muted)}.actions{display:flex;gap:9px}.actions button{border:1px solid var(--ink);padding:9px 13px;background:transparent;font:500 10px "DM Mono";cursor:pointer;text-transform:uppercase}.actions .approve{background:var(--red);color:white;border-color:var(--red)}
+    form{border-top:2px solid var(--ink);padding:18px 22px;display:grid;grid-template-columns:1fr auto;gap:12px;background:rgba(248,241,227,.75)}textarea{resize:none;min-height:50px;max-height:140px;border:1px solid var(--ink);background:transparent;padding:14px;font:400 13px/1.5 "DM Mono";color:var(--ink);outline:none}textarea:focus{box-shadow:inset 0 -3px 0 var(--red)}form button{width:96px;border:0;background:var(--ink);color:var(--paper);font:500 10px "DM Mono";text-transform:uppercase;letter-spacing:1px;cursor:pointer}form button:hover{background:var(--red)}form button:disabled,textarea:disabled{opacity:.45;cursor:wait}
+    .empty{margin:auto;max-width:520px;padding:50px 20px;text-align:center;color:var(--muted);font-size:11px;line-height:1.7}.empty strong{display:block;color:var(--ink);font:500 26px "Fraunces",serif;margin-bottom:9px}
+    @keyframes arrive{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    @media(max-width:760px){.shell{display:block;margin:0;width:100%;min-height:100vh;box-shadow:none;border-width:0 0 2px}.shell aside{border:0;border-bottom:2px solid var(--ink);padding:18px 20px;display:grid;grid-template-columns:1fr auto}.ledger{display:none}.new{margin:0}.mast{padding:22px 20px}.mast p{display:none}#messages{padding:20px;max-height:calc(100vh - 280px)}.message{max-width:92%}.mark{font-size:27px}form{padding:14px}}
+  </style>
+</head>
+<body>
+  <section class="shell">
+    <aside>
+      <div><div class="mark">Kuralle<br>Mercantile</div><span class="stamp">approval required to buy</span></div>
+      <div class="ledger">
+        <div><span class="k">Runtime</span><span class="v"><span class="dot"></span><span id="runtime">connecting</span></span></div>
+        <div><span class="k">Discovery</span><span class="v">Samesake hybrid retrieval</span></div>
+        <div><span class="k">Commerce truth</span><span class="v">Porulle + PostgreSQL</span></div>
+        <div><span class="k">Payment</span><span class="v">Stripe tokenized sandbox</span></div>
+      </div>
+      <button class="new" id="new">New receipt</button>
+    </aside>
+    <main>
+      <header class="mast"><h1>Find with evidence.<br>Buy with consent.</h1><p>No model owns price, stock, approval, or money.</p></header>
+      <div id="messages"><div class="empty"><strong>What are you shopping for?</strong>Try “a weatherproof daypack under $120” or ask to compare two products. The assistant retrieves first and checks the commerce source again before adding.</div></div>
+      <form id="form"><textarea id="input" aria-label="Message" placeholder="Describe the item, constraints, or budget…" required></textarea><button>Send</button></form>
+    </main>
+  </section>
+  <script type="module">
+    const messages=document.querySelector('#messages'),form=document.querySelector('#form'),input=document.querySelector('#input'),runtimeEl=document.querySelector('#runtime');
+    let session=localStorage.getItem('kuralle-commerce-session')||crypto.randomUUID(),runtime='cloudflare';
+    localStorage.setItem('kuralle-commerce-session',session);
+    fetch('/healthz').then(r=>r.json()).then(x=>{runtime=x.runtime==='cloudflare'?'cloudflare':'node';runtimeEl.textContent=`${x.runtime} · ${x.substrate}`}).catch(()=>runtimeEl.textContent='offline');
+    const endpoint=(action)=>runtime==='cloudflare'?`/agents/commerce-agent/${encodeURIComponent(session)}/${action}`:`/api/${action}`;
+    function clearEmpty(){messages.querySelector('.empty')?.remove()}
+    function add(role,text){clearEmpty();const row=document.createElement('div');row.className=`message ${role}`;const who=document.createElement('div');who.className='who';who.textContent=role==='user'?'Shopper':'Assistant';const bubble=document.createElement('div');bubble.className='bubble';bubble.textContent=text||'No text returned.';row.append(who,bubble);messages.append(row);messages.scrollTop=messages.scrollHeight}
+    function approvalCard(a){const row=document.createElement('div');row.className='message';const box=document.createElement('div');box.className='approval';const title=document.createElement('b');title.textContent=a.title||'Approve checkout?';const detail=document.createElement('p');detail.textContent=a.description||'The frozen checkout will execute exactly once if approved.';const actions=document.createElement('div');actions.className='actions';for(const decision of ['approve','deny']){const button=document.createElement('button');button.className=decision==='approve'?'approve':'';button.textContent=decision;button.onclick=()=>resume(a.requestId,decision,row);actions.append(button)}box.append(title,detail,actions);row.append(box);messages.append(row);messages.scrollTop=messages.scrollHeight}
+    async function turn(message){setBusy(true);add('user',message);try{const response=await fetch(endpoint('chat'),{method:'POST',headers:{'content-type':'application/json','x-idempotency-key':crypto.randomUUID()},body:JSON.stringify(runtime==='cloudflare'?{message}:{sessionId:session,message})});const body=await response.json();if(!response.ok)throw new Error(body.error||`Request failed (${response.status})`);add('assistant',body.response);if(body.pendingApproval)approvalCard(body.pendingApproval)}catch(error){add('assistant',`Request failed: ${error.message}`)}finally{setBusy(false)}}
+    async function resume(requestId,decision,row){row.querySelectorAll('button').forEach(b=>b.disabled=true);setBusy(true);try{const payload=runtime==='cloudflare'?{signalId:crypto.randomUUID(),requestId,name:'__approval',decision}:{sessionId:session,requestId,decision};const response=await fetch(endpoint('resume'),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const body=await response.json();if(!response.ok)throw new Error(body.error||`Resume failed (${response.status})`);row.remove();add('assistant',body.response||body.text||`${decision} recorded.`)}catch(error){add('assistant',`Approval failed: ${error.message}`)}finally{setBusy(false)}}
+    function setBusy(value){input.disabled=value;form.querySelector('button').disabled=value;if(!value)input.focus()}
+    form.onsubmit=(event)=>{event.preventDefault();const value=input.value.trim();if(value){input.value='';turn(value)}};
+    input.onkeydown=(event)=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();form.requestSubmit()}};
+    document.querySelector('#new').onclick=()=>{session=crypto.randomUUID();localStorage.setItem('kuralle-commerce-session',session);messages.innerHTML='<div class="empty"><strong>Fresh receipt.</strong>Your previous Durable Object remains intact; this begins a new isolated shopping session.</div>';input.focus()};
+  </script>
+</body>
+</html>

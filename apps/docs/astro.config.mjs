@@ -96,7 +96,14 @@ const plugins = [
 
 const sidebar = [
   { label: 'Overview', link: '/' },
-  { label: 'Examples', link: '/examples/' },
+  {
+    label: 'Examples',
+    collapsed: false,
+    items: [
+      { label: 'Catalogue', link: '/examples/' },
+      { label: 'Agentic Commerce', link: '/examples/agentic-commerce/' },
+    ],
+  },
   {
     label: 'Start',
     collapsed: false,

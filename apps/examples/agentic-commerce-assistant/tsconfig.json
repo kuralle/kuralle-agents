@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["bun-types", "@cloudflare/workers-types"]
+  },
+  "include": ["src/**/*.ts", "cloudflare/**/*.ts", "node/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "worker-configuration.d.ts"],
+  "exclude": ["node_modules"]
+}

@@ -110,6 +110,14 @@ describe('cart tools', () => {
       productId: 'p1',
       available: 5,
     });
+
+    await tools.cart_add!.execute({ productId: 'p1', quantity: 4 }, ctx);
+    expect(await tools.cart_add!.execute({ productId: 'p1', quantity: 2 }, ctx)).toEqual({
+      error: 'insufficient_stock',
+      productId: 'p1',
+      available: 5,
+    });
+    expect(readCart(ctx).items.find((item) => item.productId === 'p1')?.quantity).toBe(4);
   });
 });
 
@@ -142,6 +150,12 @@ describe('create_order idempotency', () => {
     const second = (await order.execute({ note: null }, ctx2)) as { order: { id: string } };
     expect(second.order.id).toBe('ord-1');
     expect(submissions).toBe(1);
+  });
+
+  it('requires approval by default and permits an explicit controlled-flow opt-out', () => {
+    const submit = async () => ({ orderId: 'ord-approval' });
+    expect(createOrderTool({ submit }).needsApproval).toBe(true);
+    expect(createOrderTool({ submit, needsApproval: false }).needsApproval).toBe(false);
   });
 
   it('coalesces concurrent submissions of the same cart', async () => {

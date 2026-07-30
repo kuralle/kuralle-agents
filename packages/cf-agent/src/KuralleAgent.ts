@@ -73,10 +73,76 @@ export abstract class KuralleAgent<
   /** Last approval surfaced by the completion-oriented HTTP chat facade. */
   private lastHttpInterrupt: HitlInterrupt | undefined;
 
-  private consumeHttpInterrupt(): HitlInterrupt | undefined {
-    const interrupt = this.lastHttpInterrupt;
-    this.lastHttpInterrupt = undefined;
+  private ensureHttpInterruptTable(): void {
+    this.getSql()`CREATE TABLE IF NOT EXISTS kuralle_http_interrupts (
+      id TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`;
+  }
+
+  private recordHttpInterrupt(interrupt: HitlInterrupt): void {
+    this.lastHttpInterrupt = interrupt;
+    this.ensureHttpInterruptTable();
+    this.getSql()`INSERT INTO kuralle_http_interrupts (id, payload, updated_at)
+      VALUES (${'pending'}, ${JSON.stringify(interrupt)}, ${Date.now()})
+      ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`;
+  }
+
+  private getHttpInterrupt(): HitlInterrupt | undefined {
+    if (this.lastHttpInterrupt) return this.lastHttpInterrupt;
+    this.ensureHttpInterruptTable();
+    const row = this.getSql()<{ payload: string }>`SELECT payload FROM kuralle_http_interrupts
+      WHERE id = ${'pending'} LIMIT 1`[0];
+    if (!row) return undefined;
+    try {
+      return JSON.parse(row.payload) as HitlInterrupt;
+    } catch {
+      this.clearHttpInterrupt();
+      return undefined;
+    }
+  }
+
+  private async resolvePendingApproval(): Promise<HitlInterrupt | undefined> {
+    const journaled = this.getHttpInterrupt();
+    if (journaled) return journaled;
+
+    // The Agents SDK may consume the SSE stream in a separate internal request,
+    // so an instance field is not a reliable hand-off to the completion-oriented
+    // HTTP facade. The durable run journal is authoritative across that boundary.
+    const sessionId = this.getSessionId();
+    const state = await new OrchestrationStore(this.getSql()).get(sessionId);
+    const run = state?.durableRuns?.[sessionId]?.runState
+      ?? Object.values(state?.durableRuns ?? {}).find((candidate) => candidate.runState.status === 'paused')?.runState;
+    const waiting = run?.status === 'paused' ? run.waitingFor : undefined;
+    if (!waiting || waiting.kind !== 'approval') return undefined;
+
+    const interrupt: HitlInterrupt = {
+      requestId: waiting.requestId,
+      kind: waiting.kind,
+      signalName: waiting.signalName,
+      ...(waiting.operation ? {
+        operation: {
+          toolCallId: waiting.operation.toolCallId,
+          toolName: waiting.operation.toolName,
+          args: waiting.operation.args,
+          argsHash: waiting.operation.argsHash,
+        },
+      } : {}),
+      display: waiting.display,
+      responseSchema: waiting.responseSchema,
+      deadline: waiting.deadline,
+      allowedDecisions: waiting.allowedDecisions,
+      createdAt: waiting.createdAt,
+    };
+    this.recordHttpInterrupt(interrupt);
     return interrupt;
+  }
+
+  private clearHttpInterrupt(): void {
+    this.lastHttpInterrupt = undefined;
+    this.ensureHttpInterruptTable();
+    this.getSql()`DELETE FROM kuralle_http_interrupts WHERE id = ${'pending'}`;
   }
 
   /**
@@ -218,7 +284,7 @@ export abstract class KuralleAgent<
     async function* parts(): AsyncGenerator<StreamPart> {
       for await (const part of handle.events) {
         if (part.type === 'paused' && part.payload.interrupt.kind === 'approval') {
-          owner.lastHttpInterrupt = part.payload.interrupt;
+          owner.recordHttpInterrupt(part.payload.interrupt);
         }
         yield part;
       }
@@ -275,7 +341,12 @@ export abstract class KuralleAgent<
     for await (const part of handle.events) {
       if (part.type === 'text-delta') text += part.payload.delta;
     }
-    await handle;
+    const result = await handle;
+    // Resumed drivers may return final text without replaying it as deltas.
+    // Prefer streamed text when present, otherwise preserve the authoritative
+    // TurnResult so HTTP and reconnecting chat clients do not receive silence.
+    if (!text.trim()) text = result.text;
+    this.clearHttpInterrupt();
 
     if (text.trim()) {
       const assistantMessage: UIMessage = {
@@ -378,7 +449,8 @@ export abstract class KuralleAgent<
     for await (const part of handle.events) {
       if (part.type === 'text-delta') text += part.payload.delta;
     }
-    await handle;
+    const result = await handle;
+    if (!text.trim()) text = result.text;
 
     if (text.trim()) {
       const assistantMessage: UIMessage = {
@@ -418,6 +490,21 @@ export abstract class KuralleAgent<
         return Response.json({ error: 'message exceeds 64000 characters' }, { status: 413 });
       }
 
+      const outstandingApproval = await this.resolvePendingApproval();
+      if (outstandingApproval) {
+        return Response.json({
+          sessionId: this.getSessionId(),
+          response: '',
+          status: 'approval-required',
+          messageCount: this.messages.length,
+          pendingApproval: {
+            requestId: outstandingApproval.requestId,
+            title: outstandingApproval.display.title,
+            description: outstandingApproval.display.description,
+          },
+        });
+      }
+
       const userMessage: UIMessage = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -428,7 +515,7 @@ export abstract class KuralleAgent<
         .find((message) => message.role === 'assistant')?.id;
       this.lastHttpInterrupt = undefined;
       const result = await this.saveMessages((messages) => [...messages, userMessage]);
-      const pendingApproval = this.consumeHttpInterrupt();
+      const pendingApproval = await this.resolvePendingApproval();
       const assistant = [...this.messages]
         .reverse()
         .find((message) => message.role === 'assistant' && message.id !== previousAssistantId);
@@ -478,7 +565,9 @@ export abstract class KuralleAgent<
           type: 'service',
         },
       });
-      return Response.json({ ok: true, text });
+      // Keep `text` for existing callers and mirror the completion-oriented
+      // `/chat` shape so generic HTTP clients can render either endpoint.
+      return Response.json({ ok: true, text, response: text, status: 'completed' });
     }
 
     if (url.pathname.endsWith('/orchestration-state')) {
