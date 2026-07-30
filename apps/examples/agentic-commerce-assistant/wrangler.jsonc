@@ -23,8 +23,7 @@
     { "binding": "HYPERDRIVE", "id": "25d7e7bdf7ca4b2db9cb5ab1da883ad3" }
   ],
   "workflows": [
-    { "name": "kuralle-catalog-sync", "binding": "CATALOG_SYNC_WORKFLOW", "class_name": "CatalogSyncWorkflow" },
-    { "name": "kuralle-checkout", "binding": "CHECKOUT_WORKFLOW", "class_name": "CheckoutWorkflow" }
+    { "name": "kuralle-catalog-sync", "binding": "CATALOG_SYNC_WORKFLOW", "class_name": "CatalogSyncWorkflow" }
   ],
   "queues": {
     "producers": [

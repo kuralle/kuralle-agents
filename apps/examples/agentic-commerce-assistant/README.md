@@ -38,10 +38,12 @@ Kuralle shopping agent ---------------- Cloudflare AI Gateway ---> OpenAI
 ```
 
 The Cloudflare deployment adds one Durable Object per shopper session, a
-Hyperdrive connection to PostgreSQL, a Queue for catalog and checkout jobs, and
-Workflows for retryable catalog indexing and checkout execution. Durable Object
-SQLite stores conversation-local coordination state and the approval journal;
-PostgreSQL stores shared search and commerce data.
+Hyperdrive connection to PostgreSQL, and a Queue feeding a retryable catalog
+indexing Workflow. Durable Object SQLite stores conversation-local coordination
+state and the approval/effect journal; PostgreSQL stores shared search and
+commerce data. Approved checkout stays synchronous with the resumed agent turn:
+the Durable Object serializes it and Porulle receives the content key as its
+idempotency key.
 
 The Node/Bun deployment keeps the same agent definition and integrations. It
 replaces the Durable Object session substrate with Kuralle's PostgreSQL session
@@ -74,7 +76,7 @@ Core directly would lose those application-level guarantees.
 | `src/porulle.ts` | Narrow, authenticated Porulle client |
 | `src/gateway.ts` | Pi, AI SDK, and embeddings through Cloudflare AI Gateway |
 | `cloudflare/agent.ts` | Durable Object composition through `@kuralle-agents/cf-agent` |
-| `cloudflare/workflows.ts` | Retryable catalog and checkout workflows |
+| `cloudflare/workflows.ts` | Retryable catalog indexing workflow |
 | `cloudflare/worker.ts` | Assets, agent routing, admin ingestion, and Queue consumer |
 | `node/` | Node/Bun server, PostgreSQL sessions, and order ledger |
 | `scripts/bootstrap.ts` | Porulle export to Samesake index |
@@ -263,7 +265,7 @@ bunx wrangler secret put ADMIN_TOKEN
 bun run cf:deploy
 ```
 
-The assistant deployment creates the Durable Object and both Workflows. The
+The assistant deployment creates the Durable Object and catalog Workflow. The
 Queue bindings refer to the two queues created above. Hyperdrive supplies the
 runtime database connection without exposing the Neon password to the Worker.
 

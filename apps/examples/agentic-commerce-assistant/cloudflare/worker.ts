@@ -1,9 +1,9 @@
 import { routeAgentRequest } from 'agents';
 import { CommerceAgent } from './agent.js';
-import type { CommerceQueueMessage, Env } from './env.js';
+import type { CatalogQueueMessage, Env } from './env.js';
 
 export { CommerceAgent };
-export { CatalogSyncWorkflow, CheckoutWorkflow } from './workflows.js';
+export { CatalogSyncWorkflow } from './workflows.js';
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
@@ -34,28 +34,17 @@ export default {
     return env.ASSETS.fetch(request);
   },
 
-  async queue(batch: MessageBatch<CommerceQueueMessage>, env: Env): Promise<void> {
+  async queue(batch: MessageBatch<CatalogQueueMessage>, env: Env): Promise<void> {
     for (const message of batch.messages) {
       try {
-        if (message.body.kind === 'catalog.upsert') {
-          await env.CATALOG_SYNC_WORKFLOW.create({
-            id: `catalog-${message.id}`,
-            params: { documents: message.body.documents },
-          });
-        } else {
-          await env.CHECKOUT_WORKFLOW.create({
-            id: `checkout-${message.body.contentKey}`,
-            params: {
-              contentKey: message.body.contentKey,
-              items: message.body.items,
-              paymentMethodToken: message.body.paymentMethodToken,
-            },
-          });
-        }
+        await env.CATALOG_SYNC_WORKFLOW.create({
+          id: `catalog-${message.id}`,
+          params: { documents: message.body.documents },
+        });
         message.ack();
       } catch {
         message.retry();
       }
     }
   },
-} satisfies ExportedHandler<Env, CommerceQueueMessage>;
+} satisfies ExportedHandler<Env, CatalogQueueMessage>;

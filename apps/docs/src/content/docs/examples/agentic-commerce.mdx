@@ -24,7 +24,7 @@ The [Agentic Commerce Assistant](https://github.com/kuralle/kuralle-agents/tree/
 | Porulle | Current catalog entity, price, inventory, cart, order, and checkout truth |
 | Stripe | Tokenized payment confirmation |
 | AI Gateway | One governed route for OpenAI chat and embeddings |
-| Queue + Workflows | Buffered catalog events and retryable multi-step indexing/checkout work |
+| Queue + Workflow | Buffered catalog events and retryable multi-step indexing |
 | Hyperdrive | Cloudflare-to-PostgreSQL connection pooling |
 
 This boundary is why `@earendil-works/pi-agent-core` fits without becoming the application framework. Pi runs the model/tool turn protocol. Kuralle still intercepts tool calls, applies policy, stores the resumable run, records the human decision, and guards effect replay. The flow would become unsafe if a direct Pi tool callback bypassed that Kuralle boundary.
@@ -131,7 +131,7 @@ bunx wrangler secret put ADMIN_TOKEN
 bun run cf:deploy
 ```
 
-The deployment provisions the Durable Object and Workflows from configuration. The Queue must exist before deployment. Hyperdrive supplies the PostgreSQL connection to Workers without putting the database password in Worker variables.
+The deployment provisions the Durable Object and catalog Workflow from configuration. The Queue must exist before deployment. Hyperdrive supplies the PostgreSQL connection to Workers without putting the database password in Worker variables. Approved checkout remains in the resumed agent turn: the Durable Object serializes the effect and Porulle receives the stable content key as its idempotency key.
 
 ## Exercise approval and recovery
 
