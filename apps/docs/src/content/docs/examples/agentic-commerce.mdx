@@ -29,6 +29,12 @@ The [Agentic Commerce Assistant](https://github.com/kuralle/kuralle-agents/tree/
 
 This boundary is why `@earendil-works/pi-agent-core` fits without becoming the application framework. Pi runs the model/tool turn protocol. Kuralle still intercepts tool calls, applies policy, stores the resumable run, records the human decision, and guards effect replay. The flow would become unsafe if a direct Pi tool callback bypassed that Kuralle boundary.
 
+## Understand the design lineage
+
+[Uber Cart Assistant](https://www.uber.com/us/en/blog/uber-cart-assistant/) separates ambiguous cart planning and relevance judgments from deterministic retrieval, pricing, eligibility, quantity validation, constraints, and cart assembly. This example keeps the same probabilistic-versus-deterministic boundary, but extends it through approval and payment: Samesake retrieves candidates, Porulle revalidates every cart line and owns checkout, and Kuralle prevents the model from crossing the consequential-action boundary by itself.
+
+[Amazon Rufus](https://www.amazon.science/blog/the-technology-behind-amazons-genai-powered-shopping-assistant-rufus) demonstrates why shopping answers need retrieval from trusted catalog and Store API evidence rather than model memory. [Shopify Sidekick](https://shopify.engineering/building-production-ready-agentic-systems) shows the operational value of keeping tool responsibilities focused and evaluating agent changes against real task behavior. Here those lessons become typed tools, a narrow Porulle client, retrieval constraint traces, deterministic money handling, focused contract tests, and an end-to-end approval exercise.
+
 ## Run the local path
 
 Clone and install Kuralle and Porulle:
