@@ -61,4 +61,60 @@ describe('completion-oriented HTTP chat approvals', () => {
       status: 'completed',
     });
   });
+
+  it('rejects an approval that is not pending in this durable object', async () => {
+    const bindings = env as unknown as ApprovalEnv;
+    const stub = await getAgentByName(bindings.TEST_APPROVAL_AGENT, 'http-wrong-session');
+    const response = await stub.fetch('http://do/resume', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        signalId: crypto.randomUUID(),
+        requestId: 'approval-from-another-session',
+        name: '__approval',
+        decision: 'approve',
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'No approval is pending for this session.',
+    });
+  });
+
+  it('rejects the wrong request id without consuming the real approval', async () => {
+    const bindings = env as unknown as ApprovalEnv;
+    const stub = await getAgentByName(bindings.TEST_APPROVAL_AGENT, 'http-wrong-request');
+    const paused = await stub.fetch('http://do/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'Please create the case.' }),
+    });
+    const pausedBody = await paused.json() as { pendingApproval: { requestId: string } };
+
+    const wrong = await stub.fetch('http://do/resume', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        signalId: crypto.randomUUID(),
+        requestId: 'wrong-request-id',
+        name: '__approval',
+        decision: 'approve',
+      }),
+    });
+    expect(wrong.status).toBe(409);
+
+    const resumed = await stub.fetch('http://do/resume', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        signalId: crypto.randomUUID(),
+        requestId: pausedBody.pendingApproval.requestId,
+        name: '__approval',
+        decision: 'approve',
+      }),
+    });
+    expect(resumed.ok).toBe(true);
+    await expect(resumed.json()).resolves.toMatchObject({ status: 'completed', text: 'created' });
+  });
 });

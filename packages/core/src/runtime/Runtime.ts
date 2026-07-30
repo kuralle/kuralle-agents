@@ -315,6 +315,22 @@ export class Runtime {
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =
         (await opened.runStore.getRunState(opened.runState.runId)) ?? opened.runState;
+      if (
+        opts.signalDelivery &&
+        !steps.some((step) => step.signalId === opts.signalDelivery!.signalId)
+      ) {
+        const waitingFor = freshRunState.waitingFor;
+        if (
+          !waitingFor ||
+          waitingFor.signalName !== opts.signalDelivery.name ||
+          waitingFor.requestId !== opts.signalDelivery.requestId
+        ) {
+          throw new Error(
+            `Signal ${opts.signalDelivery.name}/${opts.signalDelivery.requestId} does not match waitingFor ` +
+              `${waitingFor ? `${waitingFor.signalName}/${waitingFor.requestId}` : 'none'}`,
+          );
+        }
+      }
       // Snapshot cumulative token usage as this turn opens, so the trace can report
       // THIS turn's consumption (delta), not the running session total (see the
       // per-turn scope requirement in the observability guide).

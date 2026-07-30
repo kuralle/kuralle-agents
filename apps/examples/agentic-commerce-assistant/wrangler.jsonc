@@ -9,7 +9,7 @@
   "assets": {
     "binding": "ASSETS",
     "directory": "./public",
-    "run_worker_first": ["/agents/*", "/admin/*", "/healthz"]
+    "run_worker_first": ["/api/*", "/admin/*", "/healthz"]
   },
   "durable_objects": {
     "bindings": [

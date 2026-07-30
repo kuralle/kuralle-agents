@@ -8,6 +8,7 @@ export interface CommerceEnv {
   SAMESAKE_API_KEY: string;
   PORULLE_URL: string;
   PORULLE_STOREFRONT_KEY: string;
+  COMMERCE_IDENTITY_SECRET: string;
   STRIPE_PAYMENT_METHOD_TOKEN?: string;
   ENVIRONMENT?: string;
 }
@@ -20,6 +21,7 @@ export function requireEnv(env: CommerceEnv): void {
     'SAMESAKE_API_KEY',
     'PORULLE_URL',
     'PORULLE_STOREFRONT_KEY',
+    'COMMERCE_IDENTITY_SECRET',
   ] as const;
   const missing = required.filter((name) => !env[name]?.trim());
   if (missing.length > 0) throw new Error(`Missing required configuration: ${missing.join(', ')}`);

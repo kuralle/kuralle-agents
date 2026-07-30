@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import type { AnyTool } from '../../src/types/effectTool.js';
 import { recordSignalDelivery } from '../../src/runtime/durable/replay.js';
-import { buildCtx, reloadRunState, setupDurableHarness } from './helpers.js';
+import { createRuntime } from '../../src/runtime/Runtime.js';
+import { defineAgent } from '../../src/authoring/defineAgent.js';
+import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
+import { buildCtx, reloadRunState, setupDurableHarness, stubModel } from './helpers.js';
 
 // Two people approve the same request at once, or a webhook retries in parallel. The
 // store's append-time CAS already prevents a double decision and a double execution, but
@@ -70,5 +73,29 @@ describe('concurrent signal delivery', () => {
         decision: 'approve',
       }),
     ).rejects.toThrow();
+  });
+
+  it('rejects a signal-only Runtime turn when that scoped session has no pending interrupt', async () => {
+    const runtime = createRuntime({
+      agents: [defineAgent({
+        id: 'agent-1',
+        instructions: 'Test agent',
+        model: stubModel,
+      })],
+      defaultAgentId: 'agent-1',
+      defaultModel: stubModel,
+      sessionStore: new MemoryStore(),
+    });
+
+    await expect(runtime.run({
+      sessionId: 'different-shopper-session',
+      signalDelivery: {
+        signalId: 'sig-orphan-runtime',
+        requestId: 'req-from-another-session',
+        name: '__approval',
+        actor: { id: 'shopper-b', type: 'user' },
+        decision: 'approve',
+      },
+    })).rejects.toThrow('does not match waitingFor none');
   });
 });

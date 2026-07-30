@@ -556,6 +556,21 @@ export abstract class KuralleAgent<
           { status: 400 },
         );
       }
+      if (body.name === '__approval' || body.decision !== undefined) {
+        const pendingApproval = await this.resolvePendingApproval();
+        if (!pendingApproval) {
+          return Response.json(
+            { error: 'No approval is pending for this session.' },
+            { status: 409 },
+          );
+        }
+        if (body.requestId !== pendingApproval.requestId) {
+          return Response.json(
+            { error: 'requestId does not match the pending approval.' },
+            { status: 409 },
+          );
+        }
+      }
       // Never from the body — a client that names its own actor can approve as anyone.
       // Override `resolveSignalActor` to attribute a decision to the real human.
       const { text } = await this.resumeWithSignal({

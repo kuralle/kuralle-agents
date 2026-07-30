@@ -26,6 +26,7 @@ The [Agentic Commerce Assistant](https://github.com/kuralle/kuralle-agents/tree/
 | AI Gateway | One governed route for OpenAI chat and embeddings |
 | Queue + Workflow | Buffered catalog events and retryable multi-step indexing |
 | Hyperdrive | Cloudflare-to-PostgreSQL connection pooling |
+| Signed shopper identity | HTTP-only cookie, server-owned session namespace, and attributed approval actor |
 
 This boundary is why `@earendil-works/pi-agent-core` fits without becoming the application framework. Pi runs the model/tool turn protocol. Kuralle still intercepts tool calls, applies policy, stores the resumable run, records the human decision, and guards effect replay. The flow would become unsafe if a direct Pi tool callback bypassed that Kuralle boundary.
 
@@ -73,7 +74,7 @@ cd kuralle-agents/apps/examples/agentic-commerce-assistant
 cp .env.example .env
 ```
 
-Set the shared `DATABASE_URL`, your Cloudflare account/gateway details, the Porulle URL and scoped key, and an application-specific Samesake key. Use `pm_card_visa` only in Stripe test mode.
+Set the shared `DATABASE_URL`, your Cloudflare account/gateway details, the Porulle URL and scoped key, an application-specific Samesake key, and a random `COMMERCE_IDENTITY_SECRET` of at least 32 characters. Use `pm_card_visa` only in Stripe test mode.
 
 Generate a local Cloudflare token with:
 
@@ -127,6 +128,7 @@ Put the Hyperdrive ID into each `wrangler.jsonc`, replace example URLs and accou
 ```bash
 cd porulle/apps/agentic-commerce-origin
 bunx wrangler secret put STRIPE_SECRET_KEY
+bunx wrangler secret put STRIPE_WEBHOOK_SECRET
 bun run worker:deploy
 
 cd ../../../kuralle-agents/apps/examples/agentic-commerce-assistant
@@ -134,23 +136,39 @@ bunx wrangler secret put CLOUDFLARE_API_KEY
 bunx wrangler secret put SAMESAKE_API_KEY
 bunx wrangler secret put PORULLE_STOREFRONT_KEY
 bunx wrangler secret put ADMIN_TOKEN
+bunx wrangler secret put COMMERCE_IDENTITY_SECRET
 bun run cf:deploy
 ```
 
 The deployment provisions the Durable Object and catalog Workflow from configuration. The Queue must exist before deployment. Hyperdrive supplies the PostgreSQL connection to Workers without putting the database password in Worker variables. Approved checkout remains in the resumed agent turn: the Durable Object serializes the effect and Porulle receives the stable content key as its idempotency key.
 
+If you want Stripe to reconcile asynchronous payment events, register
+`https://your-porulle-origin/api/payments/webhook` as a Stripe test-mode webhook
+and use its endpoint signing secret for `STRIPE_WEBHOOK_SECRET`. Porulle verifies
+the signature, deduplicates event IDs, and applies
+`payment_intent.succeeded` only to the order identified by Stripe metadata.
+
 ## Exercise approval and recovery
 
-Cloudflare's browser client calls:
+Both runtimes expose:
 
 ```text
-POST /agents/commerce-agent/:sessionId/chat
-POST /agents/commerce-agent/:sessionId/resume
+POST /api/chat
+POST /api/chat/approval
 ```
 
-When checkout pauses, preserve `pendingApproval.requestId`. Resume with a new `signalId`, that exact request ID, `name: "__approval"`, and `decision: "approve"` or `"deny"`.
+Send `{ conversationId, message }` to `/api/chat` and retain the signed,
+HTTP-only cookie returned by the server. When checkout pauses, preserve
+`pendingApproval.requestId`; send it with the same `conversationId`, cookie, and
+an `approve` or `deny` decision to `/api/chat/approval`.
 
-The Durable Object journals the pending interrupt independently of the HTTP response. A reconnect or another chat request therefore surfaces the same outstanding approval instead of losing it or starting an unauthorized checkout.
+The browser-supplied conversation ID is only a label. The server namespaces the
+real session or Durable Object key under the verified shopper identity, binds
+the object to that identity, creates the signal ID, and records that identity as
+the approval actor. The Durable Object journals the pending interrupt
+independently of the HTTP response, so a reconnect surfaces the same approval
+while a different identity cannot resume it. Both runtimes reject an absent or
+mismatched pending request with HTTP 409 before entering the model loop.
 
 ## Verify the contracts
 

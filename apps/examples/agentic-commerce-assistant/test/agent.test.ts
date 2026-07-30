@@ -11,6 +11,7 @@ const env = {
   SAMESAKE_API_KEY: 'search-key',
   PORULLE_URL: 'https://commerce.example',
   PORULLE_STOREFRONT_KEY: 'store-key',
+  COMMERCE_IDENTITY_SECRET: 'identity-test-secret-that-is-at-least-thirty-two-characters',
   STRIPE_PAYMENT_METHOD_TOKEN: 'pm_card_visa',
   ENVIRONMENT: 'test',
 };

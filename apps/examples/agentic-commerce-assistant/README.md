@@ -47,7 +47,14 @@ idempotency key.
 
 The Node/Bun deployment keeps the same agent definition and integrations. It
 replaces the Durable Object session substrate with Kuralle's PostgreSQL session
-store and exposes `/api/chat` and `/api/resume` through Hono.
+store and exposes the same `/api/chat` and `/api/chat/approval` contract through
+Hono.
+
+Both runtimes mint a signed, HTTP-only shopper cookie. The browser chooses only
+a conversation label; the server namespaces the real session key under the
+verified cookie identity. On Cloudflare the Durable Object permanently binds
+itself to that identity, and approval decisions are attributed to the same
+server-authenticated actor.
 
 ### Where Pi fits
 
@@ -75,6 +82,7 @@ Core directly would lose those application-level guarantees.
 | `src/search.ts` | Samesake contract, indexing, hybrid retrieval, and constraint trace |
 | `src/porulle.ts` | Narrow, authenticated Porulle client |
 | `src/gateway.ts` | Pi, AI SDK, and embeddings through Cloudflare AI Gateway |
+| `src/identity.ts` | Signed shopper identity and server-owned session namespacing |
 | `cloudflare/agent.ts` | Durable Object composition through `@kuralle-agents/cf-agent` |
 | `cloudflare/workflows.ts` | Retryable catalog indexing workflow |
 | `cloudflare/worker.ts` | Assets, agent routing, admin ingestion, and Queue consumer |
@@ -135,6 +143,7 @@ Set these values in `.env`:
 DATABASE_URL=postgresql://localhost:5432/kuralle_agentic_commerce
 PUBLIC_URL=http://localhost:4000
 STRIPE_SECRET_KEY=your_stripe_test_secret_key
+STRIPE_WEBHOOK_SECRET=your_local_or_test_endpoint_signing_secret
 PORT=4000
 ```
 
@@ -178,6 +187,7 @@ SAMESAKE_API_KEY=choose-a-local-key-of-at-least-eight-characters
 PORULLE_URL=http://localhost:4000
 PORULLE_STOREFRONT_KEY=the_key_printed_by_the_porulle_seed
 STRIPE_PAYMENT_METHOD_TOKEN=pm_card_visa
+COMMERCE_IDENTITY_SECRET=a-random-secret-containing-at-least-32-characters
 ENVIRONMENT=development
 PORT=8787
 ```
@@ -227,7 +237,16 @@ The Node API can also be called directly:
 curl --request POST http://localhost:8787/api/chat \
   --header 'content-type: application/json' \
   --header 'x-idempotency-key: demo-turn-1' \
-  --data '{"sessionId":"demo-shopper","message":"Find a daypack under $120"}'
+  --cookie-jar /tmp/kuralle-commerce.cookies \
+  --data '{"conversationId":"demo-shopper-1","message":"Find a daypack under $120"}'
+```
+
+Keep the returned cookie when sending later turns or an approval. For local
+webhook verification, run Stripe CLI in test mode and copy the printed `whsec_…`
+value into `STRIPE_WEBHOOK_SECRET`:
+
+```bash
+stripe listen --forward-to localhost:4000/api/payments/webhook
 ```
 
 ## Deploy to Cloudflare with Neon
@@ -255,6 +274,7 @@ Upload secrets interactively; never place them in `wrangler.jsonc`:
 ```bash
 cd porulle/apps/agentic-commerce-origin
 bunx wrangler secret put STRIPE_SECRET_KEY
+bunx wrangler secret put STRIPE_WEBHOOK_SECRET
 bun run worker:deploy
 
 cd ../../../kuralle-agents/apps/examples/agentic-commerce-assistant
@@ -262,6 +282,7 @@ bunx wrangler secret put CLOUDFLARE_API_KEY
 bunx wrangler secret put SAMESAKE_API_KEY
 bunx wrangler secret put PORULLE_STOREFRONT_KEY
 bunx wrangler secret put ADMIN_TOKEN
+bunx wrangler secret put COMMERCE_IDENTITY_SECRET
 bun run cf:deploy
 ```
 
@@ -275,14 +296,25 @@ accepts authenticated non-empty batches, the Queue provides buffering and retry,
 and `CatalogSyncWorkflow` performs migration, contract application, upsert, and
 index build as named durable steps.
 
-## HTTP approval contract
+Register the Porulle endpoint
+`https://your-porulle-origin/api/payments/webhook` in Stripe test mode and store
+that endpoint's signing secret as `STRIPE_WEBHOOK_SECRET`. Porulle rejects
+unsigned events, deduplicates Stripe event IDs, and confirms the matching order
+from verified `payment_intent.succeeded` metadata.
 
-Cloudflare sessions are addressed by Durable Object name:
+## Authenticated HTTP approval contract
+
+Cloudflare and Node/Bun expose the same public endpoints:
 
 ```text
-POST /agents/commerce-agent/:sessionId/chat
-POST /agents/commerce-agent/:sessionId/resume
+POST /api/chat
+POST /api/chat/approval
 ```
+
+`POST /api/chat` accepts `{ "conversationId": "…", "message": "…" }`. The
+response sets a signed, HTTP-only identity cookie. Keep that cookie on every
+later chat and approval request; a client-provided conversation ID is never used
+as the storage or Durable Object key by itself.
 
 A paused chat response includes:
 
@@ -297,19 +329,21 @@ A paused chat response includes:
 }
 ```
 
-Resume with a fresh signal ID and the exact request ID:
+Resume with the exact request ID and original conversation ID:
 
 ```json
 {
-  "signalId": "a-new-uuid",
+  "conversationId": "the-original-conversation-id",
   "requestId": "the-pending-request-id",
-  "name": "__approval",
   "decision": "approve"
 }
 ```
 
-The Durable Object journals the outstanding interrupt, so reconnecting or
-sending another chat message cannot silently lose or bypass it.
+The server creates the signal ID and actor attribution. The Durable Object
+journals the outstanding interrupt, so reconnecting or sending another chat
+message cannot silently lose or bypass it. A different or tampered identity
+cookie maps to a different session and cannot resume the pending operation;
+absent or mismatched approvals return HTTP 409 on both runtimes.
 
 ## Verify before deployment
 
@@ -338,10 +372,12 @@ bun run --cwd apps/agentic-commerce-origin worker:check
 - Use real customer-created Stripe PaymentMethod tokens outside test mode.
 - Keep `ENVIRONMENT=production` in production; the agent rejects
   `pm_card_visa` there.
-- Authenticate shopper sessions and bind approval actors to your identity
-  provider before accepting real orders.
+- Replace the included signed anonymous identity resolver with your account
+  identity provider when orders must attach to known customers. Preserve the
+  server-owned session namespacing and approval actor binding.
 - Keep the admin catalog route private, rotate its token, and rate-limit it.
-- Validate Stripe webhooks before moving an order from pending to paid.
+- Configure and monitor the included verified Stripe webhook endpoint before
+  accepting real orders; never infer payment success from the agent response.
 - Set retention, deletion, alerting, and sampling policies for conversation,
   order, queue, workflow, and trace data.
 - Preserve Porulle as the server-side price and inventory authority. Search

@@ -17,4 +17,5 @@ export interface Env extends CommerceEnv {
   COMMERCE_EVENTS: Queue<CatalogQueueMessage>;
   CATALOG_SYNC_WORKFLOW: Workflow;
   ADMIN_TOKEN: string;
+  ALLOWED_ORIGINS?: string;
 }
