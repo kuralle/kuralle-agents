@@ -220,7 +220,10 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
       nonNegativeInteger(limit, `artifact.agent.limits.${key}`);
     }
   }
-  if (agent.handoffs !== undefined) stringArray(agent.handoffs, 'artifact.agent.handoffs');
+  if (agent.handoffs !== undefined) {
+    stringArray(agent.handoffs, 'artifact.agent.handoffs');
+    unique(agent.handoffs as string[], 'artifact.agent.handoffs');
+  }
 
   const instructionEntries = array(artifact.instructions, 'artifact.instructions');
   const instructionPaths = instructionEntries.map((entry, index) =>
@@ -375,10 +378,14 @@ export async function artifactDigest(artifact: ArtifactInputV1 | AgentArtifact):
 }
 
 export async function createArtifact(input: ArtifactInputV1): Promise<AgentArtifact> {
-  const validated = validateStructure(input, false);
+  // Normalize through canonical JSON so optional `undefined` properties from
+  // TypeScript object construction cannot survive into an allegedly portable
+  // artifact or produce target-dependent object shapes.
+  const normalized = JSON.parse(canonicalJson(input)) as ArtifactInputV1;
+  const validated = validateStructure(normalized, false);
   await validateInlineDigests(validated);
-  const digest = await artifactDigest(input);
-  const artifact = { ...structuredClone(input), digest };
+  const digest = await artifactDigest(normalized);
+  const artifact = { ...normalized, digest };
   return validateStructure(artifact, true);
 }
 
