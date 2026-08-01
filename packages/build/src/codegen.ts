@@ -1,7 +1,12 @@
-import { dirname, relative, sep } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import type { CompiledAgentProject } from './types.js';
 
-function moduleSpecifier(generatedFile: string, sourcePath: string): string {
+function moduleSpecifier(
+  generatedFile: string,
+  sourcePath: string,
+  importMode: 'relative' | 'absolute',
+): string {
+  if (importMode === 'absolute') return resolve(sourcePath).split(sep).join('/');
   let path = relative(dirname(generatedFile), sourcePath).split(sep).join('/');
   if (!path.startsWith('.')) path = `./${path}`;
   return path;
@@ -17,11 +22,15 @@ function literal(value: string): string {
  */
 export function generateCapabilityRegistrySource(
   project: CompiledAgentProject,
-  options: { generatedFile: string },
+  options: { generatedFile: string; importMode?: 'relative' | 'absolute' },
 ): string {
   const modules = [...project.modules].sort((a, b) => a.capability.localeCompare(b.capability));
   const imports = modules.map((module, index) => {
-    const specifier = literal(moduleSpecifier(options.generatedFile, module.sourcePath));
+    const specifier = literal(moduleSpecifier(
+      options.generatedFile,
+      module.sourcePath,
+      options.importMode ?? 'relative',
+    ));
     return module.exportName === 'default'
       ? `import capability${index} from ${specifier};`
       : `import { ${module.exportName} as capability${index} } from ${specifier};`;

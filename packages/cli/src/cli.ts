@@ -8,6 +8,8 @@
  *   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
  *   kuralle trace <session> [--last] [--json] [--web] [--port N]
  *   kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]
+ *   kuralle build --agent <directory> --default-model <provider/model> [--target node|cloudflare]
+ *   kuralle start [--app .kuralle/node/server.mjs]
  */
 import { resolveBuildRuntime } from './agentLoader.js';
 import { runChat } from './chat.js';
@@ -23,6 +25,7 @@ import {
   saveHostedConnection,
 } from './hostedConnection.js';
 import { runHostedChat, runHostedSend } from './hostedCommands.js';
+import { runBuildCommand, runStartCommand } from './buildCommand.js';
 
 const HELP = `kuralle — Kuralle agent CLI
 
@@ -33,6 +36,8 @@ Usage:
   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
   kuralle trace <session> [--last] [--json] [--web] [--port N]
   kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]
+  kuralle build --agent <directory> --default-model <provider/model> [--target node|cloudflare] [--host deployment.node.ts]
+  kuralle start [--app .kuralle/node/server.mjs]
   kuralle connection
   kuralle disconnect
 
@@ -100,6 +105,16 @@ async function main(): Promise<void> {
   }
   if (sub === 'disconnect') {
     process.stdout.write((await clearHostedConnection()) ? 'Disconnected hosted server.\n' : 'No hosted server was connected.\n');
+    return;
+  }
+  if (sub === 'build') {
+    const result = await runBuildCommand(rawSubArgv);
+    process.stdout.write(`Built ${result.artifactDigest} at ${result.outDir}\n`);
+    if (result.serverPath) process.stdout.write(`Node server: ${result.serverPath}\n`);
+    return;
+  }
+  if (sub === 'start') {
+    await runStartCommand(rawSubArgv);
     return;
   }
 
