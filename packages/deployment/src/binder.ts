@@ -25,14 +25,12 @@ import { NamedRegistry, VersionedRegistry } from './registry.js';
 import type {
   AgentArtifact,
   AgentVersion,
-  BuiltinToolReference,
   CapabilityReference,
-  ClientToolReference,
   ContentEntry,
-  HttpToolReference,
-  McpToolReference,
   RuntimeRevision,
   ThreadPin,
+  ToolReference,
+  TrustedToolReference,
 } from './types.js';
 
 type Model = NonNullable<AgentConfig['model']>;
@@ -54,12 +52,12 @@ export interface ToolBindingContext {
   secret(alias: string): Promise<string>;
 }
 
-export interface ToolReferenceResolvers {
-  http?: (reference: HttpToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-  mcp?: (reference: McpToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-  builtin?: (reference: BuiltinToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-  client?: (reference: ClientToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-}
+export type ToolReferenceResolvers = {
+  [K in Exclude<ToolReference, TrustedToolReference>['kind']]?: (
+    reference: Extract<ToolReference, { kind: K }>,
+    context: ToolBindingContext,
+  ) => AnyTool | Promise<AnyTool>;
+};
 
 export interface RuntimeBindings {
   models: NamedRegistry<Model>;
@@ -299,12 +297,12 @@ async function bindArtifact(
     } else {
       const resolver = bindings.toolReferences?.[reference.kind];
       if (!resolver) bindingError(`no ${reference.kind} tool resolver is configured for ${reference.id}`);
-      // The discriminated lookup cannot preserve the correlated function argument
-      // across the index access, so dispatch each concrete resolver explicitly.
-      if (reference.kind === 'http') tool = await bindings.toolReferences!.http!(reference, context);
-      else if (reference.kind === 'mcp') tool = await bindings.toolReferences!.mcp!(reference, context);
-      else if (reference.kind === 'builtin') tool = await bindings.toolReferences!.builtin!(reference, context);
-      else tool = await bindings.toolReferences!.client!(reference, context);
+      // The mapped type correlates `kind` with its resolver's parameter type, but
+      // the indexed lookup above erases that correlation back to the union.
+      tool = await (resolver as (r: typeof reference, c: ToolBindingContext) => AnyTool | Promise<AnyTool>)(
+        reference,
+        context,
+      );
     }
     if (tool.name !== reference.id) {
       bindingError(`bound tool ${tool.name} does not match artifact id ${reference.id}`);

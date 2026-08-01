@@ -17,6 +17,10 @@ import {
 import type {
   AgentArtifact,
   AgentVersion,
+  BuiltinToolReference,
+  ClientToolReference,
+  HttpToolReference,
+  McpToolReference,
   RuntimeBindings,
   RuntimeRevision,
   SkillArtifact,
@@ -324,5 +328,118 @@ describe('capability resolution', () => {
       runtime: runtime([{ id: 'policies.validate', version: '1.0.0' }]),
       bindings: bindings(),
     })).rejects.toThrow('no validation registry is configured');
+  });
+});
+
+describe('tool reference resolution', () => {
+  it('dispatches each non-trusted tool kind to its own resolver with a correctly-typed reference', async () => {
+    const seen: {
+      http?: HttpToolReference;
+      mcp?: McpToolReference;
+      builtin?: BuiltinToolReference;
+      client?: ClientToolReference;
+    } = {};
+    const artifact = await createArtifact(artifactInput({
+      tools: [
+        { kind: 'http', id: 'weather_lookup', method: 'GET', url: 'https://api.example.com/weather' },
+        { kind: 'mcp', id: 'search_docs', server: 'docs-server', tool: 'search' },
+        { kind: 'builtin', id: 'calculator', name: 'calc' },
+        { kind: 'client', id: 'open_camera', name: 'camera' },
+      ],
+    }));
+    const runtimeBindings = bindings();
+    runtimeBindings.toolReferences = {
+      http: async (reference) => {
+        seen.http = reference;
+        return defineTool({ name: reference.id, description: 'http tool', execute: async () => reference.url });
+      },
+      mcp: async (reference) => {
+        seen.mcp = reference;
+        return defineTool({
+          name: reference.id,
+          description: 'mcp tool',
+          execute: async () => `${reference.server}:${reference.tool}`,
+        });
+      },
+      builtin: async (reference) => {
+        seen.builtin = reference;
+        return defineTool({ name: reference.id, description: 'builtin tool', execute: async () => reference.name });
+      },
+      client: async (reference) => {
+        seen.client = reference;
+        return defineTool({ name: reference.id, description: 'client tool', execute: async () => reference.name });
+      },
+    };
+
+    const bound = await bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: runtimeBindings,
+    });
+
+    expect(seen.http?.url).toBe('https://api.example.com/weather');
+    expect(seen.mcp?.server).toBe('docs-server');
+    expect(seen.mcp?.tool).toBe('search');
+    expect(seen.builtin?.name).toBe('calc');
+    expect(seen.client?.name).toBe('camera');
+    expect(Object.keys(bound.agent.tools ?? {}).sort()).toEqual([
+      'calculator',
+      'open_camera',
+      'search_docs',
+      'weather_lookup',
+    ]);
+  });
+
+  it('fails closed with the exact message when no http tool resolver is configured', async () => {
+    const artifact = await createArtifact(artifactInput({
+      tools: [{ kind: 'http', id: 'weather_lookup', method: 'GET', url: 'https://api.example.com/weather' }],
+    }));
+
+    await expect(bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    })).rejects.toThrow('no http tool resolver is configured for weather_lookup');
+  });
+
+  it('fails closed with the exact message when no mcp tool resolver is configured', async () => {
+    const artifact = await createArtifact(artifactInput({
+      tools: [{ kind: 'mcp', id: 'search_docs', server: 'docs-server', tool: 'search' }],
+    }));
+
+    await expect(bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    })).rejects.toThrow('no mcp tool resolver is configured for search_docs');
+  });
+
+  it('fails closed with the exact message when no builtin tool resolver is configured', async () => {
+    const artifact = await createArtifact(artifactInput({
+      tools: [{ kind: 'builtin', id: 'calculator', name: 'calc' }],
+    }));
+
+    await expect(bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    })).rejects.toThrow('no builtin tool resolver is configured for calculator');
+  });
+
+  it('fails closed with the exact message when no client tool resolver is configured', async () => {
+    const artifact = await createArtifact(artifactInput({
+      tools: [{ kind: 'client', id: 'open_camera', name: 'camera' }],
+    }));
+
+    await expect(bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    })).rejects.toThrow('no client tool resolver is configured for open_camera');
   });
 });
