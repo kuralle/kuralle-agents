@@ -78,6 +78,42 @@ async function configuredStore(): Promise<{
 }
 
 describe('immutable versions and thread pins', () => {
+  it('keeps builder drafts mutable through compare-and-swap but production versions append-only', async () => {
+    const store = new InMemoryDeploymentStore();
+    await store.createEntity(entity());
+    const definition = await artifact();
+    const { digest: _digest, ...draftDefinition } = definition;
+    const first = await store.saveDraft({
+      id: 'draft-1',
+      tenantId: 'tenant-a',
+      agentEntityId: 'support',
+      revision: 0,
+      definition: draftDefinition,
+      updatedBy: 'owner-1',
+      updatedAt: CREATED_AT,
+    }, 0);
+    const second = await store.saveDraft({
+      ...first,
+      definition: {
+        ...first.definition,
+        agent: { ...definition.agent, name: 'Edited draft' },
+      },
+    }, 1);
+
+    expect(first.revision).toBe(1);
+    expect(second.revision).toBe(2);
+    await expect(store.saveDraft(first, 1)).rejects.toMatchObject({ code: 'CONFLICT' });
+    const published = await store.publishDraft({
+      tenantId: 'tenant-a',
+      draftId: 'draft-1',
+      versionId: 'draft-version-1',
+      version: 1,
+      createdBy: 'owner-1',
+      createdAt: CREATED_AT,
+    });
+    expect(published.artifact.agent.name).toBe('Edited draft');
+  });
+
   it('does not permit an existing version id or version number to be overwritten', async () => {
     const { store, v1 } = await configuredStore();
 

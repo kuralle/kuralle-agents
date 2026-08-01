@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { InMemoryDeploymentStore } from '@kuralle-agents/deployment';
 import {
   AgentBuildError,
   compileAgentDirectory,
@@ -56,6 +57,42 @@ describe('folder agent compiler', () => {
     expect(generated).toContain('export const runtimeCapabilities =');
     expect(generated).toContain('bindings.tools.register');
     expect(generated).toContain('bindings.toolPolicies.register');
+  });
+
+  it('publishes the same canonical artifact through a database builder draft', async () => {
+    const compiled = await compileAgentDirectory(join(FIXTURES, 'support'), OPTIONS);
+    const { digest: _digest, ...definition } = compiled.rootArtifact;
+    const store = new InMemoryDeploymentStore();
+    await store.createEntity({
+      id: 'support',
+      tenantId: 'tenant-a',
+      slug: 'support',
+      status: 'active',
+      ownerId: 'owner-1',
+      visibility: 'private',
+      createdAt: '2026-08-01T00:00:00.000Z',
+    });
+    const draft = await store.saveDraft({
+      id: 'draft-1',
+      tenantId: 'tenant-a',
+      agentEntityId: 'support',
+      revision: 0,
+      definition,
+      updatedBy: 'owner-1',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    }, 0);
+
+    const published = await store.publishDraft({
+      tenantId: 'tenant-a',
+      draftId: draft.id,
+      versionId: 'version-1',
+      version: 1,
+      createdBy: 'owner-1',
+      createdAt: '2026-08-01T00:00:01.000Z',
+    });
+
+    expect(published.artifact).toEqual(compiled.rootArtifact);
+    expect(published.artifact.digest).toBe(compiled.rootArtifact.digest);
   });
 
   it('accumulates config, export, target, and unknown-slot diagnostics', async () => {

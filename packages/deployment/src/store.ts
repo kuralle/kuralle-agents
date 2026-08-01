@@ -1,13 +1,16 @@
 import { canonicalJson, sha256 } from './canonical.js';
-import { validateArtifact } from './artifact.js';
+import { createArtifact, validateArtifact } from './artifact.js';
 import { DeploymentError } from './errors.js';
 import { assertArtifactCompatible } from './preflight.js';
 import type {
   AgentEntity,
+  AgentDraft,
   AgentRelease,
   AgentVersion,
+  ArtifactInputV1,
   ReleaseAllocation,
   RuntimeRevision,
+  PublishDraftRequest,
   ThreadAssignmentRequest,
   ThreadPin,
 } from './types.js';
@@ -15,6 +18,9 @@ import type {
 export interface DeploymentStore {
   createEntity(entity: AgentEntity): Promise<void>;
   getEntity(tenantId: string, entityId: string): Promise<AgentEntity | null>;
+  saveDraft(draft: AgentDraft, expectedRevision: number): Promise<AgentDraft>;
+  getDraft(tenantId: string, draftId: string): Promise<AgentDraft | null>;
+  publishDraft(request: PublishDraftRequest): Promise<AgentVersion>;
   createVersion(version: AgentVersion): Promise<void>;
   getVersion(tenantId: string, versionId: string): Promise<AgentVersion | null>;
   registerRuntime(revision: RuntimeRevision): Promise<void>;
@@ -70,6 +76,7 @@ async function selectAllocation(
  */
 export class InMemoryDeploymentStore implements DeploymentStore {
   private readonly entities = new Map<string, AgentEntity>();
+  private readonly drafts = new Map<string, AgentDraft>();
   private readonly versions = new Map<string, AgentVersion>();
   private readonly runtimes = new Map<string, RuntimeRevision>();
   private readonly releases = new Map<string, AgentRelease>();
@@ -87,6 +94,48 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   async getEntity(tenantId: string, entityId: string): Promise<AgentEntity | null> {
     const entity = this.entities.get(key(tenantId, entityId));
     return entity ? clone(entity) : null;
+  }
+
+  async saveDraft(draft: AgentDraft, expectedRevision: number): Promise<AgentDraft> {
+    const entity = this.entities.get(key(draft.tenantId, draft.agentEntityId));
+    if (!entity) notFound('agent entity does not exist');
+    const draftKey = key(draft.tenantId, draft.id);
+    const current = this.drafts.get(draftKey);
+    const actualRevision = current?.revision ?? 0;
+    if (actualRevision !== expectedRevision) {
+      conflict(`draft revision changed: expected ${expectedRevision}, received ${actualRevision}`);
+    }
+    if (current && current.agentEntityId !== draft.agentEntityId) {
+      conflict('draft cannot move between agent entities');
+    }
+    // Canonical JSON is also the JSON-safety gate: closures, symbols, bigint,
+    // and non-finite numbers cannot be smuggled into builder state.
+    const definition = JSON.parse(canonicalJson(draft.definition)) as AgentDraft['definition'];
+    const saved = clone({ ...draft, definition, revision: actualRevision + 1 });
+    this.drafts.set(draftKey, saved);
+    return clone(saved);
+  }
+
+  async getDraft(tenantId: string, draftId: string): Promise<AgentDraft | null> {
+    const draft = this.drafts.get(key(tenantId, draftId));
+    return draft ? clone(draft) : null;
+  }
+
+  async publishDraft(request: PublishDraftRequest): Promise<AgentVersion> {
+    const draft = this.drafts.get(key(request.tenantId, request.draftId));
+    if (!draft) notFound('agent draft does not exist');
+    const artifact = await createArtifact(draft.definition as ArtifactInputV1);
+    const version: AgentVersion = {
+      id: request.versionId,
+      tenantId: request.tenantId,
+      agentEntityId: draft.agentEntityId,
+      version: request.version,
+      artifact,
+      createdBy: request.createdBy,
+      createdAt: request.createdAt,
+    };
+    await this.createVersion(version);
+    return clone(version);
   }
 
   async createVersion(version: AgentVersion): Promise<void> {

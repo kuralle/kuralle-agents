@@ -170,6 +170,26 @@ export interface AgentVersion {
   createdAt: string;
 }
 
+/** Mutable builder state. It is never resolved by production execution. */
+export interface AgentDraft {
+  id: string;
+  tenantId: string;
+  agentEntityId: string;
+  revision: number;
+  definition: Partial<ArtifactInputV1>;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface PublishDraftRequest {
+  tenantId: string;
+  draftId: string;
+  versionId: string;
+  version: number;
+  createdBy: string;
+  createdAt: string;
+}
+
 export interface RuntimeCapability {
   id: string;
   version: string;

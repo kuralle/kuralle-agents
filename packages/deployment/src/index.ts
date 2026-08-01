@@ -27,6 +27,7 @@ export { InMemoryDeploymentStore, type DeploymentStore } from './store.js';
 export type {
   AgentArtifact,
   AgentArtifactV1,
+  AgentDraft,
   AgentEntity,
   AgentNode,
   AgentRelease,
@@ -45,6 +46,7 @@ export type {
   InlineContent,
   McpToolReference,
   PolicyArtifact,
+  PublishDraftRequest,
   ReleaseAllocation,
   RuntimeCapability,
   RuntimeRevision,
