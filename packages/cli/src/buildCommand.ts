@@ -201,7 +201,9 @@ export async function runBuildCommand(args: string[]): Promise<BuildCommandResul
         durable_objects: {
           bindings: [{ name: 'KURALLE_THREADS', class_name: 'KuralleThread' }],
         },
-        migrations: [{ tag: 'v1', new_sqlite_classes: ['KuralleThread'] }],
+        exports: {
+          KuralleThread: { type: 'durable-object', storage: 'sqlite' },
+        },
         d1_databases: [{
           binding: 'KURALLE_CONTROL', database_name: d1DatabaseName, database_id: d1DatabaseId!,
         }],

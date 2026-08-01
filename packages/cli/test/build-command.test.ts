@@ -64,13 +64,7 @@ describe('kuralle build', () => {
 
   it('bundles a self-contained Node server and production Dockerfile', async () => {
     const out = await mkdtemp(join(tmpdir(), 'kuralle-cli-host-build-'));
-    const host = join(out, 'deployment.node.ts');
-    await writeFile(host, [
-      'export default async function createHost() {',
-      "  throw new Error('host is not executed while bundling');",
-      '}',
-      '',
-    ].join('\n'), 'utf8');
+    const host = join(import.meta.dir, 'fixtures/node-host.ts');
 
     const result = await runBuildCommand([
       '--agent', join(import.meta.dir, '../../build/test/fixtures/support'),
@@ -87,7 +81,7 @@ describe('kuralle build', () => {
     expect(dockerfile).toContain('HEALTHCHECK');
   });
 
-  it('bundles a Cloudflare Worker with DO, D1, R2, migration, and observability config', async () => {
+  it('bundles a Cloudflare Worker with a declarative SQLite DO, D1, R2, and observability config', async () => {
     const out = await mkdtemp(join(tmpdir(), 'kuralle-cli-cf-build-'));
     const host = join(import.meta.dir, 'fixtures/cloudflare-host.ts');
 
@@ -107,6 +101,8 @@ describe('kuralle build', () => {
     expect((await readFile(result.workerPath!, 'utf8')).length).toBeGreaterThan(1_000);
     const wrangler = JSON.parse(await readFile(join(out, 'cloudflare/wrangler.jsonc'), 'utf8'));
     expect(wrangler.durable_objects.bindings[0].class_name).toBe('KuralleThread');
+    expect(wrangler.exports.KuralleThread).toEqual({ type: 'durable-object', storage: 'sqlite' });
+    expect(wrangler.migrations).toBeUndefined();
     expect(wrangler.d1_databases[0].database_name).toBe('support-control');
     expect(wrangler.r2_buckets[0].bucket_name).toBe('support-blobs');
     expect(wrangler.observability.enabled).toBe(true);

@@ -14,6 +14,8 @@ import { SqlThreadPinStore } from './SqlThreadPinStore.js';
  */
 export abstract class KuralleThreadAgent<Env = unknown, State = unknown>
   extends KuralleAgent<Env, State> {
+  private boundRevision?: { key: string; value: BoundAgentRevision };
+
   /** Authenticate the private control-plane initialization request. Fail closed. */
   protected abstract authorizeThreadInitialization(request: Request): boolean | Promise<boolean>;
 
@@ -26,7 +28,18 @@ export abstract class KuralleThreadAgent<Env = unknown, State = unknown>
   protected override async resolveRuntimeDefinition(): Promise<ResolvedRuntimeDefinition> {
     const pin = new SqlThreadPinStore(this.getSqlExecutor()).get();
     if (!pin) throw new Error('thread is not initialized');
-    const bound = await this.bindPinnedAgent(pin);
+    const key = [
+      pin.tenantId,
+      pin.threadId,
+      pin.agentVersionId,
+      pin.artifactDigest,
+      pin.runtimeRevisionId,
+      pin.configGeneration,
+      pin.secretGeneration,
+    ].join(':');
+    const bound = this.boundRevision?.key === key
+      ? this.boundRevision.value
+      : await this.bindPinnedAgent(pin);
     if (
       bound.deployment.tenantId !== pin.tenantId ||
       bound.deployment.agentVersionId !== pin.agentVersionId ||
@@ -35,6 +48,7 @@ export abstract class KuralleThreadAgent<Env = unknown, State = unknown>
     ) {
       throw new Error('bound agent does not match the durable thread pin');
     }
+    this.boundRevision = { key, value: bound };
     return {
       agents: [bound.agent],
       defaultAgentId: bound.agent.id,

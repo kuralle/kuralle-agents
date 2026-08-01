@@ -18,6 +18,16 @@ export {
 } from './binder.js';
 export { canonicalJson, sha256 } from './canonical.js';
 export { embeddedArtifactContentResolver } from './content-resolvers.js';
+export {
+  DEPLOYMENT_CONTROL_PLANE_PATHS,
+  HttpDeploymentControlPlaneClient,
+  resolvePinnedAgentVersion,
+  validateThreadPin,
+  type DeploymentControlPlaneClient,
+  type DeploymentControlPlaneFetch,
+  type HttpDeploymentControlPlaneClientOptions,
+  type PinnedAgentVersion,
+} from './control-plane.js';
 export { validateThreadAssignmentRequest } from './assignment.js';
 export { DeploymentError, type DeploymentErrorCode } from './errors.js';
 export {

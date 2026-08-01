@@ -37,6 +37,11 @@ export {
   type ThreadExecutionCoordinator,
   type ThreadExecutionLease,
 } from './deploymentRouter.js';
+export {
+  createDeploymentControlPlaneRouter,
+  type DeploymentControlPlaneAuthorization,
+  type DeploymentControlPlaneRouterOptions,
+} from './deploymentControlPlaneRouter.js';
 
 import {
   shouldEmit,

@@ -7,6 +7,7 @@ import {
 } from '@kuralle-agents/core';
 import {
   InMemoryDeploymentStore,
+  HttpDeploymentControlPlaneClient,
   NamedRegistry,
   VersionedRegistry,
   createArtifact,
@@ -14,6 +15,7 @@ import {
   type RuntimeBindings,
   type RuntimeRevision,
 } from '@kuralle-agents/deployment';
+import { createDeploymentControlPlaneRouter } from '../src/deploymentControlPlaneRouter.js';
 import {
   createDeploymentRouter,
   type ThreadExecutionCoordinator,
@@ -108,7 +110,7 @@ async function setup() {
       return tenantId ? { tenantId, userId: 'user-1' } : null;
     },
   });
-  return { app, traceStore, releases, getReleases: () => releases };
+  return { app, deploymentStore, traceStore, releases, getReleases: () => releases };
 }
 
 describe('createDeploymentRouter', () => {
@@ -170,5 +172,62 @@ describe('createDeploymentRouter', () => {
       body: JSON.stringify({ message: 'Steal it' }),
     });
     expect(denied.status).toBe(403);
+  });
+});
+
+describe('createDeploymentControlPlaneRouter', () => {
+  it('lets an authenticated Cloudflare runtime assign and fetch only its exact pinned version', async () => {
+    const { deploymentStore } = await setup();
+    const controlPlane = createDeploymentControlPlaneRouter({
+      deploymentStore,
+      authorize: (context, request) => (
+        context.req.header('authorization') === 'Bearer cf-runtime'
+        && request.tenantId === 'tenant-a'
+      ),
+    });
+    const client = new HttpDeploymentControlPlaneClient({
+      baseUrl: 'https://control.example.test',
+      authorization: 'Bearer cf-runtime',
+      fetch: (input, init) => controlPlane.fetch(new Request(
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
+        init,
+      )),
+    });
+
+    const pin = await client.assignThread({
+      tenantId: 'tenant-a',
+      threadId: 'thread-cf',
+      agentEntityId: 'support',
+      environment: 'production',
+    });
+    const version = await client.getPinnedVersion(pin);
+
+    expect(version.id).toBe(pin.agentVersionId);
+    expect(version.artifact.digest).toBe(pin.artifactDigest);
+    await expect(client.getPinnedVersion({ ...pin, artifactDigest: '0'.repeat(64) }))
+      .rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('fails closed when workload authorization is missing or scoped to another tenant', async () => {
+    const { deploymentStore } = await setup();
+    const controlPlane = createDeploymentControlPlaneRouter({
+      deploymentStore,
+      authorize: context => context.req.header('authorization') === 'Bearer allowed',
+    });
+    const client = new HttpDeploymentControlPlaneClient({
+      baseUrl: 'https://control.example.test',
+      authorization: 'Bearer denied',
+      fetch: (input, init) => controlPlane.fetch(new Request(
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
+        init,
+      )),
+    });
+
+    await expect(client.assignThread({
+      tenantId: 'tenant-a',
+      threadId: 'thread-denied',
+      agentEntityId: 'support',
+      environment: 'production',
+    })).rejects.toMatchObject({ code: 'ACCESS_DENIED' });
   });
 });
