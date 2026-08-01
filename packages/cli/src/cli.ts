@@ -43,11 +43,11 @@ Usage:
   kuralle disconnect
 
 Options:
-  --agent <path.ts>   Load a Runtime, defineAgent export, or buildRuntime factory
-  --model <id>        OpenAI model id when the agent export has no model (bare-agent shape)
+  --agent <path.ts>   Load a Runtime, defineAgent export, or buildRuntime factory (local commands only; ignored over a hosted connection)
+  --model <id>        OpenAI model id when the agent export has no model (bare-agent shape) (local commands only; ignored over a hosted connection)
   --auto "a|b|c"      Headless scripted turns (chat only)
-  --trace             Live trace side panel — the built-in AgentTrace of each turn (chat only)
-  --store <file>      Persist the session + traces to JSON files so chat survives across launches (chat only)
+  --trace             Live trace side panel — the built-in AgentTrace of each turn (--local chat only; ignored over a hosted connection, with a warning)
+  --store <file>      Persist the session + traces to JSON files so chat survives across launches (--local chat only; ignored over a hosted connection)
   --session <id>      Session id to resume with --store (default: "default")
   --summary <text>    Resolution note appended on resume (seen by the agent post-resume)
   --server <url>      Use this hosted server for the command (or KURALLE_SERVER)
