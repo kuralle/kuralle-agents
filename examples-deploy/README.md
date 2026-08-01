@@ -26,3 +26,6 @@ npx wrangler delete
 Both were verified live (memory: store → recall across two requests; skills:
 `toolCalls: ["load_skill","lookup_order"]` with a policy-grounded answer) and the
 Workers were deleted after. Redeploy from here to reproduce.
+
+The memory smoke defaults to `gpt-4.1-mini`; set `OPENAI_MODEL` as a non-secret Worker variable to
+exercise another compatible OpenAI model.

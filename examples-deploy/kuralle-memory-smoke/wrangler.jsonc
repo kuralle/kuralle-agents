@@ -3,6 +3,7 @@
   "main": "src/server.ts",
   "compatibility_date": "2026-04-01",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": { "OPENAI_MODEL": "gpt-4.1-mini" },
   "durable_objects": { "bindings": [{ "name": "MemoryAgent", "class_name": "MemoryAgent" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MemoryAgent"] }]
 }

@@ -5,6 +5,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 
 interface Env {
   OPENAI_API_KEY: string;
+  OPENAI_MODEL?: string;
   MemoryAgent: DurableObjectNamespace;
 }
 
@@ -18,7 +19,7 @@ export class MemoryAgent extends KuralleAgent<Env> {
     return [
       defineAgent({
         id: 'mem',
-        model: openai('gpt-4o-mini'),
+        model: openai(this.env.OPENAI_MODEL ?? 'gpt-4.1-mini'),
         // NEUTRAL — the framework's working-memory directive drives storage.
         instructions: 'You are a friendly assistant. Be concise.',
         memory: { workingMemory: { autoLoad: [{ scope: 'user', key: 'USER' }] } }, // store auto-wired to DO SQLite
