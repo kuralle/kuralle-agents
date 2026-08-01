@@ -129,6 +129,22 @@
         "wrangler": "^4.115.0",
       },
     },
+    "apps/examples/file-agent-chat": {
+      "name": "@kuralle-examples/file-agent-chat",
+      "version": "1.0.0",
+      "dependencies": {
+        "@ai-sdk/openai": "^3.0.89",
+        "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/deployment": "workspace:*",
+        "@kuralle-agents/hono-server": "workspace:*",
+        "ai": "6.0.237",
+        "zod": "^4.0.0",
+      },
+      "devDependencies": {
+        "@types/node": "^20.11.0",
+        "typescript": "^5.3.0",
+      },
+    },
     "apps/examples/healthcare": {
       "name": "@kuralle-examples/healthcare",
       "version": "1.0.0",
@@ -1386,6 +1402,8 @@
     "@kuralle-examples/content-agent": ["@kuralle-examples/content-agent@workspace:apps/examples/content-agent"],
 
     "@kuralle-examples/customer-support-agent": ["@kuralle-examples/customer-support-agent@workspace:apps/examples/customer-support-agent"],
+
+    "@kuralle-examples/file-agent-chat": ["@kuralle-examples/file-agent-chat@workspace:apps/examples/file-agent-chat"],
 
     "@kuralle-examples/healthcare": ["@kuralle-examples/healthcare@workspace:apps/examples/healthcare"],
 

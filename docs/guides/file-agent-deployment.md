@@ -5,7 +5,7 @@ Runtime Revision in a Release. The first request for a thread atomically records
 Changing a draft or activating another release affects only threads that do not have a pin.
 
 For a runnable Node host and a verified `kuralle chat` command, see
-[`examples-deploy/kuralle-file-agent-chat`](../../examples-deploy/kuralle-file-agent-chat/README.md).
+[`apps/examples/file-agent-chat`](../../apps/examples/file-agent-chat/README.md).
 
 ## Author the agent
 
