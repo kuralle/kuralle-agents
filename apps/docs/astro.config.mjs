@@ -145,6 +145,7 @@ const sidebar = [
       { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Engagement & Messaging', link: '/guides/engagement' },
       { label: 'Deployment', link: '/guides/deployment' },
+      { label: 'Agent Definitions in Your Database', link: '/guides/agent-definitions-database' },
       { label: 'Observability', link: '/guides/observability' },
       { label: 'CLI & Devtools', link: '/guides/cli' },
     ],

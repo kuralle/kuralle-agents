@@ -82,10 +82,12 @@ tenant and thread, authorize the private initialization request again inside the
 `registerGeneratedCapabilities`. Use `durableObjectArtifactWorkspaceProvider` for DO SQLite/R2 and
 either the embedded resolver or `r2ArtifactContentResolver` for revision blobs.
 
-The generated Wrangler config contains the SQL-backed DO migration, D1 binding
-`KURALLE_CONTROL`, optional R2 binding `KURALLE_BLOBS`, workerd compatibility flags, and Workers
-observability. Run `wrangler deploy --dry-run` in CI. Never put provider keys in the artifact or
-Wrangler variables; use encrypted secrets and resolve only aliases declared by the artifact.
+The generated Wrangler config declares the SQL-backed DO through Cloudflare's `exports` field, a D1
+binding `KURALLE_CONTROL`, optional R2 binding `KURALLE_BLOBS`, workerd compatibility flags, and
+Workers observability. Existing Workers that already use legacy Durable Object migrations must keep
+their migration history; do not replace it during an upgrade. Run `wrangler deploy --dry-run` in CI.
+Never put provider keys in the artifact or Wrangler variables; use encrypted secrets and resolve only
+aliases declared by the artifact.
 
 ## Publish, roll out, and roll back
 

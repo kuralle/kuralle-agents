@@ -14,3 +14,4 @@ src/content/docs/api/
 # OS
 .DS_Store
 *.pem
+.vercel

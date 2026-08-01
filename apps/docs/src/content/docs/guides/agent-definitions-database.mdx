@@ -1,0 +1,220 @@
+---
+title: Agent Definitions in Your Database
+description: Own agent-definition schema and migrations in Postgres, Prisma, or Drizzle, and run the agents on Cloudflare.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Kuralle owns the deployment semantics; your application owns its database lifecycle. Constructing a
+`PostgresDeploymentStore` does not create tables. Generate or inspect the canonical SQL, put it in a
+reviewed application migration, then deploy that migration with the tool your application already
+uses.
+
+This follows the same boundary used by Better Auth: its built-in adapter can migrate explicitly,
+while Prisma and Drizzle integrations generate schema and leave migration application to the ORM's
+migration tool. Kuralle currently provides canonical SQL and a storage port rather than claiming
+ORM-native adapters that it cannot contract-test and maintain.
+
+## Pick one ownership model
+
+| Application | Recommended integration |
+|---|---|
+| Existing Postgres with `pg` or Neon's Postgres connection | Apply the exported SQL in your migration system; use `PostgresDeploymentStore` at runtime. |
+| Existing Drizzle application | Add the exported SQL as a Drizzle custom migration; continue using the first-party store through a small `pg` pool, or implement `DeploymentStore` over your Drizzle schema. |
+| Existing Prisma application | Add the SQL to a Prisma migration and keep Prisma as migration owner; use a small `pg` pool for the first-party store, or implement `DeploymentStore` over Prisma transactions. |
+| Separate control-plane database | Run `store.migrate()` in an explicit bootstrap job. `autoMigrate: true` is acceptable only when that database is dedicated or ephemeral. |
+
+Do not copy only the field list into ad-hoc tables and omit the behavior. Correct adapters must keep
+draft compare-and-swap revisions, immutable version numbers and artifact digests, allocation weights,
+tenant scoping, active-release replacement, and atomic create-or-read thread pins.
+
+## Generate the canonical Postgres migration
+
+```ts
+import { writeFile } from 'node:fs/promises';
+import { postgresDeploymentMigrationSql } from '@kuralle-agents/postgres-store';
+
+await writeFile(
+  'migrations/20260801_kuralle_deployment.sql',
+  postgresDeploymentMigrationSql({ tablePrefix: 'kuralle_deploy' }),
+);
+```
+
+Review and commit the generated file, then apply it with Prisma Migrate, Drizzle Kit, your platform's
+migration runner, or `psql`. The prefix changes table names without changing semantics. Runtime
+startup stays read/write-only:
+
+```ts
+import { Pool } from 'pg';
+import { PostgresDeploymentStore } from '@kuralle-agents/postgres-store';
+
+const deploymentStore = new PostgresDeploymentStore({
+  client: new Pool({ connectionString: process.env.DATABASE_URL }),
+});
+```
+
+<Aside type="caution">
+  `PrismaClient` and a Drizzle database are not `pg` clients and cannot be passed directly to
+  `PostgresDeploymentStore`. Either give Kuralle a small `pg` pool against the same database or
+  implement the `DeploymentStore` interface using your ORM.
+</Aside>
+
+## Bring your own schema or ORM adapter
+
+Implement the eleven methods on `DeploymentStore` when existing model names, columns, tenancy rules,
+or transaction boundaries cannot match the canonical tables. Persist these logical records:
+
+- `AgentEntity`: mutable catalogue identity and active-version pointer.
+- `AgentDraft`: mutable JSON definition with optimistic `revision` compare-and-swap.
+- `AgentVersion`: immutable canonical artifact and digest.
+- `RuntimeRevision`: immutable runtime/capability identity.
+- `AgentRelease` plus allocations: environment/channel rollout state.
+- `ThreadPin`: the immutable agent/runtime assignment selected on the first turn.
+
+The store is a semantic port, not a generic CRUD repository. In particular, `assignThread` must be
+one transaction (or equivalent atomic primitive): return the existing pin or create exactly one pin
+from the active release. A cross-tenant lookup must fail closed rather than return `null` if the same
+thread identifier belongs to another tenant.
+
+## Cloudflare Agent runtime with Hono and Neon
+
+Keep Neon/Postgres behind the Hono control plane and run conversation execution in Cloudflare Agent
+Durable Objects:
+
+```text
+browser → authenticated Worker → one Agent DO per tenant/thread
+                                  ↓ first bind and exact-version reads
+                         authenticated internal Hono route
+                                  ↓
+                      application-owned Neon/Postgres schema
+```
+
+Mount the internal control-plane router in the Hono backend. Its authorization callback must validate
+the workload credential and tenant scope; the request body is not an identity source.
+
+```ts
+import { Hono } from 'hono';
+import { createDeploymentControlPlaneRouter } from '@kuralle-agents/hono-server';
+
+const app = new Hono();
+app.route('/', createDeploymentControlPlaneRouter({
+  deploymentStore,
+  authorize: async (context, request) => {
+    const workload = await verifyWorkloadToken(context.req.header('authorization'));
+    return workload?.tenants.includes(request.tenantId) === true;
+  },
+}));
+```
+
+The Cloudflare Agent uses the HTTP client for assignment and exact pinned-version reads, then binds
+the artifact locally. Store the credential with `wrangler secret`; never include it in an artifact.
+
+```ts
+import { KuralleThreadAgent } from '@kuralle-agents/cf-agent';
+import {
+  HttpDeploymentControlPlaneClient,
+  bindAgentVersion,
+} from '@kuralle-agents/deployment';
+
+class ThreadAgent extends KuralleThreadAgent<Env> {
+  private controlPlane() {
+    return new HttpDeploymentControlPlaneClient({
+      baseUrl: this.env.KURALLE_CONTROL_PLANE_URL,
+      authorization: () => `Bearer ${this.env.KURALLE_CONTROL_PLANE_TOKEN}`,
+    });
+  }
+
+  protected authorizeThreadInitialization(request: Request) {
+    return verifyPrivateInitialization(request, this.env);
+  }
+
+  protected assignThread(request) {
+    return this.controlPlane().assignThread(request);
+  }
+
+  protected async bindPinnedAgent(pin) {
+    const version = await this.controlPlane().getPinnedVersion(pin);
+    return bindAgentVersion({ version, pin, runtime: runtimeRevision, bindings });
+  }
+}
+```
+
+The Durable Object owns the sticky thread pin and execution state. Hono/Neon owns definitions,
+releases, tenancy, audit, and billing. New releases affect new threads; an existing thread continues
+using its exact version and digest.
+
+Use direct Neon access from the Worker only when Cloudflare is also allowed to own database policy
+and credentials. In that topology, use Hyperdrive with a least-privilege role. The HTTP control-plane
+boundary is the default because it preserves one authorization and ORM boundary.
+
+## Single-deployment SaaS and embedded agents
+
+You do not need one Worker deployment per customer or per agent. The recommended hosted SaaS model
+is one Worker deployment, one exported generic `KuralleThreadAgent` class, and any number of named
+Durable Object instances. Agent definitions remain immutable artifacts in the control plane.
+
+```text
+one Worker version
+  └─ one generic KuralleThreadAgent class
+       ├─ DO instance h(tenant A, thread 1) → pinned artifact 7
+       ├─ DO instance h(tenant A, thread 2) → pinned artifact 9
+       └─ DO instance h(tenant B, thread 1) → pinned artifact 31
+```
+
+The first authorized request initializes a DO, resolves one release from Hono/Neon, verifies and
+binds its exact artifact, and stores the pin in DO SQLite. The bound runtime is cached for the life of
+that warm DO isolate. After eviction or a new Worker deployment, the DO reloads the same exact pin
+from SQLite and fetches that immutable version again. It never follows `latest` during a conversation.
+
+### Use three different credentials
+
+| Credential | Where it lives | Purpose |
+|---|---|---|
+| Public agent key/slug | Embed markup or share URL | Identifies a publishable agent. It grants no control-plane access. |
+| Short-lived launch token | Browser/mobile client | Authorizes one agent, tenant, environment, and new/existing thread for a few minutes. |
+| Workload credential | Worker secret only | Lets the Agent DO call the internal Hono control plane for the tenant in the verified launch token. |
+
+Do not put a long-lived API key or the Hono workload credential in an embed. A public agent key is a
+selector, not a secret. For a private agent, the customer's backend exchanges that selector and its
+authenticated user session for a short-lived launch token. For an intentionally public share link,
+your session endpoint can issue an anonymous launch token after origin policy, quota/rate limiting,
+abuse checks, and optional Turnstile.
+
+The launch token should carry at least `iss`, `aud`, `exp`, `jti`, `tenantId`, `agentEntityId`,
+`environment`, and `threadId`. It may contain an end-user subject and allowed origins. It must not
+contain an artifact, provider secret, arbitrary tool credentials, or a client-selected version id.
+
+### Session launch flow
+
+1. An embed sends its public agent key to `POST /v1/agent-sessions` on your SaaS API.
+2. Hono resolves the key to a tenant/agent, authenticates or applies public-share policy, creates a
+   thread id, and returns a short-lived signed launch token plus the generic Worker URL.
+3. The Worker verifies the token in `onBeforeConnect` and `onBeforeRequest`, checks `Origin` where
+   applicable, and derives an opaque DO instance name from the trusted tenant/thread claims.
+4. The Worker privately initializes that DO with the trusted tenant, agent, and environment claims.
+5. The DO uses its workload credential to resolve an exact release/artifact from Hono, persists its
+   pin, and starts the conversation.
+
+This is the same broad client-security boundary used by hosted agent widgets that exchange a
+server-side API key for a short-lived signed conversation URL: clients receive a scoped launch
+credential, not the platform's secret. ElevenLabs documents signed conversation URLs for this exact
+reason. Kuralle keeps the equivalent exchange in your Hono control plane so tenancy, billing, and
+release policy remain application-owned.
+
+<Aside type="caution">
+  Do not route directly from `/agents/:agent/:instance` using unverified client strings. Verify the
+  launch token first, derive the instance name from its claims, and pass only trusted identity as
+  Agent props or private initialization data.
+</Aside>
+
+## Further reading
+
+- [Better Auth database and migration model](https://better-auth.com/docs/concepts/database)
+- [Better Auth CLI generation versus migration](https://better-auth.com/docs/concepts/cli)
+- [Cloudflare Agents: add to an existing project](https://developers.cloudflare.com/agents/getting-started/add-to-existing-project/)
+- [Cloudflare Agents routing](https://developers.cloudflare.com/agents/runtime/communication/routing/)
+- [Cloudflare Agents configuration and deployment](https://developers.cloudflare.com/agents/runtime/operations/configuration/)
+- [Cloudflare's Flue/Agents platform architecture](https://blog.cloudflare.com/agents-platform-flue-sdk/)
+- [Cloudflare Hyperdrive with Neon](https://developers.cloudflare.com/workers/databases/third-party-integrations/neon/)
+- [Cloudflare Agent routing authentication hooks](https://developers.cloudflare.com/agents/runtime/communication/routing/#routing-with-authentication)
+- [ElevenLabs signed conversation URLs](https://elevenlabs.io/docs/eleven-agents/customization/authentication)

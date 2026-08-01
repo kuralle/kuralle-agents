@@ -8,6 +8,9 @@ import honoNodeExample from '../../../examples/deployment/hono-node.ts?raw';
 
 Kuralle agents run anywhere that runs Node.js, Bun, or Cloudflare Workers. The runtime has no external process dependencies — serve it with whatever HTTP framework you prefer.
 
+If agent definitions live in an existing Postgres, Prisma, or Drizzle application—or the runtime is
+on Cloudflare while Hono and Neon remain your backend—see [Agent Definitions in Your Database](/guides/agent-definitions-database/).
+
 ## Hono (Node.js or Bun)
 
 `@kuralle-agents/hono-server` mounts a full set of endpoints onto a Hono app with one call.
@@ -110,9 +113,15 @@ Declare the Durable Object in `wrangler.jsonc`:
   "durable_objects": {
     "bindings": [{ "name": "SupportAgent", "class_name": "SupportAgent" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SupportAgent"] }]
+  "exports": {
+    "SupportAgent": { "type": "durable-object", "storage": "sqlite" }
+  }
 }
 ```
+
+Cloudflare recommends declarative `exports` for new Agent classes. If an existing Worker already has
+a `migrations` history, preserve it and add sequential migrations instead of rewriting deployed
+history.
 
 The public native endpoint is `/agents/support-agent/{instance}`. One instance name resolves to one Durable Object and therefore one single-writer session boundary. Authenticate and authorize that instance name at your Worker boundary; do not accept an arbitrary tenant id merely because it matches the URL shape.
 
