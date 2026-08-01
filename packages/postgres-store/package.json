@@ -18,7 +18,8 @@
     }
   },
   "dependencies": {
-    "@kuralle-agents/core": "workspace:*"
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/deployment": "workspace:*"
   },
   "peerDependencies": {
     "@kuralle-agents/core": "0.x",
@@ -29,6 +30,7 @@
     "@kuralle-agents/rag": "workspace:*",
     "@types/node": "^20.11.0",
     "@types/pg": "^8.11.0",
+    "pg-mem": "^3.0.5",
     "pg": "^8.11.0",
     "typescript": "^5.3.0"
   },

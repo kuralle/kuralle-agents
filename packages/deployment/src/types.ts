@@ -184,6 +184,7 @@ export interface AgentDraft {
 export interface PublishDraftRequest {
   tenantId: string;
   draftId: string;
+  draftRevision: number;
   versionId: string;
   version: number;
   createdBy: string;

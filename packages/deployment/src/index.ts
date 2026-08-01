@@ -23,7 +23,11 @@ export {
   type CompatibilityReport,
 } from './preflight.js';
 export { NamedRegistry, VersionedRegistry, type VersionedValue } from './registry.js';
-export { InMemoryDeploymentStore, type DeploymentStore } from './store.js';
+export {
+  InMemoryDeploymentStore,
+  selectReleaseAllocation,
+  type DeploymentStore,
+} from './store.js';
 export type {
   AgentArtifact,
   AgentArtifactV1,

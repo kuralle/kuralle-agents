@@ -85,6 +85,7 @@ describe('folder agent compiler', () => {
     const published = await store.publishDraft({
       tenantId: 'tenant-a',
       draftId: draft.id,
+      draftRevision: draft.revision,
       versionId: 'version-1',
       version: 1,
       createdBy: 'owner-1',

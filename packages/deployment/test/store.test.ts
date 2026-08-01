@@ -106,6 +106,7 @@ describe('immutable versions and thread pins', () => {
     const published = await store.publishDraft({
       tenantId: 'tenant-a',
       draftId: 'draft-1',
+      draftRevision: 2,
       versionId: 'draft-version-1',
       version: 1,
       createdBy: 'owner-1',

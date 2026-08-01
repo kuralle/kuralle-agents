@@ -56,7 +56,7 @@ function validateIdentity(value: string, name: string): void {
   }
 }
 
-async function selectAllocation(
+export async function selectReleaseAllocation(
   allocations: readonly ReleaseAllocation[],
   assignmentKey: readonly string[],
 ): Promise<ReleaseAllocation> {
@@ -124,6 +124,9 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   async publishDraft(request: PublishDraftRequest): Promise<AgentVersion> {
     const draft = this.drafts.get(key(request.tenantId, request.draftId));
     if (!draft) notFound('agent draft does not exist');
+    if (draft.revision !== request.draftRevision) {
+      conflict(`draft revision changed: expected ${request.draftRevision}, received ${draft.revision}`);
+    }
     const artifact = await createArtifact(draft.definition as ArtifactInputV1);
     const version: AgentVersion = {
       id: request.versionId,
@@ -248,7 +251,7 @@ export class InMemoryDeploymentStore implements DeploymentStore {
     if (!activeReleaseId) notFound('no active release exists for this agent and environment');
     const release = this.releases.get(key(request.tenantId, activeReleaseId));
     if (!release) notFound('active release does not exist');
-    const allocation = await selectAllocation(release.allocations, [
+    const allocation = await selectReleaseAllocation(release.allocations, [
       request.tenantId,
       request.environment,
       request.agentEntityId,

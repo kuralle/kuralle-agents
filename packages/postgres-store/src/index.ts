@@ -8,3 +8,5 @@ export { PostgresPersistentMemoryStore } from './PostgresPersistentMemoryStore.j
 export type { PostgresPersistentMemoryStoreOptions } from './PostgresPersistentMemoryStore.js';
 export { PgVectorStore } from './PgVectorStore.js';
 export type { PgVectorStoreOptions } from './PgVectorStore.js';
+export { PostgresDeploymentStore } from './PostgresDeploymentStore.js';
+export type { PostgresDeploymentStoreOptions } from './PostgresDeploymentStore.js';
