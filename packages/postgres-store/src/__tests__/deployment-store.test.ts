@@ -7,6 +7,7 @@ import {
   type AgentRelease,
 } from '@kuralle-agents/deployment';
 import { PostgresDeploymentStore } from '../PostgresDeploymentStore.js';
+import { PostgresThreadExecutionCoordinator } from '../PostgresThreadExecutionCoordinator.js';
 
 const AT = '2026-08-01T00:00:00.000Z';
 
@@ -136,6 +137,34 @@ describe('PostgresDeploymentStore', () => {
     await expect(afterRestart.getThreadPin('tenant-b', 'thread-a')).rejects.toMatchObject({
       code: 'ACCESS_DENIED',
     });
+    await pool.end();
+  });
+
+  it('uses renewable distributed leases instead of a process-local thread mutex', async () => {
+    const memory = newDb();
+    const pg = memory.adapters.createPg();
+    const pool = new pg.Pool();
+    let now = Date.parse(AT);
+    const coordinator = new PostgresThreadExecutionCoordinator({ client: pool, now: () => now });
+    const first = await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: 'thread-a', ownerId: 'node-1', ttlMs: 5_000,
+    });
+    expect(first).not.toBeNull();
+    expect(await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: 'thread-a', ownerId: 'node-2', ttlMs: 5_000,
+    })).toBeNull();
+
+    now += 5_001;
+    const takeover = await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: 'thread-a', ownerId: 'node-2', ttlMs: 5_000,
+    });
+    expect(takeover).not.toBeNull();
+    await expect(first!.renew()).rejects.toMatchObject({ code: 'CONFLICT' });
+    await takeover!.renew();
+    await takeover!.release();
+    expect(await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: 'thread-a', ownerId: 'node-3', ttlMs: 5_000,
+    })).not.toBeNull();
     await pool.end();
   });
 });

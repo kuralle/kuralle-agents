@@ -15,6 +15,7 @@ export {
   type ToolReferenceResolvers,
 } from './binder.js';
 export { canonicalJson, sha256 } from './canonical.js';
+export { validateThreadAssignmentRequest } from './assignment.js';
 export { DeploymentError, type DeploymentErrorCode } from './errors.js';
 export {
   assertArtifactCompatible,

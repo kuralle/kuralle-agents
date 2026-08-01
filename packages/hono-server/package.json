@@ -20,7 +20,8 @@
   "dependencies": {
     "ai": "^6.0.0",
     "hono": "^4.0.0",
-    "@kuralle-agents/core": "workspace:*"
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/deployment": "workspace:*"
   },
   "peerDependencies": {
     "@kuralle-agents/core": "0.x"

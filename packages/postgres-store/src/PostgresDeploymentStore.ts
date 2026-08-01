@@ -5,6 +5,7 @@ import {
   createArtifact,
   selectReleaseAllocation,
   validateArtifact,
+  validateThreadAssignmentRequest,
   type AgentDraft,
   type AgentEntity,
   type AgentRelease,
@@ -385,6 +386,7 @@ export class PostgresDeploymentStore implements DeploymentStore {
 
   async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
     await this.ready;
+    validateThreadAssignmentRequest(request);
     return this.transaction(async client => {
       const existing = await client.query(
         `SELECT * FROM ${this.table.pins} WHERE thread_id=$1 FOR UPDATE`,

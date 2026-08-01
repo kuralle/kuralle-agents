@@ -647,6 +647,7 @@
       "version": "0.19.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/deployment": "workspace:*",
         "ai": "^6.0.0",
         "hono": "^4.0.0",
       },

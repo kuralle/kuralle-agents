@@ -30,6 +30,13 @@ export {
 } from './streamFilter.js';
 
 export { createKuralleSseChatRouter, type KuralleSseChatRouterOptions } from './chatRouter.js';
+export {
+  createDeploymentRouter,
+  type DeploymentPrincipal,
+  type DeploymentRouterOptions,
+  type ThreadExecutionCoordinator,
+  type ThreadExecutionLease,
+} from './deploymentRouter.js';
 
 import {
   shouldEmit,

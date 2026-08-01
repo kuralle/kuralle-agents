@@ -1,4 +1,7 @@
-import { DeploymentError } from '@kuralle-agents/deployment';
+import {
+  DeploymentError,
+  validateThreadAssignmentRequest,
+} from '@kuralle-agents/deployment';
 import type {
   ThreadAssignmentRequest,
   ThreadPin,
@@ -52,20 +55,6 @@ function verifyRequest(pin: ThreadPin, request: ThreadAssignmentRequest): void {
   }
 }
 
-function validateRequest(request: ThreadAssignmentRequest): void {
-  for (const field of ['tenantId', 'threadId', 'agentEntityId', 'environment'] as const) {
-    if (typeof request[field] !== 'string' || request[field].length === 0) {
-      conflict(`invalid thread assignment ${field}`);
-    }
-  }
-  for (const field of ['configGeneration', 'secretGeneration'] as const) {
-    const value = request[field];
-    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
-      conflict(`invalid thread assignment ${field}`);
-    }
-  }
-}
-
 /** Private, one-row revision pin stored inside a thread Durable Object. */
 export class SqlThreadPinStore {
   private initialized = false;
@@ -91,7 +80,7 @@ export class SqlThreadPinStore {
     request: ThreadAssignmentRequest,
     resolve: (request: ThreadAssignmentRequest) => Promise<ThreadPin>,
   ): Promise<ThreadPin> {
-    validateRequest(request);
+    validateThreadAssignmentRequest(request);
     const existing = this.get();
     if (existing) {
       verifyRequest(existing, request);

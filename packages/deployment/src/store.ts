@@ -2,6 +2,7 @@ import { canonicalJson, sha256 } from './canonical.js';
 import { createArtifact, validateArtifact } from './artifact.js';
 import { DeploymentError } from './errors.js';
 import { assertArtifactCompatible } from './preflight.js';
+import { validateThreadAssignmentRequest } from './assignment.js';
 import type {
   AgentEntity,
   AgentDraft,
@@ -231,8 +232,7 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   }
 
   async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
-    validateIdentity(request.tenantId, 'tenant id');
-    validateIdentity(request.threadId, 'thread id');
+    validateThreadAssignmentRequest(request);
     const existingBeforeResolution = this.pins.get(request.threadId);
     if (existingBeforeResolution) {
       if (existingBeforeResolution.tenantId !== request.tenantId) accessDenied();

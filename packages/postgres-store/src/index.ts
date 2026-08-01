@@ -10,3 +10,8 @@ export { PgVectorStore } from './PgVectorStore.js';
 export type { PgVectorStoreOptions } from './PgVectorStore.js';
 export { PostgresDeploymentStore } from './PostgresDeploymentStore.js';
 export type { PostgresDeploymentStoreOptions } from './PostgresDeploymentStore.js';
+export { PostgresThreadExecutionCoordinator } from './PostgresThreadExecutionCoordinator.js';
+export type {
+  PostgresThreadExecutionCoordinatorOptions,
+  PostgresThreadExecutionLease,
+} from './PostgresThreadExecutionCoordinator.js';
