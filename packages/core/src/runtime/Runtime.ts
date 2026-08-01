@@ -279,6 +279,10 @@ export class Runtime {
         defaultAgentId: this.config.defaultAgentId,
         sessionStore: this.sessionStore,
       });
+      // `appendConversationAudit` writes into the live session during the turn.
+      // Stores with a dedicated audit log need only the entries created by this
+      // turn, not the complete inline history loaded with the session.
+      const auditBaseline = opened.session.metadata?.audit?.length ?? 0;
       recorder?.setInitiatingAgent(opened.agent.id);
 
       const policies = resolveAgentPolicies(opened.agent);
@@ -691,6 +695,7 @@ export class Runtime {
           runState: runCtx.runState,
           runStore: opened.runStore,
           sessionStore: this.sessionStore,
+          auditBaseline,
           hooks: this.hooks,
           ctx: runCtx,
           terminalOutcome,
@@ -788,11 +793,22 @@ export class Runtime {
     sessionId: string,
     opts?: AuditListOptions,
   ): Promise<ConversationAuditEntry[]> {
-    if (typeof this.sessionStore.listAuditEntries === 'function') {
-      return this.sessionStore.listAuditEntries(sessionId, opts);
-    }
     const session = await this.sessionStore.get(sessionId);
-    return filterAuditEntries(session?.metadata?.audit ?? [], opts);
+    const inline = session?.metadata?.audit ?? [];
+    if (typeof this.sessionStore.listAuditEntries !== 'function') {
+      return filterAuditEntries(inline, opts);
+    }
+
+    // The inline copy is the crash-safe fallback: a session save and a
+    // dedicated audit append cannot be one transaction on every backend. Merge
+    // both views so a failed/partial append never makes an event disappear,
+    // while exact duplicates remain one logical audit record.
+    const durable = await this.sessionStore.listAuditEntries(sessionId, opts);
+    const byValue = new Map<string, ConversationAuditEntry>();
+    for (const entry of [...durable, ...filterAuditEntries(inline, opts)]) {
+      byValue.set(JSON.stringify(entry), entry);
+    }
+    return [...byValue.values()].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   }
 
   async markOutcome(

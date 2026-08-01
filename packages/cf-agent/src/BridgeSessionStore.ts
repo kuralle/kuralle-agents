@@ -64,6 +64,7 @@ export class BridgeSessionStore implements SessionStore {
         timestamp: new Date(h.timestamp),
       })),
       state: orchState?.state,
+      metadata: reviveMetadata(orchState?.metadata),
     };
     // Restore the durable run journal so durable tools / suspend-resume can find
     // the run (SessionRunStore reads it off the Session object).
@@ -89,6 +90,7 @@ export class BridgeSessionStore implements SessionStore {
           : String(h.timestamp),
       })),
       state: session.state,
+      metadata: session.metadata,
       durableRuns: (session as SessionWithRuns)[DURABLE_RUNS_KEY],
       version: session.version ?? 0,
     };
@@ -110,6 +112,19 @@ export class BridgeSessionStore implements SessionStore {
   async cleanup(maxAgeMs: number): Promise<number> {
     return this.orchestration.cleanup(maxAgeMs);
   }
+}
+
+function reviveMetadata(metadata: OrchestrationState['metadata']): Session['metadata'] {
+  if (!metadata) return undefined;
+  return {
+    ...metadata,
+    createdAt: new Date(metadata.createdAt),
+    lastActiveAt: new Date(metadata.lastActiveAt),
+    handoffHistory: (metadata.handoffHistory ?? []).map(record => ({
+      ...record,
+      timestamp: new Date(record.timestamp),
+    })),
+  };
 }
 
 /**

@@ -12,6 +12,8 @@ import { runHookSafely } from './runHookSafely.js';
 
 export interface CloseRunOptions {
   session: Session;
+  /** Number of inline audit entries present when this turn opened. */
+  auditBaseline?: number;
   runState: RunState;
   runStore: RunStore;
   sessionStore: SessionStore;
@@ -83,4 +85,13 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
     }
     syncPendingUserInput(ctx.session, latest);
   });
+
+  if (sessionStore.appendAuditEntry) {
+    const createdThisTurn = session.metadata?.audit?.slice(options.auditBaseline ?? 0) ?? [];
+    // Keep append order deterministic. This also makes a failure observable at
+    // the turn boundary instead of silently claiming an audit trail exists.
+    for (const entry of createdThisTurn) {
+      await sessionStore.appendAuditEntry(session.id, entry);
+    }
+  }
 }

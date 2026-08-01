@@ -11,6 +11,7 @@ import type { ChannelDriver } from '../../src/types/channel.js';
 import type { StandardSchemaV1 } from '../../src/types/standard-schema.js';
 import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
 import type { SignalDelivery } from '../../src/runtime/durable/types.js';
+import type { AuditListOptions, ConversationAuditEntry } from '../../src/audit/types.js';
 import { projectCollectData, schemaSatisfied } from '../../src/flow/extraction.js';
 import {
   makeRunState,
@@ -28,6 +29,26 @@ const actionDriver: ChannelDriver = {
     return { type: 'message', input: '' };
   },
 };
+
+class DurableAuditMemoryStore extends MemoryStore {
+  readonly durableAudit: ConversationAuditEntry[] = [];
+
+  async appendAuditEntry(_sessionId: string, entry: ConversationAuditEntry): Promise<void> {
+    this.durableAudit.push(structuredClone(entry));
+  }
+
+  async listAuditEntries(
+    sessionId: string,
+    opts: AuditListOptions = {},
+  ): Promise<ConversationAuditEntry[]> {
+    const types = opts.types?.length ? new Set(opts.types) : undefined;
+    return this.durableAudit.filter((entry) =>
+      entry.sessionId === sessionId &&
+      (!types || types.has(entry.type)) &&
+      (!opts.from || Date.parse(entry.at) >= opts.from.getTime()) &&
+      (!opts.to || Date.parse(entry.at) <= opts.to.getTime()));
+  }
+}
 
 async function collect(handle: TurnHandle): Promise<StreamPart[]> {
   const parts: StreamPart[] = [];
@@ -95,7 +116,7 @@ describe('delegated flow audit adversarial repros', () => {
   });
 
   it('rejects a forged truthy approval payload without executing the protected tool', async () => {
-    const store = new MemoryStore();
+    const store = new DurableAuditMemoryStore();
     let executions = 0;
     const destructive = defineTool({
       name: 'destructive',
@@ -245,6 +266,14 @@ describe('delegated flow audit adversarial repros', () => {
       },
       outcome: 'succeeded',
     });
+    expect(store.durableAudit.map((entry) => entry.type)).toEqual([
+      'interrupt-requested',
+      'interrupt-decided',
+      'interrupt-executed',
+    ]);
+    // replay merges the inline crash-safe copy with the dedicated log without
+    // exposing exact duplicates.
+    expect(publicAudit.filter((entry) => entry.type.startsWith('interrupt-'))).toHaveLength(3);
   });
 
   it('records a pure-dispatcher routing model call in LLM spans and usage', async () => {

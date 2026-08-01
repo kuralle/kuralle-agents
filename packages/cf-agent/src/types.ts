@@ -1,4 +1,10 @@
-import type { HarnessConfig, Session, SessionDurableRuns } from '@kuralle-agents/core';
+import type {
+  ConversationAuditEntry,
+  HarnessConfig,
+  Session,
+  SessionDurableRuns,
+  SessionMetadata,
+} from '@kuralle-agents/core';
 
 export type DurableSqlValue = string | number | boolean | null;
 
@@ -44,6 +50,8 @@ export interface OrchestrationState {
     timestamp: string;
   }>;
   state?: Record<string, unknown>;
+  /** Session metadata that CF's chat message store does not own. */
+  metadata?: Omit<SessionMetadata, 'audit'> & { audit?: ConversationAuditEntry[] };
   /**
    * Kuralle durable run journal (effect log + run state) for this session.
    * `SessionRunStore` keeps the run on the Session object, so the bridge must
