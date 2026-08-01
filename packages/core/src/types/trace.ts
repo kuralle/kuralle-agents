@@ -1,5 +1,19 @@
 export type SpanKind = 'turn' | 'flow' | 'node' | 'tool' | 'handoff' | 'llm';
 
+/** Immutable deployment identity pinned to a conversation before its first turn. */
+export interface DeploymentTraceContext {
+  tenantId: string;
+  agentEntityId: string;
+  agentVersionId: string;
+  artifactDigest: string;
+  releaseId: string;
+  runtimeRevisionId: string;
+  environment: string;
+  branch?: string;
+  configGeneration: number;
+  secretGeneration: number;
+}
+
 export interface AgentSpan {
   traceId: string;
   spanId: string;
@@ -52,6 +66,17 @@ export interface AgentSpan {
     skillContentHash?: string;
     /** Skill snapshot hashes observed across all agents in this turn, including handoffs. */
     skillContentHashes?: Record<string, string>;
+    /** Immutable publication/runtime identity. Copied to every span in the turn. */
+    tenantId?: string;
+    agentEntityId?: string;
+    agentVersionId?: string;
+    artifactDigest?: string;
+    releaseId?: string;
+    runtimeRevisionId?: string;
+    environment?: string;
+    branch?: string;
+    configGeneration?: number;
+    secretGeneration?: number;
   };
 }
 

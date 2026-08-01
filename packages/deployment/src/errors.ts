@@ -4,7 +4,10 @@ export type DeploymentErrorCode =
   | 'CONFLICT'
   | 'NOT_FOUND'
   | 'ACCESS_DENIED'
-  | 'RELEASE_INVALID';
+  | 'RELEASE_INVALID'
+  | 'RUNTIME_INCOMPATIBLE'
+  | 'BINDING_FAILED'
+  | 'CONTENT_INVALID';
 
 export class DeploymentError extends Error {
   constructor(

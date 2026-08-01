@@ -6,6 +6,7 @@ import type {
   CapabilityReference,
   ContentEntry,
   PolicyArtifact,
+  SkillArtifact,
   ToolReference,
 } from './types.js';
 
@@ -119,7 +120,9 @@ function toolReference(value: unknown, path: string): ToolReference {
   const kind = string(tool.kind, `${path}.kind`);
   if (kind === 'trusted') {
     exactKeys(tool, ['kind', 'id', 'capability', 'versionRange'], [], path);
-    capabilityReference(tool, path);
+    string(tool.id, `${path}.id`, { id: true });
+    string(tool.capability, `${path}.capability`, { id: true });
+    string(tool.versionRange, `${path}.versionRange`);
   } else if (kind === 'http') {
     exactKeys(tool, ['kind', 'id', 'method', 'url'], ['authSecretRef'], path);
     string(tool.id, `${path}.id`, { id: true });
@@ -206,6 +209,12 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
   optionalString(agent.controlModel, 'artifact.agent.controlModel');
   if (agent.limits !== undefined) {
     const limits = record(agent.limits, 'artifact.agent.limits');
+    exactKeys(
+      limits,
+      [],
+      ['maxTurns', 'maxSteps', 'toolMaxSteps', 'maxOscillations', 'maxToolConcurrency'],
+      'artifact.agent.limits',
+    );
     for (const [key, limit] of Object.entries(limits)) {
       string(key, 'artifact.agent.limits key', { id: true });
       nonNegativeInteger(limit, `artifact.agent.limits.${key}`);
@@ -214,8 +223,10 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
   if (agent.handoffs !== undefined) stringArray(agent.handoffs, 'artifact.agent.handoffs');
 
   const instructionEntries = array(artifact.instructions, 'artifact.instructions');
-    instructionEntries.forEach((entry, index) => contentEntry(entry, `artifact.instructions[${index}]`, 'instructions'));
+  const instructionPaths = instructionEntries.map((entry, index) =>
+    contentEntry(entry, `artifact.instructions[${index}]`, 'instructions').path);
   if (instructionEntries.length === 0) fail('must contain at least one entry', 'artifact.instructions');
+  unique(instructionPaths, 'artifact.instructions');
 
   const skillEntries = array(artifact.skills, 'artifact.skills');
   const skillNames: string[] = [];
@@ -245,8 +256,9 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
   const nodeIds = nodes.map((value, index) => {
     const path = `artifact.agents[${index}]`;
     const node = record(value, path);
-    exactKeys(node, ['id', 'artifactId'], [], path);
+    exactKeys(node, ['id', 'artifactId', 'digest'], [], path);
     string(node.artifactId, `${path}.artifactId`, { id: true });
+    string(node.digest, `${path}.digest`, { digest: true });
     return string(node.id, `${path}.id`, { id: true });
   });
   unique(nodeIds, 'artifact.agents');
@@ -283,6 +295,17 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
     return string(secret.alias, `${path}.alias`, { id: true });
   });
   unique(aliases, 'artifact.secretRefs');
+  const declaredSecrets = new Set(aliases);
+  toolEntries.forEach((value, index) => {
+    const tool = value as ToolReference;
+    if (
+      (tool.kind === 'http' || tool.kind === 'mcp') &&
+      tool.authSecretRef &&
+      !declaredSecrets.has(tool.authSecretRef)
+    ) {
+      fail('must reference a declared secret alias', `artifact.tools[${index}].authSecretRef`);
+    }
+  });
 
   const mappings = array(artifact.sourceMap, 'artifact.sourceMap');
   mappings.forEach((value, index) => {
@@ -319,6 +342,32 @@ async function validateInlineDigests(artifact: AgentArtifact): Promise<void> {
       );
     }
   }
+  for (const skill of artifact.skills) {
+    const expected = await skillPackageDigest(skill);
+    if (skill.digest !== expected) {
+      throw new DeploymentError(
+        'ARTIFACT_DIGEST_MISMATCH',
+        `skill package digest for ${skill.name} does not match its packaged files`,
+        `skills.${skill.name}`,
+      );
+    }
+  }
+}
+
+/** Digest logical package content without coupling identity to inline/blob storage placement. */
+export async function skillPackageDigest(skill: Omit<SkillArtifact, 'digest'> | SkillArtifact): Promise<string> {
+  return sha256(canonicalJson({
+    name: skill.name,
+    description: skill.description,
+    entrypoint: skill.entrypoint,
+    files: skill.files.map(entry => ({
+      path: entry.path,
+      digest: entry.digest,
+      bytes: entry.bytes,
+      mediaType: entry.mediaType,
+      role: entry.role,
+    })),
+  }));
 }
 
 export async function artifactDigest(artifact: ArtifactInputV1 | AgentArtifact): Promise<string> {

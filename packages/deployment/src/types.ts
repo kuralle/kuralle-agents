@@ -107,6 +107,7 @@ export interface SourceMapEntry {
 export interface AgentNode {
   id: string;
   artifactId: string;
+  digest: string;
 }
 
 export interface AgentArtifactV1 {
@@ -121,7 +122,7 @@ export interface AgentArtifactV1 {
     description?: string;
     model: string;
     controlModel?: string;
-    limits?: Record<string, number>;
+    limits?: SerializableLimits;
     handoffs?: string[];
   };
   instructions: ContentEntry[];
@@ -135,6 +136,14 @@ export interface AgentArtifactV1 {
   requiredCapabilities: CapabilityRequirement[];
   secretRefs: SecretReference[];
   sourceMap: SourceMapEntry[];
+}
+
+export interface SerializableLimits {
+  maxTurns?: number;
+  maxSteps?: number;
+  toolMaxSteps?: number;
+  maxOscillations?: number;
+  maxToolConcurrency?: number;
 }
 
 export type AgentArtifact = AgentArtifactV1;

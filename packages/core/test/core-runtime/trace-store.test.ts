@@ -7,6 +7,30 @@ import { TraceRecorder } from '../../src/runtime/TraceRecorder.js';
 runTraceStoreContract(() => new MemoryTraceStore());
 
 describe('TraceRecorder sinks', () => {
+  test('copies immutable deployment identity to every span', () => {
+    const deployment = {
+      tenantId: 'tenant-a',
+      agentEntityId: 'support',
+      agentVersionId: 'version-2',
+      artifactDigest: 'a'.repeat(64),
+      releaseId: 'release-2',
+      runtimeRevisionId: 'runtime-7',
+      environment: 'production',
+      branch: 'main',
+      configGeneration: 4,
+      secretGeneration: 9,
+    };
+    const recorder = new TraceRecorder({ sessionId: 'thread-1', deployment });
+    recorder.record({ channel: 'internal', type: 'flow-enter', payload: { flow: 'checkout' } });
+    recorder.record({ channel: 'internal', type: 'flow-end', payload: { flow: 'checkout', reason: 'completed' } });
+    recorder.record({ channel: 'client', type: 'done', payload: { sessionId: 'thread-1' } });
+
+    const trace = recorder.finish({ text: '', toolResults: [] });
+    for (const span of trace.spans) {
+      expect(span.attributes).toMatchObject(deployment);
+    }
+  });
+
   test('emits each completed span exactly once with a per-run trace id', () => {
     const spans: AgentSpan[] = [];
     const recorder = new TraceRecorder({ sessionId: 'session-a', onSpan: (span) => spans.push(span) });

@@ -14,6 +14,7 @@ import type { StreamPart, TurnHandle } from '../types/stream.js';
 import type { SignalDelivery } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import type { ConversationOutcome, ConversationOutcomeMarkedBy } from '../outcomes/types.js';
+import type { DeploymentTraceContext } from '../types/trace.js';
 import { MemoryStore } from '../session/stores/MemoryStore.js';
 import { TextDriver } from './channels/TextDriver.js';
 import { createRunContext } from './ctx.js';
@@ -189,6 +190,8 @@ export interface RunOptions {
   /** Stable key for this inbound user message; duplicate webhook retries are ignored (H2). */
   idempotencyKey?: string;
   abortSignal?: AbortSignal;
+  /** Immutable release identity already authorized and pinned by the deployment host. */
+  deployment?: DeploymentTraceContext;
 }
 
 export class Runtime {
@@ -231,6 +234,7 @@ export class Runtime {
           sessionId,
           agentId: opts.agentId ?? this.config.defaultAgentId,
           input: opts.input,
+          deployment: opts.deployment,
           onSpan: (span) => this.writeSpan(span),
         })
       : undefined;

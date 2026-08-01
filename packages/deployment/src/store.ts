@@ -1,6 +1,7 @@
 import { canonicalJson, sha256 } from './canonical.js';
 import { validateArtifact } from './artifact.js';
 import { DeploymentError } from './errors.js';
+import { assertArtifactCompatible } from './preflight.js';
 import type {
   AgentEntity,
   AgentRelease,
@@ -153,16 +154,12 @@ export class InMemoryDeploymentStore implements DeploymentStore {
       }
       const runtime = this.runtimes.get(allocation.runtimeRevisionId);
       if (!runtime) throw new DeploymentError('RELEASE_INVALID', 'release references an unknown runtime revision');
-      if (!runtime.artifactSchemaVersions.includes(version.artifact.schemaVersion)) {
-        throw new DeploymentError('RELEASE_INVALID', 'runtime does not support the artifact schema version');
-      }
-      const available = new Set(runtime.capabilities.map(capability => capability.id));
-      const missing = version.artifact.requiredCapabilities
-        .filter(requirement => !requirement.optional && !available.has(requirement.capability));
-      if (missing.length > 0) {
+      try {
+        assertArtifactCompatible(version.artifact, runtime);
+      } catch (error) {
         throw new DeploymentError(
           'RELEASE_INVALID',
-          `runtime is missing required capabilities: ${missing.map(item => item.capability).join(', ')}`,
+          error instanceof Error ? error.message : 'runtime is incompatible with the artifact',
         );
       }
     }

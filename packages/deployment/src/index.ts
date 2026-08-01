@@ -1,10 +1,28 @@
 export {
   artifactDigest,
   createArtifact,
+  skillPackageDigest,
   validateArtifact,
 } from './artifact.js';
+export {
+  bindAgentVersion,
+  type ArtifactContentResolver,
+  type ArtifactResolver,
+  type BoundAgentRevision,
+  type RuntimeBindings,
+  type SecretResolver,
+  type ToolBindingContext,
+  type ToolReferenceResolvers,
+} from './binder.js';
 export { canonicalJson, sha256 } from './canonical.js';
 export { DeploymentError, type DeploymentErrorCode } from './errors.js';
+export {
+  assertArtifactCompatible,
+  preflightArtifact,
+  type CompatibilityDiagnostic,
+  type CompatibilityReport,
+} from './preflight.js';
+export { NamedRegistry, VersionedRegistry, type VersionedValue } from './registry.js';
 export { InMemoryDeploymentStore, type DeploymentStore } from './store.js';
 export type {
   AgentArtifact,
@@ -31,6 +49,7 @@ export type {
   RuntimeCapability,
   RuntimeRevision,
   SecretReference,
+  SerializableLimits,
   SkillArtifact,
   SourceMapEntry,
   ThreadAssignmentRequest,

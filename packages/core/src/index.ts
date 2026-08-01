@@ -451,7 +451,7 @@ export type {
   StreamPart,
   TurnHandle,
 } from './types/stream.js';
-export type { AgentSpan, AgentTrace, SpanKind } from './types/trace.js';
+export type { AgentSpan, AgentTrace, DeploymentTraceContext, SpanKind } from './types/trace.js';
 export {
   MemoryTraceStore,
   isTraceStore,

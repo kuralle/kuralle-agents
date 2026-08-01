@@ -166,7 +166,7 @@ export type {
   InterruptionEvent,
   CancellationReason,
 } from './runtime.js';
-export type { SpanKind, AgentSpan, AgentTrace } from './trace.js';
+export type { SpanKind, AgentSpan, AgentTrace, DeploymentTraceContext } from './trace.js';
 export type {
   AuditEntryBase,
   AuditEscalationReason,

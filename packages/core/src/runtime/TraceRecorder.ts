@@ -1,12 +1,13 @@
 import type { TurnResult } from '../types/channel.js';
 import type { StreamPart, TurnHandle } from '../types/stream.js';
-import type { AgentSpan, AgentTrace } from '../types/trace.js';
+import type { AgentSpan, AgentTrace, DeploymentTraceContext } from '../types/trace.js';
 import type { RunOptions } from './Runtime.js';
 
 export interface TraceRecorderOptions {
   sessionId?: string;
   agentId?: string;
   input?: unknown;
+  deployment?: DeploymentTraceContext;
   onSpan?: (span: AgentSpan) => void;
 }
 
@@ -20,6 +21,7 @@ export class TraceRecorder {
   private readonly openLlms = new Map<string, AgentSpan>();
   private readonly emitted = new Set<string>();
   private readonly onSpan?: (span: AgentSpan) => void;
+  private readonly deployment: Partial<AgentSpan['attributes']>;
   private currentAgentId?: string;
 
   constructor(options: TraceRecorderOptions = {}) {
@@ -27,6 +29,7 @@ export class TraceRecorder {
     const sessionId = options.sessionId ?? '';
     const traceId = crypto.randomUUID().replaceAll('-', '');
     this.onSpan = options.onSpan;
+    this.deployment = options.deployment ? { ...options.deployment } : {};
     this.currentAgentId = options.agentId;
     this.root = {
       traceId,
@@ -36,6 +39,7 @@ export class TraceRecorder {
       startTime: startedAt,
       status: 'ok',
       attributes: {
+        ...this.deployment,
         sessionId,
         ...(options.agentId ? { agentId: options.agentId } : {}),
         ...(options.input !== undefined ? { input: toJsonValue(options.input) } : {}),
@@ -275,6 +279,7 @@ export class TraceRecorder {
       startTime: args.at,
       status: 'ok',
       attributes: {
+        ...this.deployment,
         sessionId: this.trace.sessionId,
         ...(this.currentAgentId ? { agentId: this.currentAgentId } : {}),
         ...args.attributes,
