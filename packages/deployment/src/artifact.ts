@@ -181,7 +181,7 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
       'skills', 'references', 'workspaceSeed', 'agents', 'tools', 'flows', 'policies',
       'requiredCapabilities', 'secretRefs', 'sourceMap',
     ],
-    requireDigest ? ['digest'] : ['digest'],
+    ['digest'],
     'artifact',
   );
   if (artifact.schemaVersion !== 1) fail('must equal 1', 'artifact.schemaVersion');
