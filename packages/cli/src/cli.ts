@@ -138,7 +138,7 @@ async function main(): Promise<void> {
 
   switch (localSub) {
     case 'chat':
-      runChat(subArgv, buildRuntime);
+      await runChat(subArgv, buildRuntime);
       break;
     case 'send':
       await runSend(subArgv, buildRuntime);

@@ -26,7 +26,7 @@ export async function runSim(argv: string[], buildRuntime: BuildRuntime): Promis
 
   const profile = flag(argv, '--profile') ?? 'a customer chatting with the agent';
   const model = demoModel();
-  const demo = buildRuntime();
+  const demo = await buildRuntime();
   const persona = { profile, goal, temperament: 'brief and direct' };
 
   console.log(`Simulating: ${profile}`);

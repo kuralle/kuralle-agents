@@ -18,4 +18,4 @@ export type BuildRuntime = (
   sessionId?: string,
   store?: SessionStore,
   traceStore?: TraceStore,
-) => AgentRuntime;
+) => AgentRuntime | Promise<AgentRuntime>;
