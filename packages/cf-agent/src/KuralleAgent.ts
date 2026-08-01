@@ -20,7 +20,14 @@
  */
 
 import { AIChatAgent } from '@cloudflare/ai-chat';
-import { createRuntime, isWakeJob, wakeJob, type HarnessConfig, type Runtime } from '@kuralle-agents/core';
+import {
+  createRuntime,
+  isWakeJob,
+  wakeJob,
+  type DeploymentTraceContext,
+  type HarnessConfig,
+  type Runtime,
+} from '@kuralle-agents/core';
 import type {
   HitlInterrupt,
   PersistentMemoryStore,
@@ -42,6 +49,13 @@ import type { DurableSqlStorage, StreamAdapterConfig, SqlExecutor } from './type
 import { DEFAULT_STREAM_CONFIG } from './types.js';
 import { durableAgentSurface } from './durable-agent-surface.js';
 import { lastUserInputFromMessages } from './cfMessageInput.js';
+
+export interface ResolvedRuntimeDefinition {
+  agents: HarnessConfig['agents'];
+  defaultAgentId: string;
+  config?: Partial<HarnessConfig>;
+  deployment?: DeploymentTraceContext;
+}
 
 /**
  * Abstract base class for running Kuralle agents on Cloudflare.
@@ -155,6 +169,14 @@ export abstract class KuralleAgent<
    */
   protected abstract getDefaultAgentId(): string;
 
+  /** Async seam used by revision-pinned production hosts. */
+  protected async resolveRuntimeDefinition(): Promise<ResolvedRuntimeDefinition> {
+    return {
+      agents: this.getAgents(),
+      defaultAgentId: this.getDefaultAgentId(),
+    };
+  }
+
   /**
    * Optional: Additional runtime config (hooks, model, processors, etc.).
    * Merged with agents + defaultAgentId + sessionStore.
@@ -266,13 +288,15 @@ export abstract class KuralleAgent<
     }
 
     const sessionId = this.getSessionId();
-    this.runtime = this.buildRuntime();
+    const built = await this.buildRuntime();
+    this.runtime = built.runtime;
 
     const handle = this.runtime.run({
       input: lastUserMessage,
       sessionId,
       userId: (options?.body as { userId?: string } | undefined)?.userId,
       abortSignal: options?.abortSignal,
+      deployment: built.deployment,
     });
 
     const streamConfig: StreamAdapterConfig = {
@@ -294,13 +318,15 @@ export abstract class KuralleAgent<
   }
 
   /**
-   * Build a Kuralle runtime for this DO (fresh per request to pick up latest
-   * config). Bridges CF messages + DO-backed orchestration/working-memory state.
+   * Build a Kuralle runtime for this DO. Revision-pinned subclasses resolve the
+   * same immutable definition on every request; source-defined subclasses may
+   * return their current deployed definition. Bridges CF messages + durable state.
    * Shared by the chat path and the durable resume path.
    */
-  private buildRuntime(): Runtime {
+  private async buildRuntime(): Promise<{ runtime: Runtime; deployment?: DeploymentTraceContext }> {
     const sessionId = this.getSessionId();
-    const defaultAgentId = this.getDefaultAgentId();
+    const definition = await this.resolveRuntimeDefinition();
+    const defaultAgentId = definition.defaultAgentId;
     const sessionStore = new BridgeSessionStore({
       sqlExecutor: this.getSql(),
       cfMessages: this.messages,
@@ -308,16 +334,20 @@ export abstract class KuralleAgent<
       defaultAgentId,
     });
     const extraConfig = this.getRuntimeConfig();
+    const runtimeConfig = { ...extraConfig, ...definition.config };
     const workingMemoryStore = this.getWorkingMemoryStore();
-    return createRuntime({
-      ...extraConfig,
-      agents: this.getAgents(),
-      defaultAgentId,
-      sessionStore,
-      ...(workingMemoryStore && !extraConfig.defaultWorkingMemoryStore
-        ? { defaultWorkingMemoryStore: workingMemoryStore }
-        : {}),
-    });
+    return {
+      runtime: createRuntime({
+        ...runtimeConfig,
+        agents: definition.agents,
+        defaultAgentId,
+        sessionStore,
+        ...(workingMemoryStore && !runtimeConfig.defaultWorkingMemoryStore
+          ? { defaultWorkingMemoryStore: workingMemoryStore }
+          : {}),
+      }),
+      deployment: definition.deployment,
+    };
   }
 
   /**
@@ -334,8 +364,12 @@ export abstract class KuralleAgent<
    */
   protected async resumeWithSignal(signal: SignalDelivery): Promise<{ text: string }> {
     const sessionId = this.getSessionId();
-    const runtime = this.buildRuntime();
-    const handle = runtime.run({ sessionId, signalDelivery: signal });
+    const built = await this.buildRuntime();
+    const handle = built.runtime.run({
+      sessionId,
+      signalDelivery: signal,
+      deployment: built.deployment,
+    });
 
     let text = '';
     for await (const part of handle.events) {
@@ -439,10 +473,11 @@ export abstract class KuralleAgent<
     }
 
     const { reason, payload } = job.payload as unknown as WakeJobPayload;
-    const runtime = this.buildRuntime();
-    const handle = runtime.run({
+    const built = await this.buildRuntime();
+    const handle = built.runtime.run({
       sessionId: this.getSessionId(),
       wake: { reason, payload },
+      deployment: built.deployment,
     });
 
     let text = '';

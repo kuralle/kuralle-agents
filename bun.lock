@@ -453,6 +453,7 @@
       "dependencies": {
         "@cloudflare/ai-chat": "^0.10.1",
         "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/deployment": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
         "ai": "^6.0.90",
       },
