@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runBuildCommand } from '../src/buildCommand.js';
 
@@ -64,14 +64,14 @@ describe('kuralle build', () => {
 
   it('bundles a self-contained Node server and production Dockerfile', async () => {
     const out = await mkdtemp(join(tmpdir(), 'kuralle-cli-host-build-'));
-    const host = join(import.meta.dir, 'fixtures/node-host.ts');
+    const example = resolve(import.meta.dir, '../../../examples-deploy/kuralle-file-agent-chat');
 
     const result = await runBuildCommand([
-      '--agent', join(import.meta.dir, '../../build/test/fixtures/support'),
+      '--agent', join(example, 'agent'),
       '--out', out,
       '--target', 'node',
-      '--default-model', 'openai/gpt-5-mini',
-      '--host', host,
+      '--default-model', 'openai/gpt-4.1-mini',
+      '--host', join(example, 'deployment.node.ts'),
     ]);
 
     expect(result.serverPath).toBe(join(out, 'node/server.mjs'));
@@ -79,6 +79,16 @@ describe('kuralle build', () => {
     const dockerfile = await readFile(join(out, 'node/Dockerfile'), 'utf8');
     expect(dockerfile).toContain('USER node');
     expect(dockerfile).toContain('HEALTHCHECK');
+    const artifact = JSON.parse(await readFile(join(out, 'artifacts/agent.agent.json'), 'utf8')) as {
+      agent: { model: string };
+      references: unknown[];
+      skills: unknown[];
+      workspaceSeed: unknown[];
+    };
+    expect(artifact.agent.model).toBe('openai/gpt-4.1-mini');
+    expect(artifact.references).toHaveLength(1);
+    expect(artifact.skills).toHaveLength(1);
+    expect(artifact.workspaceSeed).toHaveLength(1);
   });
 
   it('bundles a Cloudflare Worker with a declarative SQLite DO, D1, R2, and observability config', async () => {

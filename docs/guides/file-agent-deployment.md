@@ -4,6 +4,9 @@ Kuralle compiles a folder into an immutable Agent Artifact, then joins that arti
 Runtime Revision in a Release. The first request for a thread atomically records both identities.
 Changing a draft or activating another release affects only threads that do not have a pin.
 
+For a runnable Node host and a verified `kuralle chat` command, see
+[`examples-deploy/kuralle-file-agent-chat`](../../examples-deploy/kuralle-file-agent-chat/README.md).
+
 ## Author the agent
 
 ```text

@@ -110,6 +110,7 @@ const sidebar = [
     items: [
       { label: 'Quickstart', link: '/guides/quickstart' },
       { label: 'Build an Agent', link: '/guides/build-an-agent' },
+      { label: 'File-authored Agents', link: '/guides/file-authored-agents' },
       { label: 'Templates', link: '/guides/templates' },
     ],
   },

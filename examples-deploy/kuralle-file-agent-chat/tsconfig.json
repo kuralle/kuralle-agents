@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": "../..",
+    "paths": {
+      "@kuralle-agents/deployment": ["packages/deployment/src/index.ts"],
+      "@kuralle-agents/deployment/node": ["packages/deployment/src/node-workspace.ts"],
+      "@kuralle-agents/hono-server": ["packages/hono-server/src/index.ts"]
+    },
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["deployment.node.ts"]
+}

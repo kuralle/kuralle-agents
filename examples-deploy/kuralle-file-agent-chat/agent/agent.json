@@ -1,0 +1,6 @@
+{
+  "name": "Atlas File Agent",
+  "description": "Demonstrates an immutable file-authored Kuralle deployment.",
+  "model": "openai/gpt-4.1-mini",
+  "limits": { "maxTurns": 8 }
+}

@@ -1,0 +1,103 @@
+---
+title: File-authored Agents
+description: Compile an agent folder into an immutable deployment and chat with it through the Kuralle CLI.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A file-authored agent keeps its declarative behavior in a folder and compiles that folder into an
+immutable, content-addressed Agent Artifact. Production execution binds the artifact to a Runtime
+Revision and pins that exact pair to the conversation thread.
+
+The runnable example is in
+[`examples-deploy/kuralle-file-agent-chat`](https://github.com/kuralle/kuralle-agents/tree/main/examples-deploy/kuralle-file-agent-chat).
+It uses `gpt-4.1-mini` and exercises the generated Node server through `kuralle chat`.
+
+## Author the folder
+
+```text
+agent/
+  instructions.md
+  agent.json
+  skills/
+    explain-artifact/
+      SKILL.md
+      references/details.md
+  references/architecture.md
+  workspace/README.md
+```
+
+`instructions.md` is required. `agent.json` contains serializable identity, model, and limit fields.
+References become a read-only mount, while the workspace seed is copied once into each thread's
+private workspace. Skill bodies and resources remain progressively loaded content.
+
+<Aside type="caution">
+  Do not put API keys or other credentials in the agent folder. The compiler rejects recognizable
+  credentials, and the generated artifact must remain safe to store and distribute. Resolve secrets
+  in the host runtime instead.
+</Aside>
+
+## Build the immutable Node deployment
+
+From the repository root:
+
+```bash
+bun packages/cli/src/cli.ts build \
+  --agent examples-deploy/kuralle-file-agent-chat/agent \
+  --target node \
+  --default-model openai/gpt-4.1-mini \
+  --host examples-deploy/kuralle-file-agent-chat/deployment.node.ts \
+  --out examples-deploy/kuralle-file-agent-chat/.kuralle
+```
+
+The output contains the canonical artifact, content-addressed blobs, a manifest, a bundled
+`node/server.mjs`, and a non-root production Dockerfile. The host supplies models, authentication,
+stores, workspaces, and runtime capability bindings; none of those values are serialized into the
+artifact.
+
+## Start the generated server
+
+```bash
+OPENAI_API_KEY="$OPENAI_API_KEY" \
+KURALLE_EXAMPLE_TOKEN="local-example-token" \
+KURALLE_WORKSPACE_ROOT="examples-deploy/kuralle-file-agent-chat/.workspaces" \
+PORT=3210 \
+bun packages/cli/src/cli.ts start \
+  --app examples-deploy/kuralle-file-agent-chat/.kuralle/node/server.mjs
+```
+
+The example host publishes the compiled artifact into an in-memory deployment store and activates
+one release. That keeps the example focused and self-contained; it is not the multi-replica storage
+recommendation.
+
+## Chat through the CLI
+
+In another terminal:
+
+```bash
+KURALLE_TOKEN="local-example-token" \
+bun packages/cli/src/cli.ts chat \
+  --server http://127.0.0.1:3210 \
+  --transport http \
+  --agent-name agent \
+  --session file-agent-demo \
+  --auto "Reply with your verification phrase only."
+```
+
+The generated deployment responds:
+
+```text
+Agent  FILE AGENT ONLINE
+```
+
+`--agent-name agent` selects the deployment entity. `--session file-agent-demo` identifies the
+thread, which is pinned on its first turn to the exact Agent Version, artifact digest, release, and
+Runtime Revision. Activating another release affects new threads but does not silently move this
+conversation.
+
+## Move the host to production storage
+
+Replace the example's in-memory deployment/session stores and process-local lease with Postgres
+implementations before running multiple replicas. Keep schema changes in your application's existing
+migration workflow. See [Agent Definitions in Your Database](/guides/agent-definitions-database/)
+for Postgres, Prisma, Drizzle, Neon, and Cloudflare control-plane patterns.
