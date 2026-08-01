@@ -36,6 +36,27 @@ function eventFromData(data: string): HostedTurnEvent | undefined {
   }
 }
 
+function eventFromSseBlock(block: string, data: string): HostedTurnEvent | undefined {
+  const direct = eventFromData(data);
+  if (direct) return direct;
+  const event = block.split('\n')
+    .find((line) => line.startsWith('event:'))
+    ?.slice(6)
+    .trim();
+  if (!event) return undefined;
+  try {
+    const payload = JSON.parse(data) as unknown;
+    return {
+      type: event,
+      payload: typeof payload === 'object' && payload !== null && !Array.isArray(payload)
+        ? payload as Record<string, unknown>
+        : {},
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 function consumeSse(
   source: string,
   state: { buffer: string; text: string; events: HostedTurnEvent[] },
@@ -51,7 +72,7 @@ function consumeSse(
       .map((line) => line.slice(5).trimStart())
       .join('\n');
     if (data && data !== '[DONE]') {
-      const event = eventFromData(data);
+      const event = eventFromSseBlock(block, data);
       if (event) {
         state.events.push(event);
         options.onEvent?.(event);
@@ -96,15 +117,27 @@ async function httpTurn(
   const timeoutMs = options.timeoutMs ?? 90_000;
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (options.token) headers.authorization = `Bearer ${options.token}`;
-  const request = async (path: string) => fetch(`${connection.server}${path}`, {
+  const request = async (path: string, body: unknown, requestHeaders = headers) => fetch(`${connection.server}${path}`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ sessionId, message }),
+    headers: requestHeaders,
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
   });
 
-  let response = await request('/api/chat');
-  if (response.status === 404 || response.status === 405) response = await request('/api/chat/sse');
+  let response: Response;
+  if (connection.agentName) {
+    const path = `/v1/agents/${encodeURIComponent(connection.agentName)}` +
+      `/threads/${encodeURIComponent(sessionId)}/messages`;
+    response = await request(path, { message }, {
+      ...headers,
+      'idempotency-key': crypto.randomUUID(),
+    });
+  } else {
+    response = await request('/api/chat', { sessionId, message });
+    if (response.status === 404 || response.status === 405) {
+      response = await request('/api/chat/sse', { sessionId, message });
+    }
+  }
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     throw new Error(`Hosted chat failed (${response.status}): ${detail.slice(0, 500)}`);

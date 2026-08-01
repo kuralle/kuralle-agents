@@ -52,7 +52,7 @@ Options:
   --summary <text>    Resolution note appended on resume (seen by the agent post-resume)
   --server <url>      Use this hosted server for the command (or KURALLE_SERVER)
   --transport <kind>  Hosted transport: http (Next/Hono/Worker JSON) or cloudflare (native Agents WS)
-  --agent-name <name> Cloudflare Agent class URL name, e.g. pharmacy-agent
+  --agent-name <name> Versioned HTTP deployment entity or Cloudflare Agent URL name
   --token <token>     Per-command bearer/query token; prefer KURALLE_TOKEN to avoid shell history
   --local             Ignore the saved hosted connection and run the local agent
 

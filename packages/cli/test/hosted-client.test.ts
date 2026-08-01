@@ -81,6 +81,41 @@ describe('hosted HTTP transport', () => {
       server.close();
     }
   });
+
+  it('drives a version-pinned deployment route when an HTTP agent name is supplied', async () => {
+    let requestUrl = '';
+    let authorization = '';
+    let idempotencyKey = '';
+    let requestBody: unknown;
+    const server = createServer(async (request, response) => {
+      requestUrl = request.url || '';
+      authorization = String(request.headers.authorization || '');
+      idempotencyKey = String(request.headers['idempotency-key'] || '');
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(chunk as Buffer);
+      requestBody = JSON.parse(Buffer.concat(chunks).toString());
+      response.setHeader('content-type', 'text/event-stream');
+      response.write('event: text-delta\n');
+      response.write('data: {"delta":"file "}\n\n');
+      response.end('event: text-delta\ndata: {"delta":"agent"}\n\n');
+    });
+    const origin = await listen(server);
+    try {
+      const result = await runHostedTurn({
+        server: origin,
+        transport: 'http',
+        agentName: 'guide-agent',
+      }, 'thread 1', 'hello', { token: 'runtime-token' });
+
+      expect(requestUrl).toBe('/v1/agents/guide-agent/threads/thread%201/messages');
+      expect(authorization).toBe('Bearer runtime-token');
+      expect(idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+      expect(requestBody).toEqual({ message: 'hello' });
+      expect(result.text).toBe('file agent');
+    } finally {
+      server.close();
+    }
+  });
 });
 
 describe('hosted Cloudflare transport', () => {
