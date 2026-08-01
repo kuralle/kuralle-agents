@@ -5,10 +5,9 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# Build the application first. The root image intentionally accepts only the
-# generated, self-contained deployment bundle; it no longer points at a deleted
-# playground application or installs a monorepo inside the runtime image.
-COPY --chown=node:node .kuralle/node/server.mjs /app/server.mjs
+# `kuralle build --target node` places a self-contained bundle beside this
+# template. No source tree, package manager, or development dependency is copied.
+COPY --chown=node:node server.mjs /app/server.mjs
 
 USER node
 EXPOSE 3000

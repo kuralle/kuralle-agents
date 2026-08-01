@@ -1,21 +1,8 @@
 # Exclude everything by default
 *
 
-# Allow the hospital-demo app and its requirements
-!apps/
-!apps/playground/
-!apps/playground/hospital-demo/
-!apps/playground/hospital-demo/**
-
-# Still exclude node_modules from the local machine
-apps/playground/hospital-demo/node_modules
-apps/playground/hospital-demo/dist
-
-# Exclude specific folders we don't need in the build context
-packages/
-docs/
-voice/
-.git
-.cursor
-.gemini
-.env
+# The production image consumes only the generated self-contained Node bundle.
+!Dockerfile
+!.kuralle/
+!.kuralle/node/
+!.kuralle/node/server.mjs
