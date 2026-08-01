@@ -2,6 +2,27 @@
 
 Kuralle's interactive chat, send, simulation, and trace inspection CLI.
 
+## Build immutable file agents
+
+```bash
+kuralle build --agent ./agent --target node \
+  --default-model openai/gpt-5-mini --host ./deployment.node.ts
+kuralle start --app .kuralle/node/server.mjs
+
+kuralle build --agent ./agent --target cloudflare \
+  --default-model openai/gpt-5-mini --host ./deployment.cloudflare.ts \
+  --d1-id <database-id> --d1-name my-agent-control --r2-bucket my-agent-blobs
+wrangler deploy --config .kuralle/cloudflare/wrangler.jsonc
+```
+
+The Node result is one `server.mjs` plus a non-root production Dockerfile. The Cloudflare result is
+one Worker module plus DO migration, D1, optional R2, compatibility flags, and observability config.
+Both contain the same canonical artifact, capability hashes, and content-addressed bytes. Host
+factories provide credentials, model instances, authentication, durable stores, and trusted runtime
+capabilities; those values are intentionally never serialized into the artifact.
+
+See [File-authored agent deployment](../../docs/guides/file-agent-deployment.md).
+
 ## Hosted runtimes (default after connect)
 
 Connect once to a deployed Next.js/Hono/Worker HTTP endpoint. Subsequent `chat`

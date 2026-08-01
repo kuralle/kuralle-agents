@@ -104,6 +104,8 @@ More examples: `packages/core/examples/agents/` — form-filler, transfer-agent,
 | Package | Use when |
 |---------|----------|
 | [`@kuralle-agents/core`](https://www.npmjs.com/package/@kuralle-agents/core) | Always — agents, flows, runtime, session, tools, and the portable AI SDK fallback |
+| [`@kuralle-agents/build`](https://www.npmjs.com/package/@kuralle-agents/build) | Deterministically compiling folder agents into immutable artifacts |
+| [`@kuralle-agents/deployment`](https://www.npmjs.com/package/@kuralle-agents/deployment) | Versions, releases, sticky thread pins, runtime binding, D1/Node deployment adapters |
 | [`@kuralle-agents/pi-driver`](https://www.npmjs.com/package/@kuralle-agents/pi-driver) | Recommended model/tool loop for production applications |
 | [`@kuralle-agents/hono-server`](https://www.npmjs.com/package/@kuralle-agents/hono-server) | Serving agents over HTTP/SSE/WebSocket on Node.js or Bun |
 | [`@kuralle-agents/cf-agent`](https://www.npmjs.com/package/@kuralle-agents/cf-agent) | Deploying to Cloudflare Workers with Durable Objects |

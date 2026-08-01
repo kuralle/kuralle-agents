@@ -66,7 +66,6 @@ docker build -f packages/deployment/templates/node/Dockerfile .
 wrangler deploy --dry-run --config <generated-wrangler-config>
 ```
 
-The existing root baseline has two unrelated failures that must not be mistaken for new regressions:
-the workerd Vitest setup cannot resolve `vitest/worker`, and a workspace test constructs an outdated
-`Session` without `conversationId`/`channelId`. Repair both during slice 0.
-
+The two baseline defects found during planning are repaired: the workerd Vitest suites resolve and
+pass, and the workspace test now constructs a complete `Session`. The root package build and
+`typecheck:all` gates are green.

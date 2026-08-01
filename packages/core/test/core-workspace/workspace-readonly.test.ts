@@ -49,6 +49,8 @@ describe('workspace readOnly default', () => {
         agentId: 'workspace-agent',
         session: {
           id: 'tenant-42',
+          conversationId: 'tenant-42',
+          channelId: 'api',
           messages: [],
           currentAgent: 'workspace-agent',
           workingMemory: {},

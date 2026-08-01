@@ -5,10 +5,12 @@
   "fixed": [
     [
       "@kuralle-agents/analytics-sdk",
+      "@kuralle-agents/build",
       "@kuralle-agents/cf-agent",
       "@kuralle-agents/cli",
       "@kuralle-agents/commerce",
       "@kuralle-agents/core",
+      "@kuralle-agents/deployment",
       "@kuralle-agents/engagement",
       "@kuralle-agents/eval",
       "@kuralle-agents/fs",
