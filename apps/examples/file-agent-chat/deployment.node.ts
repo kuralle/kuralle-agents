@@ -131,7 +131,6 @@ export default async function createHost(
     tenantId: 'example',
     agentEntityId: artifact.agent.id,
     environment: 'production',
-    state: 'active',
     allocations: [{
       agentVersionId: versionId,
       runtimeRevisionId: runtimeRevision.id,
@@ -139,7 +138,7 @@ export default async function createHost(
     }],
     createdAt,
   });
-  await deploymentStore.activateRelease('example', releaseId);
+  await deploymentStore.routeTrafficTo('example', releaseId);
 
   return {
     deploymentStore,

@@ -254,9 +254,9 @@ export class D1DeploymentStore implements DeploymentStore {
     }
     const statements = [this.statement(
       `INSERT INTO ${this.table.releases}
-       (tenant_id,id,agent_entity_id,environment,state,branch,created_at) VALUES (?,?,?,?,?,?,?)`,
+       (tenant_id,id,agent_entity_id,environment,branch,created_at) VALUES (?,?,?,?,?,?)`,
       release.tenantId, release.id, release.agentEntityId, release.environment,
-      release.state, release.branch ?? null, release.createdAt,
+      release.branch ?? null, release.createdAt,
     )];
     release.allocations.forEach((allocation, ordinal) => statements.push(this.statement(
       `INSERT INTO ${this.table.allocations}
@@ -267,13 +267,10 @@ export class D1DeploymentStore implements DeploymentStore {
     await this.database.batch(statements);
   }
 
-  async activateRelease(tenantId: string, releaseId: string): Promise<void> {
+  async routeTrafficTo(tenantId: string, releaseId: string): Promise<void> {
     await this.ready;
     const release = await this.first(`SELECT * FROM ${this.table.releases} WHERE tenant_id=? AND id=?`, tenantId, releaseId);
     if (!release) notFound('release does not exist');
-    if (release.state !== 'active') {
-      throw new DeploymentError('RELEASE_INVALID', 'only an active release can receive traffic');
-    }
     await this.run(
       `INSERT INTO ${this.table.active}
        (tenant_id,agent_entity_id,environment,release_id,updated_at) VALUES (?,?,?,?,?)
@@ -390,7 +387,7 @@ export class D1DeploymentStore implements DeploymentStore {
        id TEXT PRIMARY KEY,definition TEXT NOT NULL,created_at TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS ${t.releases} (
        tenant_id TEXT NOT NULL,id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,environment TEXT NOT NULL,
-       state TEXT NOT NULL,branch TEXT,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id))`,
+       branch TEXT,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id))`,
       `CREATE TABLE IF NOT EXISTS ${t.allocations} (
        tenant_id TEXT NOT NULL,release_id TEXT NOT NULL,ordinal INTEGER NOT NULL,agent_version_id TEXT NOT NULL,
        runtime_revision_id TEXT NOT NULL,weight INTEGER NOT NULL,PRIMARY KEY(tenant_id,release_id,ordinal))`,

@@ -106,7 +106,7 @@ export function postgresDeploymentMigrationStatements(
       id TEXT PRIMARY KEY, definition JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS ${t.releases} (
       tenant_id TEXT NOT NULL, id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
-      environment TEXT NOT NULL, state TEXT NOT NULL, branch TEXT, created_at TIMESTAMPTZ NOT NULL,
+      environment TEXT NOT NULL, branch TEXT, created_at TIMESTAMPTZ NOT NULL,
       PRIMARY KEY (tenant_id,id), FOREIGN KEY (tenant_id,agent_entity_id)
       REFERENCES ${t.entities}(tenant_id,id))`,
     `CREATE TABLE IF NOT EXISTS ${t.allocations} (
@@ -201,7 +201,6 @@ function releaseFrom(
     tenantId: String(row.tenant_id),
     agentEntityId: String(row.agent_entity_id),
     environment: String(row.environment),
-    state: row.state as AgentRelease['state'],
     branch: row.branch ? String(row.branch) : undefined,
     allocations,
     createdAt: new Date(row.created_at as string | Date).toISOString(),
@@ -418,10 +417,10 @@ export class PostgresDeploymentStore implements DeploymentStore {
         }
         await client.query(
           `INSERT INTO ${this.table.releases}
-            (tenant_id,id,agent_entity_id,environment,state,branch,created_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            (tenant_id,id,agent_entity_id,environment,branch,created_at)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
           [release.tenantId, release.id, release.agentEntityId, release.environment,
-            release.state, release.branch ?? null, release.createdAt],
+            release.branch ?? null, release.createdAt],
         );
         for (let index = 0; index < release.allocations.length; index += 1) {
           const allocation = release.allocations[index]!;
@@ -443,7 +442,7 @@ export class PostgresDeploymentStore implements DeploymentStore {
     }
   }
 
-  async activateRelease(tenantId: string, releaseId: string): Promise<void> {
+  async routeTrafficTo(tenantId: string, releaseId: string): Promise<void> {
     await this.ready;
     const result = await this.client.query(
       `SELECT * FROM ${this.table.releases} WHERE tenant_id=$1 AND id=$2`,
@@ -451,9 +450,6 @@ export class PostgresDeploymentStore implements DeploymentStore {
     );
     const release = result.rows[0];
     if (!release) notFound('release does not exist');
-    if (release.state !== 'active') {
-      throw new DeploymentError('RELEASE_INVALID', 'only an active release can receive traffic');
-    }
     await this.client.query(
       `INSERT INTO ${this.table.activeReleases}
         (tenant_id,agent_entity_id,environment,release_id,updated_at)

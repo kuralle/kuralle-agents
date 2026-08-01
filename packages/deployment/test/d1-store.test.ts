@@ -81,11 +81,11 @@ describe('D1 deployment control plane', () => {
     await store.registerRuntime(runtime);
     const release = (id: string, versionId: string): AgentRelease => ({
       id, tenantId: 'tenant-a', agentEntityId: 'support', environment: 'production',
-      state: 'active', allocations: [{ agentVersionId: versionId, runtimeRevisionId: runtime.id, weight: 10_000 }],
+      allocations: [{ agentVersionId: versionId, runtimeRevisionId: runtime.id, weight: 10_000 }],
       createdAt: CREATED_AT,
     });
     await store.createRelease(release('release-1', firstVersion.id));
-    await store.activateRelease('tenant-a', 'release-1');
+    await store.routeTrafficTo('tenant-a', 'release-1');
     const firstPin = await store.assignThread({
       tenantId: 'tenant-a', threadId: 'thread-a', agentEntityId: 'support', environment: 'production',
     });
@@ -95,7 +95,7 @@ describe('D1 deployment control plane', () => {
       artifact: await artifact({ artifactId: 'support-v2' }), createdBy: 'owner', createdAt: CREATED_AT,
     });
     await store.createRelease(release('release-2', 'version-2'));
-    await store.activateRelease('tenant-a', 'release-2');
+    await store.routeTrafficTo('tenant-a', 'release-2');
 
     expect((await store.assignThread({
       tenantId: 'tenant-a', threadId: 'thread-a', agentEntityId: 'support', environment: 'production',

@@ -70,10 +70,10 @@ async function setup() {
   await deploymentStore.registerRuntime(runtimeRevision);
   await deploymentStore.createRelease({
     id: 'release-1', tenantId: 'tenant-a', agentEntityId: 'support', environment: 'production',
-    state: 'active', allocations: [{ agentVersionId: 'version-1', runtimeRevisionId: 'runtime-1', weight: 10_000 }],
+    allocations: [{ agentVersionId: 'version-1', runtimeRevisionId: 'runtime-1', weight: 10_000 }],
     createdAt: AT,
   });
-  await deploymentStore.activateRelease('tenant-a', 'release-1');
+  await deploymentStore.routeTrafficTo('tenant-a', 'release-1');
   const models = new NamedRegistry<NonNullable<AgentConfig['model']>>();
   models.register('test/model', model);
   const bindings: RuntimeBindings = {

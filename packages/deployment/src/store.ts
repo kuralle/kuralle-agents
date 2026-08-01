@@ -26,7 +26,7 @@ export interface DeploymentStore {
   getVersion(tenantId: string, versionId: string): Promise<AgentVersion | null>;
   registerRuntime(revision: RuntimeRevision): Promise<void>;
   createRelease(release: AgentRelease): Promise<void>;
-  activateRelease(tenantId: string, releaseId: string): Promise<void>;
+  routeTrafficTo(tenantId: string, releaseId: string): Promise<void>;
   assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin>;
   getThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null>;
 }
@@ -219,12 +219,9 @@ export class InMemoryDeploymentStore implements DeploymentStore {
     this.releases.set(releaseKey, clone(release));
   }
 
-  async activateRelease(tenantId: string, releaseId: string): Promise<void> {
+  async routeTrafficTo(tenantId: string, releaseId: string): Promise<void> {
     const release = this.releases.get(key(tenantId, releaseId));
     if (!release) notFound('release does not exist');
-    if (release.state !== 'active') {
-      throw new DeploymentError('RELEASE_INVALID', 'only an active release can receive traffic');
-    }
     this.activeReleases.set(
       key(tenantId, release.agentEntityId, release.environment),
       release.id,

@@ -47,7 +47,6 @@ function release(id: string, versionId: string): AgentRelease {
     tenantId: 'tenant-a',
     agentEntityId: 'support',
     environment: 'production',
-    state: 'active',
     branch: 'main',
     allocations: [{ agentVersionId: versionId, runtimeRevisionId: 'runtime-1', weight: 10_000 }],
     createdAt: AT,
@@ -108,7 +107,7 @@ describe('PostgresDeploymentStore', () => {
       createdAt: AT,
     });
     await store.createRelease(release('release-1', v1.id));
-    await store.activateRelease('tenant-a', 'release-1');
+    await store.routeTrafficTo('tenant-a', 'release-1');
     const first = await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'thread-a',
@@ -117,7 +116,7 @@ describe('PostgresDeploymentStore', () => {
       assignedAt: AT,
     });
     await store.createRelease(release('release-2', v2.id));
-    await store.activateRelease('tenant-a', 'release-2');
+    await store.routeTrafficTo('tenant-a', 'release-2');
 
     const afterRestart = new PostgresDeploymentStore({ client: pool, autoMigrate: false });
     const resumed = await afterRestart.assignThread({

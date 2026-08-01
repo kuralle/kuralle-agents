@@ -53,7 +53,6 @@ function release(id: string, versionId: string): AgentRelease {
     tenantId: 'tenant-a',
     agentEntityId: 'support',
     environment: 'production',
-    state: 'active',
     branch: 'main',
     allocations: [{ agentVersionId: versionId, runtimeRevisionId: 'runtime-1', weight: 10_000 }],
     createdAt: CREATED_AT,
@@ -154,7 +153,7 @@ describe('immutable versions and thread pins', () => {
   it('keeps an existing thread on v1 after activating v2 while new threads receive v2', async () => {
     const { store, v1, v2 } = await configuredStore();
     await store.createRelease(release('release-1', v1.id));
-    await store.activateRelease('tenant-a', 'release-1');
+    await store.routeTrafficTo('tenant-a', 'release-1');
     const original = await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'thread-a',
@@ -164,7 +163,7 @@ describe('immutable versions and thread pins', () => {
     });
 
     await store.createRelease(release('release-2', v2.id));
-    await store.activateRelease('tenant-a', 'release-2');
+    await store.routeTrafficTo('tenant-a', 'release-2');
     const resumed = await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'thread-a',
@@ -188,7 +187,7 @@ describe('immutable versions and thread pins', () => {
   it('denies cross-tenant pin access without returning existence data', async () => {
     const { store } = await configuredStore();
     await store.createRelease(release('release-1', 'version-1'));
-    await store.activateRelease('tenant-a', 'release-1');
+    await store.routeTrafficTo('tenant-a', 'release-1');
     await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'private-thread',
@@ -221,7 +220,7 @@ describe('immutable versions and thread pins', () => {
           { agentVersionId: v2.id, runtimeRevisionId: 'runtime-1', weight: 5_000 },
         ],
       });
-      await store.activateRelease('tenant-a', 'weighted');
+      await store.routeTrafficTo('tenant-a', 'weighted');
       const pin = await store.assignThread({
         tenantId: 'tenant-a',
         threadId: 'stable-thread',
