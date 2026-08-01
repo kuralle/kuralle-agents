@@ -20,6 +20,10 @@
     "./node": {
       "types": "./dist/node-workspace.d.ts",
       "default": "./dist/node-workspace.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/d1-store.d.ts",
+      "default": "./dist/d1-store.js"
     }
   },
   "files": [
