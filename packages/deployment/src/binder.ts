@@ -26,6 +26,7 @@ import type {
   AgentArtifact,
   AgentVersion,
   BuiltinToolReference,
+  CapabilityReference,
   ClientToolReference,
   ContentEntry,
   HttpToolReference,
@@ -105,6 +106,16 @@ export interface BoundAgentRevision {
 
 function bindingError(message: string): never {
   throw new DeploymentError('BINDING_FAILED', message);
+}
+
+function resolveCapability<T>(
+  reference: CapabilityReference | undefined,
+  registry: VersionedRegistry<T> | undefined,
+  label: string,
+): T | undefined {
+  if (!reference) return undefined;
+  return registry?.resolve(reference.capability, reference.versionRange)
+    ?? bindingError(`no ${label} registry is configured`);
 }
 
 function bytes(value: string | Uint8Array): Uint8Array {
@@ -329,6 +340,15 @@ async function bindArtifact(
     bindingError(`artifact ${validated.artifactId} contains workspace content but no workspace provider is configured`);
   }
 
+  const inputPolicy = resolveCapability(validated.policies.input, bindings.inputPolicies, 'input policy');
+  const outputPolicy = resolveCapability(validated.policies.output, bindings.outputPolicies, 'output policy');
+  const toolPolicy = resolveCapability(validated.policies.tool, bindings.toolPolicies, 'tool policy');
+  const refinement = resolveCapability(validated.policies.refine, bindings.refiners, 'refinement');
+  const validation = resolveCapability(validated.policies.validate, bindings.validators, 'validation');
+  const guardrails = inputPolicy !== undefined || outputPolicy !== undefined
+    ? { input: inputPolicy !== undefined ? [inputPolicy] : undefined, output: outputPolicy !== undefined ? [outputPolicy] : undefined }
+    : undefined;
+
   const config: AgentConfig = {
     id: validated.agent.id,
     name: validated.agent.name,
@@ -344,38 +364,10 @@ async function bindArtifact(
     handoffs: validated.agent.handoffs,
     limits: validated.agent.limits,
     skills: validated.skills.length > 0 ? new ArtifactSkillStore(validated, bindings.content) : undefined,
-    guardrails: {
-      input: validated.policies.input
-        ? [bindings.inputPolicies?.resolve(
-            validated.policies.input.capability,
-            validated.policies.input.versionRange,
-          ) ?? bindingError('no input policy registry is configured')]
-        : undefined,
-      output: validated.policies.output
-        ? [bindings.outputPolicies?.resolve(
-            validated.policies.output.capability,
-            validated.policies.output.versionRange,
-          ) ?? bindingError('no output policy registry is configured')]
-        : undefined,
-    },
-    policy: validated.policies.tool
-      ? bindings.toolPolicies?.resolve(
-          validated.policies.tool.capability,
-          validated.policies.tool.versionRange,
-        ) ?? bindingError('no tool policy registry is configured')
-      : undefined,
-    refine: validated.policies.refine
-      ? [bindings.refiners?.resolve(
-          validated.policies.refine.capability,
-          validated.policies.refine.versionRange,
-        ) ?? bindingError('no refinement registry is configured')]
-      : undefined,
-    validate: validated.policies.validate
-      ? [bindings.validators?.resolve(
-          validated.policies.validate.capability,
-          validated.policies.validate.versionRange,
-        ) ?? bindingError('no validation registry is configured')]
-      : undefined,
+    ...(guardrails ? { guardrails } : {}),
+    policy: toolPolicy,
+    refine: refinement ? [refinement] : undefined,
+    validate: validation ? [validation] : undefined,
     workspace: bindings.workspace && hasWorkspaceContent
       ? async ({ session }) => bindings.workspace!.open({
           pin: structuredClone(pin),
@@ -387,7 +379,6 @@ async function bindArtifact(
         })
       : undefined,
   };
-  if (!config.guardrails?.input && !config.guardrails?.output) delete config.guardrails;
   return config;
 }
 
