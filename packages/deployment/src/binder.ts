@@ -268,6 +268,7 @@ function verifyPin(version: AgentVersion, pin: ThreadPin, runtime: RuntimeRevisi
   }
 }
 
+/** `artifact` must already be validated by the caller — this function trusts it and does not re-validate. */
 async function bindArtifact(
   artifact: AgentArtifact,
   pin: ThreadPin,
@@ -275,7 +276,7 @@ async function bindArtifact(
   bindings: RuntimeBindings,
   ancestors: ReadonlySet<string>,
 ): Promise<AgentConfig> {
-  const validated = await validateArtifact(artifact);
+  const validated = artifact;
   assertArtifactCompatible(validated, runtime);
   if (ancestors.has(validated.digest)) bindingError(`subagent cycle at ${validated.agent.id}`);
   const nextAncestors = new Set(ancestors).add(validated.digest);
@@ -321,7 +322,9 @@ async function bindArtifact(
   const childAgents: AgentConfig[] = [];
   for (const node of validated.agents) {
     if (!bindings.artifacts) bindingError(`no artifact resolver is configured for subagent ${node.id}`);
-    const child = await bindings.artifacts.get(node.artifactId, node.digest);
+    // The resolver is an external, untrusted source — validate before binding, unlike the
+    // caller-validated `artifact` parameter above.
+    const child = await validateArtifact(await bindings.artifacts.get(node.artifactId, node.digest));
     if (child.artifactId !== node.artifactId || child.digest !== node.digest || child.agent.id !== node.id) {
       bindingError(`resolved subagent ${node.id} does not match its pinned artifact reference`);
     }
@@ -367,14 +370,19 @@ async function bindArtifact(
     refine: refinement ? [refinement] : undefined,
     validate: validation ? [validation] : undefined,
     workspace: bindings.workspace && hasWorkspaceContent
-      ? async ({ session }) => bindings.workspace!.open({
-          pin: structuredClone(pin),
-          artifact: structuredClone(validated),
-          session,
-          references: structuredClone(validated.references),
-          workspaceSeed: structuredClone(validated.workspaceSeed),
-          read: entry => readEntry(entry, bindings.content),
-        })
+      ? async ({ session }) => {
+          // Clone once — `references`/`workspaceSeed` below alias into this clone rather
+          // than re-cloning `validated`, which is itself already a fresh, unshared clone.
+          const workspaceArtifact = structuredClone(validated);
+          return bindings.workspace!.open({
+            pin: structuredClone(pin),
+            artifact: workspaceArtifact,
+            session,
+            references: workspaceArtifact.references,
+            workspaceSeed: workspaceArtifact.workspaceSeed,
+            read: entry => readEntry(entry, bindings.content),
+          });
+        }
       : undefined,
   };
   return config;
