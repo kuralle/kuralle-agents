@@ -16,6 +16,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node-workspace.d.ts",
+      "default": "./dist/node-workspace.js"
     }
   },
   "files": [
@@ -32,6 +36,7 @@
   },
   "dependencies": {
     "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/fs": "workspace:*",
     "semver": "^7.7.2"
   },
   "devDependencies": {

@@ -8,6 +8,8 @@ export {
   bindAgentVersion,
   type ArtifactContentResolver,
   type ArtifactResolver,
+  type ArtifactWorkspaceContext,
+  type ArtifactWorkspaceProvider,
   type BoundAgentRevision,
   type RuntimeBindings,
   type SecretResolver,

@@ -1,6 +1,8 @@
 import {
   parseSkillFrontmatter,
   type AgentConfig,
+  type AgentWorkspaceDefinition,
+  type AgentWorkspaceResolverContext,
   type AnyTool,
   type DeploymentTraceContext,
   type Flow,
@@ -71,6 +73,26 @@ export interface RuntimeBindings {
   content?: ArtifactContentResolver;
   artifacts?: ArtifactResolver;
   secrets?: SecretResolver;
+  workspace?: ArtifactWorkspaceProvider;
+}
+
+export interface ArtifactWorkspaceContext {
+  pin: ThreadPin;
+  artifact: AgentArtifact;
+  session: AgentWorkspaceResolverContext['session'];
+  references: readonly ContentEntry[];
+  workspaceSeed: readonly ContentEntry[];
+  /** Reads and verifies an entry against its byte length and SHA-256 digest. */
+  read(entry: ContentEntry): Promise<Uint8Array>;
+}
+
+/**
+ * Platform-owned durable workspace provisioning. Implementations must key mutable
+ * state by at least tenant, thread, and agent identity from `pin`; sharing a
+ * mutable filesystem between pins violates the deployment contract.
+ */
+export interface ArtifactWorkspaceProvider {
+  open(context: ArtifactWorkspaceContext): AgentWorkspaceDefinition | Promise<AgentWorkspaceDefinition>;
 }
 
 export interface BoundAgentRevision {
@@ -302,6 +324,11 @@ async function bindArtifact(
     instructionParts.push(await readText(entry, bindings.content));
   }
 
+  const hasWorkspaceContent = validated.references.length > 0 || validated.workspaceSeed.length > 0;
+  if (hasWorkspaceContent && !bindings.workspace) {
+    bindingError(`artifact ${validated.artifactId} contains workspace content but no workspace provider is configured`);
+  }
+
   const config: AgentConfig = {
     id: validated.agent.id,
     name: validated.agent.name,
@@ -348,6 +375,16 @@ async function bindArtifact(
           validated.policies.validate.capability,
           validated.policies.validate.versionRange,
         ) ?? bindingError('no validation registry is configured')]
+      : undefined,
+    workspace: bindings.workspace && hasWorkspaceContent
+      ? async ({ session }) => bindings.workspace!.open({
+          pin: structuredClone(pin),
+          artifact: structuredClone(validated),
+          session,
+          references: structuredClone(validated.references),
+          workspaceSeed: structuredClone(validated.workspaceSeed),
+          read: entry => readEntry(entry, bindings.content),
+        })
       : undefined,
   };
   if (!config.guardrails?.input && !config.guardrails?.output) delete config.guardrails;

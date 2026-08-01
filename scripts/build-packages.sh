@@ -16,12 +16,13 @@ tier() {
 
 tier rag http-client analytics-sdk eval widget                                             # T0 leaves
 tier core                                                                                  # T1 hub
-tier deployment fs commerce trace-ui pi-driver                                      # T2 (need core)
-tier build                                                                                 # T3 (needs core/deployment)
+tier fs commerce trace-ui pi-driver                                                         # T2 (need core)
+tier deployment                                                                            # T3 (needs core/fs)
+tier build                                                                                 # T4 (needs core/deployment)
 tier tools messaging                                                                       # T2 (need core/rag)
 tier rag-loaders lancedb-store postgres-store redis-store upstash-store \
      vectorize-store hono-server cf-agent messaging-meta engagement                        # T3 (need core/rag/tools)
-tier cli                                                                                   # T4 (needs build/deployment/hono-server)
+tier cli                                                                                   # T5 (needs build/deployment/hono-server)
 # (LiveKit voice/telephony extracted to kuralle/kuralle-livekit; provider-native
 #  voice — realtime-audio, voice-protocol, ws-bench — removed entirely.)
 # (no T6 tier: `studio` was dropped in the rebrand and `e2e-tests` has no build step)

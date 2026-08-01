@@ -27,6 +27,12 @@
 export { KuralleAgent, KuralleAgent as CfChatAgent } from './KuralleAgent.js';
 export type { ResolvedRuntimeDefinition } from './KuralleAgent.js';
 export { KuralleThreadAgent } from './KuralleThreadAgent.js';
+export {
+  durableObjectArtifactWorkspaceProvider,
+  fileSystemArtifactWorkspaceProvider,
+  type DurableObjectArtifactWorkspaceOptions,
+  type FileSystemArtifactWorkspaceOptions,
+} from './ArtifactWorkspaceProvider.js';
 export { SqlThreadPinStore } from './SqlThreadPinStore.js';
 export { BridgeSessionStore } from './BridgeSessionStore.js';
 export { OrchestrationStore } from './OrchestrationStore.js';

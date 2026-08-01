@@ -197,4 +197,53 @@ describe('runtime compatibility and artifact binding', () => {
     expect(await skills.loadBody('returns')).toBe('Follow the returns policy.');
     expect(reads).toBe(1);
   });
+
+  it('provisions verified workspace content per pinned thread and fails closed without a provider', async () => {
+    const seedText = 'thread notes';
+    const seed = {
+      path: 'workspace/notes.md',
+      digest: await sha256(seedText),
+      bytes: new TextEncoder().encode(seedText).byteLength,
+      mediaType: 'text/markdown',
+      role: 'workspace-seed' as const,
+      content: { kind: 'inline' as const, text: seedText },
+    };
+    const artifact = await createArtifact(artifactInput({ workspaceSeed: [seed] }));
+
+    await expect(bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    })).rejects.toThrow('no workspace provider is configured');
+
+    const opened: Array<{ tenantId: string; threadId: string; bytes: string }> = [];
+    const runtimeBindings = bindings();
+    runtimeBindings.workspace = {
+      open: async context => {
+        opened.push({
+          tenantId: context.pin.tenantId,
+          threadId: context.pin.threadId,
+          bytes: new TextDecoder().decode(await context.read(context.workspaceSeed[0])),
+        });
+        return { fs: {} as never, readOnly: false, modelWritable: true };
+      },
+    };
+    const bound = await bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: runtimeBindings,
+    });
+    expect(typeof bound.agent.workspace).toBe('function');
+    await (bound.agent.workspace as Function)({
+      session: { id: 'runtime-session' },
+      agentId: 'support',
+    });
+    expect(opened).toEqual([{
+      tenantId: 'tenant-a',
+      threadId: 'thread-a',
+      bytes: seedText,
+    }]);
+  });
 });
