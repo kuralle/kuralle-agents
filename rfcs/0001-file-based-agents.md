@@ -1,9 +1,13 @@
 # RFC 0001 — File-based agents: project layer, agent layer, and deployment
 
-**Status:** Ready for review · **Date:** 2026-07-25 · **Author:** supervisor session
+**Status:** Superseded in part by [RFC-0003](0003-agent-revisions-and-production-deployment.md) · **Date:** 2026-07-25 · **Author:** supervisor session
 **Depends on:** ADR-0012 (workspace/shell/FS-skills), ADR-0013 (persistent FileSystem backends)
 **Evidence:** [`.understanding/file-based-agents.md`](../.understanding/file-based-agents.md)
-**Out of scope:** voice (deleted), channels (RFC 0003), evals (RFC 0004)
+**Out of scope:** voice (deleted), channels (future RFC), evals (planned RFC 0004)
+
+> RFC-0003 replaces this document's mutable production-prose model, artifact shape, and
+> per-agent Cloudflare class/codegen design. This document remains historical context for the
+> authoring ergonomics that led to the smaller folder convention selected in RFC-0003 §6.1.
 
 ---
 
@@ -73,7 +77,7 @@ Costs:
   deleted, along with `core/src/realtime`, the `VoiceDriver`, and `cf-agent`'s `./voice` export.
   Kuralle is text-first. Inbound **voice notes** (multimodal audio input + `transcriptionModel`)
   are a separate, retained feature.
-- **Channels** (`messaging`, `messaging-meta`, `engagement`) — RFC 0003. The largest remaining gap.
+- **Channels** (`messaging`, `messaging-meta`, `engagement`) — future RFC. The largest remaining gap.
 - **Evals** (`@kuralle-agents/eval` scorers, golden manifests) — RFC 0004.
 - A GUI or config-service builder. This is files in a repo.
 - Replacing code-defined agents. `defineAgent({...})` stays first-class and is what the build emits.
@@ -609,7 +613,7 @@ Not silently dropped — each is a real capability with no file convention after
 
 - **Channels** — `messaging` (`createMessagingRouter`), `messaging-meta` (WhatsApp webhooks),
   `engagement` (`ChannelPolicy`, smart-send strategist). Eve ships `channels/`; Flue ships 17 channel
-  packages. Today this means hand-writing what `pharmacy-rx-agent` hand-writes. **RFC 0003** —
+  packages. Today this means hand-writing what `pharmacy-rx-agent` hand-writes. **Future channels RFC** —
   the largest remaining gap.
 - **Evals** — `@kuralle-agents/eval` (`Scorer`, golden manifests, transcript replay). Mastra puts
   `scorers/` in the agent directory. **RFC 0004**.

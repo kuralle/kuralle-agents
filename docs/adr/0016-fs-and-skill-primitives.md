@@ -1,7 +1,11 @@
 # ADR 0016 — FS and Skill primitives: freeze the filesystem, invest in skills as content
 
-**Status:** Accepted · **Date:** 2026-07-29 · **Extends:** ADR-0006 (fs reframe), ADR-0012
+**Status:** Accepted, amended by [RFC-0003](../../rfcs/0003-agent-revisions-and-production-deployment.md) · **Date:** 2026-07-29 · **Extends:** ADR-0006 (fs reframe), ADR-0012
 (FS-backed skills), ADR-0013 (persistent backends) · **Scopes:** RFC-0001 (file-based agents)
+
+> RFC-0003 preserves the decision to treat skills as versioned content, but replaces mutable
+> production reads with immutable published Agent Revisions and per-thread pins. Mutable files are
+> draft or workspace state, not executable production configuration.
 
 ## Context
 

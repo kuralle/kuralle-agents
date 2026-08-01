@@ -1,6 +1,6 @@
 # Engineering plan — File-based agents
 
-**Status:** Ready for review · **Date:** 2026-07-28
+**Status:** Superseded in part by [RFC-0003](0003-agent-revisions-and-production-deployment.md) · **Date:** 2026-07-28
 **Translates:** [`rfcs/0001-file-based-agents.md`](0001-file-based-agents.md) (design) into an implementation contract
 **Method:** every claim below was re-verified against source on 2026-07-28. Claims that failed
 verification are marked **CORRECTED** or **BLOCKER** and the RFC line that asserted them is named.
@@ -8,6 +8,10 @@ verification are marked **CORRECTED** or **BLOCKER** and the RFC line that asser
 
 > This document supersedes the RFC's §5 interfaces, §8 work breakdown and §13 open questions.
 > The RFC's §4 design intent survives intact except where marked.
+
+> **2026-08-01:** RFC-0003 now governs the canonical artifact, publish/release/thread-pin model,
+> database authoring, and Node/Cloudflare deployment. Keep this plan only as verified historical
+> analysis of the pre-revision implementation.
 
 ---
 
@@ -244,10 +248,10 @@ agent" can mean).
 >
 > RFC §5.1 emits exactly one `KuralleAgent` subclass per agent directory. **The generated worker
 > therefore cannot express our own flagship Cloudflare deployment.** The channels deferral (§12 →
-> RFC 0003) is not a deferral; it is a hard dependency of the CF target.
+> a future channels RFC) is not a deferral; it is a hard dependency of the old CF target.
 
 **Plan decision:** `kuralle build --target cloudflare` **fails loud** with a named reason when a
-project declares a channel, until RFC 0003 lands. Emitting a worker that silently cannot serve the
+project declares a channel, until a channels RFC lands. Emitting a worker that silently cannot serve the
 app's real traffic is worse than refusing to emit one.
 
 **One RFC claim fully validated, and it is the load-bearing one.** DO-SQLite-backed `FileSystem` is
@@ -853,9 +857,9 @@ Chunk 0 blocks 4, 5, 7-equivalents and 8. Chunks 3-6 parallelise once 0-2 land.
 2. **Is `voiceMode` dead?** Declared at `Runtime.ts:112` with no consumer found. If voice is gone,
    delete it rather than give it a file convention. Same question for `hostSelect`, already
    `@deprecated`.
-3. **Chunk 10 sequencing.** Given §I.7, is RFC 0003 (channels) promoted ahead of the CF target, or
+3. **Chunk 10 sequencing.** Given §I.7, is a channels RFC promoted ahead of the CF target, or
    does the CF target ship with an explicit "no channels" refusal and pharmacy stays hand-written
-   until 0003? Recommended: the latter — the refusal is honest and unblocks 12 of 14 chunks.
+   until then? Recommended: the latter — the refusal is honest and unblocks 12 of 14 chunks.
 4. **OKF v0.2.** Unchanged from RFC §13 Q4: ship against v0.1, file the upgrade as its own task.
 5. **Subagent depth cap.** RFC proposes 3 (Mastra's). Eve has **no cap at all**. Recommended: keep 3;
    it is a diagnostic, not a limit anyone will hit honestly.
@@ -881,7 +885,7 @@ Chunk 0 blocks 4, 5, 7-equivalents and 8. Chunks 3-6 parallelise once 0-2 land.
 | §7 V8 deep-equality | **CORRECTED** — meaningless over closures |
 | §8 chunk 7 "nested YAML" | **BLOCKER** — precondition, not a chunk (§I.6) |
 | §10 no source change in `cf-agent` | ✅ plausible — but codegen inherits `@cloudflare/ai-chat`'s base-class contract |
-| §12 channels deferred to RFC 0003 | **BLOCKER for chunk 10** — a hard dependency, not a deferral |
+| §12 channels deferred to a future RFC | **BLOCKER for chunk 10** — a hard dependency, not a deferral |
 | §13 Q2 flat-YAML "open question" | **CORRECTED** — settled; the shipped parser mis-parses the RFC's own example |
 | G2 every `HarnessConfig` field reachable | **CORRECTED** — four live fields have no home |
 | G3 every `AgentConfig` field reachable | ✅ only where "file" means a `.ts` file — flows can never be data |
