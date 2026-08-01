@@ -8,8 +8,17 @@ export { PostgresPersistentMemoryStore } from './PostgresPersistentMemoryStore.j
 export type { PostgresPersistentMemoryStoreOptions } from './PostgresPersistentMemoryStore.js';
 export { PgVectorStore } from './PgVectorStore.js';
 export type { PgVectorStoreOptions } from './PgVectorStore.js';
-export { PostgresDeploymentStore } from './PostgresDeploymentStore.js';
-export type { PostgresDeploymentStoreOptions } from './PostgresDeploymentStore.js';
+export {
+  PostgresDeploymentStore,
+  postgresDeploymentMigrationSql,
+  postgresDeploymentMigrationStatements,
+  postgresDeploymentTables,
+} from './PostgresDeploymentStore.js';
+export type {
+  PostgresDeploymentSchemaOptions,
+  PostgresDeploymentStoreOptions,
+  PostgresDeploymentTables,
+} from './PostgresDeploymentStore.js';
 export { PostgresThreadExecutionCoordinator } from './PostgresThreadExecutionCoordinator.js';
 export type {
   PostgresThreadExecutionCoordinatorOptions,

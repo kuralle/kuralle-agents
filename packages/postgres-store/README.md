@@ -1,6 +1,6 @@
 # @kuralle-agents/postgres-store
 
-Postgres-backed session store, memory service, and vector store for Kuralle.
+Postgres-backed deployment, session, memory, trace, and vector stores for Kuralle.
 
 ## Install
 
@@ -21,6 +21,34 @@ Three backend implementations — sessions, long-term memory, and pgvector simil
 - **`PostgresMemoryService`** — `MemoryService` implementation for cross-session long-term memory.
 - **`PostgresPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`PgVectorStore`** — `VectorStoreCore` implementation using pgvector for similarity search.
+- **`PostgresDeploymentStore`** — immutable agent versions, releases, and sticky thread pins.
+
+## Deployment store
+
+The deployment store never changes an application database merely because it was constructed.
+Apply its schema explicitly through your migration workflow:
+
+```ts
+import { Pool } from 'pg';
+import {
+  PostgresDeploymentStore,
+  postgresDeploymentMigrationSql,
+} from '@kuralle-agents/postgres-store';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const store = new PostgresDeploymentStore({ client: pool });
+
+// Migration-generation script: write this result into a reviewed migration.
+console.log(postgresDeploymentMigrationSql({ tablePrefix: 'kuralle_deploy' }));
+
+// Explicit alternative for a dedicated database or controlled bootstrap job.
+await store.migrate();
+```
+
+`autoMigrate: true` remains an opt-in convenience for ephemeral tests and dedicated databases. A
+Prisma or Drizzle application should keep schema application in Prisma Migrate or Drizzle Kit. The
+first-party store uses a `pg`-compatible connection; a project that wants all queries to go through
+its ORM can implement the workerd-safe `DeploymentStore` port over its existing models.
 
 ## Session store
 
@@ -54,7 +82,7 @@ const runtime = createRuntime({
 
 Spans live in the separate `kuralle_trace_spans` table. Set `tableName` to override it.
 
-## Store options
+## Session store options
 
 - `tableName` (default: `'kuralle_sessions'`) — table to store sessions.
 - `autoMigrate` (default: `true`) — create the table on first use.

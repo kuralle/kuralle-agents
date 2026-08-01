@@ -7,6 +7,7 @@ import {
   type AgentRelease,
 } from '@kuralle-agents/deployment';
 import { PostgresDeploymentStore } from '../PostgresDeploymentStore.js';
+import { postgresDeploymentMigrationSql } from '../PostgresDeploymentStore.js';
 import { PostgresThreadExecutionCoordinator } from '../PostgresThreadExecutionCoordinator.js';
 
 const AT = '2026-08-01T00:00:00.000Z';
@@ -59,6 +60,7 @@ describe('PostgresDeploymentStore', () => {
     const pg = memory.adapters.createPg();
     const pool = new pg.Pool();
     const store = new PostgresDeploymentStore({ client: pool });
+    await store.migrate();
     await store.createEntity({
       id: 'support',
       tenantId: 'tenant-a',
@@ -138,6 +140,35 @@ describe('PostgresDeploymentStore', () => {
       code: 'ACCESS_DENIED',
     });
     await pool.end();
+  });
+
+  it('does not change application schema during construction and exposes inspectable migrations', async () => {
+    const queries: string[] = [];
+    const client = {
+      query: async (text: string) => {
+        queries.push(text);
+        return { rows: [] };
+      },
+    };
+
+    const store = new PostgresDeploymentStore({ client, tablePrefix: 'app_agents' });
+    await Promise.resolve();
+    expect(queries).toEqual([]);
+    expect(postgresDeploymentMigrationSql({ tablePrefix: 'app_agents' })).toContain(
+      'CREATE TABLE IF NOT EXISTS app_agents_agent_entities',
+    );
+    const schemaSql = postgresDeploymentMigrationSql({
+      tablePrefix: 'app_agents',
+      schema: 'platform',
+    });
+    expect(schemaSql).toContain('CREATE TABLE IF NOT EXISTS platform.app_agents_agent_entities');
+    expect(schemaSql).toContain('ON platform.app_agents_thread_pins');
+    expect(schemaSql).not.toContain('INDEX IF NOT EXISTS platform.');
+
+    await store.migrate();
+    expect(queries).toHaveLength(11);
+    expect(queries[0]).toBe('BEGIN');
+    expect(queries.at(-1)).toBe('COMMIT');
   });
 
   it('uses renewable distributed leases instead of a process-local thread mutex', async () => {

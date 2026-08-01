@@ -35,10 +35,13 @@ interface PgPoolLike extends PgClientLike {
 export interface PostgresDeploymentStoreOptions {
   client: PgPoolLike;
   tablePrefix?: string;
+  /** Existing Postgres schema to use. Kuralle never creates the schema itself. */
+  schema?: string;
+  /** Opt-in convenience for dedicated databases and local tests. Defaults to false. */
   autoMigrate?: boolean;
 }
 
-interface Tables {
+export interface PostgresDeploymentTables {
   entities: string;
   drafts: string;
   versions: string;
@@ -49,20 +52,93 @@ interface Tables {
   pins: string;
 }
 
-function tables(prefix = 'kuralle_deploy'): Tables {
-  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(prefix)) {
-    throw new Error(`Invalid deployment table prefix: ${prefix}`);
-  }
+export interface PostgresDeploymentSchemaOptions {
+  tablePrefix?: string;
+  schema?: string;
+}
+
+function identifier(value: string, label: string): string {
+  if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(value)) throw new Error(`Invalid deployment ${label}: ${value}`);
+  return value;
+}
+
+export function postgresDeploymentTables(
+  options: PostgresDeploymentSchemaOptions = {},
+): PostgresDeploymentTables {
+  const prefix = identifier(options.tablePrefix ?? 'kuralle_deploy', 'table prefix');
+  const qualify = (name: string) => options.schema
+    ? `${identifier(options.schema, 'schema')}.${name}`
+    : name;
   return {
-    entities: `${prefix}_agent_entities`,
-    drafts: `${prefix}_agent_drafts`,
-    versions: `${prefix}_agent_versions`,
-    runtimes: `${prefix}_runtime_revisions`,
-    releases: `${prefix}_releases`,
-    allocations: `${prefix}_release_allocations`,
-    activeReleases: `${prefix}_active_releases`,
-    pins: `${prefix}_thread_pins`,
+    entities: qualify(`${prefix}_agent_entities`),
+    drafts: qualify(`${prefix}_agent_drafts`),
+    versions: qualify(`${prefix}_agent_versions`),
+    runtimes: qualify(`${prefix}_runtime_revisions`),
+    releases: qualify(`${prefix}_releases`),
+    allocations: qualify(`${prefix}_release_allocations`),
+    activeReleases: qualify(`${prefix}_active_releases`),
+    pins: qualify(`${prefix}_thread_pins`),
   };
+}
+
+export function postgresDeploymentMigrationStatements(
+  options: PostgresDeploymentSchemaOptions = {},
+): readonly string[] {
+  const t = postgresDeploymentTables(options);
+  const prefix = identifier(options.tablePrefix ?? 'kuralle_deploy', 'table prefix');
+  return [
+    `CREATE TABLE IF NOT EXISTS ${t.entities} (
+      tenant_id TEXT NOT NULL, id TEXT NOT NULL, slug TEXT NOT NULL, status TEXT NOT NULL,
+      owner_id TEXT NOT NULL, visibility TEXT NOT NULL, active_version_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (tenant_id,id), UNIQUE (tenant_id,slug))`,
+    `CREATE TABLE IF NOT EXISTS ${t.drafts} (
+      tenant_id TEXT NOT NULL, id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
+      revision INTEGER NOT NULL, definition JSONB NOT NULL, updated_by TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (tenant_id,id),
+      FOREIGN KEY (tenant_id,agent_entity_id) REFERENCES ${t.entities}(tenant_id,id))`,
+    `CREATE TABLE IF NOT EXISTS ${t.versions} (
+      tenant_id TEXT NOT NULL, id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
+      version INTEGER NOT NULL, digest CHAR(64) NOT NULL, artifact JSONB NOT NULL,
+      created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (tenant_id,id), UNIQUE (tenant_id,agent_entity_id,version),
+      FOREIGN KEY (tenant_id,agent_entity_id) REFERENCES ${t.entities}(tenant_id,id))`,
+    `CREATE TABLE IF NOT EXISTS ${t.runtimes} (
+      id TEXT PRIMARY KEY, definition JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS ${t.releases} (
+      tenant_id TEXT NOT NULL, id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
+      environment TEXT NOT NULL, state TEXT NOT NULL, branch TEXT, created_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (tenant_id,id), FOREIGN KEY (tenant_id,agent_entity_id)
+      REFERENCES ${t.entities}(tenant_id,id))`,
+    `CREATE TABLE IF NOT EXISTS ${t.allocations} (
+      tenant_id TEXT NOT NULL, release_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
+      agent_version_id TEXT NOT NULL, runtime_revision_id TEXT NOT NULL, weight INTEGER NOT NULL,
+      PRIMARY KEY (tenant_id,release_id,ordinal), FOREIGN KEY (tenant_id,release_id)
+      REFERENCES ${t.releases}(tenant_id,id), FOREIGN KEY (tenant_id,agent_version_id)
+      REFERENCES ${t.versions}(tenant_id,id), FOREIGN KEY (runtime_revision_id)
+      REFERENCES ${t.runtimes}(id))`,
+    `CREATE TABLE IF NOT EXISTS ${t.activeReleases} (
+      tenant_id TEXT NOT NULL, agent_entity_id TEXT NOT NULL, environment TEXT NOT NULL,
+      release_id TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (tenant_id,agent_entity_id,environment), FOREIGN KEY (tenant_id,release_id)
+      REFERENCES ${t.releases}(tenant_id,id))`,
+    `CREATE TABLE IF NOT EXISTS ${t.pins} (
+      thread_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
+      agent_version_id TEXT NOT NULL, artifact_digest CHAR(64) NOT NULL,
+      runtime_revision_id TEXT NOT NULL, release_id TEXT NOT NULL, branch TEXT,
+      environment TEXT NOT NULL, config_generation INTEGER NOT NULL,
+      secret_generation INTEGER NOT NULL, assigned_at TIMESTAMPTZ NOT NULL,
+      FOREIGN KEY (tenant_id,agent_version_id) REFERENCES ${t.versions}(tenant_id,id),
+      FOREIGN KEY (runtime_revision_id) REFERENCES ${t.runtimes}(id),
+      FOREIGN KEY (tenant_id,release_id) REFERENCES ${t.releases}(tenant_id,id))`,
+    `CREATE INDEX IF NOT EXISTS ${prefix}_thread_pins_tenant_agent_idx
+      ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
+  ];
+}
+
+export function postgresDeploymentMigrationSql(
+  options: PostgresDeploymentSchemaOptions = {},
+): string {
+  return `${postgresDeploymentMigrationStatements(options).join(';\n\n')};\n`;
 }
 
 function json(value: unknown): string {
@@ -151,13 +227,17 @@ function pinFrom(row: Record<string, unknown>): ThreadPin {
 
 export class PostgresDeploymentStore implements DeploymentStore {
   private readonly client: PgPoolLike;
-  private readonly table: Tables;
+  private readonly tablePrefix: string;
+  private readonly schema?: string;
+  private readonly table: PostgresDeploymentTables;
   private readonly ready: Promise<void>;
 
   constructor(options: PostgresDeploymentStoreOptions) {
     this.client = options.client;
-    this.table = tables(options.tablePrefix);
-    this.ready = (options.autoMigrate ?? true) ? this.migrate() : Promise.resolve();
+    this.tablePrefix = options.tablePrefix ?? 'kuralle_deploy';
+    this.schema = options.schema;
+    this.table = postgresDeploymentTables({ tablePrefix: this.tablePrefix, schema: this.schema });
+    this.ready = options.autoMigrate ? this.migrate() : Promise.resolve();
   }
 
   async createEntity(entity: AgentEntity): Promise<void> {
@@ -497,55 +577,14 @@ export class PostgresDeploymentStore implements DeploymentStore {
     }
   }
 
-  private async migrate(): Promise<void> {
-    const t = this.table;
-    const statements = [
-      `CREATE TABLE IF NOT EXISTS ${t.entities} (
-        tenant_id TEXT NOT NULL, id TEXT NOT NULL, slug TEXT NOT NULL, status TEXT NOT NULL,
-        owner_id TEXT NOT NULL, visibility TEXT NOT NULL, active_version_id TEXT,
-        created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (tenant_id,id), UNIQUE (tenant_id,slug))`,
-      `CREATE TABLE IF NOT EXISTS ${t.drafts} (
-        tenant_id TEXT NOT NULL, id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
-        revision INTEGER NOT NULL, definition JSONB NOT NULL, updated_by TEXT NOT NULL,
-        updated_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (tenant_id,id),
-        FOREIGN KEY (tenant_id,agent_entity_id) REFERENCES ${t.entities}(tenant_id,id))`,
-      `CREATE TABLE IF NOT EXISTS ${t.versions} (
-        tenant_id TEXT NOT NULL, id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
-        version INTEGER NOT NULL, digest CHAR(64) NOT NULL, artifact JSONB NOT NULL,
-        created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL,
-        PRIMARY KEY (tenant_id,id), UNIQUE (tenant_id,agent_entity_id,version),
-        FOREIGN KEY (tenant_id,agent_entity_id) REFERENCES ${t.entities}(tenant_id,id))`,
-      `CREATE TABLE IF NOT EXISTS ${t.runtimes} (
-        id TEXT PRIMARY KEY, definition JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL)`,
-      `CREATE TABLE IF NOT EXISTS ${t.releases} (
-        tenant_id TEXT NOT NULL, id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
-        environment TEXT NOT NULL, state TEXT NOT NULL, branch TEXT, created_at TIMESTAMPTZ NOT NULL,
-        PRIMARY KEY (tenant_id,id), FOREIGN KEY (tenant_id,agent_entity_id)
-        REFERENCES ${t.entities}(tenant_id,id))`,
-      `CREATE TABLE IF NOT EXISTS ${t.allocations} (
-        tenant_id TEXT NOT NULL, release_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
-        agent_version_id TEXT NOT NULL, runtime_revision_id TEXT NOT NULL, weight INTEGER NOT NULL,
-        PRIMARY KEY (tenant_id,release_id,ordinal), FOREIGN KEY (tenant_id,release_id)
-        REFERENCES ${t.releases}(tenant_id,id), FOREIGN KEY (tenant_id,agent_version_id)
-        REFERENCES ${t.versions}(tenant_id,id), FOREIGN KEY (runtime_revision_id)
-        REFERENCES ${t.runtimes}(id))`,
-      `CREATE TABLE IF NOT EXISTS ${t.activeReleases} (
-        tenant_id TEXT NOT NULL, agent_entity_id TEXT NOT NULL, environment TEXT NOT NULL,
-        release_id TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL,
-        PRIMARY KEY (tenant_id,agent_entity_id,environment), FOREIGN KEY (tenant_id,release_id)
-        REFERENCES ${t.releases}(tenant_id,id))`,
-      `CREATE TABLE IF NOT EXISTS ${t.pins} (
-        thread_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
-        agent_version_id TEXT NOT NULL, artifact_digest CHAR(64) NOT NULL,
-        runtime_revision_id TEXT NOT NULL, release_id TEXT NOT NULL, branch TEXT,
-        environment TEXT NOT NULL, config_generation INTEGER NOT NULL,
-        secret_generation INTEGER NOT NULL, assigned_at TIMESTAMPTZ NOT NULL,
-        FOREIGN KEY (tenant_id,agent_version_id) REFERENCES ${t.versions}(tenant_id,id),
-        FOREIGN KEY (runtime_revision_id) REFERENCES ${t.runtimes}(id),
-        FOREIGN KEY (tenant_id,release_id) REFERENCES ${t.releases}(tenant_id,id))`,
-      `CREATE INDEX IF NOT EXISTS ${t.pins}_tenant_agent_idx
-        ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
-    ];
-    for (const statement of statements) await this.client.query(statement);
+  async migrate(): Promise<void> {
+    await this.transaction(async client => {
+      for (const statement of postgresDeploymentMigrationStatements({
+        tablePrefix: this.tablePrefix,
+        schema: this.schema,
+      })) {
+        await client.query(statement);
+      }
+    });
   }
 }
