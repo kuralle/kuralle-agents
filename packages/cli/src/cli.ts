@@ -37,6 +37,7 @@ Usage:
   kuralle trace <session> [--last] [--json] [--web] [--port N]
   kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]
   kuralle build --agent <directory> --default-model <provider/model> [--target node|cloudflare] [--host deployment.node.ts]
+  kuralle build --agent <directory> --target cloudflare --host deployment.cloudflare.ts --d1-id <uuid> [--d1-name <name>] [--r2-bucket <name>]
   kuralle start [--app .kuralle/node/server.mjs]
   kuralle connection
   kuralle disconnect
@@ -111,6 +112,7 @@ async function main(): Promise<void> {
     const result = await runBuildCommand(rawSubArgv);
     process.stdout.write(`Built ${result.artifactDigest} at ${result.outDir}\n`);
     if (result.serverPath) process.stdout.write(`Node server: ${result.serverPath}\n`);
+    if (result.workerPath) process.stdout.write(`Cloudflare Worker: ${result.workerPath}\n`);
     return;
   }
   if (sub === 'start') {

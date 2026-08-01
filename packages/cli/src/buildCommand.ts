@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { builtinModules } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build as bundle } from 'esbuild';
@@ -28,6 +29,7 @@ export interface BuildCommandResult {
   outDir: string;
   manifestPath: string;
   serverPath?: string;
+  workerPath?: string;
   artifactDigest: string;
   runtimeRevisionSeed: string;
 }
@@ -53,8 +55,9 @@ export async function runBuildCommand(args: string[]): Promise<BuildCommandResul
   const runtimeApiRange = option(args, '--runtime-api-range') ?? '^1.0.0';
   const artifactIdPrefix = option(args, '--artifact-prefix') ?? 'agent';
   const host = option(args, '--host');
-  if (target === 'cloudflare' && host) {
-    throw new Error('--host bundling is currently the Node target; Cloudflare uses the emitted static sources with Wrangler');
+  const d1DatabaseId = option(args, '--d1-id');
+  if (target === 'cloudflare' && host && !d1DatabaseId) {
+    throw new Error('--d1-id is required when bundling a Cloudflare deployment');
   }
 
   const generatedSource = join(outDir, 'generated', 'capabilities.ts');
@@ -67,6 +70,7 @@ export async function runBuildCommand(args: string[]): Promise<BuildCommandResul
   });
   await mkdir(dirname(generatedSource), { recursive: true });
   await mkdir(join(outDir, 'artifacts'), { recursive: true });
+  await mkdir(join(outDir, 'blobs'), { recursive: true });
   await writeFile(
     generatedSource,
     generateCapabilityRegistrySource(project, {
@@ -81,6 +85,12 @@ export async function runBuildCommand(args: string[]): Promise<BuildCommandResul
       `${canonicalJson(artifact)}\n`,
       'utf8',
     );
+  }
+  const artifactBlobs: Record<string, string> = {};
+  for (const blob of project.blobs) {
+    const data = await readFile(blob.sourcePath);
+    await writeFile(join(outDir, 'blobs', blob.digest), data);
+    artifactBlobs[`sha256:${blob.digest}`] = data.toString('base64');
   }
   const runtimeRevisionSeed = await sha256(canonicalJson(project.modules.map(module => ({
     capability: module.capability,
@@ -97,6 +107,12 @@ export async function runBuildCommand(args: string[]): Promise<BuildCommandResul
       digest: artifact.digest,
       file: `artifacts/${encodeURIComponent(artifact.artifactId)}.json`,
     })),
+    blobs: project.blobs.map(blob => ({
+      digest: blob.digest,
+      bytes: blob.bytes,
+      mediaType: blob.mediaType,
+      file: `blobs/${blob.digest}`,
+    })),
     runtimeRevisionSeed,
     capabilitiesSource: 'generated/capabilities.ts',
   };
@@ -104,53 +120,107 @@ export async function runBuildCommand(args: string[]): Promise<BuildCommandResul
   await writeFile(manifestPath, `${canonicalJson(manifest)}\n`, 'utf8');
 
   let serverPath: string | undefined;
+  let workerPath: string | undefined;
   if (host) {
-    const nodeDir = join(outDir, 'node');
-    const entry = join(outDir, 'generated', 'node-entry.ts');
     const artifactsSource = join(outDir, 'generated', 'artifacts.ts');
-    await mkdir(nodeDir, { recursive: true });
     await writeFile(artifactsSource, [
       `export const artifacts = ${canonicalJson(project.artifacts)};`,
       `export const rootArtifactDigest = ${JSON.stringify(project.rootArtifact.digest)};`,
       `export const runtimeRevisionSeed = ${JSON.stringify(runtimeRevisionSeed)};`,
+      `export const artifactBlobs = ${canonicalJson(artifactBlobs)};`,
       '',
     ].join('\n'), 'utf8');
     const hostSpecifier = resolve(host).split('\\').join('/');
-    await writeFile(entry, [
-      `import createHost from ${JSON.stringify(hostSpecifier)};`,
-      `import { createDeploymentRouter } from '@kuralle-agents/hono-server';`,
-      `import { startDeploymentServer } from '@kuralle-agents/hono-server/node';`,
-      `import { artifacts, rootArtifactDigest, runtimeRevisionSeed } from './artifacts.js';`,
-      `import { registerGeneratedCapabilities, runtimeCapabilities } from './capabilities.js';`,
-      '',
-      'const options = await createHost({ artifacts, rootArtifactDigest, runtimeRevisionSeed, runtimeCapabilities });',
-      'registerGeneratedCapabilities(options.bindings);',
-      'const app = createDeploymentRouter(options);',
-      'const port = Number(process.env.PORT ?? 3000);',
-      'startDeploymentServer({ app, port, installSignalHandlers: true });',
-      '',
-    ].join('\n'), 'utf8');
-    serverPath = join(nodeDir, 'server.mjs');
-    await bundle({
-      entryPoints: [entry],
-      outfile: serverPath,
-      bundle: true,
-      platform: 'node',
-      target: 'node22',
-      format: 'esm',
-      sourcemap: false,
-      minify: false,
-      legalComments: 'none',
-      logLevel: 'silent',
-      nodePaths: [CLI_NODE_MODULES],
-    });
-    await writeFile(join(nodeDir, 'Dockerfile'), NODE_DOCKERFILE, 'utf8');
+
+    if (target === 'node') {
+      const nodeDir = join(outDir, 'node');
+      const entry = join(outDir, 'generated', 'node-entry.ts');
+      await mkdir(nodeDir, { recursive: true });
+      await writeFile(entry, [
+        `import createHost from ${JSON.stringify(hostSpecifier)};`,
+        `import { createDeploymentRouter } from '@kuralle-agents/hono-server';`,
+        `import { startDeploymentServer } from '@kuralle-agents/hono-server/node';`,
+        `import { artifactBlobs, artifacts, rootArtifactDigest, runtimeRevisionSeed } from './artifacts.js';`,
+        `import { registerGeneratedCapabilities, runtimeCapabilities } from './capabilities.js';`,
+        '',
+        'const options = await createHost({ artifactBlobs, artifacts, rootArtifactDigest, runtimeRevisionSeed, runtimeCapabilities });',
+        'registerGeneratedCapabilities(options.bindings);',
+        'const app = createDeploymentRouter(options);',
+        'const port = Number(process.env.PORT ?? 3000);',
+        'startDeploymentServer({ app, port, installSignalHandlers: true });',
+        '',
+      ].join('\n'), 'utf8');
+      serverPath = join(nodeDir, 'server.mjs');
+      await bundle({
+        entryPoints: [entry], outfile: serverPath, bundle: true, platform: 'node',
+        target: 'node22', format: 'esm', sourcemap: false, minify: false,
+        legalComments: 'none', logLevel: 'silent', nodePaths: [CLI_NODE_MODULES],
+      });
+      await writeFile(join(nodeDir, 'Dockerfile'), NODE_DOCKERFILE, 'utf8');
+    } else {
+      const cloudflareDir = join(outDir, 'cloudflare');
+      const entry = join(outDir, 'generated', 'cloudflare-entry.ts');
+      await mkdir(cloudflareDir, { recursive: true });
+      await writeFile(entry, [
+        `import createHost from ${JSON.stringify(hostSpecifier)};`,
+        `import { artifactBlobs, artifacts, rootArtifactDigest, runtimeRevisionSeed } from './artifacts.js';`,
+        `import { registerGeneratedCapabilities, runtimeCapabilities } from './capabilities.js';`,
+        '',
+        'const deployment = await createHost({',
+        '  artifactBlobs, artifacts, rootArtifactDigest, runtimeRevisionSeed, runtimeCapabilities,',
+        '  registerGeneratedCapabilities,',
+        '});',
+        'export const KuralleThread = deployment.agent;',
+        'export default deployment.worker;',
+        '',
+      ].join('\n'), 'utf8');
+      workerPath = join(cloudflareDir, 'worker.mjs');
+      await bundle({
+        entryPoints: [entry], outfile: workerPath, bundle: true, platform: 'browser',
+        target: 'es2022', format: 'esm', sourcemap: false, minify: false,
+        legalComments: 'none', logLevel: 'silent', nodePaths: [CLI_NODE_MODULES],
+        conditions: ['workerd', 'worker', 'browser'],
+        external: ['cloudflare:*', 'node:*', ...builtinModules],
+      });
+      const appName = option(args, '--name') ?? 'kuralle-agent';
+      const d1DatabaseName = option(args, '--d1-name') ?? `${appName}-control`;
+      const r2Bucket = option(args, '--r2-bucket');
+      const wrangler = {
+        name: appName,
+        main: 'worker.mjs',
+        compatibility_date: '2026-07-29',
+        compatibility_flags: [
+          'nodejs_compat',
+          'enable_nodejs_tty_module',
+          'enable_nodejs_fs_module',
+          'enable_nodejs_http_modules',
+          'enable_nodejs_perf_hooks_module',
+          'enable_nodejs_v8_module',
+          'enable_nodejs_process_v2',
+        ],
+        durable_objects: {
+          bindings: [{ name: 'KURALLE_THREADS', class_name: 'KuralleThread' }],
+        },
+        migrations: [{ tag: 'v1', new_sqlite_classes: ['KuralleThread'] }],
+        d1_databases: [{
+          binding: 'KURALLE_CONTROL', database_name: d1DatabaseName, database_id: d1DatabaseId!,
+        }],
+        ...(r2Bucket ? { r2_buckets: [{ binding: 'KURALLE_BLOBS', bucket_name: r2Bucket }] } : {}),
+        observability: { enabled: true },
+      };
+      await writeFile(
+        join(cloudflareDir, 'wrangler.jsonc'),
+        `${JSON.stringify(wrangler, null, 2)}\n`,
+        'utf8',
+      );
+    }
   }
 
   return {
     outDir,
     manifestPath,
     serverPath,
+    workerPath,
     artifactDigest: project.rootArtifact.digest,
     runtimeRevisionSeed,
   };

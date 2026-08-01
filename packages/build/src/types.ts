@@ -52,10 +52,18 @@ export interface CapabilityModule {
   digest: string;
 }
 
+export interface ArtifactBlob {
+  digest: string;
+  sourcePath: string;
+  bytes: number;
+  mediaType: string;
+}
+
 export interface CompiledAgentProject {
   rootArtifact: AgentArtifact;
   artifacts: AgentArtifact[];
   modules: CapabilityModule[];
+  blobs: ArtifactBlob[];
   diagnostics: BuildDiagnostic[];
 }
 

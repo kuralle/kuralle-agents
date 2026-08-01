@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { InMemoryDeploymentStore } from '@kuralle-agents/deployment';
@@ -94,6 +94,22 @@ describe('folder agent compiler', () => {
 
     expect(published.artifact).toEqual(compiled.rootArtifact);
     expect(published.artifact.digest).toBe(compiled.rootArtifact.digest);
+  });
+
+  it('retains content-addressed source bytes for every non-inline artifact entry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kuralle-agent-blobs-'));
+    await mkdir(join(root, 'references'));
+    await writeFile(join(root, 'instructions.md'), 'Use the packaged image.');
+    const image = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    await writeFile(join(root, 'references', 'diagram.png'), image);
+
+    const compiled = await compileAgentDirectory(root, { ...OPTIONS, target: 'node' });
+    expect(compiled.blobs).toHaveLength(1);
+    expect(compiled.blobs[0]).toMatchObject({
+      digest: compiled.rootArtifact.references[0]?.digest,
+      bytes: image.byteLength,
+      mediaType: 'image/png',
+    });
   });
 
   it('accumulates config, export, target, and unknown-slot diagnostics', async () => {

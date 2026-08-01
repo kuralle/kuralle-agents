@@ -16,6 +16,7 @@ import { AgentBuildError } from './errors.js';
 import { analyzeModule } from './module-analysis.js';
 import {
   DEFAULT_BUILD_QUOTAS,
+  type ArtifactBlob,
   type BuildDiagnostic,
   type BuildQuotas,
   type CapabilityModule,
@@ -50,6 +51,7 @@ interface CompileState {
   diagnostics: BuildDiagnostic[];
   modules: CapabilityModule[];
   artifacts: AgentArtifact[];
+  blobs: Map<string, ArtifactBlob>;
   foldedPaths: Map<string, string>;
   files: number;
   totalBytes: number;
@@ -180,6 +182,12 @@ async function contentEntry(
       content: { kind: 'inline', text },
     };
   }
+  state.blobs.set(digest, {
+    digest,
+    sourcePath: resolve(absolute),
+    bytes: data.byteLength,
+    mediaType: type,
+  });
   return {
     path: localPath,
     digest,
@@ -632,6 +640,7 @@ export async function compileAgentDirectory(
     diagnostics: [],
     modules: [],
     artifacts: [],
+    blobs: new Map(),
     foldedPaths: new Map(),
     files: 0,
     totalBytes: 0,
@@ -645,6 +654,7 @@ export async function compileAgentDirectory(
     rootArtifact,
     artifacts: state.artifacts,
     modules: state.modules,
+    blobs: [...state.blobs.values()].sort((a, b) => a.digest.localeCompare(b.digest)),
     diagnostics: state.diagnostics,
   };
 }

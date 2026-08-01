@@ -22,8 +22,8 @@
       "default": "./dist/node-workspace.js"
     },
     "./cloudflare": {
-      "types": "./dist/d1-store.d.ts",
-      "default": "./dist/d1-store.js"
+      "types": "./dist/cloudflare.d.ts",
+      "default": "./dist/cloudflare.js"
     }
   },
   "files": [

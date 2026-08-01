@@ -17,7 +17,9 @@ import {
 import { NodeFileSystem } from '@kuralle-agents/fs/node/fs';
 import { canonicalJson, sha256 } from './canonical.js';
 import { DeploymentError } from './errors.js';
+import { assertContentRef } from './content-resolvers.js';
 import type {
+  ArtifactContentResolver,
   ArtifactWorkspaceContext,
   ArtifactWorkspaceProvider,
 } from './binder.js';
@@ -35,6 +37,17 @@ export interface NodeArtifactWorkspaceOptions {
   root: string;
   /** Expose write operations to the model-facing workspace tool. Defaults to false. */
   modelWritable?: boolean;
+}
+
+/** Resolve `sha256:` artifact blobs from a read-only build/upload directory. */
+export function nodeArtifactContentResolver(root: string): ArtifactContentResolver {
+  const directory = resolve(root);
+  return {
+    async read(ref) {
+      const digest = assertContentRef(ref);
+      return new Uint8Array(await readFile(join(directory, digest)));
+    },
+  };
 }
 
 function stripRoot(path: string, root: 'references' | 'workspace'): string {

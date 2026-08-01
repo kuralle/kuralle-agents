@@ -4,6 +4,7 @@ export { AgentBuildError } from './errors.js';
 export { analyzeModule } from './module-analysis.js';
 export {
   DEFAULT_BUILD_QUOTAS,
+  type ArtifactBlob,
   type BuildDiagnostic,
   type BuildDiagnosticCode,
   type BuildQuotas,
