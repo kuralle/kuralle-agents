@@ -165,7 +165,15 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
           for await (const part of handle.events) {
             if (!shouldEmit(part, filter)) continue;
             const safe = sanitizeForClient(part);
-            await stream.writeSSE({ event: safe.type, data: JSON.stringify(safe.payload) });
+            // The composition above is addressing, and addressing does not
+            // cross this boundary: a client keeps `done.sessionId` and sends it
+            // back as a thread id, and the internal form contains `|`, which
+            // thread-id validation rejects. Undo it on the way out — the layer
+            // that composed the key is the layer that owes the raw one back.
+            const payload = 'sessionId' in safe.payload
+              ? { ...safe.payload, sessionId: threadId }
+              : safe.payload;
+            await stream.writeSSE({ event: safe.type, data: JSON.stringify(payload) });
           }
           await handle;
           if (renewalFailed) throw renewalFailed;

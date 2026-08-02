@@ -171,6 +171,36 @@ describe('a thread id collision across tenants', () => {
     expect(tenantBTurn.join('\n')).not.toContain('4111');
   });
 
+  it('never emits the internal storage key to the client', async () => {
+    const { app } = await setup();
+    const threadId = '94778984729';
+
+    const res = await app.request(
+      `http://local/v1/agents/support/threads/${threadId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer tenant-a',
+          'content-type': 'application/json',
+          'idempotency-key': 'leak-1',
+        },
+        body: JSON.stringify({ message: 'Hello' }),
+      },
+    );
+    const body = await res.text();
+    const done = body
+      .split('\n')
+      .filter(line => line.startsWith('data: '))
+      .map(line => JSON.parse(line.slice(6)) as { sessionId?: string })
+      .find(payload => typeof payload.sessionId === 'string');
+
+    // The composed key is addressing. A client that keeps `done.sessionId` and
+    // sends it back as a thread id must get a working round trip — the internal
+    // form contains `|`, which `validateThreadAssignmentRequest` rejects.
+    expect(done?.sessionId).toBe(threadId);
+    expect(body).not.toContain('|');
+  });
+
   it('still carries one tenant\'s own history forward across turns', async () => {
     const { app } = await setup();
     const shared = '94778984729';
