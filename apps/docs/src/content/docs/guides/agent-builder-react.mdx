@@ -9,6 +9,12 @@ An *agent builder* is the product surface most teams end up wanting: a screen wh
 non-engineer edits an agent's instructions, tools, and model, hits **Publish**, and gets a
 working assistant — without a deploy, and without touching anyone else's tenant.
 
+<Aside type="tip" title="Runnable version">
+Everything below exists as a working example at `apps/examples/agent-builder` — a Hono
+backend, a React UI, and two demo tenants so the isolation is visible rather than
+asserted. `bun run dev` and `bun run dev:web`.
+</Aside>
+
 This guide builds one. It assumes you have read [Build an Agent](/guides/build-an-agent/)
 and [Deployment](/guides/deployment/), and it focuses on the parts that are genuinely
 non-obvious: the draft/version/release lifecycle, the compare-and-swap that makes

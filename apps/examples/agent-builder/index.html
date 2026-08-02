@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kuralle Agent Builder</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; margin: 0; }
+      main { max-width: 46rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+      header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+      h1 { font-size: 1.35rem; margin: 0; }
+      h2 { font-size: 1rem; margin: 0 0 .5rem; }
+      section { border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+                border-radius: .6rem; padding: 1rem; margin: 1rem 0; }
+      label { display: block; margin: .5rem 0; }
+      input, textarea, select { width: 100%; padding: .45rem .6rem; font: inherit;
+                border-radius: .4rem; border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+                background: transparent; color: inherit; box-sizing: border-box; }
+      select { width: auto; }
+      button { font: inherit; padding: .45rem .9rem; margin: .35rem .35rem .35rem 0;
+               border-radius: .4rem; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+      pre { white-space: pre-wrap; margin: .5rem 0 0; }
+      .muted { opacity: .65; }
+      .warn { color: #b45309; }
+      .ok { color: #047857; }
+      footer { opacity: .75; font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/web/main.tsx"></script>
+  </body>
+</html>
