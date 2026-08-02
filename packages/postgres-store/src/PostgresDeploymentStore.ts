@@ -133,6 +133,15 @@ export function postgresDeploymentMigrationStatements(
       FOREIGN KEY (tenant_id,release_id) REFERENCES ${t.releases}(tenant_id,id))`,
     `CREATE INDEX IF NOT EXISTS ${prefix}_thread_pins_tenant_agent_idx
       ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
+    // Pins predate tenant scoping, when the key was `thread_id` alone. On such a
+    // database `CREATE TABLE IF NOT EXISTS` above is a no-op, so the old key
+    // survives and `ON CONFLICT (tenant_id,thread_id)` has no constraint to
+    // target — every assignment fails. Drop-then-add reaches the composite key
+    // from either starting schema, so it is idempotent rather than conditional.
+    // Safe unconditionally: nothing references the pin table by foreign key, and
+    // `tenant_id` was already NOT NULL under the old schema.
+    `ALTER TABLE ${t.pins} DROP CONSTRAINT IF EXISTS ${prefix}_thread_pins_pkey`,
+    `ALTER TABLE ${t.pins} ADD PRIMARY KEY (tenant_id,thread_id)`,
   ];
 }
 

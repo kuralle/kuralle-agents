@@ -399,5 +399,41 @@ export class D1DeploymentStore implements DeploymentStore {
        ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
     ];
     await this.database.batch(sql.map(statement => this.database.prepare(statement)));
+    await this.rekeyPinsByTenant();
+  }
+
+  /**
+   * Pins predate tenant scoping, when the key was `thread_id` alone. On such a
+   * database the `CREATE TABLE IF NOT EXISTS` above is a no-op, so the old key
+   * survives and `ON CONFLICT(tenant_id,thread_id)` matches no constraint —
+   * every assignment fails outright.
+   *
+   * SQLite cannot alter a primary key, so the fix is the standard rebuild.
+   * Detection is structural rather than a match on stored DDL text: `pk` in
+   * `table_info` is the column's 1-based position in the primary key, so
+   * `tenant_id` reporting 0 means it is not part of the key.
+   */
+  private async rekeyPinsByTenant(): Promise<void> {
+    const t = this.table;
+    const columns = await this.all(`PRAGMA table_info(${t.pins})`);
+    const tenant = columns.find(column => column.name === 'tenant_id');
+    if (!tenant || Number(tenant.pk) > 0) return;
+
+    const names = columns.map(column => String(column.name)).join(',');
+    await this.database.batch([
+      // Named explicitly, never positionally: the old schema declared
+      // `thread_id` first and the new one declares `tenant_id` first.
+      `CREATE TABLE ${t.pins}_rekeyed (
+       tenant_id TEXT NOT NULL,thread_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,agent_version_id TEXT NOT NULL,
+       artifact_digest TEXT NOT NULL,runtime_revision_id TEXT NOT NULL,release_id TEXT NOT NULL,branch TEXT,
+       environment TEXT NOT NULL,config_generation INTEGER NOT NULL,secret_generation INTEGER NOT NULL,
+       assigned_at TEXT NOT NULL,PRIMARY KEY(tenant_id,thread_id))`,
+      // No row can collide: the old key made `thread_id` unique on its own.
+      `INSERT INTO ${t.pins}_rekeyed (${names}) SELECT ${names} FROM ${t.pins}`,
+      `DROP TABLE ${t.pins}`,
+      `ALTER TABLE ${t.pins}_rekeyed RENAME TO ${t.pins}`,
+      `CREATE INDEX IF NOT EXISTS ${t.pins}_tenant_agent_idx
+       ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
+    ].map(statement => this.database.prepare(statement)));
   }
 }

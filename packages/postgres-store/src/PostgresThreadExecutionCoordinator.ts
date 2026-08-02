@@ -94,5 +94,16 @@ export class PostgresThreadExecutionCoordinator {
       `CREATE INDEX IF NOT EXISTS ${this.table.replace(/\./g, '_')}_expiry_idx
        ON ${this.table}(expires_at)`,
     );
+    // Leases predate tenant scoping, when the key was `thread_id` alone. The
+    // CREATE above is a no-op on such a database, leaving `ON CONFLICT
+    // (tenant_id,thread_id)` without a constraint to target. Drop-then-add
+    // reaches the composite key from either schema, so it is idempotent.
+    const bare = this.table.split('.').pop();
+    await this.client.query(
+      `ALTER TABLE ${this.table} DROP CONSTRAINT IF EXISTS ${bare}_pkey`,
+    );
+    await this.client.query(
+      `ALTER TABLE ${this.table} ADD PRIMARY KEY (tenant_id,thread_id)`,
+    );
   }
 }

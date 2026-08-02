@@ -166,7 +166,7 @@ describe('PostgresDeploymentStore', () => {
     expect(schemaSql).not.toContain('INDEX IF NOT EXISTS platform.');
 
     await store.migrate();
-    expect(queries).toHaveLength(11);
+    expect(queries).toHaveLength(13);
     expect(queries[0]).toBe('BEGIN');
     expect(queries.at(-1)).toBe('COMMIT');
   });
