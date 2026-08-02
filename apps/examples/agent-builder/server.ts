@@ -17,13 +17,14 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { createOpenAI } from '@ai-sdk/openai';
-import { MemoryStore, type AgentConfig } from '@kuralle-agents/core';
+import { MemoryStore, MemoryTraceStore, type AgentConfig, type AgentTrace } from '@kuralle-agents/core';
 import {
   DeploymentError,
   InMemoryDeploymentStore,
   NamedRegistry,
   VersionedRegistry,
   createArtifact,
+  scopedKey,
   sha256,
   type ArtifactInputV1,
   type RuntimeBindings,
@@ -55,6 +56,27 @@ const principalFrom = (header: string | undefined) => {
 
 const store = new InMemoryDeploymentStore();
 const sessionStore = new MemoryStore();
+/** Spans land here; the Traces tab reads them back per conversation. */
+const traceStore = new MemoryTraceStore();
+
+/**
+ * Which threads a tenant has talked to, and which versions it has published.
+ *
+ * Kuralle deliberately has no "list every thread" API — a control plane that
+ * enumerates conversations is a different product with different privacy
+ * requirements. Owning this registry is the application's job, which is the
+ * same boundary the rest of /api/* sits on.
+ */
+const threadsByTenant = new Map<string, Set<string>>();
+interface PublishedVersion {
+  versionId: string;
+  releaseId: string;
+  digest: string;
+  version: number;
+  publishedAt: string;
+}
+const versionsByTenant = new Map<string, PublishedVersion[]>();
+const liveReleaseByTenant = new Map<string, string>();
 
 const runtimeRevision: RuntimeRevision = {
   id: 'runtime-1',
@@ -217,10 +239,113 @@ api.post('/agents/:id/publish', async c => {
   // with no rebuild and no new version.
   await store.routeTrafficTo(tenantId, releaseId);
 
-  return c.json({
+  const record: PublishedVersion = {
     versionId: published.id,
     releaseId,
     digest: published.artifact.digest,
+    version: body.version,
+    publishedAt: new Date().toISOString(),
+  };
+  const history = versionsByTenant.get(tenantId) ?? [];
+  history.unshift(record);
+  versionsByTenant.set(tenantId, history);
+  liveReleaseByTenant.set(tenantId, releaseId);
+
+  return c.json(record);
+});
+
+/** Version history, newest first, with the one currently serving traffic marked. */
+api.get('/versions', c => {
+  const tenantId = c.get('tenantId');
+  const live = liveReleaseByTenant.get(tenantId);
+  return c.json({
+    versions: (versionsByTenant.get(tenantId) ?? [])
+      .map(v => ({ ...v, live: v.releaseId === live })),
+  });
+});
+
+/**
+ * Rollback. Immutable releases plus a routing pointer make this one write —
+ * no rebuild, no new version, and open conversations keep their pinned version
+ * either way.
+ */
+api.post('/traffic', async c => {
+  const { releaseId } = await c.req.json<{ releaseId: string }>();
+  const tenantId = c.get('tenantId');
+  const known = (versionsByTenant.get(tenantId) ?? []).some(v => v.releaseId === releaseId);
+  if (!known) return c.json({ error: 'unknown release for this tenant' }, 404);
+  await store.routeTrafficTo(tenantId, releaseId);
+  liveReleaseByTenant.set(tenantId, releaseId);
+  return c.json({ releaseId });
+});
+
+/** Every conversation this tenant has had, with what it pinned. */
+api.get('/conversations', async c => {
+  const tenantId = c.get('tenantId');
+  const threads = [...(threadsByTenant.get(tenantId) ?? [])];
+  const rows = await Promise.all(threads.map(async threadId => {
+    const session = await sessionStore.get(scopedKey(tenantId, threadId));
+    const pin = await store.getThreadPin(tenantId, threadId);
+    return {
+      threadId,
+      turns: session ? session.messages.filter(m => m.role === 'user').length : 0,
+      messages: session?.messages.length ?? 0,
+      pinnedVersionId: pin?.agentVersionId ?? null,
+      artifactDigest: pin?.artifactDigest ?? null,
+      updatedAt: session?.updatedAt ?? null,
+    };
+  }));
+  rows.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')));
+  return c.json({ conversations: rows });
+});
+
+/**
+ * One conversation: the transcript and the spans, side by side. This is the
+ * view LiveKit and Vapi both converge on — a transcript alone cannot tell you
+ * why a turn was slow, and spans alone cannot tell you what was said.
+ */
+api.get('/conversations/:threadId', async c => {
+  const tenantId = c.get('tenantId');
+  const threadId = c.req.param('threadId');
+  const sessionId = scopedKey(tenantId, threadId);
+  const session = await sessionStore.get(sessionId);
+  const traces: AgentTrace[] = await traceStore.listTraces(sessionId);
+  const pin = await store.getThreadPin(tenantId, threadId);
+
+  return c.json({
+    threadId,
+    // The RAW thread id the caller used. `sessionId` above is a tenant-scoped
+    // storage key and never leaves the server.
+    pin: pin && {
+      agentVersionId: pin.agentVersionId,
+      artifactDigest: pin.artifactDigest,
+      releaseId: pin.releaseId,
+      assignedAt: pin.assignedAt,
+    },
+    messages: (session?.messages ?? []).map(m => ({
+      role: m.role,
+      content: typeof m.content === 'string'
+        ? m.content
+        : JSON.stringify(m.content),
+    })),
+    traces: traces.map(t => ({
+      traceId: t.traceId,
+      startedAt: t.startedAt,
+      endedAt: t.endedAt,
+      durationMs: t.endedAt ? t.endedAt - t.startedAt : null,
+      usedTool: t.usedTool,
+      answer: t.answer,
+      spans: t.spans.map(span => ({
+        name: span.name,
+        kind: span.kind,
+        status: span.status,
+        durationMs: span.endTime ? span.endTime - span.startTime : null,
+        agentVersionId: span.attributes.agentVersionId ?? null,
+        modelId: span.attributes.modelId ?? null,
+        inputTokens: span.attributes.inputTokens ?? null,
+        outputTokens: span.attributes.outputTokens ?? null,
+      })),
+    })),
   });
 });
 
@@ -231,6 +356,22 @@ api.post('/agents/:id/definition', async c => {
 
 const app = new Hono();
 app.route('/api', api);
+
+/**
+ * Kuralle has no "list every thread" API, so the application records which
+ * threads it has seen. This runs before the deployment router and only notes
+ * the pair; the router still owns authentication and everything after it.
+ */
+app.use('/v1/agents/:agentEntityId/threads/:threadId/messages', async (c, next) => {
+  const principal = principalFrom(c.req.header('authorization'));
+  if (principal) {
+    const seen = threadsByTenant.get(principal.tenantId) ?? new Set<string>();
+    seen.add(c.req.param('threadId'));
+    threadsByTenant.set(principal.tenantId, seen);
+  }
+  await next();
+});
+
 app.route('/', createDeploymentRouter({
   deploymentStore: store,
   sessionStore,
@@ -240,6 +381,9 @@ app.route('/', createDeploymentRouter({
   // 'all' so the preview pane can show tool and lifecycle events. Production
   // defaults to 'safe', which withholds internal detail from clients.
   streamFilter: 'all',
+  // Spans are what make the Traces tab possible: turn, llm, and tool spans
+  // carrying the deployment identity that produced them.
+  runtimeConfig: { tracing: { store: traceStore } },
   resolvePrincipal: c => principalFrom(c.req.header('authorization')),
 }));
 

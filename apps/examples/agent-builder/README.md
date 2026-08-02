@@ -1,8 +1,15 @@
 # Agent Builder
 
 A runnable multi-tenant agent builder: edit an agent in the browser, publish an
-immutable version, release it, and chat with the result — with two demo tenants so
-the isolation is visible rather than asserted.
+immutable version, release it, hold a multi-turn conversation with it, then inspect
+the transcript and its trace spans — with two demo tenants so the isolation is
+visible rather than asserted.
+
+The operator surface follows what production agent platforms converge on
+([LiveKit](https://livekit.com/products/agent-observability),
+[Vapi](https://docs.vapi.ai/whats-new)): a session list, a turn-by-turn transcript,
+the spans behind each turn, version history, and one-click rollback. A transcript
+alone cannot tell you why a turn was slow; spans alone cannot tell you what was said.
 
 Pairs with the [Agent Builder in React](https://agents.kuralle.com/guides/agent-builder-react/)
 guide, which explains the reasoning behind each part.
@@ -17,7 +24,20 @@ bun run dev:web    # React UI on :5173 (second terminal)
 ```
 
 Open http://localhost:5173, then: edit the instructions → **Save draft** → **Publish** →
-**Send**. Switch the tenant dropdown and repeat to watch the two tenants stay separate.
+send a message, then a follow-up that depends on the first. Open **Conversations →
+Inspect** to see the transcript beside its spans. Switch the tenant dropdown and
+repeat to watch the two tenants stay separate.
+
+## What it does
+
+| panel | what it shows |
+| --- | --- |
+| **Edit the draft** | the agent form; loads the existing draft and its revision on mount |
+| **Publish & release** | draft → immutable version → release → live traffic |
+| **Preview** | multi-turn chat; history lives on the server, keyed by thread |
+| **Conversations** | every thread, its turn count, and the version it pinned |
+| ↳ **Inspect** | transcript + per-turn trace spans (kind, duration, model, tokens) |
+| **Versions** | published versions, which is live, and rollback |
 
 ## What this demonstrates
 
@@ -49,6 +69,16 @@ so a customer mid-conversation is never swapped onto a new prompt. That applies 
 preview pane too, which is why the preview thread id is derived from the published
 version — with a **Reset preview thread** button for the rest.
 
+**Observability is the operator's half of the product.** `MemoryTraceStore` is wired
+into the runtime, so every turn emits `turn` and `llm` spans carrying the deployment
+identity that produced them. `GET /api/conversations/:threadId` returns the transcript
+and those spans together. Swap in a durable `TraceStore` and the same UI works against
+production traffic.
+
+**Kuralle has no "list every thread" API, on purpose.** A control plane that enumerates
+conversations is a different product with different privacy requirements. The example
+keeps its own thread registry — the same boundary the rest of `/api/*` sits on.
+
 **Tenancy comes from the credential.** `resolvePrincipal` reads the bearer token; the
 tenant is never taken from a path segment or request body. Two demo tokens
 (`demo-acme`, `demo-globex`) map to two tenants that cannot see each other's agents or
@@ -68,6 +98,13 @@ Checked against this example running live, with a real model:
 | same thread id, two tenants | each gets its own agent |
 | existing thread after a new release | stays on its pinned version |
 | new thread after a new release | gets the new version |
+| multi-turn recall | turn 2 answered from turn 1's context |
+| conversation list | thread, turns, pinned version, digest |
+| trace spans | `turn` + `llm` per turn, with duration and token counts |
+| version history | published versions with the live one marked |
+
+Driven end-to-end in a real Chromium browser (via CDP), not only by HTTP: the form,
+save, publish, a two-turn conversation, and both tables were exercised through the UI.
 
 ## Going to production
 

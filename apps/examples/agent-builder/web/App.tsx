@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDeploymentThread } from './useDeploymentThread.js';
+import { Conversations, Versions } from './Observability.js';
 
 const TENANTS = [
   { token: 'demo-acme', label: 'Acme (tenant: acme)' },
@@ -35,6 +36,7 @@ export function App() {
   // first saw — so the id changes whenever the published version does.
   const [nonce, setNonce] = useState(0);
   const [message, setMessage] = useState('What can you help me with?');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const threadId = useMemo(
     () => `preview-${published?.versionId ?? 'draft'}-${nonce}`,
@@ -50,12 +52,46 @@ export function App() {
     },
   }), [token]);
 
-  // Switching tenants is a different agent namespace entirely, so reset.
+  // Switching tenants is a different agent namespace entirely, so reset — then
+  // load whatever that tenant already has. A builder that assumes revision 0 on
+  // mount will 409 the first time anyone reloads the page, because the stored
+  // draft has moved on without it.
   useEffect(() => {
+    let cancelled = false;
     setRevision(0);
     setVersion(1);
     setPublished(null);
     setStatus('');
+
+    void (async () => {
+      const draftResponse = await fetch(`/api/agents/${form.agentId}/draft`, authed());
+      if (cancelled || !draftResponse.ok) return;
+      const { draft } = await draftResponse.json();
+      if (draft) {
+        setRevision(draft.revision);
+        const agent = draft.definition?.agent;
+        const instructions = draft.definition?.instructions?.[0]?.content?.text;
+        setForm(previous => ({
+          ...previous,
+          name: agent?.name ?? previous.name,
+          description: agent?.description ?? previous.description,
+          instructions: instructions ?? previous.instructions,
+          maxTurns: agent?.limits?.maxTurns ?? previous.maxTurns,
+        }));
+        setStatus(`Loaded existing draft at revision ${draft.revision}.`);
+      }
+
+      const versionsResponse = await fetch('/api/versions', authed());
+      if (cancelled || !versionsResponse.ok) return;
+      const { versions } = await versionsResponse.json();
+      if (versions.length > 0) {
+        setPublished({ versionId: versions[0].versionId, digest: versions[0].digest });
+        setVersion(versions[0].version + 1);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const save = useCallback(async () => {
@@ -94,6 +130,7 @@ export function App() {
     setPublished({ versionId: result.versionId, digest: result.digest });
     setVersion(v => v + 1);
     setNonce(n => n + 1);
+    setRefreshKey(k => k + 1);
     setStatus(`Published ${result.versionId} and routed traffic to it.`);
   }, [authed, form.agentId, revision, version]);
 
@@ -155,20 +192,60 @@ export function App() {
 
       <section>
         <h2>3 · Preview</h2>
-        <p className="muted">thread <code>{threadId}</code></p>
-        <input value={message} onChange={e => setMessage(e.target.value)} />
-        <button onClick={() => thread.send(message)} disabled={thread.streaming || !published}>
-          {thread.streaming ? 'Streaming…' : 'Send'}
+        <p className="muted">
+          thread <code>{threadId}</code> — history lives on the server, so this is a
+          real multi-turn conversation, not a sequence of one-shot prompts.
+        </p>
+
+        <div className="transcript">
+          {thread.messages.map((m, i) => (
+            <p key={i} className={m.role === 'user' ? 'msg user' : 'msg assistant'}>
+              <strong>{m.role}</strong> {m.content}
+            </p>
+          ))}
+          {thread.pending && (
+            <p className="msg assistant"><strong>assistant</strong> {thread.pending}</p>
+          )}
+          {thread.messages.length === 0 && !thread.pending && (
+            <p className="muted">No messages yet.</p>
+          )}
+        </div>
+
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            if (!message.trim() || thread.streaming) return;
+            const text = message;
+            setMessage('');
+            void thread.send(text).then(() => setRefreshKey(k => k + 1));
+          }}
+        >
+          <input
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder="Ask a follow-up…"
+          />
+          <button type="submit" disabled={thread.streaming || !published}>
+            {thread.streaming ? 'Streaming…' : 'Send'}
+          </button>
+        </form>
+        <button onClick={() => { setNonce(n => n + 1); thread.reset(); }}>
+          Reset preview thread
         </button>
-        <button onClick={() => setNonce(n => n + 1)}>Reset preview thread</button>
         {!published && <p className="muted">Publish first — a thread needs a released version.</p>}
         {thread.error && <p className="warn">{thread.error}</p>}
-        <pre>{thread.text}</pre>
         <details>
           <summary>{thread.events.length} stream events</summary>
           <pre>{thread.events.map(e => e.type).join('\n')}</pre>
         </details>
       </section>
+
+      <Conversations authed={authed} refreshKey={refreshKey} />
+      <Versions
+        authed={authed}
+        refreshKey={refreshKey}
+        onRollback={() => { setNonce(n => n + 1); thread.reset(); setStatus('Traffic re-pointed.'); }}
+      />
 
       {status && <footer>{status}</footer>}
     </main>

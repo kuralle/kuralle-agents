@@ -26,6 +26,26 @@
       .warn { color: #b45309; }
       .ok { color: #047857; }
       footer { opacity: .75; font-size: .9rem; }
+      table { width: 100%; border-collapse: collapse; margin: .5rem 0; font-size: .88rem; }
+      th, td { text-align: left; padding: .35rem .5rem; vertical-align: top;
+               border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent); }
+      th { font-weight: 600; opacity: .7; }
+      tr.sel { background: color-mix(in srgb, currentColor 8%, transparent); }
+      code { font-size: .88em; }
+      form { display: flex; gap: .5rem; align-items: center; }
+      form input { flex: 1; }
+      .transcript { border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+                    border-radius: .5rem; padding: .5rem .75rem; margin: .5rem 0;
+                    max-height: 22rem; overflow-y: auto; }
+      .msg { margin: .4rem 0; }
+      .msg strong { display: inline-block; min-width: 5.5rem; opacity: .6;
+                    font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+      .msg.user { opacity: .85; }
+      .detail { border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+                margin-top: 1rem; padding-top: .75rem; }
+      h3, h4 { font-size: .95rem; margin: .75rem 0 .35rem; }
+      details { margin: .35rem 0; }
+      summary { cursor: pointer; }
     </style>
   </head>
   <body>
