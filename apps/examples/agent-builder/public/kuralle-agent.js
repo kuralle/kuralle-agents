@@ -115,6 +115,18 @@
           if (response.status === 409) { add('err', 'One moment — still answering.'); return; }
           if (!response.ok || !response.body) { add('err', `Sorry, something failed (${response.status}).`); return; }
 
+          const take = frame => {
+            const data = frame.match(/^data: (.*)$/m)?.[1]?.trim();
+            // `[DONE]` is the AI SDK's stream sentinel, not JSON.
+            if (!data || data === '[DONE]') return;
+            let chunk;
+            try { chunk = JSON.parse(data); } catch { return; }
+            if (chunk.type !== 'text-delta' || typeof chunk.delta !== 'string') return;
+            if (!bubble) bubble = add('agent', '');
+            bubble.textContent += chunk.delta;
+            log.scrollTop = log.scrollHeight;
+          };
+
           const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
           let buffer = '';
           for (;;) {
@@ -125,18 +137,12 @@
             // trailing partial frame for the next read.
             const frames = buffer.split('\n\n');
             buffer = frames.pop() ?? '';
-            for (const frame of frames) {
-              const data = frame.match(/^data: (.*)$/m)?.[1]?.trim();
-              // `[DONE]` is the AI SDK's stream sentinel, not JSON.
-              if (!data || data === '[DONE]') continue;
-              let chunk;
-              try { chunk = JSON.parse(data); } catch { continue; }
-              if (chunk.type !== 'text-delta' || typeof chunk.delta !== 'string') continue;
-              if (!bubble) bubble = add('agent', '');
-              bubble.textContent += chunk.delta;
-              log.scrollTop = log.scrollHeight;
-            }
+            for (const frame of frames) take(frame);
           }
+          // Flush a final frame the server did not terminate with a blank
+          // line. Standard SSE always does, so this is belt-and-braces —
+          // borrowed from Algolia's ai-lite parser, which handles it too.
+          if (buffer.trim()) take(buffer);
           if (!bubble) add('err', 'No reply received.');
         } catch (error) {
           add('err', `Network error: ${error.message}`);
