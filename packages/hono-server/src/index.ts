@@ -48,6 +48,7 @@ import {
   sanitizeForClient,
   type StreamEventFilter,
 } from './streamFilter.js';
+import { wantsRawStreamFormat } from './streamFormat.js';
 import { debug } from './debug.js';
 
 type FlowRouterManager = {
@@ -201,7 +202,6 @@ const parseJsonBody = async <T>(c: Context): Promise<T | null> => {
   }
 };
 
-const wantsRawStreamFormat = (c: Context): boolean => c.req.query('format') === 'raw';
 
 /** A UIMessage part as sent by `useChat` (text or file). File parts carry a URL
  *  (blob/data URL) + mediaType — the ai-chatbot multimodal shape. */

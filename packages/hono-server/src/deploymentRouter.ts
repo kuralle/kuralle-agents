@@ -17,9 +17,7 @@ import {
   type RuntimeRevision,
 } from '@kuralle-agents/deployment';
 import { sanitizeForClient, shouldEmit, type StreamEventFilter } from './streamFilter.js';
-
-/** Same negotiation the chat/flow routes use, so one flag means one thing. */
-const wantsRawStreamFormat = (c: Context): boolean => c.req.query('format') === 'raw';
+import { wantsRawStreamFormat } from './streamFormat.js';
 
 export interface DeploymentPrincipal {
   tenantId: string;

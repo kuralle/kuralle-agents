@@ -148,6 +148,32 @@ kuralle chat --session customer-42
 
 The hosted runtime owns credentials, state, tools, and workspaces. The CLI stores only the non-secret server/transport selection. Provide a bearer token with `KURALLE_TOKEN`; see [CLI & Devtools](/guides/cli#hosted-runtimes).
 
+## The deployment thread route
+
+`POST /v1/agents/:agentEntityId/threads/:threadId/messages` serves an AI SDK
+`UIMessageStream` by default — the same wire every Kuralle runtime speaks — so
+`useChat` consumes it with no bridge code:
+
+```ts
+const transport = new DefaultChatTransport({
+  api: `/v1/agents/${agentId}/threads/${threadId}/messages`,
+  headers: () => ({ authorization: `Bearer ${token}`, 'idempotency-key': key.current }),
+});
+const { messages, sendMessage } = useChat<KuralleUIMessage>({ id: threadId, transport });
+```
+
+Append `?format=raw` for the named-event `StreamPart` SSE, the same negotiation
+`/api/chat/sse` and `/api/flow/sse` already use. That form is for non-browser
+consumers — CLIs, webhooks, custom transports.
+
+<Aside type="caution" title="Transient parts never reach `message.parts`">
+`data-kuralle-node`, `-flow`, `-control` and `-flow-*` are written with
+`transient: true`, so they arrive via `useChat({ onData })` and are dropped from
+message history. Reading them off `message.parts` produces a panel that renders
+nothing. The persistent parts — `-handoff`, `-interactive`, `-safety`,
+`-outcome` — do stay in `message.parts`.
+</Aside>
+
 ## HTTP streaming
 
 ### Web (`useChat`, default)
