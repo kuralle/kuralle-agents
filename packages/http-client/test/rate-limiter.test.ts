@@ -3,11 +3,24 @@ import { RateLimiter } from '../src/rate-limiter.js';
 
 describe('RateLimiter', () => {
   it('acquires immediately when capacity is available', async () => {
+    // "Immediately" means "without waiting on a release", which is a property of
+    // the limiter — not "within 50ms of wall clock", which is a property of the
+    // machine. The wall-clock form flaked under full parallel suite load: an
+    // uncontended acquire measured 75ms on a loaded runner and failed a test
+    // about queueing behaviour, which is how a green suite starts being ignored.
     const limiter = new RateLimiter({ maxConcurrent: 5, perSecondLimit: 100 });
-    const start = Date.now();
+
+    // The fast path returns without awaiting anything, so `acquire()` settles as
+    // a MICROTASK. The queue path schedules a `setTimeout` drain, so it settles
+    // as a macrotask at best. Racing against a zero-delay timer separates the
+    // two by event-loop ordering, which does not care how loaded the machine is.
+    let timerFired = false;
+    setTimeout(() => { timerFired = true; }, 0);
+
     await limiter.acquire();
+
+    expect(timerFired).toBe(false);
     limiter.release();
-    expect(Date.now() - start).toBeLessThan(50);
   });
 
   it('queues callers when concurrency is saturated', async () => {

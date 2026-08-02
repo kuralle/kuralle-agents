@@ -1,11 +1,17 @@
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { DefaultChatTransport, isDataUIPart, isTextUIPart, type DataUIPart } from 'ai';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import type { KuralleDataParts, KuralleUIMessage } from '@kuralle-agents/core';
 
-export interface ThreadEvent {
-  type: string;
-  payload: Record<string, unknown>;
-}
+/**
+ * One Kuralle orchestration event: a `data-kuralle-*` part, discriminated on
+ * `type`, with `data` typed per variant by `KuralleDataParts`.
+ */
+export type ThreadEvent = DataUIPart<KuralleDataParts>;
+
+/** Concatenate the text parts of a message, ignoring tool and data parts. */
+const textOf = (message: KuralleUIMessage): string =>
+  message.parts.filter(isTextUIPart).map(part => part.text).join('');
 
 /**
  * Multi-turn chat against a deployed agent — `useChat`, with no bridge.
@@ -21,6 +27,10 @@ export interface ThreadEvent {
  *
  * Conversation history lives on the SERVER, keyed by thread. The client sends
  * one message; the runtime replays the rest.
+ *
+ * `useChat<KuralleUIMessage>` types the whole surface: `part.data` is narrowed
+ * per variant, and the SDK's `isTextUIPart` / `isDataUIPart` guards do the
+ * narrowing that would otherwise be a cast at every read.
  */
 export function useDeploymentThread(options: {
   agentId: string;
@@ -49,7 +59,7 @@ export function useDeploymentThread(options: {
 
   const transport = useMemo(
     () =>
-      new DefaultChatTransport({
+      new DefaultChatTransport<KuralleUIMessage>({
         api: `/v1/agents/${encodeURIComponent(agentId)}/threads/${encodeURIComponent(threadId)}/messages`,
         headers: () => ({
           authorization: `Bearer ${token}`,
@@ -57,28 +67,18 @@ export function useDeploymentThread(options: {
         }),
         // The route takes `{ message }`, not the full useChat message array —
         // history is the server's, so re-sending it would be redundant.
-        prepareSendMessagesRequest: ({ messages }) => ({
-          body: {
-            message: messages[messages.length - 1]?.parts
-              ?.filter(part => part.type === 'text')
-              .map(part => (part as { text: string }).text)
-              .join('') ?? '',
-          },
-        }),
+        prepareSendMessagesRequest: ({ messages }) => {
+          const last = messages[messages.length - 1];
+          return { body: { message: last ? textOf(last) : '' } };
+        },
       }),
     [agentId, threadId, token],
   );
 
-  const chat = useChat({
+  const chat = useChat<KuralleUIMessage>({
     transport,
     id: threadId,
-    onData: part => {
-      if (!part.type.startsWith('data-')) return;
-      setTransient(previous => [
-        ...previous,
-        { type: part.type, payload: part as unknown as Record<string, unknown> },
-      ]);
-    },
+    onData: part => setTransient(previous => [...previous, part]),
   });
 
   const send = useCallback(async (message: string) => {
@@ -90,18 +90,11 @@ export function useDeploymentThread(options: {
 
   const messages = chat.messages.map(message => ({
     role: message.role as 'user' | 'assistant',
-    content: message.parts
-      .filter(part => part.type === 'text')
-      .map(part => (part as { text: string }).text)
-      .join(''),
+    content: textOf(message),
   }));
 
   // Persistent Kuralle parts live in history; transient ones arrived via onData.
-  const persistent: ThreadEvent[] = chat.messages.flatMap(message =>
-    message.parts
-      .filter(part => part.type.startsWith('data-'))
-      .map(part => ({ type: part.type, payload: part as unknown as Record<string, unknown> })),
-  );
+  const persistent = chat.messages.flatMap(message => message.parts.filter(isDataUIPart));
 
   return {
     messages,
