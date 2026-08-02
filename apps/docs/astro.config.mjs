@@ -196,7 +196,7 @@ const sidebar = [
 ];
 
 export default defineConfig({
-  site: 'https://docs.kuralle.com',
+  site: 'https://agents.kuralle.com',
   integrations: [
     starlight({
       title: 'Kuralle',

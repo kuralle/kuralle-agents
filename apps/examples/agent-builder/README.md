@@ -4,7 +4,7 @@ A runnable multi-tenant agent builder: edit an agent in the browser, publish an
 immutable version, release it, and chat with the result — with two demo tenants so
 the isolation is visible rather than asserted.
 
-Pairs with the [Agent Builder in React](https://kuralle.dev/guides/agent-builder-react/)
+Pairs with the [Agent Builder in React](https://agents.kuralle.com/guides/agent-builder-react/)
 guide, which explains the reasoning behind each part.
 
 ## Run it
