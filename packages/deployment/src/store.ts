@@ -39,6 +39,38 @@ function key(...parts: string[]): string {
   return parts.map(part => `${part.length}:${part}`).join('|');
 }
 
+/**
+ * The identity of a conversation thread: the tenant that owns it, plus the id
+ * the client chose. Compose this at the trust boundary — where an authenticated
+ * tenant first meets a client-supplied thread id — and use the result as the
+ * key everywhere downstream: pin, session, and execution lease.
+ *
+ * A thread id alone is not an identity. It arrives from a URL path segment, so
+ * without the tenant two customers address one row: the first to claim an id
+ * locks the second out permanently, and "already taken" reveals that somebody
+ * else holds it.
+ *
+ * Hashed rather than concatenated, for two reasons:
+ *
+ * - **Length.** Both halves may be up to 128 characters, and a thread id must
+ *   itself satisfy that limit. No concatenation of two 128-character ids fits,
+ *   so a joined key would work for short inputs and fail for long ones.
+ * - **Charset.** A thread id must match `[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}`.
+ *   Hex output always does; a separator outside that set does not.
+ *
+ * The pre-image is length-prefixed so the hash is taken over an unambiguous
+ * encoding: plain joining collides, since ("a:b","c") and ("a","b:c") both
+ * yield "a:b:c", which would map two tenants onto one key and reinstate the
+ * defect this exists to prevent.
+ *
+ * The result is opaque — the tenant cannot be read back off it. That is
+ * acceptable because nothing parses a thread id, and every store keeps
+ * `tenant_id` as its own column for querying and debugging.
+ */
+export async function scopedThreadKey(tenantId: string, threadId: string): Promise<string> {
+  return sha256(key(tenantId, threadId));
+}
+
 function conflict(message: string): never {
   throw new DeploymentError('CONFLICT', message);
 }

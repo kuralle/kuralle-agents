@@ -8,6 +8,7 @@ import {
 import {
   DeploymentError,
   bindAgentVersion,
+  scopedThreadKey,
   type DeploymentStore,
   type RuntimeBindings,
   type RuntimeRevision,
@@ -103,6 +104,13 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     if (body.message.length > 64_000) return c.json({ error: 'message exceeds 64000 characters' }, 413);
     const message = body.message.trim();
 
+    // `threadId` is a client-controlled path segment; `principal.tenantId` is
+    // established by authentication. Compose them here, once, and use the result
+    // as the thread's identity for every store below — pin, session and lease.
+    // Passing the raw id would put all three in one global namespace shared by
+    // every tenant.
+    const threadKey = await scopedThreadKey(principal.tenantId, threadId);
+
     try {
       const generations = await options.resolveGenerations?.({ principal, agentEntityId }) ?? {
         configGeneration: 1,
@@ -110,7 +118,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
       };
       const pin = await options.deploymentStore.assignThread({
         tenantId: principal.tenantId,
-        threadId,
+        threadId: threadKey,
         agentEntityId,
         environment,
         configGeneration: generations.configGeneration,
@@ -127,7 +135,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
       const ownerId = crypto.randomUUID();
       const lease = await options.coordinator.acquire({
         tenantId: principal.tenantId,
-        threadId,
+        threadId: threadKey,
         ownerId,
         ttlMs: leaseTtlMs,
       });
@@ -151,7 +159,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         try {
           const handle = runtime.run({
             input: message,
-            sessionId: threadId,
+            sessionId: threadKey,
             userId: principal.userId,
             idempotencyKey,
             abortSignal: abort.signal,

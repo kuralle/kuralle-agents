@@ -39,6 +39,7 @@ export {
 export { NamedRegistry, VersionedRegistry, type VersionedValue } from './registry.js';
 export {
   InMemoryDeploymentStore,
+  scopedThreadKey,
   selectReleaseAllocation,
   type DeploymentStore,
 } from './store.js';
