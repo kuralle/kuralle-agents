@@ -223,10 +223,7 @@ export function App() {
               <strong>{m.role}</strong> {m.content}
             </p>
           ))}
-          {thread.pending && (
-            <p className="msg assistant"><strong>assistant</strong> {thread.pending}</p>
-          )}
-          {thread.messages.length === 0 && !thread.pending && (
+          {thread.messages.length === 0 && (
             <p className="muted">No messages yet.</p>
           )}
         </div>

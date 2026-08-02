@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.90",
+    "@ai-sdk/react": "^3.0.239",
     "@hono/node-server": "^2.0.12",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/deployment": "workspace:*",

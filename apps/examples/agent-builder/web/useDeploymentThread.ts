@@ -1,28 +1,22 @@
-import { useCallback, useRef, useState } from 'react';
-
-export interface ThreadEvent {
-  type: string;
-  payload: Record<string, unknown>;
-}
-
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { useCallback, useMemo, useRef } from 'react';
 
 /**
- * Multi-turn chat over the deployment router's SSE stream.
+ * Multi-turn chat against a deployed agent — now `useChat`, with no bridge.
  *
- * `useChat` from the AI SDK does NOT work against this route, and that is not a
- * bug: `POST /v1/agents/:id/threads/:threadId/messages` emits Kuralle stream
- * parts as NAMED events (`event: text-delta`) whose `data:` is the payload
- * alone — a different wire format from the UIMessageStream `useChat` consumes.
- * The trade is deliberate: tool calls, approvals, and lifecycle events arrive as
- * distinct events the builder can render, at the cost of writing this.
+ * This file used to be a ~110-line hand-rolled SSE reader, because the
+ * deployment route emitted named-event frames no AI SDK client understood.
+ * The route now serves the same UIMessageStream every other Kuralle runtime
+ * serves, so the reader is gone and this is a thin wrapper that supplies two
+ * things `useChat` does not know about:
  *
- * Conversation history lives on the SERVER, keyed by the thread id. The client
- * sends one message and the runtime replays the rest, so this hook keeps a
- * local transcript only for display.
+ *   1. the tenant credential, and
+ *   2. an `idempotency-key` per logical send, reused on retry so a network
+ *      blip cannot duplicate a turn.
+ *
+ * Conversation history lives on the SERVER, keyed by thread. The client sends
+ * one message; the runtime replays the rest.
  */
 export function useDeploymentThread(options: {
   agentId: string;
@@ -30,101 +24,65 @@ export function useDeploymentThread(options: {
   token: string;
 }) {
   const { agentId, threadId, token } = options;
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [pending, setPending] = useState('');
-  const [events, setEvents] = useState<ThreadEvent[]>([]);
-  const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // One key per logical send, held across retries. Reusing it is what makes a
-  // retry safe; minting a fresh one turns a network blip into a duplicate turn.
+  // One key per logical send. Held in a ref so a re-render cannot mint a new
+  // one mid-flight, which would turn a retry into a second turn.
   const idempotencyKey = useRef('');
 
-  const reset = useCallback(() => {
-    setMessages([]);
-    setPending('');
-    setEvents([]);
-    setError(null);
-    idempotencyKey.current = '';
-  }, []);
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `/v1/agents/${encodeURIComponent(agentId)}/threads/${encodeURIComponent(threadId)}/messages`,
+        headers: () => ({
+          authorization: `Bearer ${token}`,
+          'idempotency-key': idempotencyKey.current || (idempotencyKey.current = crypto.randomUUID()),
+        }),
+        // The route takes `{ message }`, not the full useChat message array —
+        // history is the server's, so re-sending it would be redundant.
+        prepareSendMessagesRequest: ({ messages }) => ({
+          body: { message: messages[messages.length - 1]?.parts
+            ?.filter(part => part.type === 'text')
+            .map(part => (part as { text: string }).text)
+            .join('') ?? '' },
+        }),
+      }),
+    [agentId, threadId, token],
+  );
+
+  const chat = useChat({ transport, id: threadId });
 
   const send = useCallback(async (message: string) => {
     if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
-    setStreaming(true);
-    setError(null);
-    setPending('');
-    setMessages(previous => [...previous, { role: 'user', content: message }]);
+    await chat.sendMessage({ text: message });
+    // The turn completed, so the next send is a new logical request.
+    idempotencyKey.current = '';
+  }, [chat]);
 
-    const response = await fetch(
-      `/v1/agents/${encodeURIComponent(agentId)}/threads/${encodeURIComponent(threadId)}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-          'idempotency-key': idempotencyKey.current,
-        },
-        body: JSON.stringify({ message }),
-      },
-    );
+  const messages = chat.messages.map(message => ({
+    role: message.role as 'user' | 'assistant',
+    content: message.parts
+      .filter(part => part.type === 'text')
+      .map(part => (part as { text: string }).text)
+      .join(''),
+  }));
 
-    if (response.status === 409) {
-      // Not an error: a turn is already running on this thread, enforced by a
-      // lease. Keep the key — this send has not happened yet.
-      setError('This thread already has a turn in flight.');
-      setStreaming(false);
-      return;
-    }
-    if (!response.ok || !response.body) {
-      setError(`Request failed (${response.status}).`);
-      setStreaming(false);
+  return {
+    messages,
+    // useChat renders the in-flight assistant message in `messages` directly,
+    // so there is no separate "pending" buffer to keep any more.
+    pending: '',
+    streaming: chat.status === 'streaming' || chat.status === 'submitted',
+    error: chat.error?.message ?? null,
+    send,
+    reset: () => {
+      chat.setMessages([]);
       idempotencyKey.current = '';
-      return;
-    }
-
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = '';
-    let answer = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += value;
-
-      // A stream chunk does not respect SSE frame boundaries, so keep the
-      // trailing partial frame for the next read. Skipping this produces
-      // intermittent parse failures that never reproduce locally.
-      const frames = buffer.split('\n\n');
-      buffer = frames.pop() ?? '';
-
-      for (const frame of frames) {
-        const type = frame.match(/^event: (.*)$/m)?.[1];
-        const data = frame.match(/^data: (.*)$/m)?.[1];
-        if (!type || !data) continue;
-        let payload: Record<string, unknown>;
-        try {
-          payload = JSON.parse(data) as Record<string, unknown>;
-        } catch {
-          continue;
-        }
-
-        setEvents(previous => [...previous, { type, payload }]);
-        if (type === 'text-delta' && typeof payload.delta === 'string') {
-          answer += payload.delta;
-          setPending(answer);
-        }
-        if (type === 'error' && typeof payload.error === 'string') {
-          setError(payload.error);
-        }
-        if (type === 'done') {
-          // The turn completed, so the next send is a new logical request.
-          idempotencyKey.current = '';
-        }
-      }
-    }
-
-    if (answer) setMessages(previous => [...previous, { role: 'assistant', content: answer }]);
-    setPending('');
-    setStreaming(false);
-  }, [agentId, threadId, token]);
-
-  return { messages, pending, events, streaming, error, send, reset };
+    },
+    // Kuralle's typed data parts arrive here — flow/node/safety/interactive —
+    // as real parts rather than something this file has to decode by hand.
+    events: chat.messages.flatMap(message =>
+      message.parts
+        .filter(part => part.type.startsWith('data-'))
+        .map(part => ({ type: part.type, payload: part as Record<string, unknown> })),
+    ),
+  };
 }

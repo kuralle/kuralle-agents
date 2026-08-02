@@ -6,12 +6,10 @@
  *   <script src="https://your-host/kuralle-agent.js"></script>
  *   <kuralle-agent agent="support" token="demo-acme"></kuralle-agent>
  *
- * Why this is not `@kuralle-agents/widget`: that package speaks to the CHAT
- * router (`/api/agent/:id`, `/api/chat/*`). This example is built on the
- * DEPLOYMENT router, whose route is
- * `POST /v1/agents/:id/threads/:threadId/messages` and whose stream is named
- * SSE events rather than a UIMessageStream. Same product idea, different wire
- * contract — so the embed is written against the contract actually in play.
+ * The stream is a standard AI SDK UIMessageStream — the same wire every
+ * Kuralle runtime now speaks — so the frames are plain `data: {...}` chunks.
+ * A React app would use `useChat` and write none of this; the parsing below
+ * exists only because a drop-in <script> tag cannot assume a framework.
  *
  * TOKENS: this demo passes a tenant token straight to the browser, which is
  * fine for a local demo and wrong for production. A real deployment mints a
@@ -128,14 +126,14 @@
             const frames = buffer.split('\n\n');
             buffer = frames.pop() ?? '';
             for (const frame of frames) {
-              const type = frame.match(/^event: (.*)$/m)?.[1];
-              const data = frame.match(/^data: (.*)$/m)?.[1];
-              if (type !== 'text-delta' || !data) continue;
-              let delta;
-              try { delta = JSON.parse(data).delta; } catch { continue; }
-              if (typeof delta !== 'string') continue;
+              const data = frame.match(/^data: (.*)$/m)?.[1]?.trim();
+              // `[DONE]` is the AI SDK's stream sentinel, not JSON.
+              if (!data || data === '[DONE]') continue;
+              let chunk;
+              try { chunk = JSON.parse(data); } catch { continue; }
+              if (chunk.type !== 'text-delta' || typeof chunk.delta !== 'string') continue;
               if (!bubble) bubble = add('agent', '');
-              bubble.textContent += delta;
+              bubble.textContent += chunk.delta;
               log.scrollTop = log.scrollHeight;
             }
           }

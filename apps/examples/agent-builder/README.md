@@ -84,13 +84,16 @@ write with `CONFLICT`, and the UI surfaces it instead of retrying. Retrying with
 revision writes stale form state over the change you just detected — last-write-wins with
 extra steps.
 
-**`useChat` does not work against the deployment route, and that is not a bug.**
-`POST /v1/agents/:id/threads/:threadId/messages` emits Kuralle stream parts as *named*
-SSE events (`event: text-delta`) whose `data:` is the payload alone — a different wire
-format from the AI SDK UIMessageStream. `web/useDeploymentThread.ts` is the ~40-line
-reader, including the two details that bite: buffering across chunk boundaries (a stream
-chunk does not respect SSE frame boundaries) and holding one idempotency key across
-retries but not across turns.
+**`useChat` works against the deployment route, with no bridge.** The route serves the
+same AI SDK `UIMessageStream` every Kuralle runtime serves, so
+`web/useDeploymentThread.ts` is a thin `useChat` wrapper rather than a hand-rolled SSE
+reader — it shrank from 130 lines to 88, and all of the deleted lines were parsing.
+
+It still supplies the two things `useChat` cannot know: the tenant credential, and an
+`idempotency-key` per logical send that is reused on retry, so a network blip cannot
+duplicate a turn.
+
+Raw named-event SSE remains available at `?format=raw` for non-browser consumers.
 
 **Sticky pinning.** A thread pins its version on the first message and keeps it for life,
 so a customer mid-conversation is never swapped onto a new prompt. That applies to your

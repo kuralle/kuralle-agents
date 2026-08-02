@@ -114,10 +114,13 @@ async function chat(p: Persona, message: string, key: string): Promise<string> {
     const frames = buffer.split('\n\n');
     buffer = frames.pop() ?? '';
     for (const frame of frames) {
-      const type = frame.match(/^event: (.*)$/m)?.[1];
-      const data = frame.match(/^data: (.*)$/m)?.[1];
-      if (type !== 'text-delta' || !data) continue;
-      try { text += (JSON.parse(data) as { delta?: string }).delta ?? ''; } catch { /* partial frame */ }
+      const data = frame.match(/^data: (.*)$/m)?.[1]?.trim();
+      // `[DONE]` is the AI SDK's stream sentinel, not JSON.
+      if (!data || data === '[DONE]') continue;
+      try {
+        const chunk = JSON.parse(data) as { type?: string; delta?: string };
+        if (chunk.type === 'text-delta' && typeof chunk.delta === 'string') text += chunk.delta;
+      } catch { /* partial frame; the next chunk completes it */ }
     }
   }
   return text.trim();
