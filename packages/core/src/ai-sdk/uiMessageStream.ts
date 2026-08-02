@@ -1,6 +1,5 @@
 import {
   createUIMessageStream,
-  generateId,
   type UIMessage,
   type UIMessageStreamWriter,
 } from 'ai';
@@ -42,9 +41,34 @@ export type KuralleUIMessage = UIMessage<KuralleMetadata, KuralleDataParts>;
 /** An error that the harness has explicitly classified for client delivery. */
 class ClientStreamError extends Error {}
 
+/**
+ * Stable, per-turn ids for the data parts that persist into message history.
+ *
+ * These ids are not decoration — clients reconcile on `(type, id)`. Cloudflare's
+ * `applyChunkToParts` updates a part in place when both match and appends a new
+ * one when they do not, and the AI SDK's own client does the same. A random id
+ * therefore means "always append", so a turn that is re-emitted into an existing
+ * message — Cloudflare's chat recovery re-runs `onChatMessage` and appends to
+ * the same assistant message — duplicates every handoff, safety block and
+ * outcome it had already recorded.
+ *
+ * Counting per type per stream gives the ordinal of the event within the turn,
+ * which is exactly the identity reconciliation wants: the second safety block of
+ * a turn is the same logical part on every attempt at that turn.
+ */
+function createIdSequence(): (kind: string) => string {
+  const counts = new Map<string, number>();
+  return kind => {
+    const next = counts.get(kind) ?? 0;
+    counts.set(kind, next + 1);
+    return `${kind}-${next}`;
+  };
+}
+
 function writeHarnessPart(
   part: StreamPart,
   writer: UIMessageStreamWriter<KuralleUIMessage>,
+  nextId: (kind: string) => string,
 ): void {
   switch (part.type) {
     case 'text-start':
@@ -62,7 +86,11 @@ function writeHarnessPart(
     case 'tool-call':
       writer.write({
         type: 'tool-input-available',
-        toolCallId: part.payload.toolCallId ?? generateId(),
+        // Same reasoning as the data-part ids: a random fallback id appends a
+        // duplicate tool part on a re-emitted turn. (It stays unpaired with the
+        // `tool-result` fallback below, which is a pre-existing gap in the
+        // degenerate case where the harness emitted no toolCallId at all.)
+        toolCallId: part.payload.toolCallId ?? nextId('tool'),
         toolName: part.payload.toolName,
         input: part.payload.args,
       });
@@ -112,7 +140,7 @@ function writeHarnessPart(
     case 'handoff':
       writer.write({
         type: 'data-kuralle-handoff',
-        id: generateId(),
+        id: nextId('handoff'),
         data: { targetAgent: part.payload.targetAgent, reason: part.payload.reason },
       });
       break;
@@ -130,7 +158,7 @@ function writeHarnessPart(
     case 'safety-blocked':
       writer.write({
         type: 'data-kuralle-safety',
-        id: generateId(),
+        id: nextId('safety'),
         data: {
           kind: 'safety-blocked',
           moderator: part.payload.moderator,
@@ -142,7 +170,7 @@ function writeHarnessPart(
     case 'pipeline-validation-block':
       writer.write({
         type: 'data-kuralle-safety',
-        id: generateId(),
+        id: nextId('safety'),
         data: {
           kind: 'pipeline-validation-block',
           rationale: part.payload.rationale,
@@ -153,7 +181,7 @@ function writeHarnessPart(
     case 'conversation-outcome':
       writer.write({
         type: 'data-kuralle-outcome',
-        id: generateId(),
+        id: nextId('outcome'),
         data: { outcome: part.payload.outcome },
       });
       break;
@@ -210,6 +238,7 @@ export function harnessToUIMessageStream(
     onError: (error) =>
       error instanceof ClientStreamError ? error.message : 'An error occurred.',
     execute: async ({ writer }) => {
+      const nextId = createIdSequence();
       let doneSessionId = opts?.sessionId;
 
       if (doneSessionId) {
@@ -223,7 +252,7 @@ export function harnessToUIMessageStream(
         if (part.type === 'done' && part.payload.sessionId) {
           doneSessionId = doneSessionId ?? part.payload.sessionId;
         } else {
-          writeHarnessPart(part, writer);
+          writeHarnessPart(part, writer, nextId);
         }
       }
 

@@ -26,7 +26,7 @@ export interface DeploymentStore {
   getVersion(tenantId: string, versionId: string): Promise<AgentVersion | null>;
   registerRuntime(revision: RuntimeRevision): Promise<void>;
   createRelease(release: AgentRelease): Promise<void>;
-  activateRelease(tenantId: string, releaseId: string): Promise<void>;
+  routeTrafficTo(tenantId: string, releaseId: string): Promise<void>;
   assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin>;
   getThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null>;
 }
@@ -35,7 +35,17 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function key(...parts: string[]): string {
+/**
+ * Composes a trusted scope (the tenant) with an id the caller supplied into a
+ * single storage key. Length-prefixing is what makes it injective: with a bare
+ * separator, `('a', 'b|c')` and `('a|b', 'c')` produce the same string, and one
+ * tenant addresses another tenant's row.
+ *
+ * This is addressing, never identity — what a caller passed in is what comes
+ * back out, so anything comparing a stored record against the request that
+ * produced it keeps working.
+ */
+export function scopedKey(...parts: string[]): string {
   return parts.map(part => `${part.length}:${part}`).join('|');
 }
 
@@ -45,10 +55,6 @@ function conflict(message: string): never {
 
 function notFound(message: string): never {
   throw new DeploymentError('NOT_FOUND', message);
-}
-
-function accessDenied(): never {
-  throw new DeploymentError('ACCESS_DENIED', 'resource is not accessible in this tenant');
 }
 
 function validateIdentity(value: string, name: string): void {
@@ -87,20 +93,20 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   async createEntity(entity: AgentEntity): Promise<void> {
     validateIdentity(entity.id, 'entity id');
     validateIdentity(entity.tenantId, 'tenant id');
-    const entityKey = key(entity.tenantId, entity.id);
+    const entityKey = scopedKey(entity.tenantId, entity.id);
     if (this.entities.has(entityKey)) conflict('agent entity already exists');
     this.entities.set(entityKey, clone(entity));
   }
 
   async getEntity(tenantId: string, entityId: string): Promise<AgentEntity | null> {
-    const entity = this.entities.get(key(tenantId, entityId));
+    const entity = this.entities.get(scopedKey(tenantId, entityId));
     return entity ? clone(entity) : null;
   }
 
   async saveDraft(draft: AgentDraft, expectedRevision: number): Promise<AgentDraft> {
-    const entity = this.entities.get(key(draft.tenantId, draft.agentEntityId));
+    const entity = this.entities.get(scopedKey(draft.tenantId, draft.agentEntityId));
     if (!entity) notFound('agent entity does not exist');
-    const draftKey = key(draft.tenantId, draft.id);
+    const draftKey = scopedKey(draft.tenantId, draft.id);
     const current = this.drafts.get(draftKey);
     const actualRevision = current?.revision ?? 0;
     if (actualRevision !== expectedRevision) {
@@ -118,12 +124,12 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   }
 
   async getDraft(tenantId: string, draftId: string): Promise<AgentDraft | null> {
-    const draft = this.drafts.get(key(tenantId, draftId));
+    const draft = this.drafts.get(scopedKey(tenantId, draftId));
     return draft ? clone(draft) : null;
   }
 
   async publishDraft(request: PublishDraftRequest): Promise<AgentVersion> {
-    const draft = this.drafts.get(key(request.tenantId, request.draftId));
+    const draft = this.drafts.get(scopedKey(request.tenantId, request.draftId));
     if (!draft) notFound('agent draft does not exist');
     if (draft.revision !== request.draftRevision) {
       conflict(`draft revision changed: expected ${request.draftRevision}, received ${draft.revision}`);
@@ -143,10 +149,10 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   }
 
   async createVersion(version: AgentVersion): Promise<void> {
-    const entity = this.entities.get(key(version.tenantId, version.agentEntityId));
+    const entity = this.entities.get(scopedKey(version.tenantId, version.agentEntityId));
     if (!entity) notFound('agent entity does not exist');
     const assertAvailable = (): string => {
-      const versionKey = key(version.tenantId, version.id);
+      const versionKey = scopedKey(version.tenantId, version.id);
       if (this.versions.has(versionKey)) conflict('agent version already exists');
       for (const existing of this.versions.values()) {
         if (
@@ -168,7 +174,7 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   }
 
   async getVersion(tenantId: string, versionId: string): Promise<AgentVersion | null> {
-    const version = this.versions.get(key(tenantId, versionId));
+    const version = this.versions.get(scopedKey(tenantId, versionId));
     return version ? clone(version) : null;
   }
 
@@ -186,9 +192,9 @@ export class InMemoryDeploymentStore implements DeploymentStore {
   }
 
   async createRelease(release: AgentRelease): Promise<void> {
-    const entity = this.entities.get(key(release.tenantId, release.agentEntityId));
+    const entity = this.entities.get(scopedKey(release.tenantId, release.agentEntityId));
     if (!entity) notFound('agent entity does not exist');
-    const releaseKey = key(release.tenantId, release.id);
+    const releaseKey = scopedKey(release.tenantId, release.id);
     if (this.releases.has(releaseKey)) conflict('release already exists');
     if (release.allocations.length === 0) {
       throw new DeploymentError('RELEASE_INVALID', 'release must contain at least one allocation');
@@ -201,7 +207,7 @@ export class InMemoryDeploymentStore implements DeploymentStore {
       throw new DeploymentError('RELEASE_INVALID', 'release weights must be positive integers totaling 10000');
     }
     for (const allocation of release.allocations) {
-      const version = this.versions.get(key(release.tenantId, allocation.agentVersionId));
+      const version = this.versions.get(scopedKey(release.tenantId, allocation.agentVersionId));
       if (!version || version.agentEntityId !== release.agentEntityId) {
         throw new DeploymentError('RELEASE_INVALID', 'release references an inaccessible agent version');
       }
@@ -219,23 +225,25 @@ export class InMemoryDeploymentStore implements DeploymentStore {
     this.releases.set(releaseKey, clone(release));
   }
 
-  async activateRelease(tenantId: string, releaseId: string): Promise<void> {
-    const release = this.releases.get(key(tenantId, releaseId));
+  async routeTrafficTo(tenantId: string, releaseId: string): Promise<void> {
+    const release = this.releases.get(scopedKey(tenantId, releaseId));
     if (!release) notFound('release does not exist');
-    if (release.state !== 'active') {
-      throw new DeploymentError('RELEASE_INVALID', 'only an active release can receive traffic');
-    }
     this.activeReleases.set(
-      key(tenantId, release.agentEntityId, release.environment),
+      scopedKey(tenantId, release.agentEntityId, release.environment),
       release.id,
     );
   }
 
   async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
     validateThreadAssignmentRequest(request);
-    const existingBeforeResolution = this.pins.get(request.threadId);
+    // Pins are addressed by (tenant, thread). The thread id is client-supplied,
+    // so keying on it alone puts every tenant in one namespace: the first to
+    // claim an id locks out the rest, and "already taken" reveals that somebody
+    // else holds it. The tenant belongs in the key, not in a check after the
+    // read — a check can only report the collision, never prevent it.
+    const pinKey = scopedKey(request.tenantId, request.threadId);
+    const existingBeforeResolution = this.pins.get(pinKey);
     if (existingBeforeResolution) {
-      if (existingBeforeResolution.tenantId !== request.tenantId) accessDenied();
       if (
         existingBeforeResolution.agentEntityId !== request.agentEntityId ||
         existingBeforeResolution.environment !== request.environment
@@ -246,10 +254,10 @@ export class InMemoryDeploymentStore implements DeploymentStore {
     }
 
     const activeReleaseId = this.activeReleases.get(
-      key(request.tenantId, request.agentEntityId, request.environment),
+      scopedKey(request.tenantId, request.agentEntityId, request.environment),
     );
     if (!activeReleaseId) notFound('no active release exists for this agent and environment');
-    const release = this.releases.get(key(request.tenantId, activeReleaseId));
+    const release = this.releases.get(scopedKey(request.tenantId, activeReleaseId));
     if (!release) notFound('active release does not exist');
     const allocation = await selectReleaseAllocation(release.allocations, [
       request.tenantId,
@@ -258,7 +266,7 @@ export class InMemoryDeploymentStore implements DeploymentStore {
       release.id,
       request.threadId,
     ]);
-    const version = this.versions.get(key(request.tenantId, allocation.agentVersionId));
+    const version = this.versions.get(scopedKey(request.tenantId, allocation.agentVersionId));
     if (!version) notFound('assigned agent version does not exist');
 
     const pin: ThreadPin = {
@@ -279,19 +287,18 @@ export class InMemoryDeploymentStore implements DeploymentStore {
     // Web Crypto yields while selecting. Re-check so concurrent first turns have
     // create-or-read semantics. A database adapter implements this with a unique
     // thread key and transaction/compare-and-swap.
-    const existingAfterResolution = this.pins.get(request.threadId);
+    const existingAfterResolution = this.pins.get(pinKey);
     if (existingAfterResolution) {
-      if (existingAfterResolution.tenantId !== request.tenantId) accessDenied();
       return clone(existingAfterResolution);
     }
-    this.pins.set(request.threadId, clone(pin));
+    this.pins.set(pinKey, clone(pin));
     return clone(pin);
   }
 
   async getThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null> {
-    const pin = this.pins.get(threadId);
-    if (!pin) return null;
-    if (pin.tenantId !== tenantId) accessDenied();
-    return clone(pin);
+    // Absent, never denied: distinguishing "another tenant holds this" from
+    // "nobody holds this" is an existence oracle over client-chosen thread ids.
+    const pin = this.pins.get(scopedKey(tenantId, threadId));
+    return pin ? clone(pin) : null;
   }
 }

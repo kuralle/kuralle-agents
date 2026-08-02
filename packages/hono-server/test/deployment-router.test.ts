@@ -11,6 +11,7 @@ import {
   NamedRegistry,
   VersionedRegistry,
   createArtifact,
+  scopedKey,
   sha256,
   type RuntimeBindings,
   type RuntimeRevision,
@@ -70,10 +71,10 @@ async function setup() {
   await deploymentStore.registerRuntime(runtimeRevision);
   await deploymentStore.createRelease({
     id: 'release-1', tenantId: 'tenant-a', agentEntityId: 'support', environment: 'production',
-    state: 'active', allocations: [{ agentVersionId: 'version-1', runtimeRevisionId: 'runtime-1', weight: 10_000 }],
+    allocations: [{ agentVersionId: 'version-1', runtimeRevisionId: 'runtime-1', weight: 10_000 }],
     createdAt: AT,
   });
-  await deploymentStore.activateRelease('tenant-a', 'release-1');
+  await deploymentStore.routeTrafficTo('tenant-a', 'release-1');
   const models = new NamedRegistry<NonNullable<AgentConfig['model']>>();
   models.register('test/model', model);
   const bindings: RuntimeBindings = {
@@ -128,10 +129,19 @@ describe('createDeploymentRouter', () => {
 
     expect(response.status).toBe(200);
     const body = await response.text();
-    expect(body).toContain('event: text-delta');
+    // The default wire is now a UIMessageStream — the same one every other
+    // Kuralle runtime speaks — so `useChat` renders it with no bridge code.
+    expect(body).toContain('"type":"text-delta"');
     expect(body).toContain('"delta":"ok"');
+    expect(body).toContain('"type":"start"');
+    // sessionId reaches the client as message metadata, and it is the RAW
+    // thread id: the tenant-scoped storage key never crosses this boundary.
+    expect(body).toContain('"sessionId":"thread-a"');
+    expect(body).not.toContain('|');
     expect(getReleases()).toBe(1);
-    const trace = (await traceStore.listTraces('thread-a'))[0];
+    // Traces are keyed by session id, so scoping the session scopes them too:
+    // reading one tenant's trace now means naming that tenant.
+    const trace = (await traceStore.listTraces(scopedKey('tenant-a', 'thread-a')))[0];
     expect(trace?.spans.length).toBeGreaterThan(0);
     for (const span of trace?.spans ?? []) {
       expect(span.attributes).toMatchObject({
@@ -144,7 +154,7 @@ describe('createDeploymentRouter', () => {
     }
   });
 
-  it('requires authentication and an idempotency key and rejects cross-tenant thread access', async () => {
+  it('requires auth and an idempotency key, and reveals nothing about another tenant thread', async () => {
     const { app } = await setup();
     const url = 'http://local/v1/agents/support/threads/thread-a/messages';
     expect((await app.request(url, { method: 'POST' })).status).toBe(401);
@@ -162,16 +172,33 @@ describe('createDeploymentRouter', () => {
       },
       body: JSON.stringify({ message: 'Hello' }),
     })).text();
-    const denied = await app.request(url, {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer tenant-b',
-        'content-type': 'application/json',
-        'idempotency-key': 'delivery-2',
-      },
-      body: JSON.stringify({ message: 'Steal it' }),
-    });
-    expect(denied.status).toBe(403);
+    // The oracle test: tenant-b's request for an id tenant-a has claimed must be
+    // indistinguishable from tenant-b's request for an id nobody has touched.
+    // Asserting merely "not 403" is not enough — any difference in status or
+    // body is itself the signal that somebody else holds the id.
+    const askForClaimedId = async (threadId: string, key: string) => {
+      const res = await app.request(
+        `http://local/v1/agents/support/threads/${threadId}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer tenant-b',
+            'content-type': 'application/json',
+            'idempotency-key': key,
+          },
+          body: JSON.stringify({ message: 'Steal it' }),
+        },
+      );
+      return { status: res.status, body: await res.text() };
+    };
+
+    const claimed = await askForClaimedId('thread-a', 'delivery-2');
+    const neverUsed = await askForClaimedId('thread-nobody-has-touched', 'delivery-3');
+
+    expect(claimed.status).toBe(neverUsed.status);
+    expect(claimed.body).toBe(neverUsed.body);
+    expect(claimed.status).not.toBe(403);
+    expect(claimed.body).not.toContain('not accessible');
   });
 });
 

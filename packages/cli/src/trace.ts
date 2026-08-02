@@ -19,7 +19,7 @@ export async function runTrace(argv: string[], buildRuntime: BuildRuntime): Prom
   const traceStore = storePath
     ? fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json')
     : undefined;
-  const { runtime } = buildRuntime(sessionId, sessionStore, traceStore);
+  const { runtime } = await buildRuntime(sessionId, sessionStore, traceStore);
   if (argv.includes('--web')) {
     const port = numberFlag(argv, '--port') ?? 4319;
     await startTraceWebServer(runtime, sessionId, port);

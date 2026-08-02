@@ -69,9 +69,6 @@ function tableNames(prefix = 'kuralle_deploy'): Tables {
 
 function conflict(message: string): never { throw new DeploymentError('CONFLICT', message); }
 function notFound(message: string): never { throw new DeploymentError('NOT_FOUND', message); }
-function accessDenied(): never {
-  throw new DeploymentError('ACCESS_DENIED', 'resource is not accessible in this tenant');
-}
 function json(value: unknown): string { return canonicalJson(value); }
 function parse<T>(value: unknown): T {
   return (typeof value === 'string' ? JSON.parse(value) : value) as T;
@@ -254,9 +251,9 @@ export class D1DeploymentStore implements DeploymentStore {
     }
     const statements = [this.statement(
       `INSERT INTO ${this.table.releases}
-       (tenant_id,id,agent_entity_id,environment,state,branch,created_at) VALUES (?,?,?,?,?,?,?)`,
+       (tenant_id,id,agent_entity_id,environment,branch,created_at) VALUES (?,?,?,?,?,?)`,
       release.tenantId, release.id, release.agentEntityId, release.environment,
-      release.state, release.branch ?? null, release.createdAt,
+      release.branch ?? null, release.createdAt,
     )];
     release.allocations.forEach((allocation, ordinal) => statements.push(this.statement(
       `INSERT INTO ${this.table.allocations}
@@ -267,13 +264,10 @@ export class D1DeploymentStore implements DeploymentStore {
     await this.database.batch(statements);
   }
 
-  async activateRelease(tenantId: string, releaseId: string): Promise<void> {
+  async routeTrafficTo(tenantId: string, releaseId: string): Promise<void> {
     await this.ready;
     const release = await this.first(`SELECT * FROM ${this.table.releases} WHERE tenant_id=? AND id=?`, tenantId, releaseId);
     if (!release) notFound('release does not exist');
-    if (release.state !== 'active') {
-      throw new DeploymentError('RELEASE_INVALID', 'only an active release can receive traffic');
-    }
     await this.run(
       `INSERT INTO ${this.table.active}
        (tenant_id,agent_entity_id,environment,release_id,updated_at) VALUES (?,?,?,?,?)
@@ -286,7 +280,7 @@ export class D1DeploymentStore implements DeploymentStore {
   async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
     await this.ready;
     validateThreadAssignmentRequest(request);
-    const current = await this.rawThreadPin(request.threadId);
+    const current = await this.rawThreadPin(request.tenantId, request.threadId);
     if (current) return this.verifyPin(current, request);
     const release = await this.first(
       `SELECT r.* FROM ${this.table.active} a JOIN ${this.table.releases} r
@@ -324,34 +318,33 @@ export class D1DeploymentStore implements DeploymentStore {
       `INSERT INTO ${this.table.pins}
        (thread_id,tenant_id,agent_entity_id,agent_version_id,artifact_digest,runtime_revision_id,
         release_id,branch,environment,config_generation,secret_generation,assigned_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(thread_id) DO NOTHING`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,thread_id) DO NOTHING`,
       pin.threadId, pin.tenantId, pin.agentEntityId, pin.agentVersionId, pin.artifactDigest,
       pin.runtimeRevisionId, pin.releaseId, pin.branch ?? null, pin.environment,
       pin.configGeneration, pin.secretGeneration, pin.assignedAt,
     );
-    const assigned = await this.rawThreadPin(request.threadId);
+    const assigned = await this.rawThreadPin(request.tenantId, request.threadId);
     if (!assigned) conflict('thread pin conflict could not be resolved');
     return this.verifyPin(assigned, request);
   }
 
   async getThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null> {
     await this.ready;
-    const pin = await this.rawThreadPin(threadId);
-    if (!pin) return null;
-    if (pin.tenantId !== tenantId) accessDenied();
-    return pin;
+    // Absent, never denied: telling one tenant that another holds an id is an
+    // existence oracle over client-chosen thread ids.
+    return this.rawThreadPin(tenantId, threadId);
   }
 
   private verifyPin(pin: ThreadPin, request: ThreadAssignmentRequest): ThreadPin {
-    if (pin.tenantId !== request.tenantId) accessDenied();
     if (pin.agentEntityId !== request.agentEntityId || pin.environment !== request.environment) {
       conflict('thread is already pinned to a different agent or environment');
     }
     return pin;
   }
 
-  private async rawThreadPin(threadId: string): Promise<ThreadPin | null> {
-    const row = await this.first(`SELECT * FROM ${this.table.pins} WHERE thread_id=?`, threadId);
+  private async rawThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null> {
+    const row = await this.first(
+      `SELECT * FROM ${this.table.pins} WHERE tenant_id=? AND thread_id=?`, tenantId, threadId);
     return row ? pinFrom(row) : null;
   }
 
@@ -390,7 +383,7 @@ export class D1DeploymentStore implements DeploymentStore {
        id TEXT PRIMARY KEY,definition TEXT NOT NULL,created_at TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS ${t.releases} (
        tenant_id TEXT NOT NULL,id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,environment TEXT NOT NULL,
-       state TEXT NOT NULL,branch TEXT,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id))`,
+       branch TEXT,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id))`,
       `CREATE TABLE IF NOT EXISTS ${t.allocations} (
        tenant_id TEXT NOT NULL,release_id TEXT NOT NULL,ordinal INTEGER NOT NULL,agent_version_id TEXT NOT NULL,
        runtime_revision_id TEXT NOT NULL,weight INTEGER NOT NULL,PRIMARY KEY(tenant_id,release_id,ordinal))`,
@@ -398,13 +391,49 @@ export class D1DeploymentStore implements DeploymentStore {
        tenant_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,environment TEXT NOT NULL,release_id TEXT NOT NULL,
        updated_at TEXT NOT NULL,PRIMARY KEY(tenant_id,agent_entity_id,environment))`,
       `CREATE TABLE IF NOT EXISTS ${t.pins} (
-       thread_id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,agent_version_id TEXT NOT NULL,
+       tenant_id TEXT NOT NULL,thread_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,agent_version_id TEXT NOT NULL,
        artifact_digest TEXT NOT NULL,runtime_revision_id TEXT NOT NULL,release_id TEXT NOT NULL,branch TEXT,
        environment TEXT NOT NULL,config_generation INTEGER NOT NULL,secret_generation INTEGER NOT NULL,
-       assigned_at TEXT NOT NULL)`,
+       assigned_at TEXT NOT NULL,PRIMARY KEY(tenant_id,thread_id))`,
       `CREATE INDEX IF NOT EXISTS ${t.pins}_tenant_agent_idx
        ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
     ];
     await this.database.batch(sql.map(statement => this.database.prepare(statement)));
+    await this.rekeyPinsByTenant();
+  }
+
+  /**
+   * Pins predate tenant scoping, when the key was `thread_id` alone. On such a
+   * database the `CREATE TABLE IF NOT EXISTS` above is a no-op, so the old key
+   * survives and `ON CONFLICT(tenant_id,thread_id)` matches no constraint —
+   * every assignment fails outright.
+   *
+   * SQLite cannot alter a primary key, so the fix is the standard rebuild.
+   * Detection is structural rather than a match on stored DDL text: `pk` in
+   * `table_info` is the column's 1-based position in the primary key, so
+   * `tenant_id` reporting 0 means it is not part of the key.
+   */
+  private async rekeyPinsByTenant(): Promise<void> {
+    const t = this.table;
+    const columns = await this.all(`PRAGMA table_info(${t.pins})`);
+    const tenant = columns.find(column => column.name === 'tenant_id');
+    if (!tenant || Number(tenant.pk) > 0) return;
+
+    const names = columns.map(column => String(column.name)).join(',');
+    await this.database.batch([
+      // Named explicitly, never positionally: the old schema declared
+      // `thread_id` first and the new one declares `tenant_id` first.
+      `CREATE TABLE ${t.pins}_rekeyed (
+       tenant_id TEXT NOT NULL,thread_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,agent_version_id TEXT NOT NULL,
+       artifact_digest TEXT NOT NULL,runtime_revision_id TEXT NOT NULL,release_id TEXT NOT NULL,branch TEXT,
+       environment TEXT NOT NULL,config_generation INTEGER NOT NULL,secret_generation INTEGER NOT NULL,
+       assigned_at TEXT NOT NULL,PRIMARY KEY(tenant_id,thread_id))`,
+      // No row can collide: the old key made `thread_id` unique on its own.
+      `INSERT INTO ${t.pins}_rekeyed (${names}) SELECT ${names} FROM ${t.pins}`,
+      `DROP TABLE ${t.pins}`,
+      `ALTER TABLE ${t.pins}_rekeyed RENAME TO ${t.pins}`,
+      `CREATE INDEX IF NOT EXISTS ${t.pins}_tenant_agent_idx
+       ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
+    ].map(statement => this.database.prepare(statement)));
   }
 }

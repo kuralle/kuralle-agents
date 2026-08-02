@@ -152,13 +152,10 @@ function buildFromRuntime(runtime: Runtime): BuildRuntime {
 }
 
 function buildFromFactory(factory: BuildRuntimeFactory): BuildRuntime {
-  return (sessionId?, store?, traceStore?) => {
+  return async (sessionId?, store?, traceStore?) => {
     const sid = sessionId ?? newSessionId();
     const stores = defaultStores(sessionId, store, traceStore);
-    const result = factory(sid, stores.sessionStore, stores.traceStore);
-    if (result instanceof Promise) {
-      throw new Error('async buildRuntime factories are not supported');
-    }
+    const result = await factory(sid, stores.sessionStore, stores.traceStore);
     if (isAgentRuntime(result)) return result;
     if (isRuntime(result)) {
       return assembleAgentRuntime(result, stores.sessionStore, sid, 'agent');

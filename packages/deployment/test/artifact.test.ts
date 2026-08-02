@@ -57,6 +57,31 @@ describe('canonical agent artifacts', () => {
     });
   });
 
+  it('creates an artifact from input with no digest key, still rejecting unknown fields', async () => {
+    const created = await createArtifact(artifactInput());
+    expect(created.digest).toMatch(/^[a-f0-9]{64}$/);
+
+    const withUnknownField = { ...artifactInput(), runtimeSecret: 'must-never-be-packaged' };
+    await expect(createArtifact(withUnknownField as never)).rejects.toMatchObject({
+      code: 'ARTIFACT_INVALID',
+      path: 'artifact.runtimeSecret',
+    });
+  });
+
+  it('rejects a published artifact with a missing or malformed digest', async () => {
+    const { digest: _digest, ...withoutDigest } = await createArtifact(artifactInput());
+    await expect(validateArtifact(withoutDigest)).rejects.toMatchObject({
+      code: 'ARTIFACT_INVALID',
+      path: 'artifact.digest',
+    });
+
+    const withMalformedDigest = { ...(await createArtifact(artifactInput())), digest: 'not-a-sha256' };
+    await expect(validateArtifact(withMalformedDigest)).rejects.toMatchObject({
+      code: 'ARTIFACT_INVALID',
+      path: 'artifact.digest',
+    });
+  });
+
   it('detects mutation after publication by recomputing the digest', async () => {
     const published = await createArtifact(artifactInput());
     const altered = structuredClone(published);

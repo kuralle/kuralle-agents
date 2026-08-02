@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline/promises';
-import { stdin, stdout } from 'node:process';
+import { stderr, stdin, stdout } from 'node:process';
 import type { HostedConnection } from './hostedConnection.js';
 import { runHostedTurn } from './hostedClient.js';
 
@@ -42,6 +42,9 @@ export async function runHostedSend(argv: string[], connection: HostedConnection
 }
 
 export async function runHostedChat(argv: string[], connection: HostedConnection): Promise<void> {
+  if (argv.includes('--trace')) {
+    stderr.write('[hosted] --trace has no effect here: the trace panel only runs with --local.\n');
+  }
   const sessionId = session(argv);
   const scripted = flag(argv, '--auto')?.split('|').map((value) => value.trim()).filter(Boolean);
   stdout.write(`Kuralle hosted chat · ${connection.transport} ${connection.server}\nSession ${sessionId}\n`);

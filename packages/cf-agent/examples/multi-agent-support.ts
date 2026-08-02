@@ -142,13 +142,6 @@ export class SupportAgent extends KuralleAgent<Env> {
     return 'triage';
   }
 
-  protected getStreamConfig() {
-    return {
-      includeHandoffs: true,
-      includeFlowEvents: false,
-      includeTripwires: true,
-    };
-  }
 }
 
 export default {

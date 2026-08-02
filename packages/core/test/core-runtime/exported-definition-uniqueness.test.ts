@@ -192,6 +192,10 @@ function duplicateDefinitions(): Map<string, DuplicateDefinition> {
   return duplicates;
 }
 
+// This walks and parses every public source file, so it is inherently slow —
+// measured at ~11 s under full parallel suite load against bun's 5 s default,
+// which made it an intermittent red with no assertion actually failing. The
+// budget is explicit rather than the default so a genuine hang still fails.
 test('public source names have one definition unless explicitly tracked', () => {
   const detected = duplicateDefinitions();
   const expected = new Map(Object.entries(KNOWN_DUPLICATES));
@@ -209,4 +213,4 @@ test('public source names have one definition unless explicitly tracked', () => 
   expect(normalize(detected.entries())).toEqual(
     normalize([...expected.entries()].map(([name, duplicate]) => [name, duplicate])),
   );
-});
+}, 60_000);

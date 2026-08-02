@@ -36,14 +36,6 @@ export class SupportAgent extends KuralleAgent<SupportEnv> {
     return this.parts().config;
   }
 
-  protected getStreamConfig() {
-    return {
-      includeHandoffs: true,
-      includeTripwires: true,
-      includeToolArgs: false,
-    };
-  }
-
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.endsWith('/chat') || url.pathname.endsWith('/resume')) {

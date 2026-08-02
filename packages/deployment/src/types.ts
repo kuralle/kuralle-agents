@@ -215,7 +215,6 @@ export interface AgentRelease {
   tenantId: string;
   agentEntityId: string;
   environment: string;
-  state: 'draft' | 'active' | 'retired';
   branch?: string;
   allocations: ReleaseAllocation[];
   createdAt: string;

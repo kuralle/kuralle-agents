@@ -1,6 +1,11 @@
 # RFC 0002 — One stream union, audience in the type
 
-**Status:** Ready to implement · **Date:** 2026-07-25 · **Author:** supervisor session
+**Status:** Implemented · **Date:** 2026-07-25 · **Author:** supervisor session
+
+> The blast-radius list in §6 is a snapshot of the tree as it stood on 2026-07-25 and is kept as
+> written. One entry has since gone: `cf-agent/StreamAdapter.ts` was deleted when every runtime
+> moved onto `harnessToUIMessageStream`, so the Cloudflare mapping this RFC had to reshape no longer
+> exists as a separate surface.
 **Method:** `/diagnose` → `/zero-tech-debt` · **Supersedes:** the ad-hoc "merge the two unions" patch
 
 ---

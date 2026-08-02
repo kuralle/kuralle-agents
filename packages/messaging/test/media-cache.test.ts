@@ -46,17 +46,28 @@ describe('MediaCache', () => {
     expect(cache.get('c')).toBeDefined();
   });
 
-  it('has() returns true for cached and false for missing/expired', () => {
-    const cache = new MediaCache({ ttlMs: 1 });
+  it('has() returns true for cached and false for missing', () => {
+    // A generous TTL on purpose. This used to share a `ttlMs: 1` cache with the
+    // expiry case below, which made it flaky: any scheduling hiccup longer than
+    // a millisecond between `set` and `has` expired the entry, and the
+    // assertion that it was still cached failed. It surfaced only under full
+    // parallel suite load, which is exactly when a 1 ms window gets missed.
+    const cache = new MediaCache({ ttlMs: 60_000 });
     cache.set('media-1', { data: Buffer.from('x'), mimeType: 'image/png' });
 
     expect(cache.has('media-1')).toBe(true);
     expect(cache.has('nonexistent')).toBe(false);
+  });
 
-    // Wait for expiration
+  it('has() returns false once the entry has outlived its TTL', () => {
+    // The expiry direction is safe to time: waiting LONGER than the TTL is
+    // reliable, where waiting less than it is not.
+    const cache = new MediaCache({ ttlMs: 1 });
+    cache.set('media-1', { data: Buffer.from('x'), mimeType: 'image/png' });
+
     const start = Date.now();
-    while (Date.now() - start < 5) {
-      // busy wait
+    while (Date.now() - start < 20) {
+      // busy wait, comfortably past the 1 ms TTL
     }
 
     expect(cache.has('media-1')).toBe(false);

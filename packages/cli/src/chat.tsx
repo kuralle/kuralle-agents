@@ -108,11 +108,11 @@ async function runTurn(
   return { answer: text.trim(), ttftMs, totalMs: performance.now() - started };
 }
 
-function App({ scripted, buildRuntime, showTrace, persist }: { scripted?: string[]; buildRuntime: BuildRuntime; showTrace?: boolean; persist?: Persist }) {
+function App({ scripted, runtime, buildRuntime, showTrace, persist }: { scripted?: string[]; runtime: AgentRuntime; buildRuntime: BuildRuntime; showTrace?: boolean; persist?: Persist }) {
   const { exit } = useApp();
-  const make = (sid?: string): AgentRuntime =>
+  const make = (sid?: string): AgentRuntime | Promise<AgentRuntime> =>
     persist ? buildRuntime(sid ?? persist.sessionId, persist.sessionStore, persist.traceStore) : buildRuntime(sid);
-  const demoRef = useRef<AgentRuntime>(make());
+  const demoRef = useRef<AgentRuntime>(runtime);
   const [log, setLog] = useState<Line[]>([line('system', demoRef.current.label)]);
   const [live, setLive] = useState('');
   const [events, setEvents] = useState<string[]>([]);
@@ -136,7 +136,7 @@ function App({ scripted, buildRuntime, showTrace, persist }: { scripted?: string
     if (text === '/quit') { exit(); return; }
     if (text === '/help') { push(line('system', 'commands: /state  /reset  /quit')); return; }
     if (text === '/reset') {
-      demoRef.current = make(newSessionId());
+      demoRef.current = await make(newSessionId());
       push(line('system', `— new session ${demoRef.current.sessionId.slice(0, 8)} —`));
       await refreshStatus();
       return;
@@ -212,7 +212,7 @@ function App({ scripted, buildRuntime, showTrace, persist }: { scripted?: string
   ) : body;
 }
 
-export function runChat(argv: string[], buildRuntime: BuildRuntime): void {
+export async function runChat(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
   const flag = (name: string): string | undefined => {
     const i = argv.indexOf(name);
     return i >= 0 ? argv[i + 1] : undefined;
@@ -233,5 +233,11 @@ export function runChat(argv: string[], buildRuntime: BuildRuntime): void {
       }
     : undefined;
 
-  render(<App scripted={scripted} buildRuntime={buildRuntime} showTrace={showTrace} persist={persist} />);
+  // Resolved BEFORE render() — a React function component cannot await, so an async
+  // factory (e.g. one that loads remote config) must finish here, not during render.
+  const runtime = await (persist
+    ? buildRuntime(persist.sessionId, persist.sessionStore, persist.traceStore)
+    : buildRuntime());
+
+  render(<App scripted={scripted} runtime={runtime} buildRuntime={buildRuntime} showTrace={showTrace} persist={persist} />);
 }

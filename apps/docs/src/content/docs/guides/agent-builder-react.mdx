@@ -1,0 +1,441 @@
+---
+title: Build an Agent Builder in React
+description: Build a multi-tenant agent builder UI on React — drafts, publishing, releases, live preview streaming, and deploying the result to Node or Cloudflare.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+An *agent builder* is the product surface most teams end up wanting: a screen where a
+non-engineer edits an agent's instructions, tools, and model, hits **Publish**, and gets a
+working assistant — without a deploy, and without touching anyone else's tenant.
+
+<Aside type="tip" title="Runnable version">
+Everything below exists as a working example at `apps/examples/agent-builder` — a Hono
+backend, a React UI, and two demo tenants so the isolation is visible rather than
+asserted. `bun run dev` and `bun run dev:web`.
+</Aside>
+
+This guide builds one. It assumes you have read [Build an Agent](/guides/build-an-agent/)
+and [Deployment](/guides/deployment/), and it focuses on the parts that are genuinely
+non-obvious: the draft/version/release lifecycle, the compare-and-swap that makes
+concurrent editing safe, the split between orchestration events that persist and ones that
+are transient, and the tenancy rules that decide whether two customers can see each
+other's conversations.
+
+## What Kuralle gives you — and what you build
+
+This is the first thing to get straight, because it shapes the whole architecture.
+
+Kuralle ships the **domain model and its invariants** as `DeploymentStore`. It does *not*
+ship a REST API for your builder. The only HTTP surface in the deployment package is
+`createDeploymentControlPlaneRouter`, which exposes exactly two **internal** endpoints —
+`/v1/internal/deployment/threads/assign` and `/v1/internal/deployment/threads/pinned-version` —
+for a Cloudflare runtime to call back into your control plane. They are not a builder API,
+and they are not meant to face a browser.
+
+| you build | Kuralle provides |
+| --- | --- |
+| The builder UI (React) | — |
+| Your builder's HTTP API | — |
+| Authentication and tenant resolution | the `resolvePrincipal` hook to plug it into |
+| Persistence choice | `InMemoryDeploymentStore`, `D1DeploymentStore`, `PostgresDeploymentStore` |
+| — | immutability, versioning, sticky pinning, tenant isolation, artifact digests |
+
+That split is deliberate. Every team's auth, RBAC, audit, and billing differ; the parts
+that must **not** differ — an immutable published version, a thread that keeps its version
+mid-conversation — are the parts Kuralle enforces.
+
+## The lifecycle
+
+Five nouns. A builder UI is mostly a tour through them, and most builder bugs come from
+conflating two of them.
+
+```
+  AgentEntity          the stable identity of "the support agent"
+       │                one row per (tenant, agent). Created once.
+       ▼
+  AgentDraft           MUTABLE working copy. Compare-and-swap on `revision`.
+       │                This is the only thing your form edits.
+       │  publishDraft()
+       ▼
+  AgentVersion         IMMUTABLE, content-addressed artifact + digest.
+       │                Never edited. Never deleted. v1, v2, v3 …
+       │  createRelease()
+       ▼
+  AgentRelease         which version(s) serve traffic, with weights.
+       │                Immutable once created.
+       │  routeTrafficTo()
+       ▼
+  ThreadPin            a conversation's frozen choice of version.
+                        Assigned on first message, then sticky forever.
+```
+
+Three consequences worth internalising before you write the UI:
+
+- **Save ≠ Publish ≠ Release.** Saving updates a draft. Publishing freezes an immutable
+  version. Releasing decides what new conversations get. A builder that wires one button to
+  all three will surprise its users the first time someone saves a half-finished prompt.
+- **A published version can never be edited.** "Edit v2" means "load v2 into a draft, then
+  publish v3". Your UI should say that plainly.
+- **Traffic routing is separate from publishing**, which is what makes rollback instant:
+  `routeTrafficTo(tenantId, previousReleaseId)` and new threads go back, with no rebuild.
+
+<Aside type="tip" title="Rollback is not a redeploy">
+Because releases are immutable rows and routing is a pointer, rolling back is one write.
+Keep the old release around — never mutate it — and rollback stays a single call.
+</Aside>
+
+## Part 1 — the builder API
+
+Your React app talks to your own API. Here is the minimum route table, and what each one
+maps to.
+
+| route | store call | note |
+| --- | --- | --- |
+| `POST /agents` | `createEntity` | once per agent |
+| `GET  /agents/:id/draft` | `getDraft` | returns `revision` — the UI must keep it |
+| `PUT  /agents/:id/draft` | `saveDraft(draft, expectedRevision)` | **compare-and-swap** |
+| `POST /agents/:id/publish` | `publishDraft` | draft → immutable version |
+| `POST /agents/:id/releases` | `createRelease` | pick versions + weights |
+| `POST /agents/:id/traffic` | `routeTrafficTo` | activate a release |
+
+```ts title="server/builder-api.ts"
+import { Hono } from 'hono';
+import { DeploymentError, type DeploymentStore } from '@kuralle-agents/deployment';
+
+export function createBuilderApi(store: DeploymentStore) {
+  const app = new Hono<{ Variables: { tenantId: string; userId: string } }>();
+
+  // Tenancy is derived from the credential, never from the path or body.
+  // Accepting a tenantId the client supplied is the single most common way a
+  // builder becomes cross-tenant readable.
+  app.use('*', async (c, next) => {
+    const principal = await authenticate(c.req.header('authorization'));
+    if (!principal) return c.json({ error: 'unauthorized' }, 401);
+    c.set('tenantId', principal.tenantId);
+    c.set('userId', principal.userId);
+    await next();
+  });
+
+  app.put('/agents/:id/draft', async c => {
+    const body = await c.req.json<{ definition: unknown; revision: number }>();
+    try {
+      const saved = await store.saveDraft({
+        id: `draft-${c.req.param('id')}`,
+        tenantId: c.get('tenantId'),
+        agentEntityId: c.req.param('id'),
+        revision: body.revision,
+        definition: body.definition as never,
+        updatedBy: c.get('userId'),
+        updatedAt: new Date().toISOString(),
+      }, body.revision);
+      return c.json(saved);
+    } catch (error) {
+      // Somebody else saved between this client's read and its write.
+      if (error instanceof DeploymentError && error.code === 'CONFLICT') {
+        const current = await store.getDraft(c.get('tenantId'), `draft-${c.req.param('id')}`);
+        return c.json({ error: 'conflict', current }, 409);
+      }
+      throw error;
+    }
+  });
+
+  app.post('/agents/:id/publish', async c => {
+    const body = await c.req.json<{ draftRevision: number; version: number }>();
+    const published = await store.publishDraft({
+      tenantId: c.get('tenantId'),
+      draftId: `draft-${c.req.param('id')}`,
+      draftRevision: body.draftRevision,
+      versionId: crypto.randomUUID(),
+      version: body.version,
+      createdBy: c.get('userId'),
+      createdAt: new Date().toISOString(),
+    });
+    return c.json({ id: published.id, digest: published.artifact.digest });
+  });
+
+  return app;
+}
+```
+
+### Compare-and-swap is the feature, not the friction
+
+`saveDraft(draft, expectedRevision)` rejects with `CONFLICT` when the stored revision has
+moved. Two people editing the same agent is the normal case in a builder, and the
+alternative — last-write-wins — silently destroys the other person's prompt.
+
+So return `409` with the current draft, and let the UI decide. Do not retry
+automatically: a retry with the *new* revision writes the stale form state over the change
+you just detected, which is last-write-wins with extra steps.
+
+```tsx title="src/useDraft.ts"
+export function useDraft(agentId: string) {
+  const [definition, setDefinition] = useState<Partial<ArtifactInputV1>>({});
+  const [revision, setRevision] = useState(0);
+  const [conflict, setConflict] = useState<AgentDraft | null>(null);
+
+  const save = useCallback(async () => {
+    const res = await fetch(`/api/agents/${agentId}/draft`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ definition, revision }),
+    });
+
+    if (res.status === 409) {
+      // Surface it. Whose prompt survives is a product decision, not a retry policy.
+      const { current } = await res.json();
+      setConflict(current);
+      return;
+    }
+    const saved = await res.json();
+    setRevision(saved.revision);
+  }, [agentId, definition, revision]);
+
+  return { definition, setDefinition, revision, save, conflict };
+}
+```
+
+<Aside type="caution" title="`revision` is returned, not incremented client-side">
+`saveDraft` returns the draft with its **new** revision. Take it from the response. A UI
+that does `setRevision(r => r + 1)` drifts the moment a save fails or a second tab saves.
+</Aside>
+
+## Part 2 — mapping the form to an artifact
+
+The draft's `definition` is a `Partial<ArtifactInputV1>`. The fields a builder form
+usually exposes:
+
+| form control | artifact field |
+| --- | --- |
+| Name, description | `agent.name`, `agent.description` |
+| Model picker | `agent.model` (`"openai/gpt-5-mini"`) |
+| System prompt editor | `instructions[]` (a `ContentEntry`) |
+| Tool checkboxes | `tools[]` (`ToolReference` — names + versions, not code) |
+| Max turns | `agent.limits` |
+| Secrets | `secretRefs[]` |
+
+Two of those deserve emphasis.
+
+**Tools and flows are references, not code.** The artifact records *which* capability at
+*which* version; the runtime resolves it from a registry you supply at deploy time. A
+builder cannot introduce new executable code, which is exactly the property you want when
+non-engineers are editing.
+
+**Secrets are never in the artifact.** `SecretReference` is `{ alias, purpose }` — an
+alias and a human-readable reason. The value lives in your secret manager and is resolved
+at runtime. Artifacts are content-addressed and stored forever; a secret pasted into one
+is a secret you cannot unpublish.
+
+<Aside type="danger" title="Artifacts are permanent">
+Publishing computes a digest over the artifact's canonical JSON, and versions are
+append-only by design — there is no delete. Treat the publish button as "write this to a
+permanent log", and validate before it, not after.
+</Aside>
+
+## Part 3 — the preview pane
+
+This is where most React integrations go wrong, so it gets the most detail.
+
+Every Kuralle server speaks **one wire**: an AI SDK `UIMessageStream`. That was not
+always true — the deployment route used to emit named-event SSE that no AI SDK client
+could read, and builders hand-rolled a parser to compensate. They no longer need to.
+
+| server | route | default frame | `useChat`? |
+| --- | --- | --- | --- |
+| `createKuralleRouter` | `POST /api/flow/sse` | AI SDK UIMessageStream | **yes** |
+| `createKuralleSseChatRouter` | `POST /api/chat/sse` | AI SDK UIMessageStream | **yes** |
+| `createDeploymentRouter` | `POST /v1/agents/:id/threads/:threadId/messages` | AI SDK UIMessageStream | **yes** |
+
+Every one of them accepts `?format=raw` to get the older named-event `StreamPart` SSE
+instead. Reach for it only for a non-browser consumer that already parses `StreamPart`
+directly — a CLI, a webhook bridge, a log tap.
+
+So the preview pane is `useChat`, and the hook you write supplies only the two things
+`useChat` cannot know: the tenant credential, and an idempotency key per logical send.
+
+```tsx title="src/useDeploymentThread.ts"
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { useCallback, useMemo, useRef } from 'react';
+
+export function useDeploymentThread(agentId: string, threadId: string, token: string) {
+  // `DefaultChatTransport` evaluates `headers` per REQUEST, so minting the key
+  // inside that function would produce a fresh one on every retry — turning a
+  // network blip into a second turn. Mint per send, hold it in a ref, read it here.
+  const idempotencyKey = useRef('');
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `/v1/agents/${encodeURIComponent(agentId)}/threads/${encodeURIComponent(threadId)}/messages`,
+        headers: () => ({
+          authorization: `Bearer ${token}`,
+          'idempotency-key': idempotencyKey.current,
+        }),
+        // The route takes `{ message }`, not useChat's message array — history
+        // lives on the server, so re-sending it would be redundant.
+        prepareSendMessagesRequest: ({ messages }) => ({
+          body: {
+            message: messages[messages.length - 1]?.parts
+              ?.filter(part => part.type === 'text')
+              .map(part => (part as { text: string }).text)
+              .join('') ?? '',
+          },
+        }),
+      }),
+    [agentId, threadId, token],
+  );
+
+  const chat = useChat({ transport, id: threadId });
+
+  const send = useCallback(async (message: string) => {
+    idempotencyKey.current = crypto.randomUUID();
+    await chat.sendMessage({ text: message });
+  }, [chat]);
+
+  return { messages: chat.messages, streaming: chat.status === 'streaming', send };
+}
+```
+
+Four details that are easy to get wrong:
+
+- **`idempotency-key` is mandatory.** The route returns `400` without it. Generate one per
+  logical send and **reuse it on retry** — that is the entire point. Generating a fresh key
+  on retry turns a network blip into a duplicated turn, which is why it lives in a ref that
+  the per-request header function only reads.
+- **Orchestration events split two ways.** `data-kuralle-handoff`, `-interactive`,
+  `-safety` and `-outcome` persist into `message.parts`. `data-kuralle-node`, `-flow`,
+  `-control` and `-custom` are marked `transient: true` and **never appear there** — read
+  them from `useChat({ onData })`. An events panel wired to `message.parts` alone renders
+  nothing and looks like a broken stream rather than a wrong subscription.
+- **`409` means "a turn is already running on this thread"**, enforced by a distributed
+  lease. Disable the composer while streaming rather than surfacing it as an error, and do
+  not clear the idempotency key — a retry is the same logical send.
+- **`messageMetadata.sessionId` is the thread id you sent** — the raw one. Internally the
+  runtime keys storage by a tenant-scoped composite, but that never crosses the wire. Do
+  not parse it, and do not expect it to be opaque.
+
+### Preview threads and sticky pinning
+
+The single most confusing builder bug: *"I published v3, but preview still answers like
+v2."*
+
+That is pinning working as designed. A thread pins its version on first message and keeps
+it for the life of the conversation, so a customer mid-checkout is not swapped onto a new
+prompt. Your preview pane inherits that.
+
+So **mint a new thread id whenever the previewed version changes**:
+
+```tsx
+// Not a stable "preview" id — that pins to whatever version you first tested.
+const previewThreadId = useMemo(
+  () => `preview-${publishedVersionId}-${nonce}`,
+  [publishedVersionId, nonce],
+);
+```
+
+Give users an explicit **Reset preview** control that bumps `nonce`. It is a two-line
+feature that removes an entire category of support question.
+
+## Part 4 — serving it
+
+The builder API and the agent runtime are two different servers, and they can be deployed
+independently.
+
+<Tabs>
+<TabItem label="Node / Bun">
+
+```ts title="server/index.ts"
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import { createDeploymentRouter } from '@kuralle-agents/hono-server';
+import { PostgresDeploymentStore } from '@kuralle-agents/postgres-store';
+
+const store = new PostgresDeploymentStore({ client: pool });
+await store.migrate();
+
+const app = new Hono();
+app.route('/api', createBuilderApi(store));       // your builder
+app.route('/', createDeploymentRouter({           // the runtime
+  deploymentStore: store,
+  sessionStore,
+  runtimeRevision,
+  bindings,
+  coordinator,
+  resolvePrincipal: async c => authenticate(c.req.header('authorization')),
+}));
+
+serve({ fetch: app.fetch, port: 8787 });
+```
+
+</TabItem>
+<TabItem label="Cloudflare Workers">
+
+On Workers the runtime is a Durable Object per `(tenant, thread)`, and the control plane is
+D1. See [Deployment](/guides/deployment/) for the Worker entry point and
+[Agent Definitions in Your Database](/guides/agent-definitions-database/) for the
+Hono-and-Neon split.
+
+The rule that matters: **derive the Durable Object name from tenant *and* thread**.
+
+```ts
+// Correct — two tenants using the same thread id get two objects.
+const id = env.KURALLE_THREADS.idFromName(`${tenantId}:${threadId}`);
+
+// Wrong — a thread id is client-supplied, so this is a shared object.
+const id = env.KURALLE_THREADS.idFromName(threadId);
+```
+
+Thread ids are frequently phone numbers (WhatsApp `wa_id`). They are not unique across your
+customer base, and treating them as unique is a cross-tenant data leak.
+
+<Aside type="caution" title="An email is not a valid thread id">
+Thread ids must match `^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$`. A phone number passes as-is;
+an email does **not**, because `@` is outside the charset — the request is rejected. Derive
+a safe id (`dana@example.com` → `dana-example.com`, or a hash) rather than forwarding an
+address straight through from a webhook.
+
+The rejection currently surfaces as `409`, the same status as "a turn is already running",
+so a malformed id and a busy thread look alike to a client.
+</Aside>
+
+</TabItem>
+</Tabs>
+
+## Nuances worth knowing before you ship
+
+**Tenancy comes from the credential.** `resolvePrincipal` receives the request context and
+returns `{ tenantId, userId }`. Derive the tenant from the token, never from a path segment
+or request body. The store enforces isolation given a correct principal; it cannot detect a
+principal you populated from attacker-controlled input.
+
+**A foreign thread reads as absent, not denied.** Asking for another tenant's thread
+returns `null`, not `403`. This is deliberate: a rejection would confirm that *somebody*
+holds that id, and when thread ids are phone numbers, that is a customer-list disclosure.
+If you add your own error handling, preserve the property — a 404 that differs from a
+"never seen this id" 404 re-opens the oracle.
+
+**Upgrading an existing deployment needs a migration.** Tenant-scoped keys changed the
+primary key of the pin and lease tables, and the session key format. `store.migrate()`
+handles the schema; conversation history needs `rekeySessionsByTenant` from
+`@kuralle-agents/deployment`, run deliberately. Skipping it does not error — sessions are
+simply not found and every thread silently restarts.
+
+**Validate before publish, not after.** `preflightArtifact` and `assertArtifactCompatible`
+check an artifact against a runtime revision's supported schema versions and capabilities.
+Run preflight when the user hits Publish and show the diagnostics in the form. A
+`RUNTIME_INCOMPATIBLE` surfaced at first-message time is a much worse experience, and by
+then the version is permanent.
+
+**Weighted releases give you canaries for free.** A release holds allocations with weights
+out of 10,000, and assignment is deterministic in `(tenant, environment, agent, release,
+thread)` — the same thread always lands in the same bucket. A "10% canary" is one release
+with two allocations, and it is stable per conversation rather than flapping per message.
+
+## Further reading
+
+- [Deployment](/guides/deployment/) — serving, endpoints, and streaming formats
+- [Agent Definitions in Your Database](/guides/agent-definitions-database/) — schema ownership and ORM adapters
+- [File-authored Agents](/guides/file-authored-agents/) — the same artifact model, authored from a folder
+- [Tool Policy](/guides/policy/) — approval gates a builder can expose as toggles
+- [Observability](/guides/observability/) — traces carry `tenantId`, `agentVersionId`, and `artifactDigest`

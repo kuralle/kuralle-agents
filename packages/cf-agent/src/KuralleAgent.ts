@@ -39,14 +39,14 @@ import type {
   WakeJobPayload,
 } from '@kuralle-agents/core';
 import type { StreamPart } from '@kuralle-agents/core';
+import { harnessToUIMessageStream } from '@kuralle-agents/core';
 import type { StreamTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
 import { BridgeSessionStore } from './BridgeSessionStore.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
 import { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
-import { createSSEResponse } from './StreamAdapter.js';
-import type { DurableSqlStorage, StreamAdapterConfig, SqlExecutor } from './types.js';
-import { DEFAULT_STREAM_CONFIG } from './types.js';
+import { createUIMessageStreamResponse } from 'ai';
+import type { DurableSqlStorage, SqlExecutor } from './types.js';
 import { durableAgentSurface } from './durable-agent-surface.js';
 import { lastUserInputFromMessages } from './cfMessageInput.js';
 
@@ -186,13 +186,6 @@ export abstract class KuralleAgent<
   }
 
   /**
-   * Optional: Configure which Kuralle events become data parts in the stream.
-   */
-  protected getStreamConfig(): Partial<StreamAdapterConfig> {
-    return {};
-  }
-
-  /**
    * Optional: durable working-memory blocks backed by DO SQLite.
    * When returned, wired into `HarnessConfig.defaultWorkingMemoryStore`.
    */
@@ -299,11 +292,6 @@ export abstract class KuralleAgent<
       deployment: built.deployment,
     });
 
-    const streamConfig: StreamAdapterConfig = {
-      ...DEFAULT_STREAM_CONFIG,
-      ...this.getStreamConfig(),
-    };
-
     const owner = this;
     async function* parts(): AsyncGenerator<StreamPart> {
       for await (const part of handle.events) {
@@ -314,7 +302,13 @@ export abstract class KuralleAgent<
       }
     }
 
-    return createSSEResponse(parts(), streamConfig);
+    // One mapping, owned by core. Cloudflare's AIChatAgent parser tolerates the
+    // full format — `text-*` frames resolve by type and ignore `id`, `data-*` is
+    // handled generically, and unrecognised frames are skipped — so there is no
+    // format to adapt around, only a second implementation to delete.
+    return createUIMessageStreamResponse({
+      stream: harnessToUIMessageStream(parts(), { sessionId }),
+    });
   }
 
   /**

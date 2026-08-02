@@ -76,11 +76,11 @@ try {
   });
   await store.createRelease({
     id: 'release-live-v1', tenantId: 'validation', agentEntityId: 'neon-live',
-    environment: 'production', state: 'active',
+    environment: 'production',
     allocations: [{ agentVersionId: 'neon-live-v1', runtimeRevisionId: 'runtime-live-v1', weight: 10_000 }],
     createdAt: at,
   });
-  await store.activateRelease('validation', 'release-live-v1');
+  await store.routeTrafficTo('validation', 'release-live-v1');
   const pin = await store.assignThread({
     tenantId: 'validation', threadId: 'thread-live', agentEntityId: 'neon-live',
     environment: 'production', assignedAt: at,

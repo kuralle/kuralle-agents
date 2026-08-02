@@ -6,9 +6,10 @@
 # closes that hole: it finds each tsconfig under packages/ and runs
 # `tsc --noEmit -p` on it.
 #
-# Standalone apps (docs)
-# are EXCLUDED — they have independent dep trees (react/next/etc.) and their
-# errors are missing-deps, not v2 drift. Type-check one on demand directly.
+# apps/examples IS included: each is a workspace package that declares its own
+# dependencies, so a deleted export breaks it exactly like a package would.
+# apps/docs stays EXCLUDED — it is a documentation site with an independent dep
+# tree, and its errors would be missing-deps, not framework drift.
 #
 # Exit non-zero if any in-scope tsconfig fails. Run: `bun run typecheck:all`
 set -uo pipefail
@@ -20,12 +21,12 @@ TSC=./node_modules/.bin/tsc
 # Standalone-app configs to skip (independent dep trees, not framework surface).
 SKIP_RE='apps/docs'
 
-CFGS=$(find packages -name "tsconfig*.json" \
+CFGS=$(find packages apps/examples -name "tsconfig*.json" \
     -not -path "*/node_modules/*" -not -path "*/dist/*" -not -path "*/.next/*" 2>/dev/null \
   | grep -vE "$SKIP_RE" | sort)
 
 fail=0; empty=0; ran=0
-echo "== framework tsconfig sweep ($(printf '%s\n' "$CFGS" | grep -c . ) configs) =="
+echo "== framework + example tsconfig sweep ($(printf '%s\n' "$CFGS" | grep -c . ) configs) =="
 for cfg in $CFGS; do
   # skip extends-only base configs with no own inputs
   hasinput=$(python3 -c "import json;d=json.load(open('$cfg'));print(1 if (d.get('include') or d.get('files')) else 0)" 2>/dev/null || echo 1)

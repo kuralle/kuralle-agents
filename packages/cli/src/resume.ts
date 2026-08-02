@@ -35,7 +35,7 @@ export async function runResume(argv: string[], buildRuntime: BuildRuntime): Pro
 
   const store = fileSessionStore(storePath);
   const traces = fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json');
-  const demo = buildRuntime(sessionId, store, traces);
+  const demo = await buildRuntime(sessionId, store, traces);
 
   await demo.runtime.resumeFromEscalation(
     sessionId,

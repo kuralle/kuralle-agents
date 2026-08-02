@@ -78,7 +78,7 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   // exit and `kuralle trace --store` finds nothing — the exact sidecar `chat --store`
   // writes and the CLI guide promises for both commands.
   const traces = fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json');
-  const demo = buildRuntime(sessionId, store, traces);
+  const demo = await buildRuntime(sessionId, store, traces);
 
   async function readState() {
     const s = await store.get(sessionId);

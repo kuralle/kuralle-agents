@@ -53,7 +53,6 @@ function release(id: string, versionId: string): AgentRelease {
     tenantId: 'tenant-a',
     agentEntityId: 'support',
     environment: 'production',
-    state: 'active',
     branch: 'main',
     allocations: [{ agentVersionId: versionId, runtimeRevisionId: 'runtime-1', weight: 10_000 }],
     createdAt: CREATED_AT,
@@ -154,7 +153,7 @@ describe('immutable versions and thread pins', () => {
   it('keeps an existing thread on v1 after activating v2 while new threads receive v2', async () => {
     const { store, v1, v2 } = await configuredStore();
     await store.createRelease(release('release-1', v1.id));
-    await store.activateRelease('tenant-a', 'release-1');
+    await store.routeTrafficTo('tenant-a', 'release-1');
     const original = await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'thread-a',
@@ -164,7 +163,7 @@ describe('immutable versions and thread pins', () => {
     });
 
     await store.createRelease(release('release-2', v2.id));
-    await store.activateRelease('tenant-a', 'release-2');
+    await store.routeTrafficTo('tenant-a', 'release-2');
     const resumed = await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'thread-a',
@@ -185,10 +184,10 @@ describe('immutable versions and thread pins', () => {
     expect(newThread.releaseId).toBe('release-2');
   });
 
-  it('denies cross-tenant pin access without returning existence data', async () => {
+  it('hides one tenant\'s pin from another without revealing that it exists', async () => {
     const { store } = await configuredStore();
     await store.createRelease(release('release-1', 'version-1'));
-    await store.activateRelease('tenant-a', 'release-1');
+    await store.routeTrafficTo('tenant-a', 'release-1');
     await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'private-thread',
@@ -196,19 +195,10 @@ describe('immutable versions and thread pins', () => {
       environment: 'production',
     });
 
-    await expect(store.getThreadPin('tenant-b', 'private-thread')).rejects.toMatchObject({
-      code: 'ACCESS_DENIED',
-      message: 'resource is not accessible in this tenant',
-    });
-    await expect(store.assignThread({
-      tenantId: 'tenant-b',
-      threadId: 'private-thread',
-      agentEntityId: 'support',
-      environment: 'production',
-    })).rejects.toMatchObject({
-      code: 'ACCESS_DENIED',
-      message: 'resource is not accessible in this tenant',
-    });
+    // Absent, not denied. ACCESS_DENIED would itself be the existence data:
+    // it tells tenant-b that somebody else holds this id.
+    expect(await store.getThreadPin('tenant-b', 'private-thread')).toBeNull();
+    expect((await store.getThreadPin('tenant-a', 'private-thread'))?.threadId).toBe('private-thread');
   });
 
   it('makes weighted assignment stable for equivalent control-plane state', async () => {
@@ -221,7 +211,7 @@ describe('immutable versions and thread pins', () => {
           { agentVersionId: v2.id, runtimeRevisionId: 'runtime-1', weight: 5_000 },
         ],
       });
-      await store.activateRelease('tenant-a', 'weighted');
+      await store.routeTrafficTo('tenant-a', 'weighted');
       const pin = await store.assignThread({
         tenantId: 'tenant-a',
         threadId: 'stable-thread',

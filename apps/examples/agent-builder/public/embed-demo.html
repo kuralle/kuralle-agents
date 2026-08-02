@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Northwind Coffee — a customer's site</title>
+    <style>
+      :root { color-scheme: light; }
+      body { margin: 0; font: 16px/1.6 ui-sans-serif, system-ui, sans-serif;
+             background: #faf8f5; color: #23201c; }
+      header { padding: 1.1rem 2rem; border-bottom: 1px solid #e6e0d8;
+               display: flex; justify-content: space-between; align-items: center; }
+      .brand { font-weight: 700; letter-spacing: -.01em; }
+      main { max-width: 44rem; margin: 0 auto; padding: 3rem 1.5rem 8rem; }
+      h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 .6rem; }
+      .lede { font-size: 1.1rem; opacity: .75; }
+      .note { margin-top: 2.5rem; padding: 1rem 1.2rem; background: #fff;
+              border: 1px solid #e6e0d8; border-radius: .7rem; font-size: .94rem; }
+      code { background: #f1ece5; padding: .12em .35em; border-radius: .3em; font-size: .9em; }
+      pre { background: #23201c; color: #f3efe9; padding: .9rem 1.1rem;
+            border-radius: .6rem; overflow-x: auto; font-size: .85rem; }
+      .tenant { display: inline-block; padding: .12rem .5rem; border-radius: 999px;
+                background: #e8f0e4; color: #2f5d2a; font-size: .8rem; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="brand">☕ Northwind Coffee</span>
+      <span class="tenant">powered by tenant: acme</span>
+    </header>
+
+    <main>
+      <h1>Single-origin, roasted the morning it ships.</h1>
+      <p class="lede">
+        This page is standing in for a customer's own website. It knows nothing about
+        Kuralle beyond one script tag — no build step, no framework, no npm install.
+      </p>
+
+      <div class="note">
+        <p><strong>The entire integration:</strong></p>
+        <pre>&lt;script src="/kuralle-agent.js"&gt;&lt;/script&gt;
+&lt;kuralle-agent agent="support" token="demo-acme"&gt;&lt;/kuralle-agent&gt;</pre>
+        <p style="margin-bottom:0">
+          Click <strong>Chat</strong>, bottom-right. The widget mints a thread id, keeps it in
+          <code>localStorage</code>, and talks to the same deployment route the builder's
+          preview uses — so the conversation shows up in the builder's
+          <strong>Conversations</strong> table, pinned to whichever version was live when it
+          started.
+        </p>
+      </div>
+
+      <div class="note">
+        <p style="margin-top:0"><strong>Open this page as the other tenant</strong> by changing one
+        attribute to <code>token="demo-globex"</code>. Same agent id, same thread id format,
+        completely separate conversations and versions.</p>
+        <p style="margin-bottom:0">The demo ships the tenant token to the browser, which is fine
+        here and wrong in production: a real deployment mints a short-lived, thread-scoped token
+        server-side. The widget code does not change.</p>
+      </div>
+    </main>
+
+    <script src="/kuralle-agent.js"></script>
+    <kuralle-agent agent="support" token="demo-acme" title="Northwind Support"></kuralle-agent>
+  </body>
+</html>

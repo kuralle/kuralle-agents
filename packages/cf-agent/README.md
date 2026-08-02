@@ -20,7 +20,19 @@ Peers: `agents` (Cloudflare Agents SDK), `zod`.
 - **`BridgeSessionStore`** — bridges Kuralle `SessionStore` interface to CF's SQLite storage.
 - **`OrchestrationStore`** — Durable Object KV for orchestration state.
 - **`SqlPersistentMemoryStore`** — DO SQLite-backed `PersistentMemoryStore` for USER/MEMORY blocks.
-- **`createSSEResponse`** — helper for streaming SSE responses from Workers.
+
+## Streaming
+
+`onChatMessage` returns the same `UIMessageStream` every other Kuralle runtime serves, via core's `harnessToUIMessageStream`. There is no Cloudflare-specific stream adapter and nothing to configure: a client typed against `KuralleUIMessage` matches a Durable Object exactly as it matches a Node deployment.
+
+Kuralle events arrive as `data-kuralle-*` parts, split by whether they belong in history:
+
+| Part | Persisted? | How to read it |
+| --- | --- | --- |
+| `data-kuralle-handoff`, `-interactive`, `-safety`, `-outcome` | yes | `message.parts` |
+| `data-kuralle-node`, `-flow`, `-control`, `-custom` | no (`transient: true`) | the `onData` callback |
+
+Transient parts are broadcast to connected clients in real time but never enter `message.parts` — reading them from message history yields nothing. The persisted parts carry a stable per-turn id (`handoff-0`, `safety-0`, …) so a recovered turn reconciles them in place instead of appending duplicates.
 
 ## Usage
 

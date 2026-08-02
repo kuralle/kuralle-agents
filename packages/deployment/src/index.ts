@@ -38,7 +38,13 @@ export {
 } from './preflight.js';
 export { NamedRegistry, VersionedRegistry, type VersionedValue } from './registry.js';
 export {
+  rekeySessionsByTenant,
+  type SessionRekeyOptions,
+  type SessionRekeyResult,
+} from './session-rekey.js';
+export {
   InMemoryDeploymentStore,
+  scopedKey,
   selectReleaseAllocation,
   type DeploymentStore,
 } from './store.js';

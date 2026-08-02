@@ -25,13 +25,12 @@ import { NamedRegistry, VersionedRegistry } from './registry.js';
 import type {
   AgentArtifact,
   AgentVersion,
-  BuiltinToolReference,
-  ClientToolReference,
+  CapabilityReference,
   ContentEntry,
-  HttpToolReference,
-  McpToolReference,
   RuntimeRevision,
   ThreadPin,
+  ToolReference,
+  TrustedToolReference,
 } from './types.js';
 
 type Model = NonNullable<AgentConfig['model']>;
@@ -53,12 +52,12 @@ export interface ToolBindingContext {
   secret(alias: string): Promise<string>;
 }
 
-export interface ToolReferenceResolvers {
-  http?: (reference: HttpToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-  mcp?: (reference: McpToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-  builtin?: (reference: BuiltinToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-  client?: (reference: ClientToolReference, context: ToolBindingContext) => AnyTool | Promise<AnyTool>;
-}
+export type ToolReferenceResolvers = {
+  [K in Exclude<ToolReference, TrustedToolReference>['kind']]?: (
+    reference: Extract<ToolReference, { kind: K }>,
+    context: ToolBindingContext,
+  ) => AnyTool | Promise<AnyTool>;
+};
 
 export interface RuntimeBindings {
   models: NamedRegistry<Model>;
@@ -105,6 +104,16 @@ export interface BoundAgentRevision {
 
 function bindingError(message: string): never {
   throw new DeploymentError('BINDING_FAILED', message);
+}
+
+function resolveCapability<T>(
+  reference: CapabilityReference | undefined,
+  registry: VersionedRegistry<T> | undefined,
+  label: string,
+): T | undefined {
+  if (!reference) return undefined;
+  return registry?.resolve(reference.capability, reference.versionRange)
+    ?? bindingError(`no ${label} registry is configured`);
 }
 
 function bytes(value: string | Uint8Array): Uint8Array {
@@ -259,6 +268,7 @@ function verifyPin(version: AgentVersion, pin: ThreadPin, runtime: RuntimeRevisi
   }
 }
 
+/** `artifact` must already be validated by the caller — this function trusts it and does not re-validate. */
 async function bindArtifact(
   artifact: AgentArtifact,
   pin: ThreadPin,
@@ -266,7 +276,7 @@ async function bindArtifact(
   bindings: RuntimeBindings,
   ancestors: ReadonlySet<string>,
 ): Promise<AgentConfig> {
-  const validated = await validateArtifact(artifact);
+  const validated = artifact;
   assertArtifactCompatible(validated, runtime);
   if (ancestors.has(validated.digest)) bindingError(`subagent cycle at ${validated.agent.id}`);
   const nextAncestors = new Set(ancestors).add(validated.digest);
@@ -288,12 +298,12 @@ async function bindArtifact(
     } else {
       const resolver = bindings.toolReferences?.[reference.kind];
       if (!resolver) bindingError(`no ${reference.kind} tool resolver is configured for ${reference.id}`);
-      // The discriminated lookup cannot preserve the correlated function argument
-      // across the index access, so dispatch each concrete resolver explicitly.
-      if (reference.kind === 'http') tool = await bindings.toolReferences!.http!(reference, context);
-      else if (reference.kind === 'mcp') tool = await bindings.toolReferences!.mcp!(reference, context);
-      else if (reference.kind === 'builtin') tool = await bindings.toolReferences!.builtin!(reference, context);
-      else tool = await bindings.toolReferences!.client!(reference, context);
+      // The mapped type correlates `kind` with its resolver's parameter type, but
+      // the indexed lookup above erases that correlation back to the union.
+      tool = await (resolver as (r: typeof reference, c: ToolBindingContext) => AnyTool | Promise<AnyTool>)(
+        reference,
+        context,
+      );
     }
     if (tool.name !== reference.id) {
       bindingError(`bound tool ${tool.name} does not match artifact id ${reference.id}`);
@@ -312,7 +322,9 @@ async function bindArtifact(
   const childAgents: AgentConfig[] = [];
   for (const node of validated.agents) {
     if (!bindings.artifacts) bindingError(`no artifact resolver is configured for subagent ${node.id}`);
-    const child = await bindings.artifacts.get(node.artifactId, node.digest);
+    // The resolver is an external, untrusted source — validate before binding, unlike the
+    // caller-validated `artifact` parameter above.
+    const child = await validateArtifact(await bindings.artifacts.get(node.artifactId, node.digest));
     if (child.artifactId !== node.artifactId || child.digest !== node.digest || child.agent.id !== node.id) {
       bindingError(`resolved subagent ${node.id} does not match its pinned artifact reference`);
     }
@@ -329,6 +341,15 @@ async function bindArtifact(
     bindingError(`artifact ${validated.artifactId} contains workspace content but no workspace provider is configured`);
   }
 
+  const inputPolicy = resolveCapability(validated.policies.input, bindings.inputPolicies, 'input policy');
+  const outputPolicy = resolveCapability(validated.policies.output, bindings.outputPolicies, 'output policy');
+  const toolPolicy = resolveCapability(validated.policies.tool, bindings.toolPolicies, 'tool policy');
+  const refinement = resolveCapability(validated.policies.refine, bindings.refiners, 'refinement');
+  const validation = resolveCapability(validated.policies.validate, bindings.validators, 'validation');
+  const guardrails = inputPolicy !== undefined || outputPolicy !== undefined
+    ? { input: inputPolicy !== undefined ? [inputPolicy] : undefined, output: outputPolicy !== undefined ? [outputPolicy] : undefined }
+    : undefined;
+
   const config: AgentConfig = {
     id: validated.agent.id,
     name: validated.agent.name,
@@ -344,50 +365,26 @@ async function bindArtifact(
     handoffs: validated.agent.handoffs,
     limits: validated.agent.limits,
     skills: validated.skills.length > 0 ? new ArtifactSkillStore(validated, bindings.content) : undefined,
-    guardrails: {
-      input: validated.policies.input
-        ? [bindings.inputPolicies?.resolve(
-            validated.policies.input.capability,
-            validated.policies.input.versionRange,
-          ) ?? bindingError('no input policy registry is configured')]
-        : undefined,
-      output: validated.policies.output
-        ? [bindings.outputPolicies?.resolve(
-            validated.policies.output.capability,
-            validated.policies.output.versionRange,
-          ) ?? bindingError('no output policy registry is configured')]
-        : undefined,
-    },
-    policy: validated.policies.tool
-      ? bindings.toolPolicies?.resolve(
-          validated.policies.tool.capability,
-          validated.policies.tool.versionRange,
-        ) ?? bindingError('no tool policy registry is configured')
-      : undefined,
-    refine: validated.policies.refine
-      ? [bindings.refiners?.resolve(
-          validated.policies.refine.capability,
-          validated.policies.refine.versionRange,
-        ) ?? bindingError('no refinement registry is configured')]
-      : undefined,
-    validate: validated.policies.validate
-      ? [bindings.validators?.resolve(
-          validated.policies.validate.capability,
-          validated.policies.validate.versionRange,
-        ) ?? bindingError('no validation registry is configured')]
-      : undefined,
+    ...(guardrails ? { guardrails } : {}),
+    policy: toolPolicy,
+    refine: refinement ? [refinement] : undefined,
+    validate: validation ? [validation] : undefined,
     workspace: bindings.workspace && hasWorkspaceContent
-      ? async ({ session }) => bindings.workspace!.open({
-          pin: structuredClone(pin),
-          artifact: structuredClone(validated),
-          session,
-          references: structuredClone(validated.references),
-          workspaceSeed: structuredClone(validated.workspaceSeed),
-          read: entry => readEntry(entry, bindings.content),
-        })
+      ? async ({ session }) => {
+          // Clone once — `references`/`workspaceSeed` below alias into this clone rather
+          // than re-cloning `validated`, which is itself already a fresh, unshared clone.
+          const workspaceArtifact = structuredClone(validated);
+          return bindings.workspace!.open({
+            pin: structuredClone(pin),
+            artifact: workspaceArtifact,
+            session,
+            references: workspaceArtifact.references,
+            workspaceSeed: workspaceArtifact.workspaceSeed,
+            read: entry => readEntry(entry, bindings.content),
+          });
+        }
       : undefined,
   };
-  if (!config.guardrails?.input && !config.guardrails?.output) delete config.guardrails;
   return config;
 }
 

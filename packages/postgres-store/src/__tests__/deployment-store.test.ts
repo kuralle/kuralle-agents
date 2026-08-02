@@ -47,7 +47,6 @@ function release(id: string, versionId: string): AgentRelease {
     tenantId: 'tenant-a',
     agentEntityId: 'support',
     environment: 'production',
-    state: 'active',
     branch: 'main',
     allocations: [{ agentVersionId: versionId, runtimeRevisionId: 'runtime-1', weight: 10_000 }],
     createdAt: AT,
@@ -108,7 +107,7 @@ describe('PostgresDeploymentStore', () => {
       createdAt: AT,
     });
     await store.createRelease(release('release-1', v1.id));
-    await store.activateRelease('tenant-a', 'release-1');
+    await store.routeTrafficTo('tenant-a', 'release-1');
     const first = await store.assignThread({
       tenantId: 'tenant-a',
       threadId: 'thread-a',
@@ -117,7 +116,7 @@ describe('PostgresDeploymentStore', () => {
       assignedAt: AT,
     });
     await store.createRelease(release('release-2', v2.id));
-    await store.activateRelease('tenant-a', 'release-2');
+    await store.routeTrafficTo('tenant-a', 'release-2');
 
     const afterRestart = new PostgresDeploymentStore({ client: pool, autoMigrate: false });
     const resumed = await afterRestart.assignThread({
@@ -136,9 +135,10 @@ describe('PostgresDeploymentStore', () => {
 
     expect(resumed).toEqual(first);
     expect(newThread.agentVersionId).toBe('version-2');
-    await expect(afterRestart.getThreadPin('tenant-b', 'thread-a')).rejects.toMatchObject({
-      code: 'ACCESS_DENIED',
-    });
+    // Absent, not denied: a rejection would tell tenant-b that somebody else
+    // holds this id, which is the existence oracle the composite key removes.
+    expect(await afterRestart.getThreadPin('tenant-b', 'thread-a')).toBeNull();
+    expect((await afterRestart.getThreadPin('tenant-a', 'thread-a'))?.threadId).toBe('thread-a');
     await pool.end();
   });
 
@@ -166,7 +166,7 @@ describe('PostgresDeploymentStore', () => {
     expect(schemaSql).not.toContain('INDEX IF NOT EXISTS platform.');
 
     await store.migrate();
-    expect(queries).toHaveLength(11);
+    expect(queries).toHaveLength(13);
     expect(queries[0]).toBe('BEGIN');
     expect(queries.at(-1)).toBe('COMMIT');
   });
@@ -196,6 +196,36 @@ describe('PostgresDeploymentStore', () => {
     expect(await coordinator.acquire({
       tenantId: 'tenant-a', threadId: 'thread-a', ownerId: 'node-3', ttlMs: 5_000,
     })).not.toBeNull();
+    await pool.end();
+  });
+
+  it('does not let one tenant\'s live turn lock another tenant out of the same thread id', async () => {
+    const memory = newDb();
+    const pg = memory.adapters.createPg();
+    const pool = new pg.Pool();
+    const coordinator = new PostgresThreadExecutionCoordinator({
+      client: pool, now: () => Date.parse(AT),
+    });
+    // A phone number on the WhatsApp path is an ordinary thread id for two
+    // different businesses. One holding a turn must not 409 the other.
+    const shared = '94778984729';
+
+    const a = await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: shared, ownerId: 'node-a', ttlMs: 5_000,
+    });
+    const b = await coordinator.acquire({
+      tenantId: 'tenant-b', threadId: shared, ownerId: 'node-b', ttlMs: 5_000,
+    });
+
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    // And the mutual exclusion each tenant relies on still holds inside a tenant.
+    expect(await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: shared, ownerId: 'node-a2', ttlMs: 5_000,
+    })).toBeNull();
+    // One tenant releasing must not free the other's lease.
+    await a!.release();
+    await b!.renew();
     await pool.end();
   });
 });

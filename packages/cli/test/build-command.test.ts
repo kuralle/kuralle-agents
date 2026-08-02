@@ -64,7 +64,7 @@ describe('kuralle build', () => {
 
   it('bundles a self-contained Node server and production Dockerfile', async () => {
     const out = await mkdtemp(join(tmpdir(), 'kuralle-cli-host-build-'));
-    const example = resolve(import.meta.dir, '../../../examples-deploy/kuralle-file-agent-chat');
+    const example = resolve(import.meta.dir, '../../../apps/examples/file-agent-chat');
 
     const result = await runBuildCommand([
       '--agent', join(example, 'agent'),
