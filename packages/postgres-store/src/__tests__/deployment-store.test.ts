@@ -198,4 +198,34 @@ describe('PostgresDeploymentStore', () => {
     })).not.toBeNull();
     await pool.end();
   });
+
+  it('does not let one tenant\'s live turn lock another tenant out of the same thread id', async () => {
+    const memory = newDb();
+    const pg = memory.adapters.createPg();
+    const pool = new pg.Pool();
+    const coordinator = new PostgresThreadExecutionCoordinator({
+      client: pool, now: () => Date.parse(AT),
+    });
+    // A phone number on the WhatsApp path is an ordinary thread id for two
+    // different businesses. One holding a turn must not 409 the other.
+    const shared = '94778984729';
+
+    const a = await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: shared, ownerId: 'node-a', ttlMs: 5_000,
+    });
+    const b = await coordinator.acquire({
+      tenantId: 'tenant-b', threadId: shared, ownerId: 'node-b', ttlMs: 5_000,
+    });
+
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    // And the mutual exclusion each tenant relies on still holds inside a tenant.
+    expect(await coordinator.acquire({
+      tenantId: 'tenant-a', threadId: shared, ownerId: 'node-a2', ttlMs: 5_000,
+    })).toBeNull();
+    // One tenant releasing must not free the other's lease.
+    await a!.release();
+    await b!.renew();
+    await pool.end();
+  });
 });

@@ -51,8 +51,8 @@ export class PostgresThreadExecutionCoordinator {
     const result = await this.client.query(
       `INSERT INTO ${this.table} (thread_id,tenant_id,owner_id,expires_at)
        VALUES ($1,$2,$3,$4)
-       ON CONFLICT (thread_id) DO UPDATE SET
-         tenant_id=EXCLUDED.tenant_id, owner_id=EXCLUDED.owner_id, expires_at=EXCLUDED.expires_at
+       ON CONFLICT (tenant_id,thread_id) DO UPDATE SET
+         owner_id=EXCLUDED.owner_id, expires_at=EXCLUDED.expires_at
        WHERE ${this.table}.expires_at <= $5
        RETURNING owner_id`,
       [options.threadId, options.tenantId, options.ownerId, expiresAt, new Date(this.now())],
@@ -83,10 +83,11 @@ export class PostgresThreadExecutionCoordinator {
   private async migrate(): Promise<void> {
     await this.client.query(
       `CREATE TABLE IF NOT EXISTS ${this.table} (
-        thread_id TEXT PRIMARY KEY,
         tenant_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
         owner_id TEXT NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL
+        expires_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (tenant_id,thread_id)
       )`,
     );
     await this.client.query(
