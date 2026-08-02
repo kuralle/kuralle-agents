@@ -1,4 +1,4 @@
-import { jsonSchema, parseJsonEventStream } from 'ai';
+import { parseJsonEventStream, uiMessageChunkSchema } from 'ai';
 import type { StreamPart } from '../types/stream.js';
 
 /**
@@ -91,9 +91,13 @@ const VOLATILE_ID_TYPES = new Set([
 export async function drainSSEFrames(
   stream: ReadableStream,
 ): Promise<Array<Record<string, unknown>>> {
-  const parsed = parseJsonEventStream<Record<string, unknown>>({
+  // Same pairing the SDK's own `DefaultChatTransport.processResponseStream`
+  // uses: `parseJsonEventStream` for the wire, `uiMessageChunkSchema` to
+  // validate. A generic object schema would accept frames a real client would
+  // reject, which is the opposite of what a parity test wants.
+  const parsed = parseJsonEventStream({
     stream: stream as ReadableStream<Uint8Array>,
-    schema: jsonSchema<Record<string, unknown>>({ type: 'object' }),
+    schema: uiMessageChunkSchema,
   });
 
   const frames: Array<Record<string, unknown>> = [];
@@ -102,7 +106,7 @@ export async function drainSSEFrames(
     const { done, value } = await reader.read();
     if (done) break;
     if (!value.success) continue;
-    const frame = value.value;
+    const frame = value.value as unknown as Record<string, unknown>;
     frames.push(
       typeof frame.id === 'string' && VOLATILE_ID_TYPES.has(String(frame.type))
         ? { ...frame, id: '<generated>' }
