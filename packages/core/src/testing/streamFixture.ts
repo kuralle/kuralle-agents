@@ -1,3 +1,4 @@
+import { jsonSchema, parseJsonEventStream } from 'ai';
 import type { StreamPart } from '../types/stream.js';
 
 /**
@@ -78,6 +79,11 @@ const VOLATILE_ID_TYPES = new Set([
 /**
  * Drains an SSE `ReadableStream` into parsed frame objects.
  *
+ * The SSE decoding is the AI SDK's `parseJsonEventStream` rather than a
+ * hand-rolled splitter — it already handles chunk boundaries, the `[DONE]`
+ * sentinel, and malformed frames, and it is the same parser the SDK's own
+ * clients use, so the test decodes the wire exactly as a real consumer does.
+ *
  * Frames are compared whole rather than by `type` alone: the divergences this
  * exists to catch include a missing `id` on text frames and differently-named
  * `data-*` parts, both of which a type-only comparison would wave through.
@@ -85,39 +91,24 @@ const VOLATILE_ID_TYPES = new Set([
 export async function drainSSEFrames(
   stream: ReadableStream,
 ): Promise<Array<Record<string, unknown>>> {
-  const reader = stream.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = '';
+  const parsed = parseJsonEventStream<Record<string, unknown>>({
+    stream: stream as ReadableStream<Uint8Array>,
+    schema: jsonSchema<Record<string, unknown>>({ type: 'object' }),
+  });
+
   const frames: Array<Record<string, unknown>> = [];
-
-  const take = (block: string): void => {
-    for (const line of block.split('\n')) {
-      if (!line.startsWith('data: ')) continue;
-      const body = line.slice(6).trim();
-      if (!body || body === '[DONE]') continue;
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = JSON.parse(body) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      if (typeof parsed.id === 'string' && VOLATILE_ID_TYPES.has(String(parsed.type))) {
-        parsed = { ...parsed, id: '<generated>' };
-      }
-      frames.push(parsed);
-    }
-  };
-
+  const reader = parsed.getReader();
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buffer += value;
-    // A chunk boundary does not respect SSE frame boundaries; keep the tail.
-    const blocks = buffer.split('\n\n');
-    buffer = blocks.pop() ?? '';
-    for (const block of blocks) take(block);
+    if (!value.success) continue;
+    const frame = value.value;
+    frames.push(
+      typeof frame.id === 'string' && VOLATILE_ID_TYPES.has(String(frame.type))
+        ? { ...frame, id: '<generated>' }
+        : frame,
+    );
   }
-  if (buffer.trim()) take(buffer);
-
   return frames;
 }
 
