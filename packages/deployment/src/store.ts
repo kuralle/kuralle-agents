@@ -67,8 +67,35 @@ function key(...parts: string[]): string {
  * acceptable because nothing parses a thread id, and every store keeps
  * `tenant_id` as its own column for querying and debugging.
  */
+export const THREAD_KEY_PREFIX = 't1.';
+
+const RAW_THREAD_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
+
+/**
+ * Rejects a client-supplied thread id that must not be accepted.
+ *
+ * Two rules, and the second is the one that is easy to miss:
+ *
+ * 1. It must satisfy the documented identifier contract. Validate the **raw**
+ *    value — validating a digest computed from it proves nothing about the
+ *    input, and would let Unicode, out-of-charset and unbounded-length path
+ *    segments through while appearing to check them.
+ * 2. It must not sit inside the reserved composed namespace. A composed key is
+ *    otherwise a legal raw id, so a tenant could pre-create a thread whose id
+ *    equals another tenant's future composed key and claim their identity in
+ *    advance. The prefix makes the two namespaces disjoint.
+ */
+export function assertRawThreadId(threadId: string): void {
+  if (!RAW_THREAD_ID.test(threadId)) {
+    throw new DeploymentError('CONFLICT', 'invalid thread id');
+  }
+  if (threadId.startsWith(THREAD_KEY_PREFIX)) {
+    throw new DeploymentError('CONFLICT', 'invalid thread id');
+  }
+}
+
 export async function scopedThreadKey(tenantId: string, threadId: string): Promise<string> {
-  return sha256(key(tenantId, threadId));
+  return `${THREAD_KEY_PREFIX}${await sha256(key(tenantId, threadId))}`;
 }
 
 function conflict(message: string): never {

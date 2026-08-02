@@ -16,11 +16,13 @@ import {
   NamedRegistry,
   VersionedRegistry,
   createArtifact,
+  THREAD_KEY_PREFIX,
   scopedThreadKey,
   sha256,
   type RuntimeBindings,
   type RuntimeRevision,
 } from '@kuralle-agents/deployment';
+import { createDeploymentControlPlaneRouter } from '../src/deploymentControlPlaneRouter.js';
 import {
   createDeploymentRouter,
   type ThreadExecutionCoordinator,
@@ -172,6 +174,73 @@ describe('deployment tenant isolation', () => {
     expect(pinB?.agentVersionId).toBe('version-tenant-b');
     // Distinct rows, not one row two tenants share.
     expect(pinA?.threadId).not.toBe(pinB?.threadId);
+  });
+
+  it('validates the raw thread id before composing, not the digest afterwards', async () => {
+    const { post } = await setupTwoTenants();
+
+    // Composing first meant only the 64-hex digest was ever validated, so ids
+    // the documented contract rejects — non-ASCII, out-of-charset, over-length —
+    // were silently accepted and pinned.
+    const unicode = await post('tenant-a', encodeURIComponent('thread-🙂'), 'hi');
+    const overLong = await post('tenant-a', 'x'.repeat(200), 'hi');
+
+    expect(unicode.status).toBe(400);
+    expect(overLong.status).toBe(400);
+  });
+
+  it('refuses a raw thread id inside the reserved composed namespace', async () => {
+    const { post } = await setupTwoTenants();
+
+    // A composed key must not be forgeable as a raw id, or a tenant can claim
+    // another tenant's future identity by pre-creating it.
+    const forged = await post('tenant-a', `${THREAD_KEY_PREFIX}${'a'.repeat(64)}`, 'hi');
+
+    expect(forged.status).toBe(400);
+  });
+
+  it('composes the same identity on the Cloudflare control plane as on the Node router', async () => {
+    const { app, deploymentStore } = await setupTwoTenants();
+    const controlPlane = createDeploymentControlPlaneRouter({
+      deploymentStore,
+      authorize: () => true,
+    });
+
+    // A Cloudflare runtime assigns a thread through the control plane...
+    const assigned = await controlPlane.request(
+      'http://local/v1/internal/deployment/threads/assign',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: 'tenant-a', threadId: 'shared-thread',
+          agentEntityId: 'support', environment: 'production',
+        }),
+      },
+    );
+    expect(assigned.status).toBe(200);
+
+    // ...and the Node router must agree that this is the same thread, not a
+    // different one. If the two paths compose differently, a raw writer can
+    // pre-claim another tenant's composed identity.
+    const composed = await scopedThreadKey('tenant-a', 'shared-thread');
+    const pin = await deploymentStore.getThreadPin('tenant-a', composed);
+    expect(pin?.agentVersionId).toBe('version-tenant-a');
+
+    // And a raw id inside the reserved namespace must be refused here too.
+    const forged = await controlPlane.request(
+      'http://local/v1/internal/deployment/threads/assign',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: 'tenant-b', threadId: `${THREAD_KEY_PREFIX}${'a'.repeat(64)}`,
+          agentEntityId: 'support', environment: 'production',
+        }),
+      },
+    );
+    expect(forged.status).not.toBe(200);
+    void app;
   });
 
   it('does not leak conversation history across tenants on a shared thread id', async () => {

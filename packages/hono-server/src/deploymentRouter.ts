@@ -7,6 +7,7 @@ import {
 } from '@kuralle-agents/core';
 import {
   DeploymentError,
+  assertRawThreadId,
   bindAgentVersion,
   scopedThreadKey,
   type DeploymentStore,
@@ -103,6 +104,14 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     }
     if (body.message.length > 64_000) return c.json({ error: 'message exceeds 64000 characters' }, 413);
     const message = body.message.trim();
+
+    // Validate the RAW id first. Composing before validating would mean only the
+    // digest is ever checked, which proves nothing about what the client sent.
+    try {
+      assertRawThreadId(threadId);
+    } catch {
+      return c.json({ error: 'invalid thread id' }, 400);
+    }
 
     // `threadId` is a client-controlled path segment; `principal.tenantId` is
     // established by authentication. Compose them here, once, and use the result
