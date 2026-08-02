@@ -10,6 +10,11 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8787',
       '/v1': 'http://localhost:8787',
+      // The widget and the demo site are served by the API. Proxying them means
+      // the origin-relative embed snippet works from the Vite origin too —
+      // otherwise the copy-paste snippet 404s in dev.
+      '/kuralle-agent.js': 'http://localhost:8787',
+      '/embed-demo.html': 'http://localhost:8787',
     },
   },
 });

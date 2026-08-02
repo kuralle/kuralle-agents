@@ -9,7 +9,8 @@
     "dev:web": "vite",
     "build:web": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json",
-    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json"
+    "build": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p web/tsconfig.json",
+    "simulate": "bun run scripts/simulate.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.90",

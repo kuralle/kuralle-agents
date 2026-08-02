@@ -43,9 +43,20 @@
       .msg.user { opacity: .85; }
       .detail { border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
                 margin-top: 1rem; padding-top: .75rem; }
+      .detail.top { border-top: 0; border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+                    margin-top: .75rem; padding-top: 0; padding-bottom: .75rem; }
       h3, h4 { font-size: .95rem; margin: .75rem 0 .35rem; }
       details { margin: .35rem 0; }
       summary { cursor: pointer; }
+      .tabs { display: flex; gap: .3rem; margin: 1rem 0 0; flex-wrap: wrap; }
+      .tab { margin: 0; background: transparent; border: 1px solid transparent;
+             opacity: .6; border-radius: .45rem .45rem 0 0; }
+      .tab.on { opacity: 1; font-weight: 600;
+                border-color: color-mix(in srgb, currentColor 18%, transparent);
+                border-bottom-color: transparent;
+                background: color-mix(in srgb, currentColor 6%, transparent); }
+      .tabs + section { margin-top: 0; border-top-left-radius: 0; }
+      a { color: inherit; }
     </style>
   </head>
   <body>

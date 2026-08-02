@@ -12,6 +12,7 @@
     ]
   },
   "include": [
-    "server.ts"
+    "server.ts",
+    "scripts/**/*.ts"
   ]
 }

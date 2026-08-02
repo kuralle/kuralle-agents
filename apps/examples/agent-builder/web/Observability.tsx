@@ -81,28 +81,8 @@ export function Conversations(props: {
     <section>
       <h2>Conversations</h2>
       <button onClick={() => void load()}>Refresh</button>
-      {rows.length === 0 && <p className="muted">No conversations yet — send a message in Preview.</p>}
-      {rows.length > 0 && (
-        <table>
-          <thead>
-            <tr><th>Thread</th><th>Turns</th><th>Pinned version</th><th>Digest</th><th /></tr>
-          </thead>
-          <tbody>
-            {rows.map(row => (
-              <tr key={row.threadId} className={row.threadId === selected ? 'sel' : undefined}>
-                <td><code>{row.threadId}</code></td>
-                <td>{row.turns}</td>
-                <td>{row.pinnedVersionId ?? '—'}</td>
-                <td><code>{short(row.artifactDigest)}</code></td>
-                <td><button onClick={() => void open(row.threadId)}>Inspect</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
       {detail && (
-        <div className="detail">
+        <div className="detail top">
           <h3>{detail.threadId}</h3>
           {detail.pin && (
             <p className="muted">
@@ -146,6 +126,26 @@ export function Conversations(props: {
           ))}
         </div>
       )}
+      {rows.length === 0 && <p className="muted">No conversations yet — send a message in Preview.</p>}
+      {rows.length > 0 && (
+        <table>
+          <thead>
+            <tr><th>Thread</th><th>Turns</th><th>Pinned version</th><th>Digest</th><th /></tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.threadId} className={row.threadId === selected ? 'sel' : undefined}>
+                <td><code>{row.threadId}</code></td>
+                <td>{row.turns}</td>
+                <td>{row.pinnedVersionId ?? '—'}</td>
+                <td><code>{short(row.artifactDigest)}</code></td>
+                <td><button onClick={() => void open(row.threadId)}>Inspect</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
     </section>
   );
 }

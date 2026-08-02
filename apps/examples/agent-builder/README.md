@@ -19,9 +19,13 @@ guide, which explains the reasoning behind each part.
 ```bash
 export OPENAI_API_KEY=sk-...
 
-bun run dev        # builder API + agent runtime on :8787
+bun run dev        # builder API + agent runtime + widget on :8787
 bun run dev:web    # React UI on :5173 (second terminal)
+bun run simulate   # multi-tenant load simulation (third terminal, optional)
 ```
+
+- Builder UI — http://localhost:5173
+- Embedded widget on a mock customer site — http://localhost:8787/embed-demo.html
 
 Open http://localhost:5173, then: edit the instructions → **Save draft** → **Publish** →
 send a message, then a follow-up that depends on the first. Open **Conversations →
@@ -38,6 +42,30 @@ repeat to watch the two tenants stay separate.
 | **Conversations** | every thread, its turn count, and the version it pinned |
 | ↳ **Inspect** | transcript + per-turn trace spans (kind, duration, model, tokens) |
 | **Versions** | published versions, which is live, and rollback |
+| **Embed** | the copy-paste `<script>` snippet for a customer's own site |
+
+### Observe — transcript beside spans
+
+![Conversation transcript with its trace spans](docs/observe-traces.png)
+
+Each turn carries a `turn` span and an `llm` span with its duration, model, and token
+counts. A transcript alone cannot tell you why a turn took 1498 ms; the spans alone
+cannot tell you the customer asked for their order number.
+
+### Embed — one script tag
+
+![The Embed tab with the copy-paste snippet](docs/embed-tab.png)
+
+![The widget running on a mock customer site](docs/embedded-widget.png)
+
+The widget is a `<kuralle-agent>` web component in `public/kuralle-agent.js` — no build
+step, no framework, shadow-DOM isolated. It is deliberately **not**
+`@kuralle-agents/widget`: that package speaks to the chat router (`/api/agent/:id`,
+`/api/chat/*`), while this example is built on the deployment router, whose route and
+stream shape differ. Same product idea, different wire contract.
+
+Conversations started by the widget show up in **Observe** for that tenant — and only
+that tenant.
 
 ## What this demonstrates
 
@@ -106,6 +134,30 @@ Checked against this example running live, with a real model:
 Driven end-to-end in a real Chromium browser (via CDP), not only by HTTP: the form,
 save, publish, a two-turn conversation, and both tables were exercised through the UI.
 
+## Multi-tenant simulation
+
+`bun run simulate` drives five personas across two tenants concurrently, with thread ids
+that **collide on purpose** — the interesting question is not whether it works but
+whether tenant B ever sees tenant A's conversation.
+
+```
+== turn 2: every persona asks for their code back (multi-turn) ==
+  globex  ivy   thread=dana-example.com   -> [GLOBEX] The code you gave me is: GLOBEX-ECHO-55.
+  globex  hank  thread=94778984729        -> [GLOBEX] The code you gave me is GLOBEX-DELTA-44.
+  acme    cy    thread=acme-only-thread   -> [ACME] The code you gave me is: ACME-CHARLIE-33.
+  acme    bo    thread=dana-example.com   -> [ACME] The code you gave me is ACME-BRAVO-22.
+  acme    ada   thread=94778984729        -> [ACME] The code you gave me is: ACME-ALPHA-11.
+
+== each tenant sees only its own conversations ==
+  acme:   3 conversations — 94778984729, dana-example.com, acme-only-thread
+  globex: 2 conversations — dana-example.com, 94778984729
+
+ALL CHECKS PASSED
+```
+
+Two tenants hold `94778984729` and `dana-example.com` at the same time; each recalls its
+own code, is served its own published agent, and sees only its own conversation list.
+
 ## Going to production
 
 This example uses `InMemoryDeploymentStore` and a process-local turn lock so it runs with
@@ -119,4 +171,10 @@ no setup. Swap both for real infrastructure:
 
 On Cloudflare, derive the Durable Object name from **tenant and thread**
 (`idFromName(`${tenantId}:${threadId}`)`). A thread id is client-supplied and is often a
-phone number or email — not unique across your customer base.
+phone number — not unique across your customer base.
+
+**An email is not a valid thread id.** Ids must match
+`^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$`; `@` is outside that charset, so a raw address is
+rejected (as `409`, the same status as a busy thread). `scripts/simulate.ts` asserts both
+the rejection and the sanitised form, because a webhook that forwards addresses straight
+through will otherwise fail only in production.

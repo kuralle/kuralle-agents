@@ -14,8 +14,10 @@
  *      use the same thread id.
  */
 
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { serve } from '@hono/node-server';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { createOpenAI } from '@ai-sdk/openai';
 import { MemoryStore, MemoryTraceStore, type AgentConfig, type AgentTrace } from '@kuralle-agents/core';
 import {
@@ -355,6 +357,23 @@ api.post('/agents/:id/definition', async c => {
 });
 
 const app = new Hono();
+
+/**
+ * The embeddable widget and a demo "customer site" that loads it. Served from
+ * this origin so the whole embed story runs with no extra process: open
+ * http://localhost:8787/embed-demo.html and the chat bubble is bottom-right.
+ */
+const publicDir = join(import.meta.dirname, 'public');
+const staticFile = (name: string, type: string) => async (c: Context) => {
+  try {
+    return c.body(await readFile(join(publicDir, name), 'utf8'), 200, { 'content-type': type });
+  } catch {
+    return c.text('not found', 404);
+  }
+};
+app.get('/kuralle-agent.js', staticFile('kuralle-agent.js', 'application/javascript; charset=utf-8'));
+app.get('/embed-demo.html', staticFile('embed-demo.html', 'text/html; charset=utf-8'));
+
 app.route('/api', api);
 
 /**
@@ -363,13 +382,15 @@ app.route('/api', api);
  * the pair; the router still owns authentication and everything after it.
  */
 app.use('/v1/agents/:agentEntityId/threads/:threadId/messages', async (c, next) => {
-  const principal = principalFrom(c.req.header('authorization'));
-  if (principal) {
-    const seen = threadsByTenant.get(principal.tenantId) ?? new Set<string>();
-    seen.add(c.req.param('threadId'));
-    threadsByTenant.set(principal.tenantId, seen);
-  }
   await next();
+  // Record AFTER the router has run, and only when it accepted the request.
+  // Recording first lists threads that were rejected — a malformed id (an email
+  // address, say) would show up as a conversation with zero turns and no pin.
+  const principal = principalFrom(c.req.header('authorization'));
+  if (!principal || !c.res.ok) return;
+  const seen = threadsByTenant.get(principal.tenantId) ?? new Set<string>();
+  seen.add(c.req.param('threadId'));
+  threadsByTenant.set(principal.tenantId, seen);
 });
 
 app.route('/', createDeploymentRouter({
@@ -390,4 +411,5 @@ app.route('/', createDeploymentRouter({
 serve({ fetch: app.fetch, port: PORT });
 console.log(`\n  Agent builder API   http://localhost:${PORT}`);
 console.log(`  Web UI              run \`bun run dev:web\` in another terminal\n`);
+console.log(`  Embed demo          http://localhost:${PORT}/embed-demo.html`);
 console.log(`  Demo tokens: ${Object.keys(TOKENS).join(', ')}  (two tenants)\n`);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDeploymentThread } from './useDeploymentThread.js';
 import { Conversations, Versions } from './Observability.js';
+import { Embed } from './Embed.js';
 
 const TENANTS = [
   { token: 'demo-acme', label: 'Acme (tenant: acme)' },
@@ -37,6 +38,10 @@ export function App() {
   const [nonce, setNonce] = useState(0);
   const [message, setMessage] = useState('What can you help me with?');
   const [refreshKey, setRefreshKey] = useState(0);
+  // Tabs, not one long column: each panel is a different job (author, test,
+  // operate, ship), and an operator inspecting a trace should not have to
+  // scroll past the prompt editor to reach it.
+  const [tab, setTab] = useState<'build' | 'preview' | 'observe' | 'embed'>('build');
 
   const threadId = useMemo(
     () => `preview-${published?.versionId ?? 'draft'}-${nonce}`,
@@ -145,7 +150,22 @@ export function App() {
         </select>
       </header>
 
-      <section>
+      <nav className="tabs">
+        {([
+          ['build', '1 · Build'],
+          ['preview', '2 · Preview'],
+          ['observe', '3 · Observe'],
+          ['embed', '4 · Embed'],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            className={tab === id ? 'tab on' : 'tab'}
+            onClick={() => setTab(id)}
+          >{label}</button>
+        ))}
+      </nav>
+
+      {tab === 'build' && (<><section>
         <h2>1 · Edit the draft</h2>
         <label>Agent id
           <input value={form.agentId} onChange={e => setForm({ ...form, agentId: e.target.value })} />
@@ -188,10 +208,10 @@ export function App() {
             {published.versionId} · digest <code>{published.digest.slice(0, 12)}…</code>
           </p>
         )}
-      </section>
+      </section></>)}
 
-      <section>
-        <h2>3 · Preview</h2>
+      {tab === 'preview' && (<section>
+        <h2>Preview</h2>
         <p className="muted">
           thread <code>{threadId}</code> — history lives on the server, so this is a
           real multi-turn conversation, not a sequence of one-shot prompts.
@@ -238,14 +258,18 @@ export function App() {
           <summary>{thread.events.length} stream events</summary>
           <pre>{thread.events.map(e => e.type).join('\n')}</pre>
         </details>
-      </section>
+      </section>)}
 
-      <Conversations authed={authed} refreshKey={refreshKey} />
-      <Versions
-        authed={authed}
-        refreshKey={refreshKey}
-        onRollback={() => { setNonce(n => n + 1); thread.reset(); setStatus('Traffic re-pointed.'); }}
-      />
+      {tab === 'observe' && (<>
+        <Conversations authed={authed} refreshKey={refreshKey} />
+        <Versions
+          authed={authed}
+          refreshKey={refreshKey}
+          onRollback={() => { setNonce(n => n + 1); thread.reset(); setStatus('Traffic re-pointed.'); }}
+        />
+      </>)}
+
+      {tab === 'embed' && <Embed token={token} agentId={form.agentId} published={Boolean(published)} />}
 
       {status && <footer>{status}</footer>}
     </main>

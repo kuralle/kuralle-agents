@@ -402,8 +402,18 @@ const id = env.KURALLE_THREADS.idFromName(`${tenantId}:${threadId}`);
 const id = env.KURALLE_THREADS.idFromName(threadId);
 ```
 
-Thread ids are frequently phone numbers (WhatsApp `wa_id`) or emails. They are not unique
-across your customer base, and treating them as unique is a cross-tenant data leak.
+Thread ids are frequently phone numbers (WhatsApp `wa_id`). They are not unique across your
+customer base, and treating them as unique is a cross-tenant data leak.
+
+<Aside type="caution" title="An email is not a valid thread id">
+Thread ids must match `^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$`. A phone number passes as-is;
+an email does **not**, because `@` is outside the charset — the request is rejected. Derive
+a safe id (`dana@example.com` → `dana-example.com`, or a hash) rather than forwarding an
+address straight through from a webhook.
+
+The rejection currently surfaces as `409`, the same status as "a turn is already running",
+so a malformed id and a busy thread look alike to a client.
+</Aside>
 
 </TabItem>
 </Tabs>
