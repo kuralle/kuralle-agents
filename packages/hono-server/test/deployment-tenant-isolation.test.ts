@@ -188,16 +188,19 @@ describe('a thread id collision across tenants', () => {
       },
     );
     const body = await res.text();
-    const done = body
+    const frames = body
       .split('\n')
       .filter(line => line.startsWith('data: '))
-      .map(line => JSON.parse(line.slice(6)) as { sessionId?: string })
-      .find(payload => typeof payload.sessionId === 'string');
+      .map(line => line.slice(6).trim())
+      // `[DONE]` is the AI SDK's stream sentinel, not JSON.
+      .filter(payload => payload && payload !== '[DONE]')
+      .map(payload => JSON.parse(payload) as { messageMetadata?: { sessionId?: string } });
 
-    // The composed key is addressing. A client that keeps `done.sessionId` and
-    // sends it back as a thread id must get a working round trip — the internal
-    // form contains `|`, which `validateThreadAssignmentRequest` rejects.
-    expect(done?.sessionId).toBe(threadId);
+    // The composed key is addressing and never crosses this boundary. A client
+    // keeps the sessionId from message metadata and sends it back as a thread
+    // id; the internal form contains `|`, which thread-id validation rejects.
+    const withSession = frames.find(frame => frame.messageMetadata?.sessionId);
+    expect(withSession?.messageMetadata?.sessionId).toBe(threadId);
     expect(body).not.toContain('|');
   });
 

@@ -1,9 +1,12 @@
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
+import { createUIMessageStreamResponse } from 'ai';
 import {
   createRuntime,
+  harnessToUIMessageStream,
   type HarnessConfig,
   type SessionStore,
+  type StreamPart,
 } from '@kuralle-agents/core';
 import {
   DeploymentError,
@@ -14,6 +17,9 @@ import {
   type RuntimeRevision,
 } from '@kuralle-agents/deployment';
 import { sanitizeForClient, shouldEmit, type StreamEventFilter } from './streamFilter.js';
+
+/** Same negotiation the chat/flow routes use, so one flag means one thing. */
+const wantsRawStreamFormat = (c: Context): boolean => c.req.query('format') === 'raw';
 
 export interface DeploymentPrincipal {
   tenantId: string;
@@ -133,6 +139,9 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         ttlMs: leaseTtlMs,
       });
       if (!lease) return c.json({ error: 'thread already has an active turn' }, 409);
+      // Captured after the guard: the narrowing does not reach into the
+      // generator declared below.
+      const heldLease = lease;
       const runtime = createRuntime({
         ...options.runtimeConfig,
         agents: [bound.agent],
@@ -140,55 +149,83 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         sessionStore: options.sessionStore,
       });
 
-      return streamSSE(c, async stream => {
-        const abort = new AbortController();
-        let renewalFailed: Error | undefined;
-        const timer = setInterval(() => {
-          void lease.renew().catch(error => {
-            renewalFailed = error instanceof Error ? error : new Error('thread lease renewal failed');
-            abort.abort(renewalFailed);
-          });
-        }, Math.max(1_000, Math.floor(leaseTtlMs / 3)));
+      const abort = new AbortController();
+      let renewalFailed: Error | undefined;
+      const timer = setInterval(() => {
+        void lease.renew().catch(error => {
+          renewalFailed = error instanceof Error ? error : new Error('thread lease renewal failed');
+          abort.abort(renewalFailed);
+        });
+      }, Math.max(1_000, Math.floor(leaseTtlMs / 3)));
+
+      const handle = runtime.run({
+        input: message,
+        // A thread id arrives from the client; the tenant is resolved from the
+        // credential. Everything keyed by `sessionId` downstream — history,
+        // traces, durable run state — inherits its isolation from this one
+        // composition, so it happens once, here.
+        sessionId: scopedKey(principal.tenantId, threadId),
+        userId: principal.userId,
+        idempotencyKey,
+        abortSignal: abort.signal,
+        deployment: bound.deployment,
+      });
+
+      /**
+       * The filtered part stream both encodings share.
+       *
+       * The filter has to run BEFORE the encoder: `harnessToUIMessageStream`
+       * consumes an iterable directly, so applying `streamFilter` afterwards
+       * would mean it never applied at all.
+       *
+       * Lease release lives in the `finally` so it happens on either path, and
+       * whether the stream completes, errors, or the client disconnects.
+       */
+      async function* clientParts(): AsyncGenerator<StreamPart> {
         try {
-          const handle = runtime.run({
-            input: message,
-            // A thread id arrives from the client; the tenant is resolved from
-            // the credential. Everything keyed by `sessionId` downstream —
-            // history, traces, durable run state — inherits its isolation from
-            // this one composition, so it happens once, here.
-            sessionId: scopedKey(principal.tenantId, threadId),
-            userId: principal.userId,
-            idempotencyKey,
-            abortSignal: abort.signal,
-            deployment: bound.deployment,
-          });
           for await (const part of handle.events) {
             if (!shouldEmit(part, filter)) continue;
-            const safe = sanitizeForClient(part);
-            // The composition above is addressing, and addressing does not
-            // cross this boundary: a client keeps `done.sessionId` and sends it
-            // back as a thread id, and the internal form contains `|`, which
-            // thread-id validation rejects. Undo it on the way out — the layer
-            // that composed the key is the layer that owes the raw one back.
-            const payload = 'sessionId' in safe.payload
-              ? { ...safe.payload, sessionId: threadId }
-              : safe.payload;
-            await stream.writeSSE({ event: safe.type, data: JSON.stringify(payload) });
+            yield sanitizeForClient(part);
           }
           await handle;
           if (renewalFailed) throw renewalFailed;
-        } catch (error) {
-          console.error('[Kuralle] deployment stream failed', error);
-          await stream.writeSSE({
-            event: 'error',
-            data: JSON.stringify({ error: 'An error occurred. Please try again.' }),
-          });
         } finally {
           clearInterval(timer);
-          await lease.release().catch(error => {
+          await heldLease.release().catch(error => {
             console.error('[Kuralle] thread lease release failed', error);
           });
         }
+      }
+
+      // Raw named-event SSE stays available for non-browser consumers, on the
+      // same `?format=raw` negotiation the sibling chat routes already use.
+      if (wantsRawStreamFormat(c)) {
+        return streamSSE(c, async stream => {
+          try {
+            for await (const part of clientParts()) {
+              // Only the raw wire carries `done`, and `done` is where the
+              // composed storage key would escape. The default wire never
+              // emits it, so it cannot leak there.
+              const payload = 'sessionId' in part.payload
+                ? { ...part.payload, sessionId: threadId }
+                : part.payload;
+              await stream.writeSSE({ event: part.type, data: JSON.stringify(payload) });
+            }
+          } catch (error) {
+            console.error('[Kuralle] deployment stream failed', error);
+            await stream.writeSSE({
+              event: 'error',
+              data: JSON.stringify({ error: 'An error occurred. Please try again.' }),
+            });
+          }
+        });
+      }
+
+      // Default: the one wire every Kuralle runtime speaks. `sessionId` is the
+      // raw thread id — the composed key is addressing and never crosses this
+      // boundary.
+      return createUIMessageStreamResponse({
+        stream: harnessToUIMessageStream(clientParts(), { sessionId: threadId }),
       });
     } catch (error) {
       const status = statusFor(error);

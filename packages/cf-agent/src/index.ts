@@ -39,7 +39,6 @@ export { OrchestrationStore } from './OrchestrationStore.js';
 export { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
 export { SqlTraceStore } from './SqlTraceStore.js';
 export { createSqlExecutor } from './sqlExecutor.js';
-export { createSSEResponse } from './StreamAdapter.js';
 export { lastUserInputFromMessages } from './cfMessageInput.js';
 export {
   AgentScheduleCoalesceScheduler,
@@ -56,7 +55,6 @@ export {
 export type {
   DurableSqlStorage,
   DurableSqlValue,
-  StreamAdapterConfig,
   OrchestrationState,
   SqlExecutor,
 } from './types.js';
@@ -66,7 +64,6 @@ export type {
   ScheduleHost,
 } from './inbound-runtime.js';
 
-export { DEFAULT_STREAM_CONFIG } from './types.js';
 
 // Re-export core types for convenience
 export type {

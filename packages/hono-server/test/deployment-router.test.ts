@@ -129,8 +129,15 @@ describe('createDeploymentRouter', () => {
 
     expect(response.status).toBe(200);
     const body = await response.text();
-    expect(body).toContain('event: text-delta');
+    // The default wire is now a UIMessageStream — the same one every other
+    // Kuralle runtime speaks — so `useChat` renders it with no bridge code.
+    expect(body).toContain('"type":"text-delta"');
     expect(body).toContain('"delta":"ok"');
+    expect(body).toContain('"type":"start"');
+    // sessionId reaches the client as message metadata, and it is the RAW
+    // thread id: the tenant-scoped storage key never crosses this boundary.
+    expect(body).toContain('"sessionId":"thread-a"');
+    expect(body).not.toContain('|');
     expect(getReleases()).toBe(1);
     // Traces are keyed by session id, so scoping the session scopes them too:
     // reading one tenant's trace now means naming that tenant.

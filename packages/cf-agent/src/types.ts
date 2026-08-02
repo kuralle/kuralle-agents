@@ -67,20 +67,3 @@ export interface OrchestrationState {
  * Configuration for the stream adapter.
  * Controls which Kuralle events are forwarded to CF as data parts.
  */
-export interface StreamAdapterConfig {
-  /** Include handoff events as data-handoff parts. Default: true. */
-  includeHandoffs: boolean;
-  /** Include flow node/transition events as data-flow-* parts. Default: false. */
-  includeFlowEvents: boolean;
-  /** Include tripwire events as data-tripwire parts. Default: false. */
-  includeTripwires: boolean;
-  /** Include tool call arguments in tool-input-available. Default: false. */
-  includeToolArgs: boolean;
-}
-
-export const DEFAULT_STREAM_CONFIG: StreamAdapterConfig = {
-  includeHandoffs: true,
-  includeFlowEvents: false,
-  includeTripwires: false,
-  includeToolArgs: false,
-};
