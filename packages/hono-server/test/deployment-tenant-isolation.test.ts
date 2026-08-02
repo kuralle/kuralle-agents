@@ -1,11 +1,12 @@
 /**
- * Thread ids arrive from a client-controlled URL path segment; the tenant comes
- * from the authenticated principal. Two tenants must be able to use the same
- * thread id without seeing, blocking, or detecting each other.
+ * A thread id is client-supplied; the tenant is not. The deployment router is
+ * the boundary where those two meet, so it is the layer that must compose them
+ * before either reaches storage.
  *
- * Asserted through the HTTP surface, because that is where the trust boundary
- * is. The vulnerable version returned two 200s here — so these assert on
- * content and on which tenant's data came back, never on status alone.
+ * Pins are keyed by (tenant, thread) inside the store. Conversation history is
+ * keyed by `sessionId`, and `SessionStore` has no tenant concept by design —
+ * every non-deployment runtime path uses it single-tenant. So the composition
+ * belongs here, at the only surface that knows both facts.
  */
 
 import { describe, expect, it } from 'bun:test';
@@ -16,41 +17,46 @@ import {
   NamedRegistry,
   VersionedRegistry,
   createArtifact,
-  THREAD_KEY_PREFIX,
-  scopedThreadKey,
   sha256,
   type RuntimeBindings,
   type RuntimeRevision,
 } from '@kuralle-agents/deployment';
-import { createDeploymentControlPlaneRouter } from '../src/deploymentControlPlaneRouter.js';
 import {
   createDeploymentRouter,
   type ThreadExecutionCoordinator,
 } from '../src/deploymentRouter.js';
 
-const AT = '2026-08-01T00:00:00.000Z';
+const AT = '2026-08-02T00:00:00.000Z';
 const TENANTS = ['tenant-a', 'tenant-b'] as const;
 
-/** Echoes the conversation length so a reply reveals whose history was loaded. */
-function echoingModel() {
-  return new MockLanguageModelV3({
+/** Every user-role text the model was ever asked to answer. */
+const seenByModel: string[] = [];
+
+async function setup() {
+  const model = new MockLanguageModelV3({
     doStream: async ({ prompt }) => {
-      const userTurns = prompt.filter(m => m.role === 'user').length;
+      for (const message of prompt) {
+        if (message.role !== 'user') continue;
+        for (const part of message.content) {
+          if (part.type === 'text') seenByModel.push(part.text);
+        }
+      }
       return {
         stream: simulateReadableStream({
           chunks: [
             { type: 'text-start', id: '1' },
-            { type: 'text-delta', id: '1', delta: `turns=${userTurns}` },
+            { type: 'text-delta', id: '1', delta: 'ok' },
             { type: 'text-end', id: '1' },
-            { type: 'finish', finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+            {
+              type: 'finish',
+              finishReason: 'stop',
+              usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            },
           ],
         }),
       } as never;
     },
   });
-}
-
-async function setupTwoTenants() {
   const instructions = 'Reply briefly.';
   const artifact = await createArtifact({
     schemaVersion: 1,
@@ -76,39 +82,39 @@ async function setupTwoTenants() {
     capabilities: [], createdAt: AT,
   };
   await deploymentStore.registerRuntime(runtimeRevision);
-
-  // Both tenants run their own release of the same agent — the realistic SaaS shape.
   for (const tenantId of TENANTS) {
     await deploymentStore.createEntity({
       id: 'support', tenantId, slug: 'support', status: 'active',
-      ownerId: `owner-${tenantId}`, visibility: 'private', createdAt: AT,
+      ownerId: tenantId, visibility: 'private', createdAt: AT,
     });
     await deploymentStore.createVersion({
       id: `version-${tenantId}`, tenantId, agentEntityId: 'support', version: 1,
-      artifact, createdBy: `owner-${tenantId}`, createdAt: AT,
+      artifact, createdBy: tenantId, createdAt: AT,
     });
     await deploymentStore.createRelease({
       id: `release-${tenantId}`, tenantId, agentEntityId: 'support', environment: 'production',
-      allocations: [{ agentVersionId: `version-${tenantId}`, runtimeRevisionId: 'runtime-1', weight: 10_000 }],
+      allocations: [{
+        agentVersionId: `version-${tenantId}`, runtimeRevisionId: 'runtime-1', weight: 10_000,
+      }],
       createdAt: AT,
     });
     await deploymentStore.routeTrafficTo(tenantId, `release-${tenantId}`);
   }
 
   const models = new NamedRegistry<NonNullable<AgentConfig['model']>>();
-  models.register('test/model', echoingModel());
+  models.register('test/model', model as never);
   const bindings: RuntimeBindings = {
-    models, tools: new VersionedRegistry(), flows: new VersionedRegistry(),
+    models,
+    tools: new VersionedRegistry(),
+    flows: new VersionedRegistry(),
   };
-
-  // Per-thread lease, keyed the way the router asks for it.
   const held = new Set<string>();
   const coordinator: ThreadExecutionCoordinator = {
     acquire: async ({ tenantId, threadId }) => {
-      const key = `${tenantId}::${threadId}`;
-      if (held.has(key)) return null;
-      held.add(key);
-      return { renew: async () => {}, release: async () => { held.delete(key); } };
+      const lock = `${tenantId}/${threadId}`;
+      if (held.has(lock)) return null;
+      held.add(lock);
+      return { renew: async () => {}, release: async () => { held.delete(lock); } };
     },
   };
 
@@ -121,138 +127,78 @@ async function setupTwoTenants() {
     streamFilter: 'all',
     resolvePrincipal: c => {
       const tenantId = c.req.header('authorization')?.replace('Bearer ', '');
-      return tenantId ? { tenantId, userId: `user-of-${tenantId}` } : null;
+      return tenantId ? { tenantId, userId: `${tenantId}-user` } : null;
     },
   });
-
-  let delivery = 0;
-  const post = async (tenantId: string, threadId: string, message: string) => {
-    delivery += 1;
-    const res = await app.request(`http://local/v1/agents/support/threads/${threadId}/messages`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${tenantId}`,
-        'content-type': 'application/json',
-        'idempotency-key': `delivery-${delivery}`,
-      },
-      body: JSON.stringify({ message }),
-    });
-    return { status: res.status, body: await res.text() };
-  };
-
-  return { app, deploymentStore, post };
+  return { app, sessionStore: new MemoryStore() };
 }
 
-describe('deployment tenant isolation', () => {
-  it('lets two tenants hold the same thread id without blocking each other', async () => {
-    const { post } = await setupTwoTenants();
-    const sharedThreadId = '94778984729';
+describe('a thread id collision across tenants', () => {
+  it('never lets one tenant\'s message reach the other tenant\'s turn', async () => {
+    const { app } = await setup();
+    // A phone number on the WhatsApp path: the same string is a perfectly
+    // ordinary thread id for two different businesses.
+    const shared = '94778984729';
+    const secret = 'my card number is 4111-1111-1111-1111';
 
-    const first = await post('tenant-a', sharedThreadId, 'hello from A');
-    const second = await post('tenant-b', sharedThreadId, 'hello from B');
+    const send = async (tenantId: string, message: string, key: string) => {
+      const res = await app.request(
+        `http://local/v1/agents/support/threads/${shared}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${tenantId}`,
+            'content-type': 'application/json',
+            'idempotency-key': key,
+          },
+          body: JSON.stringify({ message }),
+        },
+      );
+      await res.text();
+      return res.status;
+    };
 
-    expect(first.status).toBe(200);
-    // The lockout: today tenant-b is refused because tenant-a claimed the id.
-    expect(second.status).toBe(200);
+    seenByModel.length = 0;
+    expect(await send('tenant-a', secret, 'a-1')).toBe(200);
+    const afterA = seenByModel.length;
+
+    expect(await send('tenant-b', 'hello', 'b-1')).toBe(200);
+
+    // Everything the model saw while answering tenant-b.
+    const tenantBTurn = seenByModel.slice(afterA);
+    expect(tenantBTurn.length).toBeGreaterThan(0);
+    expect(tenantBTurn).not.toContain(secret);
+    expect(tenantBTurn.join('\n')).not.toContain('4111');
   });
 
-  it('pins each tenant to its own agent version for the same thread id', async () => {
-    const { post, deploymentStore } = await setupTwoTenants();
-    const sharedThreadId = '94778984729';
+  it('still carries one tenant\'s own history forward across turns', async () => {
+    const { app } = await setup();
+    const shared = '94778984729';
 
-    await post('tenant-a', sharedThreadId, 'hello from A');
-    await post('tenant-b', sharedThreadId, 'hello from B');
+    const send = async (message: string, key: string) => {
+      const res = await app.request(
+        `http://local/v1/agents/support/threads/${shared}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer tenant-a',
+            'content-type': 'application/json',
+            'idempotency-key': key,
+          },
+          body: JSON.stringify({ message }),
+        },
+      );
+      await res.text();
+    };
 
-    // Pins are keyed by the composed identity, so ask for them the same way the
-    // router stored them.
-    const pinA = await deploymentStore.getThreadPin(
-      'tenant-a', await scopedThreadKey('tenant-a', sharedThreadId));
-    const pinB = await deploymentStore.getThreadPin(
-      'tenant-b', await scopedThreadKey('tenant-b', sharedThreadId));
+    seenByModel.length = 0;
+    await send('remember: the sky is green', 'own-1');
+    const afterFirst = seenByModel.length;
+    await send('what colour is the sky?', 'own-2');
 
-    expect(pinA?.agentVersionId).toBe('version-tenant-a');
-    expect(pinB?.agentVersionId).toBe('version-tenant-b');
-    // Distinct rows, not one row two tenants share.
-    expect(pinA?.threadId).not.toBe(pinB?.threadId);
-  });
-
-  it('validates the raw thread id before composing, not the digest afterwards', async () => {
-    const { post } = await setupTwoTenants();
-
-    // Composing first meant only the 64-hex digest was ever validated, so ids
-    // the documented contract rejects — non-ASCII, out-of-charset, over-length —
-    // were silently accepted and pinned.
-    const unicode = await post('tenant-a', encodeURIComponent('thread-🙂'), 'hi');
-    const overLong = await post('tenant-a', 'x'.repeat(200), 'hi');
-
-    expect(unicode.status).toBe(400);
-    expect(overLong.status).toBe(400);
-  });
-
-  it('refuses a raw thread id inside the reserved composed namespace', async () => {
-    const { post } = await setupTwoTenants();
-
-    // A composed key must not be forgeable as a raw id, or a tenant can claim
-    // another tenant's future identity by pre-creating it.
-    const forged = await post('tenant-a', `${THREAD_KEY_PREFIX}${'a'.repeat(64)}`, 'hi');
-
-    expect(forged.status).toBe(400);
-  });
-
-  it('composes the same identity on the Cloudflare control plane as on the Node router', async () => {
-    const { app, deploymentStore } = await setupTwoTenants();
-    const controlPlane = createDeploymentControlPlaneRouter({
-      deploymentStore,
-      authorize: () => true,
-    });
-
-    // A Cloudflare runtime assigns a thread through the control plane...
-    const assigned = await controlPlane.request(
-      'http://local/v1/internal/deployment/threads/assign',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: 'tenant-a', threadId: 'shared-thread',
-          agentEntityId: 'support', environment: 'production',
-        }),
-      },
-    );
-    expect(assigned.status).toBe(200);
-
-    // ...and the Node router must agree that this is the same thread, not a
-    // different one. If the two paths compose differently, a raw writer can
-    // pre-claim another tenant's composed identity.
-    const composed = await scopedThreadKey('tenant-a', 'shared-thread');
-    const pin = await deploymentStore.getThreadPin('tenant-a', composed);
-    expect(pin?.agentVersionId).toBe('version-tenant-a');
-
-    // And a raw id inside the reserved namespace must be refused here too.
-    const forged = await controlPlane.request(
-      'http://local/v1/internal/deployment/threads/assign',
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: 'tenant-b', threadId: `${THREAD_KEY_PREFIX}${'a'.repeat(64)}`,
-          agentEntityId: 'support', environment: 'production',
-        }),
-      },
-    );
-    expect(forged.status).not.toBe(200);
-    void app;
-  });
-
-  it('does not leak conversation history across tenants on a shared thread id', async () => {
-    const { post } = await setupTwoTenants();
-    const sharedThreadId = '94778984729';
-
-    await post('tenant-a', sharedThreadId, 'first');
-    await post('tenant-a', sharedThreadId, 'second');
-    const bFirstTurn = await post('tenant-b', sharedThreadId, 'my first message');
-
-    // The model echoes how many user turns it was given. Tenant B's opening
-    // turn must be turn 1 — seeing 3 would mean it inherited A's history.
-    expect(bFirstTurn.body).toContain('turns=1');
+    // Scoping the session must not amount to discarding it: the second turn
+    // still replays the first. This is what a bare `crypto.randomUUID()`
+    // "fix" would break, and it would break silently.
+    expect(seenByModel.slice(afterFirst)).toContain('remember: the sky is green');
   });
 });

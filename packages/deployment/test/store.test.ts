@@ -184,7 +184,7 @@ describe('immutable versions and thread pins', () => {
     expect(newThread.releaseId).toBe('release-2');
   });
 
-  it('denies cross-tenant pin access without returning existence data', async () => {
+  it('hides one tenant\'s pin from another without revealing that it exists', async () => {
     const { store } = await configuredStore();
     await store.createRelease(release('release-1', 'version-1'));
     await store.routeTrafficTo('tenant-a', 'release-1');
@@ -195,19 +195,10 @@ describe('immutable versions and thread pins', () => {
       environment: 'production',
     });
 
-    await expect(store.getThreadPin('tenant-b', 'private-thread')).rejects.toMatchObject({
-      code: 'ACCESS_DENIED',
-      message: 'resource is not accessible in this tenant',
-    });
-    await expect(store.assignThread({
-      tenantId: 'tenant-b',
-      threadId: 'private-thread',
-      agentEntityId: 'support',
-      environment: 'production',
-    })).rejects.toMatchObject({
-      code: 'ACCESS_DENIED',
-      message: 'resource is not accessible in this tenant',
-    });
+    // Absent, not denied. ACCESS_DENIED would itself be the existence data:
+    // it tells tenant-b that somebody else holds this id.
+    expect(await store.getThreadPin('tenant-b', 'private-thread')).toBeNull();
+    expect((await store.getThreadPin('tenant-a', 'private-thread'))?.threadId).toBe('private-thread');
   });
 
   it('makes weighted assignment stable for equivalent control-plane state', async () => {

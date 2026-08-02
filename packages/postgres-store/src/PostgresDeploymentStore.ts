@@ -122,11 +122,12 @@ export function postgresDeploymentMigrationStatements(
       PRIMARY KEY (tenant_id,agent_entity_id,environment), FOREIGN KEY (tenant_id,release_id)
       REFERENCES ${t.releases}(tenant_id,id))`,
     `CREATE TABLE IF NOT EXISTS ${t.pins} (
-      thread_id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL, thread_id TEXT NOT NULL, agent_entity_id TEXT NOT NULL,
       agent_version_id TEXT NOT NULL, artifact_digest CHAR(64) NOT NULL,
       runtime_revision_id TEXT NOT NULL, release_id TEXT NOT NULL, branch TEXT,
       environment TEXT NOT NULL, config_generation INTEGER NOT NULL,
       secret_generation INTEGER NOT NULL, assigned_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (tenant_id,thread_id),
       FOREIGN KEY (tenant_id,agent_version_id) REFERENCES ${t.versions}(tenant_id,id),
       FOREIGN KEY (runtime_revision_id) REFERENCES ${t.runtimes}(id),
       FOREIGN KEY (tenant_id,release_id) REFERENCES ${t.releases}(tenant_id,id))`,
@@ -161,10 +162,6 @@ function conflict(message: string): never {
 
 function notFound(message: string): never {
   throw new DeploymentError('NOT_FOUND', message);
-}
-
-function accessDenied(): never {
-  throw new DeploymentError('ACCESS_DENIED', 'resource is not accessible in this tenant');
 }
 
 function entityFrom(row: Record<string, unknown>): AgentEntity {
@@ -465,8 +462,8 @@ export class PostgresDeploymentStore implements DeploymentStore {
     validateThreadAssignmentRequest(request);
     return this.transaction(async client => {
       const existing = await client.query(
-        `SELECT * FROM ${this.table.pins} WHERE thread_id=$1 FOR UPDATE`,
-        [request.threadId],
+        `SELECT * FROM ${this.table.pins} WHERE tenant_id=$1 AND thread_id=$2 FOR UPDATE`,
+        [request.tenantId, request.threadId],
       );
       if (existing.rows[0]) return this.verifyExistingPin(pinFrom(existing.rows[0]), request);
       const active = await client.query(
@@ -529,8 +526,8 @@ export class PostgresDeploymentStore implements DeploymentStore {
       } catch (error) {
         if (code(error) !== '23505') throw error;
         const raced = await client.query(
-          `SELECT * FROM ${this.table.pins} WHERE thread_id=$1`,
-          [request.threadId],
+          `SELECT * FROM ${this.table.pins} WHERE tenant_id=$1 AND thread_id=$2`,
+          [request.tenantId, request.threadId],
         );
         if (!raced.rows[0]) conflict('thread pin conflict could not be resolved');
         return this.verifyExistingPin(pinFrom(raced.rows[0]), request);
@@ -541,17 +538,15 @@ export class PostgresDeploymentStore implements DeploymentStore {
   async getThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null> {
     await this.ready;
     const result = await this.client.query(
-      `SELECT * FROM ${this.table.pins} WHERE thread_id=$1`,
-      [threadId],
+      // Absent, never denied: telling one tenant that another holds an id is an
+      // existence oracle over client-chosen thread ids.
+      `SELECT * FROM ${this.table.pins} WHERE tenant_id=$1 AND thread_id=$2`,
+      [tenantId, threadId],
     );
-    if (!result.rows[0]) return null;
-    const pin = pinFrom(result.rows[0]);
-    if (pin.tenantId !== tenantId) accessDenied();
-    return pin;
+    return result.rows[0] ? pinFrom(result.rows[0]) : null;
   }
 
   private verifyExistingPin(pin: ThreadPin, request: ThreadAssignmentRequest): ThreadPin {
-    if (pin.tenantId !== request.tenantId) accessDenied();
     if (pin.agentEntityId !== request.agentEntityId || pin.environment !== request.environment) {
       conflict('thread is already pinned to a different agent or environment');
     }

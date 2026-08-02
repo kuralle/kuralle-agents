@@ -104,6 +104,7 @@ describe('D1 deployment control plane', () => {
       tenantId: 'tenant-a', threadId: 'thread-b', agentEntityId: 'support', environment: 'production',
     })).agentVersionId).toBe('version-2');
     expect(firstPin.artifactDigest).toBe(firstVersion.artifact.digest);
-    await expect(store.getThreadPin('tenant-b', 'thread-a')).rejects.toMatchObject({ code: 'ACCESS_DENIED' });
+    // Absent, not denied — a rejection would reveal that another tenant holds it.
+    expect(await store.getThreadPin('tenant-b', 'thread-a')).toBeNull();
   });
 });

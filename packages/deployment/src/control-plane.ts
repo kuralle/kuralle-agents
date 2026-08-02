@@ -1,6 +1,6 @@
 import { validateArtifact } from './artifact.js';
 import { DeploymentError } from './errors.js';
-import { scopedThreadKey, type DeploymentStore } from './store.js';
+import type { DeploymentStore } from './store.js';
 import type { AgentVersion, ThreadAssignmentRequest, ThreadPin } from './types.js';
 
 export interface PinnedAgentVersion {
@@ -113,14 +113,9 @@ export class HttpDeploymentControlPlaneClient implements DeploymentControlPlaneC
   async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
     const result = await this.post(DEPLOYMENT_CONTROL_PLANE_PATHS.assignThread, request);
     const pin = validateThreadPin(isRecord(result) ? result.pin : undefined);
-    // The control plane composes the thread identity from tenant + thread, so
-    // the pin comes back keyed by the composed value. Verify against the same
-    // composition rather than the raw id — this check exists to prove the server
-    // pinned the thread we asked for, and must keep proving it.
-    const expectedThreadId = await scopedThreadKey(request.tenantId, request.threadId);
     if (
       pin.tenantId !== request.tenantId
-      || pin.threadId !== expectedThreadId
+      || pin.threadId !== request.threadId
       || pin.agentEntityId !== request.agentEntityId
       || pin.environment !== request.environment
     ) {

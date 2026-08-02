@@ -69,9 +69,6 @@ function tableNames(prefix = 'kuralle_deploy'): Tables {
 
 function conflict(message: string): never { throw new DeploymentError('CONFLICT', message); }
 function notFound(message: string): never { throw new DeploymentError('NOT_FOUND', message); }
-function accessDenied(): never {
-  throw new DeploymentError('ACCESS_DENIED', 'resource is not accessible in this tenant');
-}
 function json(value: unknown): string { return canonicalJson(value); }
 function parse<T>(value: unknown): T {
   return (typeof value === 'string' ? JSON.parse(value) : value) as T;
@@ -283,7 +280,7 @@ export class D1DeploymentStore implements DeploymentStore {
   async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
     await this.ready;
     validateThreadAssignmentRequest(request);
-    const current = await this.rawThreadPin(request.threadId);
+    const current = await this.rawThreadPin(request.tenantId, request.threadId);
     if (current) return this.verifyPin(current, request);
     const release = await this.first(
       `SELECT r.* FROM ${this.table.active} a JOIN ${this.table.releases} r
@@ -321,34 +318,33 @@ export class D1DeploymentStore implements DeploymentStore {
       `INSERT INTO ${this.table.pins}
        (thread_id,tenant_id,agent_entity_id,agent_version_id,artifact_digest,runtime_revision_id,
         release_id,branch,environment,config_generation,secret_generation,assigned_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(thread_id) DO NOTHING`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,thread_id) DO NOTHING`,
       pin.threadId, pin.tenantId, pin.agentEntityId, pin.agentVersionId, pin.artifactDigest,
       pin.runtimeRevisionId, pin.releaseId, pin.branch ?? null, pin.environment,
       pin.configGeneration, pin.secretGeneration, pin.assignedAt,
     );
-    const assigned = await this.rawThreadPin(request.threadId);
+    const assigned = await this.rawThreadPin(request.tenantId, request.threadId);
     if (!assigned) conflict('thread pin conflict could not be resolved');
     return this.verifyPin(assigned, request);
   }
 
   async getThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null> {
     await this.ready;
-    const pin = await this.rawThreadPin(threadId);
-    if (!pin) return null;
-    if (pin.tenantId !== tenantId) accessDenied();
-    return pin;
+    // Absent, never denied: telling one tenant that another holds an id is an
+    // existence oracle over client-chosen thread ids.
+    return this.rawThreadPin(tenantId, threadId);
   }
 
   private verifyPin(pin: ThreadPin, request: ThreadAssignmentRequest): ThreadPin {
-    if (pin.tenantId !== request.tenantId) accessDenied();
     if (pin.agentEntityId !== request.agentEntityId || pin.environment !== request.environment) {
       conflict('thread is already pinned to a different agent or environment');
     }
     return pin;
   }
 
-  private async rawThreadPin(threadId: string): Promise<ThreadPin | null> {
-    const row = await this.first(`SELECT * FROM ${this.table.pins} WHERE thread_id=?`, threadId);
+  private async rawThreadPin(tenantId: string, threadId: string): Promise<ThreadPin | null> {
+    const row = await this.first(
+      `SELECT * FROM ${this.table.pins} WHERE tenant_id=? AND thread_id=?`, tenantId, threadId);
     return row ? pinFrom(row) : null;
   }
 
@@ -395,10 +391,10 @@ export class D1DeploymentStore implements DeploymentStore {
        tenant_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,environment TEXT NOT NULL,release_id TEXT NOT NULL,
        updated_at TEXT NOT NULL,PRIMARY KEY(tenant_id,agent_entity_id,environment))`,
       `CREATE TABLE IF NOT EXISTS ${t.pins} (
-       thread_id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,agent_version_id TEXT NOT NULL,
+       tenant_id TEXT NOT NULL,thread_id TEXT NOT NULL,agent_entity_id TEXT NOT NULL,agent_version_id TEXT NOT NULL,
        artifact_digest TEXT NOT NULL,runtime_revision_id TEXT NOT NULL,release_id TEXT NOT NULL,branch TEXT,
        environment TEXT NOT NULL,config_generation INTEGER NOT NULL,secret_generation INTEGER NOT NULL,
-       assigned_at TEXT NOT NULL)`,
+       assigned_at TEXT NOT NULL,PRIMARY KEY(tenant_id,thread_id))`,
       `CREATE INDEX IF NOT EXISTS ${t.pins}_tenant_agent_idx
        ON ${t.pins}(tenant_id,agent_entity_id,environment)`,
     ];

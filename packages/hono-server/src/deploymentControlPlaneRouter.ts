@@ -2,8 +2,6 @@ import { Hono, type Context } from 'hono';
 import {
   DeploymentError,
   resolvePinnedAgentVersion,
-  assertRawThreadId,
-  scopedThreadKey,
   validateThreadAssignmentRequest,
   validateThreadPin,
   type DeploymentStore,
@@ -49,24 +47,12 @@ export function createDeploymentControlPlaneRouter(
     if (!body) return context.json({ error: 'invalid assignment request' }, 400);
     try {
       validateThreadAssignmentRequest(body);
-      // Reject a raw id inside the reserved composed namespace. Without this an
-      // authorized remote runtime could assign scopedThreadKey(victim, thread)
-      // directly and pre-claim another tenant's composed identity.
-      assertRawThreadId(body.threadId);
-      // Authorize against the id the caller actually named, not the digest.
       if (!await options.authorize(context, {
         action: 'assign-thread', tenantId: body.tenantId, threadId: body.threadId,
       })) {
         return context.json({ error: 'forbidden' }, 403);
       }
-      // Compose exactly as the Node router does, so both paths agree on what a
-      // thread is. Diverging here would let one path address a thread the other
-      // cannot see.
-      const pin = await options.deploymentStore.assignThread({
-        ...body,
-        threadId: await scopedThreadKey(body.tenantId, body.threadId),
-      });
-      return context.json({ pin });
+      return context.json({ pin: await options.deploymentStore.assignThread(body) });
     } catch (error) {
       return errorResponse(context, error);
     }

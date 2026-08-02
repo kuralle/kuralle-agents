@@ -135,9 +135,10 @@ describe('PostgresDeploymentStore', () => {
 
     expect(resumed).toEqual(first);
     expect(newThread.agentVersionId).toBe('version-2');
-    await expect(afterRestart.getThreadPin('tenant-b', 'thread-a')).rejects.toMatchObject({
-      code: 'ACCESS_DENIED',
-    });
+    // Absent, not denied: a rejection would tell tenant-b that somebody else
+    // holds this id, which is the existence oracle the composite key removes.
+    expect(await afterRestart.getThreadPin('tenant-b', 'thread-a')).toBeNull();
+    expect((await afterRestart.getThreadPin('tenant-a', 'thread-a'))?.threadId).toBe('thread-a');
     await pool.end();
   });
 
