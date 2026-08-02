@@ -18,9 +18,9 @@ asserted. `bun run dev` and `bun run dev:web`.
 This guide builds one. It assumes you have read [Build an Agent](/guides/build-an-agent/)
 and [Deployment](/guides/deployment/), and it focuses on the parts that are genuinely
 non-obvious: the draft/version/release lifecycle, the compare-and-swap that makes
-concurrent editing safe, the three different streaming wire formats (only one of which
-works with your preview pane), and the tenancy rules that decide whether two customers can
-see each other's conversations.
+concurrent editing safe, the split between orchestration events that persist and ones that
+are transient, and the tenancy rules that decide whether two customers can see each
+other's conversations.
 
 ## What Kuralle gives you — and what you build
 
@@ -236,98 +236,82 @@ permanent log", and validate before it, not after.
 
 This is where most React integrations go wrong, so it gets the most detail.
 
-Kuralle exposes **three different streaming wire formats**. They are not
-interchangeable, and picking the wrong one for a preview pane produces a stream that
-either won't parse or won't render.
+Every Kuralle server speaks **one wire**: an AI SDK `UIMessageStream`. That was not
+always true — the deployment route used to emit named-event SSE that no AI SDK client
+could read, and builders hand-rolled a parser to compensate. They no longer need to.
 
-| server | route | frame | `useChat`? |
+| server | route | default frame | `useChat`? |
 | --- | --- | --- | --- |
 | `createKuralleRouter` | `POST /api/flow/sse` | AI SDK UIMessageStream | **yes** |
-| `createKuralleSseChatRouter` | `POST /api/chat/sse` | `data:` = the whole `StreamPart` | no |
-| `createDeploymentRouter` | `POST /v1/agents/:id/threads/:threadId/messages` | `event:` = part type, `data:` = payload **only** | no |
+| `createKuralleSseChatRouter` | `POST /api/chat/sse` | AI SDK UIMessageStream | **yes** |
+| `createDeploymentRouter` | `POST /v1/agents/:id/threads/:threadId/messages` | AI SDK UIMessageStream | **yes** |
 
-A builder previewing a *deployed, versioned, tenant-scoped* agent uses the third. So
-`useChat` from the AI SDK will not work against it — not because anything is broken, but
-because the deployment route is deliberately a lower-level, named-event stream that carries
-tool calls, approvals, and lifecycle events your builder wants to render distinctly.
+Every one of them accepts `?format=raw` to get the older named-event `StreamPart` SSE
+instead. Reach for it only for a non-browser consumer that already parses `StreamPart`
+directly — a CLI, a webhook bridge, a log tap.
 
-Write the reader. It is about forty lines.
+So the preview pane is `useChat`, and the hook you write supplies only the two things
+`useChat` cannot know: the tenant credential, and an idempotency key per logical send.
 
 ```tsx title="src/useDeploymentThread.ts"
-import { useCallback, useRef, useState } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { useCallback, useMemo, useRef } from 'react';
 
 export function useDeploymentThread(agentId: string, threadId: string, token: string) {
-  const [text, setText] = useState('');
-  const [streaming, setStreaming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  // One key per logical send, kept across retries — that is what makes the
-  // retry safe rather than duplicating the turn.
-  const idempotencyKey = useRef<string>('');
+  // `DefaultChatTransport` evaluates `headers` per REQUEST, so minting the key
+  // inside that function would produce a fresh one on every retry — turning a
+  // network blip into a second turn. Mint per send, hold it in a ref, read it here.
+  const idempotencyKey = useRef('');
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: `/v1/agents/${encodeURIComponent(agentId)}/threads/${encodeURIComponent(threadId)}/messages`,
+        headers: () => ({
+          authorization: `Bearer ${token}`,
+          'idempotency-key': idempotencyKey.current,
+        }),
+        // The route takes `{ message }`, not useChat's message array — history
+        // lives on the server, so re-sending it would be redundant.
+        prepareSendMessagesRequest: ({ messages }) => ({
+          body: {
+            message: messages[messages.length - 1]?.parts
+              ?.filter(part => part.type === 'text')
+              .map(part => (part as { text: string }).text)
+              .join('') ?? '',
+          },
+        }),
+      }),
+    [agentId, threadId, token],
+  );
+
+  const chat = useChat({ transport, id: threadId });
 
   const send = useCallback(async (message: string) => {
-    if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
-    setStreaming(true);
-    setText('');
+    idempotencyKey.current = crypto.randomUUID();
+    await chat.sendMessage({ text: message });
+  }, [chat]);
 
-    const res = await fetch(
-      `/v1/agents/${agentId}/threads/${encodeURIComponent(threadId)}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-          'idempotency-key': idempotencyKey.current,
-        },
-        body: JSON.stringify({ message }),
-      },
-    );
-
-    // One turn at a time per thread. Not an error — the previous turn is live.
-    if (res.status === 409) { setBusy(true); setStreaming(false); return; }
-    if (!res.ok || !res.body) { setStreaming(false); return; }
-
-    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += value;
-
-      // SSE frames are separated by a blank line; a chunk can split one.
-      const frames = buffer.split('\n\n');
-      buffer = frames.pop() ?? '';
-      for (const frame of frames) {
-        const event = frame.match(/^event: (.*)$/m)?.[1];
-        const data = frame.match(/^data: (.*)$/m)?.[1];
-        if (!event || !data) continue;
-        const payload = JSON.parse(data);
-
-        if (event === 'text-delta') setText(previous => previous + payload.delta);
-        if (event === 'done') {
-          // A completed turn earns a fresh key; reusing it would replay this turn.
-          idempotencyKey.current = '';
-          setStreaming(false);
-        }
-      }
-    }
-  }, [agentId, threadId, token]);
-
-  return { text, streaming, busy, send };
+  return { messages: chat.messages, streaming: chat.status === 'streaming', send };
 }
 ```
 
-Four details in there that are easy to get wrong:
+Four details that are easy to get wrong:
 
 - **`idempotency-key` is mandatory.** The route returns `400` without it. Generate one per
   logical send and **reuse it on retry** — that is the entire point. Generating a fresh key
-  on retry turns a network blip into a duplicated turn.
-- **Buffer across chunks.** A `ReadableStream` chunk boundary does not respect SSE frame
-  boundaries. Splitting on `\n\n` and keeping the remainder is the whole fix, and skipping
-  it produces intermittent parse failures under exactly the conditions you cannot reproduce
-  locally.
+  on retry turns a network blip into a duplicated turn, which is why it lives in a ref that
+  the per-request header function only reads.
+- **Orchestration events split two ways.** `data-kuralle-handoff`, `-interactive`,
+  `-safety` and `-outcome` persist into `message.parts`. `data-kuralle-node`, `-flow`,
+  `-control` and `-custom` are marked `transient: true` and **never appear there** — read
+  them from `useChat({ onData })`. An events panel wired to `message.parts` alone renders
+  nothing and looks like a broken stream rather than a wrong subscription.
 - **`409` means "a turn is already running on this thread"**, enforced by a distributed
-  lease. Disable the composer while streaming rather than surfacing it as an error.
-- **`done.payload.sessionId` is the thread id you sent** — the raw one. Internally the
+  lease. Disable the composer while streaming rather than surfacing it as an error, and do
+  not clear the idempotency key — a retry is the same logical send.
+- **`messageMetadata.sessionId` is the thread id you sent** — the raw one. Internally the
   runtime keys storage by a tenant-scoped composite, but that never crosses the wire. Do
   not parse it, and do not expect it to be opaque.
 
