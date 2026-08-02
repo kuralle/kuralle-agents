@@ -69,13 +69,6 @@ export const ALL_CLIENT_STREAM_PARTS: StreamPart[] = [
   { channel: 'client', type: 'error', payload: { error: 'upstream exploded' } },
 ] as StreamPart[];
 
-/** Four adapter cases mint a random `id`; normalise so frames compare stably. */
-const VOLATILE_ID_TYPES = new Set([
-  'data-kuralle-handoff',
-  'data-kuralle-safety',
-  'data-kuralle-outcome',
-]);
-
 /**
  * Drains an SSE `ReadableStream` into parsed frame objects.
  *
@@ -106,12 +99,7 @@ export async function drainSSEFrames(
     const { done, value } = await reader.read();
     if (done) break;
     if (!value.success) continue;
-    const frame = value.value as unknown as Record<string, unknown>;
-    frames.push(
-      typeof frame.id === 'string' && VOLATILE_ID_TYPES.has(String(frame.type))
-        ? { ...frame, id: '<generated>' }
-        : frame,
-    );
+    frames.push(value.value as unknown as Record<string, unknown>);
   }
   return frames;
 }
