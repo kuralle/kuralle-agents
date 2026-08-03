@@ -25,6 +25,11 @@ CMD ["node", "/app/server.mjs"]
 
 const CLI_NODE_MODULES = resolve(dirname(fileURLToPath(import.meta.url)), '../node_modules');
 
+// Bundled CJS deps (e.g. ws, @vercel/oidc) call require('path') at runtime. In ESM output
+// there is no require unless we inject one — same pattern as apps/playground/fs-demo-vercel.
+const NODE_ESM_REQUIRE_BANNER =
+  "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);";
+
 export interface BuildCommandResult {
   outDir: string;
   manifestPath: string;
@@ -155,6 +160,7 @@ export async function runBuildCommand(args: string[]): Promise<BuildCommandResul
         entryPoints: [entry], outfile: serverPath, bundle: true, platform: 'node',
         target: 'node22', format: 'esm', sourcemap: false, minify: false,
         legalComments: 'none', logLevel: 'silent', nodePaths: [CLI_NODE_MODULES],
+        banner: { js: NODE_ESM_REQUIRE_BANNER },
       });
       await writeFile(join(nodeDir, 'Dockerfile'), NODE_DOCKERFILE, 'utf8');
     } else {
