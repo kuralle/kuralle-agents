@@ -520,27 +520,24 @@ export class PostgresDeploymentStore implements DeploymentStore {
         secretGeneration: request.secretGeneration ?? 1,
         assignedAt: request.assignedAt ?? new Date().toISOString(),
       };
-      try {
-        const inserted = await client.query(
-          `INSERT INTO ${this.table.pins}
-            (thread_id,tenant_id,agent_entity_id,agent_version_id,artifact_digest,
-             runtime_revision_id,release_id,branch,environment,config_generation,
-             secret_generation,assigned_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-          [pin.threadId, pin.tenantId, pin.agentEntityId, pin.agentVersionId, pin.artifactDigest,
-            pin.runtimeRevisionId, pin.releaseId, pin.branch ?? null, pin.environment,
-            pin.configGeneration, pin.secretGeneration, pin.assignedAt],
-        );
-        return pinFrom(inserted.rows[0]!);
-      } catch (error) {
-        if (code(error) !== '23505') throw error;
-        const raced = await client.query(
-          `SELECT * FROM ${this.table.pins} WHERE tenant_id=$1 AND thread_id=$2`,
-          [request.tenantId, request.threadId],
-        );
-        if (!raced.rows[0]) conflict('thread pin conflict could not be resolved');
-        return this.verifyExistingPin(pinFrom(raced.rows[0]), request);
-      }
+      const inserted = await client.query(
+        `INSERT INTO ${this.table.pins}
+          (thread_id,tenant_id,agent_entity_id,agent_version_id,artifact_digest,
+           runtime_revision_id,release_id,branch,environment,config_generation,
+           secret_generation,assigned_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         ON CONFLICT (tenant_id,thread_id) DO NOTHING RETURNING *`,
+        [pin.threadId, pin.tenantId, pin.agentEntityId, pin.agentVersionId, pin.artifactDigest,
+          pin.runtimeRevisionId, pin.releaseId, pin.branch ?? null, pin.environment,
+          pin.configGeneration, pin.secretGeneration, pin.assignedAt],
+      );
+      if (inserted.rows[0]) return pinFrom(inserted.rows[0]!);
+      const raced = await client.query(
+        `SELECT * FROM ${this.table.pins} WHERE tenant_id=$1 AND thread_id=$2`,
+        [request.tenantId, request.threadId],
+      );
+      if (!raced.rows[0]) conflict('thread pin conflict could not be resolved');
+      return this.verifyExistingPin(pinFrom(raced.rows[0]), request);
     });
   }
 
