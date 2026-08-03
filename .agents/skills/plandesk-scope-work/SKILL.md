@@ -20,9 +20,14 @@ Pick by what you were handed: a *pile of items that already exist* is `signal`;
 single coherent initiative rather than a list of unrelated asks, treat it as
 `plan` — the edges matter more than the dedup.
 
-**Lane: approve.** Everything here lands as a proposal a human resolves. The
-`scope → todo` release is that resolution, and it is never yours — see
-[autonomy](../plandesk-autonomy/SKILL.md).
+**Lane: approve.** Everything here lands as a proposal, and the `scope → todo`
+release is the resolution of that proposal — a separate act from making it.
+This skill never performs it: a plan is not evidence that the plan was
+accepted, and an intake that releases its own output has reviewed nothing.
+
+Who may perform that release is decided elsewhere — by default a human, and
+under [autonomy](../plandesk-autonomy/SKILL.md) an agent with its reasoning
+posted first. Either way it is a decision taken *after* this skill returns.
 
 ## Rules both modes share
 
@@ -34,11 +39,22 @@ single coherent initiative rather than a list of unrelated asks, treat it as
   [groom-task](../plandesk-groom-task/SKILL.md) — the one readiness bar this project
   keeps. Source material rarely clears every row; draft what it supports, never
   invent the rest, and leave the unmet rows for groom to finish.
+- **Decision tasks for open questions.** When decomposition surfaces a question
+  whose answer changes what gets built — a schema tradeoff, a product choice, a
+  dependency call — create a `decision` task (`kind: 'decision'`, `status:
+  'scope'`) rather than folding a guess into a build task's description. A guess
+  written as a spec is indistinguishable from a decision to whoever reads it
+  next. **Creating a decision task records the question; it does not answer it.**
+  This skill does not resolve decision tasks — that is a conversation, and
+  [autonomy](../plandesk-autonomy/SKILL.md) already forbids an agent settling a call
+  that belongs to a human.
+- **Refer to board items by name** in narration and comments — see
+  `.plandesk/skill.md`. Ids are for tool calls.
 - **Label in house style** — imperative and outcome-focused, "Verb Noun in
   Location", so the label alone says what done looks like.
 - **Assign a lane by blast radius** (`auto` / `approve` / `full`, from
   [lanes.md](../../factory/lanes.md)) and a severity (`low` / `medium` / `high`),
-  both as tags — tasks have no dedicated field for either yet.
+  using the task's typed fields.
 - **Record provenance** on everything created or merged (see below).
 
 ## Mode `signal` — a pile of items
@@ -203,8 +219,9 @@ is a courtesy to the reviewer, not a stored primitive.
 
 ## When you are done
 
-Stop. Assign the lanes, then hand back — humans release `scope → todo` on the
-board. Do not start executing the plan you just scaffolded unless the human
+Stop. Assign the lanes, then hand back — the `scope → todo` release happens
+after this skill returns, by whoever [lanes.md](../../factory/lanes.md) says may
+make it. Do not start executing the plan you just scaffolded unless the human
 asked for that in the same request.
 
 Then offer the next step rather than taking it: if any task landed thinner than
@@ -221,7 +238,6 @@ should choose whether that happens before or after they look at it.
   initiative. Split the input and run both modes rather than forcing one.
 - `list_tasks(project_id)` without a status filter is what makes dedup work;
   filtering to `scope` hides the duplicate that is already `done`.
-- Severity and lane are tags, not fields. Reading them back means reading tags.
 
 ## References
 

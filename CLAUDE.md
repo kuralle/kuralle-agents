@@ -120,7 +120,9 @@ E2E tests: see `packages/e2e-tests/README.md`.
 - `docs/research/` — primary sources behind current RFCs
 - `CONTRIBUTING.md` — monorepo dev/build/publish workflow
 
+<!-- plandesk:start -->
 @.plandesk/skill.md
+<!-- plandesk:end -->
 
 <!-- plandesk-factory:start -->
 ## Plan Desk Factory — default operating mode

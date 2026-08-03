@@ -27,7 +27,8 @@ contract in [factory.md](../../factory/factory.md), dispatch and verification in
    long run into wasted tokens if it fails halfway, so check before starting,
    not on the way past. Open the run with `start_agent_run`.
 
-2. **Resolve the scope.** A task id works one item. `next` calls
+2. **Resolve the scope.** A named task label (looked up with `list_tasks` /
+   `get_task`) works one item. `next` calls
    `get_next_task`. `all todo` or a goal name takes the whole frontier — only
    `todo` tasks whose prerequisites are `done`; `scope` and `backlog` are
    waiting on a human and are not yours to release. Read each task's linked
@@ -50,25 +51,66 @@ contract in [factory.md](../../factory/factory.md), dispatch and verification in
    file of its own — the task descriptions already hold the build contract, so
    do not restate the work anywhere.
 
-5. **Dispatch implementation.** One dispatch per tree, per
+5. **Dispatch implementation — default async.** One dispatch per tree, per
    [protocol.md](../../factory/protocol.md). Pick the worker from
    [routing.md](../../factory/routing.md) unless one was named; a named worker
    wins, and several named workers split the slices across worktrees. Build the
    brief to protocol.md's five-section contract — the bar, the result contract,
    the ground, the WBS snapshot, and a live `Context:` link.
 
-   Mint that link explicitly: `create_share_link` on the task (or the goal, for
-   a multi-slice run), `expires: 7d`, and put the returned `markdown_url` in the
-   brief as `Context:`. The worker has no MCP access, so this is the only way it
-   reads live board state instead of a copy that goes stale the moment someone
-   edits the task. Derive the WBS snapshot from `list_tasks` + `list_edges` so
-   the worker sees the agreed order and the paths a later item owns; a worker
-   given one node and no map finishes the next one too.
+   **Fire async unless the slice is trivial.** Background is the default for
+   every real dispatch. Run foreground only when the slice is genuinely
+   small (one obvious edit, expected under a few minutes) and the user asked
+   for inline work. The recipe:
+
+   1. Run the worker's `probe`; substitute `{prompt_file}` and `{repo_path}` in
+      its `command` template — flags come from [workers/](../../factory/workers/),
+      never from memory.
+   2. Append the log redirect the engine owns:
+      `> runs/worker-<task>.log 2>&1` (never put redirects in worker files).
+   3. **Background through the harness** — `run_in_background: true` on the
+      Shell/Bash tool. Never append `&` or wrap in `nohup … &`; that
+      orphan-detaches, the harness fires a false "completed", and the real leaf
+      keeps writing to a tree nobody is watching.
+   4. **Arm the monitor in the same step**, also backgrounded — the watch loop
+      in protocol.md's *Watching a live dispatch*. Do not dispatch and "remember
+      to watch later."
+   5. **Do not poll the harness completion notification.** Wrapper exit is
+      unreliable (orphan shell, transient API blip). The monitor watches
+      `runs/result-<task>.json`; use `Await` on the monitor shell when you are
+      ready to verify, or continue other foreman work while it runs.
+
+   **Stdin is per worker** — getting this wrong backgrounds a hang:
+
+   | delivery | workers | rule |
+   | --- | --- | --- |
+   | prompt via stdin | claude, cursor, opencode | `< {prompt_file}` — **no** `< /dev/null` |
+   | prompt via `@file` or arg | pi, codex, grok | pi: `@{prompt_file}`; codex: `"$(cat …)"`; grok: `--prompt-file` — add `< /dev/null` |
+
+   Mint the live link explicitly: `create_share_link` on the task (or the goal,
+   for a multi-slice run), `expires: 7d`, and put the returned `markdown_url`
+   in the brief as `Context:`. The worker has no MCP access, so this is the
+   only way it reads live board state instead of a copy that goes stale the
+   moment someone edits the task. Derive the WBS snapshot from `list_tasks` +
+   `list_edges` so the worker sees the agreed order and the paths a later item
+   owns; a worker given one node and no map finishes the next one too.
+
+   **Never dispatch a `kind: 'decision'` task.** Its resolution is a
+   conversation with whoever owns the outcome; a worker given one will answer
+   its own question and record a fabrication as a decision. Report it by task
+   **label** as awaiting a human and take the next frontier item — a decision
+   task blocks only itself; unlike a lane gate it does not stop the run.
 
 6. **Stage the moment a worker returns, before reading anything.** Review takes
    minutes and unstaged work is defenceless for all of them; staged work
    survives a later `git checkout` because git restores it from the index. This
    ordering is the cheapest real protection in the whole run.
+
+   **Unless the dispatch was killed.** No result file means it ran no gates and
+   wrote no result, so the tree holds unverified partial output rather than work
+   product. Discard it and re-dispatch clean per
+   [protocol.md](../../factory/protocol.md) — staging it makes salvage look like
+   a deliverable, and the next reader cannot tell the difference.
 
 7. **Verify the claims.** Follow the verification sequence in
    [protocol.md](../../factory/protocol.md) — gate integrity before re-running
@@ -100,14 +142,24 @@ contract in [factory.md](../../factory/factory.md), dispatch and verification in
     [heartbeat.md](../../factory/heartbeat.md) — a worker with no output, no
     file changes, and flat CPU is stalled rather than thinking, and the tree may
     already hold most of its work. Close with `complete_agent_run` and report at
-    diff level: what shipped, what is waiting on a human, what failed and why.
+    diff level — naming tasks by label, not bare id (see `.plandesk/skill.md`):
+    what shipped, what is waiting on a human, what failed and why.
 
 ## Stopping
 
-Stop and report — do not work around it — when a lane gate needs a human, a
-worker returns `blocked` with a question you cannot answer from the board, a
-gate cannot be satisfied honestly, or the frontier empties. Never merge, and
-never release `scope` → `todo`; both belong to whoever owns the outcome.
+Stop the run and report — do not work around it — when:
+
+- a **lane gate** needs a human,
+- a worker returns **`blocked`** with a question you cannot answer from the board,
+- a gate cannot be satisfied honestly, or
+- the frontier empties.
+
+**Skip dispatch, but continue the run**, when a frontier item is `kind: 'decision'`.
+Unlike a lane gate — which blocks the tree because uncommitted work occupies it —
+a decision task blocks only itself. Report it by **label** as awaiting a human
+and take the next frontier item.
+
+Never merge, and never release `scope` → `todo`; both belong to whoever owns the outcome.
 
 Leave the board true on the way out. A status that does not match what actually
 happened is worse than no status, because the next run trusts it.
@@ -115,6 +167,10 @@ happened is worse than no status, because the next run trusts it.
 ## Boundaries
 
 - Groom inline, dispatch implementation. Reversing this is the common failure.
+- **Never dispatch a `kind: 'decision'` task.** Its resolution is a conversation
+  with whoever owns the outcome; a worker given one will answer its own question
+  and record a fabrication as a decision. Report it as awaiting a human and take
+  the next frontier item.
 - Do not restate the readiness bar; it lives in
   [groom-task](../plandesk-groom-task/SKILL.md) and a second copy would drift from it.
 - Do not restate the task's spec in a brief — link it live.
