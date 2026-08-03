@@ -16,9 +16,12 @@ function session(argv: string[]): string {
   return flag(argv, '--session') || `cli-${crypto.randomUUID()}`;
 }
 
-function messageFrom(argv: string[]): string {
+export function messageFrom(argv: string[]): string {
+  // Value-consuming flags accepted by cli.ts that must not become message text. Keep in sync
+  // with the Options block in packages/cli/src/cli.ts (--store/--summary were missing → leak).
   const consumesValue = new Set([
     '--session', '--server', '--transport', '--agent-name', '--token', '--auto', '--model', '--agent',
+    '--store', '--summary',
   ]);
   return argv
     .filter((value, index) => !value.startsWith('--') && !(index > 0 && consumesValue.has(argv[index - 1]!)))
