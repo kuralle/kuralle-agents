@@ -395,6 +395,9 @@ export {
 } from './tools/effect/index.js';
 export type { Tool as EffectTool } from './types/effectTool.js';
 export type { AgentRoute } from './types/processors.js';
+// `AgentConfig.limits` is public API, so its type has to be reachable — without this an app
+// setting `limits: { maxSteps: 25 }` cannot name the type it is passing.
+export type { Guardrails, Limits } from './types/guardrails.js';
 export type {
   AgentConfig,
   AgentWorkspaceConfig,

@@ -120,7 +120,8 @@
     "smoke:flow": "bun test ./test/core-flow/flow.smoke.ts",
     "smoke:agent": "bun test ./test/core-agent/agent.smoke.ts",
     "smoke:approval": "bun test ./test/core-policy/approval.smoke.ts",
-    "smoke:knowledge": "bun test ./test/core-grounding/knowledge.smoke.ts"
+    "smoke:knowledge": "bun test ./test/core-grounding/knowledge.smoke.ts",
+    "test:turn-loop": "bun test test/core-channel/turn-loop-step-exhaustion.test.ts"
   },
   "dependencies": {
     "chrono-node": "^2.6.0",
