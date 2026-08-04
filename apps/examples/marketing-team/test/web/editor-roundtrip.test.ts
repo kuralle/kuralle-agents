@@ -174,3 +174,58 @@ describe('every editor node and mark is serializable', () => {
     expect(missing).toEqual([]);
   });
 });
+
+/**
+ * The symmetric guard, and the one that was missing.
+ *
+ * The suite above proves every node the EDITOR can build is serializable. It cannot prove the
+ * converse, because it builds its documents from the editor's own schema — a node the editor
+ * lacks is simply never constructed, so the test passes while the app is broken.
+ *
+ * The failing direction is the one real content takes: an agent writes markdown,
+ * `markdownToTiptap` runs it through prosemirror-markdown's DEFAULT parser, and the editor
+ * calls `schema.nodeFromJSON` on the result. A node the parser emits but the editor lacks
+ * throws "Unknown node type" there and the page renders an EMPTY editor over a fully intact
+ * `body_markdown` — silent, total content loss in the UI.
+ *
+ * A real blog post hit exactly this: its markdown opened with a `---` thematic break, and
+ * 2,973 stored characters displayed as a blank editor because `horizontal_rule` was not in the
+ * editor schema. `image` and `hard_break` had the same hole.
+ */
+describe('every node the markdown parser can emit is renderable by the editor', () => {
+  it('the editor schema covers prosemirror-markdown’s parser schema', async () => {
+    const { defaultMarkdownParser } = await import('prosemirror-markdown');
+    const editorNodes = new Set(Object.keys(schema.nodes));
+    const missing = Object.keys(defaultMarkdownParser.schema.nodes).filter((n) => !editorNodes.has(n));
+    expect(missing).toEqual([]);
+  });
+
+  it('the editor schema covers prosemirror-markdown’s parser marks', async () => {
+    const { defaultMarkdownParser } = await import('prosemirror-markdown');
+    const editorMarks = new Set(Object.keys(schema.marks));
+    const missing = Object.keys(defaultMarkdownParser.schema.marks).filter((m) => !editorMarks.has(m));
+    expect(missing).toEqual([]);
+  });
+
+  // The coverage checks above compare name sets. These load real agent-written markdown the
+  // way the page does, so an attribute mismatch (not just a missing name) fails too.
+  const AGENT_MARKDOWN: Record<string, string> = {
+    'a thematic break': 'Intro paragraph.\n\n---\n\nAfter the rule.\n',
+    'front matter the model emitted as a fence': '---\nmeta_description: x\n---\n\nBody text.\n',
+    'an image': '![alt text](https://example.com/a.png)\n',
+    'a hard break': 'line one  \nline two\n',
+  };
+
+  for (const [name, markdown] of Object.entries(AGENT_MARKDOWN)) {
+    it(`loads ${name} into the editor schema without throwing`, () => {
+      expect(() => schema.nodeFromJSON(markdownToTiptap(markdown))).not.toThrow();
+    });
+  }
+
+  it('still reaches a fixed point for markdown carrying those constructs', () => {
+    const markdown = 'Intro.\n\n---\n\n![alt](https://example.com/a.png)\n';
+    const once = tiptapToMarkdown(markdownToTiptap(markdown));
+    const twice = tiptapToMarkdown(markdownToTiptap(once));
+    expect(twice).toBe(once);
+  });
+});
