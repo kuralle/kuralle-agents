@@ -17,4 +17,5 @@ export {
   validateSkillName,
   validateSkillDescription,
   type ParsedSkill,
+  type ParseSkillContext,
 } from './parseSkillFrontmatter.js';

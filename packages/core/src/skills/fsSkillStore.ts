@@ -99,21 +99,26 @@ async function discoverSkills(
       const skillPath = fs.resolvePath(root, `${entry}/SKILL.md`);
       if (!(await fs.exists(skillPath))) continue;
 
-      const content = await fs.readFile(skillPath);
-      const parsed = parseSkillFrontmatter(content, { path: skillPath });
-      const contentHash = await sha256(content);
-      skills.set(parsed.name, {
-        root,
-        folder: entry,
-        meta: {
-          name: parsed.name,
-          description: parsed.description,
-          path: skillPath,
-          contentHash,
-          ...(parsed.allowedTools ? { allowedTools: parsed.allowedTools } : {}),
-        },
-        body: parsed.body,
-      });
+      try {
+        const content = await fs.readFile(skillPath);
+        const parsed = parseSkillFrontmatter(content, { path: skillPath, directoryName: entry });
+        const contentHash = await sha256(content);
+        skills.set(entry, {
+          root,
+          folder: entry,
+          meta: {
+            name: parsed.name,
+            description: parsed.description,
+            path: skillPath,
+            contentHash,
+            ...(parsed.allowedTools ? { allowedTools: parsed.allowedTools } : {}),
+          },
+          body: parsed.body,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[skills] Skipping invalid skill "${entry}": ${message}`);
+      }
     }
   }
 

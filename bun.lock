@@ -572,6 +572,7 @@
       "version": "0.19.0",
       "dependencies": {
         "chrono-node": "^2.6.0",
+        "yaml": "^2.8.0",
       },
       "devDependencies": {
         "@ai-sdk/openai": "^3.0.0",

@@ -123,6 +123,7 @@
     "smoke:knowledge": "bun test ./test/core-grounding/knowledge.smoke.ts"
   },
   "dependencies": {
-    "chrono-node": "^2.6.0"
+    "chrono-node": "^2.6.0",
+    "yaml": "^2.8.0"
   }
 }

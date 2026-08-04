@@ -137,12 +137,20 @@ Project gamma body.`,
       expect(await reversed.loadBody('alpha')).toBe('Base alpha body.');
     });
 
-    it('fails loudly when a discovered SKILL.md is invalid', async () => {
+    it('skips an invalid discovered SKILL.md without aborting discovery', async () => {
       const fs = new InMemoryFs({
         '/skills/broken/SKILL.md': '---\nname: broken\n---\nMissing description.',
+        '/skills/good/SKILL.md': `---
+name: good
+description: A valid skill.
+---
+
+Good body.`,
       });
 
-      await expect(fsSkillStore(fs).list()).rejects.toThrow(/broken\/SKILL\.md.*description/i);
+      const metas = await fsSkillStore(fs).list();
+      expect(metas).toHaveLength(1);
+      expect(metas[0]?.name).toBe('good');
     });
 
     it('reuses one validated discovery snapshot across catalog and body loads', async () => {
