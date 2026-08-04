@@ -140,6 +140,8 @@ export function createApi(): Hono {
       slug: row.slug,
       status: row.status,
       bodyJson: row.bodyJson,
+      metaDescription: row.metaDescription,
+      targetQuery: row.targetQuery,
       authoredByAgent: row.authoredByAgent,
       updatedAt: row.updatedAt.toISOString(),
     });

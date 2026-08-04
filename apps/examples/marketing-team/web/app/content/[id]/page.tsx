@@ -12,6 +12,8 @@ interface ContentPiece {
   slug: string;
   status: string;
   bodyJson: JSONContent;
+  metaDescription: string | null;
+  targetQuery: string | null;
   authoredByAgent: string | null;
   updatedAt: string;
 }
@@ -121,6 +123,19 @@ export default function ContentEditorPage() {
             {piece.kind} · <span className="badge">{piece.status}</span> · authored by{' '}
             {piece.authoredByAgent ?? 'a person'}
           </p>
+          {/*
+            Shown here rather than in the editor body. These used to arrive written into the
+            markdown itself — first as YAML front matter, then as a trailer — and rendered as
+            the first or last thing a reader saw. They have their own columns now, so this is
+            where they surface.
+          */}
+          {piece.metaDescription || piece.targetQuery ? (
+            <p className="status-message" style={{ marginTop: 4 }}>
+              {piece.metaDescription ? <>Meta: {piece.metaDescription}</> : null}
+              {piece.metaDescription && piece.targetQuery ? ' · ' : null}
+              {piece.targetQuery ? <>Target query: {piece.targetQuery}</> : null}
+            </p>
+          ) : null}
         </div>
         <div className="btn-row">
           {next ? (

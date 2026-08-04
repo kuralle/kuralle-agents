@@ -118,6 +118,18 @@ export const contentPieces = pgTable(
     status: contentStatus('status').notNull().default('draft'),
     bodyJson: jsonb('body_json').notNull(),
     bodyMarkdown: text('body_markdown').notNull(),
+    // Page metadata, kept out of the body on purpose.
+    //
+    // The blog-style skill teaches that a meta description and a target query are part of the
+    // deliverable, and until these columns existed there was nowhere to put them — so the model
+    // smuggled them through `body_markdown`, first as a YAML front matter block at the top and,
+    // once that was rejected, as a trailing "Meta description: …" section after a rule. Both
+    // rendered as body text in the editor.
+    //
+    // Closing each carrier one at a time is whack-a-mole; the model kept producing the data
+    // because the data is genuinely part of the job. Giving it a typed home is what stops it.
+    metaDescription: text('meta_description'),
+    targetQuery: text('target_query'),
     // Nullable on purpose: a piece a human wrote or rewrote in the editor has no authoring
     // agent. Forcing a value here would make the UI invent one, which corrupts the audit
     // trail this column exists to provide. NULL means "a person wrote this".
