@@ -7,9 +7,10 @@ produce marketing content. Unlike the original, this version is self-contained �
 SaaS dependency (Vercel Blob, Notion, Typefully, Resend) is replaced by local Postgres, so it runs
 with no third-party accounts.
 
-**This is the shell only.** There is no agent, no tool, and no database schema yet — just the app
-skeleton (package, server, database client, Docker Compose for Postgres) that later tasks build on.
-Do not expect marketing functionality from this state of the app.
+**There is no agent yet.** The database schema (`db/`) and the ported tool surface
+(`agent/lib/` — brand context, artifacts, assets, content, style lint, tracked links, user
+preferences, all Postgres-backed and workspace-scoped) exist, but nothing wires them into an
+agent or exposes them over HTTP. Do not expect marketing functionality from this state of the app.
 
 ## Setup
 

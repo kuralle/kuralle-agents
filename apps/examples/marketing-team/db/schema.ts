@@ -81,6 +81,29 @@ export const brandContext = pgTable(
   ],
 );
 
+// Append-only history keyed to brand_context, so a change to shared positioning is auditable
+// the same way a content edit is.
+export const brandContextRevisions = pgTable(
+  'brand_context_revisions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id),
+    brandContextId: uuid('brand_context_id')
+      .notNull()
+      .references(() => brandContext.id),
+    bodyJson: jsonb('body_json').notNull(),
+    bodyMarkdown: text('body_markdown').notNull(),
+    editedByAgent: text('edited_by_agent').notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index('brand_context_revisions_workspace_id_idx').on(table.workspaceId),
+    index('brand_context_revisions_brand_context_id_idx').on(table.brandContextId),
+  ],
+);
+
 // The Notion replacement.
 export const contentPieces = pgTable(
   'content_pieces',
@@ -259,6 +282,9 @@ export type NewWorkspace = typeof workspaces.$inferInsert;
 
 export type BrandContext = typeof brandContext.$inferSelect;
 export type NewBrandContext = typeof brandContext.$inferInsert;
+
+export type BrandContextRevision = typeof brandContextRevisions.$inferSelect;
+export type NewBrandContextRevision = typeof brandContextRevisions.$inferInsert;
 
 export type ContentPiece = typeof contentPieces.$inferSelect;
 export type NewContentPiece = typeof contentPieces.$inferInsert;

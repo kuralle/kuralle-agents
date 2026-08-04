@@ -12,6 +12,6 @@
     "noEmit": true,
     "types": ["bun-types"]
   },
-  "include": ["db/**/*.ts", "server/**/*.ts", "test/**/*.ts", "drizzle.config.ts"],
+  "include": ["db/**/*.ts", "server/**/*.ts", "agent/**/*.ts", "test/**/*.ts", "drizzle.config.ts"],
   "exclude": ["node_modules"]
 }

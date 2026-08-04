@@ -11,7 +11,7 @@
     "db:seed": "bun run db/seed.ts",
     "dev:server": "bun run server/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test test/*.test.ts"
+    "test": "bun test test/"
   },
   "dependencies": {
     "@kuralle-agents/core": "workspace:*",
