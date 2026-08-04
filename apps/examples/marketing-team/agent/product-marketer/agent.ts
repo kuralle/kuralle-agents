@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LanguageModel } from 'ai';
 import { defineAgent, type AgentConfig } from '@kuralle-agents/core';
+import { AGENT_LIMITS } from '../limits.js';
 import { packageSkillsDirectory } from '@kuralle-agents/build';
 import { createArtifactTools, createAssetTools, createBrandContextTools } from '../lib/index.js';
 import type { MarketingToolsDeps } from '../lib/index.js';
@@ -29,6 +30,7 @@ export async function createProductMarketerAgent(deps: ProductMarketerAgentDeps)
     description:
       'Works out what the product is, who it is for, and why someone would choose it: positioning, differentiation, messaging, and competitive research. Owns the shared brand context.',
     model: deps.model,
+    limits: AGENT_LIMITS,
     instructions: INSTRUCTIONS,
     tools: {
       get_brand_context,

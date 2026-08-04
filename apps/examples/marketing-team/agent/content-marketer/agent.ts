@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LanguageModel } from 'ai';
 import { defineAgent, readOnlyPolicy, type AgentConfig } from '@kuralle-agents/core';
+import { AGENT_LIMITS } from '../limits.js';
 import { packageSkillsDirectory } from '@kuralle-agents/build';
 import { createArtifactTools, createAssetTools, createBrandContextTools, createContentTools, createLintTools } from '../lib/index.js';
 import type { MarketingToolsDeps } from '../lib/index.js';
@@ -36,6 +37,7 @@ export async function createContentMarketerAgent(deps: ContentMarketerAgentDeps)
     description:
       'Plans and writes long-form content: blog posts, landing pages, case studies, docs, and the prose for newsletters.',
     model: deps.model,
+    limits: AGENT_LIMITS,
     instructions: INSTRUCTIONS,
     tools: {
       get_brand_context,

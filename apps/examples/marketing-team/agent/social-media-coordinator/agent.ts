@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LanguageModel } from 'ai';
 import { defineAgent, readOnlyPolicy, type AgentConfig } from '@kuralle-agents/core';
+import { AGENT_LIMITS } from '../limits.js';
 import { packageSkillsDirectory } from '@kuralle-agents/build';
 import { createArtifactTools, createAssetTools, createBrandContextTools, createContentTools, createLintTools, createTrackingTools } from '../lib/index.js';
 import type { MarketingToolsDeps } from '../lib/index.js';
@@ -39,6 +40,7 @@ export async function createSocialMediaCoordinatorAgent(
     description:
       'Drafts and manages posts for X, LinkedIn, Threads, Bluesky, and Mastodon, checked against each platform\'s style rules.',
     model: deps.model,
+    limits: AGENT_LIMITS,
     instructions: INSTRUCTIONS,
     tools: {
       get_brand_context,

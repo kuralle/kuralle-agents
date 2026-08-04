@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LanguageModel } from 'ai';
 import { defineAgent, type AgentConfig } from '@kuralle-agents/core';
+import { AGENT_LIMITS } from './limits.js';
 import { createArtifactTools, createBrandContextTools, createUserPreferenceTools } from './lib/index.js';
 import type { MarketingToolsDeps } from './lib/index.js';
 
@@ -32,6 +33,7 @@ export function createLeadAgent(deps: LeadAgentDeps): AgentConfig {
     description:
       'Routes marketing work to the specialist who does it and hands back what they produced.',
     model: deps.model,
+    limits: AGENT_LIMITS,
     instructions: INSTRUCTIONS,
     tools: {
       get_brand_context,
