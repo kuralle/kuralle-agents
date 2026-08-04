@@ -26,7 +26,7 @@ import { describe, test, expect, afterAll } from 'bun:test';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { rmSync, mkdirSync } from 'fs';
-import { google } from '@ai-sdk/google';
+import { embeddingModel, EMBEDDING_MODEL_ID, hasTaskTypeSupport, taskTypeOptions } from './_embedder.js';
 import {
   AiSdkEmbedder,
   RagPipeline,
@@ -69,13 +69,13 @@ if (!hasGoogle) {
 
 // Task-type-aware embedders (RFC Gap 2: dual-embedder pattern)
 const docEmbedder = new AiSdkEmbedder({
-  model: google.embedding('gemini-embedding-001'),
-  providerOptions: { google: { taskType: 'RETRIEVAL_DOCUMENT' } },
+  model: embeddingModel(),
+  providerOptions: taskTypeOptions('RETRIEVAL_DOCUMENT'),
 });
 
 const queryEmbedder = new AiSdkEmbedder({
-  model: google.embedding('gemini-embedding-001'),
-  providerOptions: { google: { taskType: 'RETRIEVAL_QUERY' } },
+  model: embeddingModel(),
+  providerOptions: taskTypeOptions('RETRIEVAL_QUERY'),
 });
 
 try { rmSync(LANCEDB_DIR, { recursive: true }); } catch {}
@@ -143,7 +143,7 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
     console.log(`    Products: ${productDocs.length} sections`);
     console.log(`    LanceDB vectors: ${stats!.count} (dim=${stats!.dimension})`);
     console.log(`    BM25 documents: ${bm25.size}`);
-    console.log(`    Embedder: gemini-embedding-001 (RETRIEVAL_DOCUMENT task type)`);
+    console.log(`    Embedder: ${EMBEDDING_MODEL_ID}${hasTaskTypeSupport ? ' (RETRIEVAL_DOCUMENT task type)' : ''}`);
 
     expect(stats!.count).toBeGreaterThan(0);
     expect(bm25.size).toBeGreaterThan(0);
@@ -460,9 +460,12 @@ describe.skipIf(!hasGoogle)('Full Agent E2E — Acme Corp Customer Support', () 
   // Phase 6: Task-Type Embedding Comparison (RFC Gap 2)
   // =========================================================================
 
-  test('Phase 6.1: RETRIEVAL_QUERY vs no task type — query similarity', async () => {
+  // Asymmetric embedding is a Gemini feature. On a provider without task types both
+  // embedders are identical, so this comparison would pass for the wrong reason.
+  const taskTypeTest = hasTaskTypeSupport ? test : test.skip;
+  taskTypeTest('Phase 6.1: RETRIEVAL_QUERY vs no task type — query similarity', async () => {
     const noTaskEmbedder = new AiSdkEmbedder({
-      model: google.embedding('gemini-embedding-001'),
+      model: embeddingModel(),
       // No providerOptions — backward compatible
     });
 

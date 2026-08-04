@@ -18,7 +18,7 @@ import { describe, test, expect, afterAll } from 'bun:test';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, rmSync, mkdirSync } from 'fs';
-import { google } from '@ai-sdk/google';
+import { embeddingModel, EMBEDDING_MODEL_ID } from './_embedder.js';
 import {
   AiSdkEmbedder,
   RagPipeline,
@@ -62,10 +62,9 @@ if (!fixturesReady) {
 // Shared state
 let allDocTexts: Array<{ id: string; text: string; metadata?: Record<string, unknown> }> = [];
 
-// Gemini Embedding — free, high quality
-// gemini-embedding-001 is stable GA; gemini-embedding-2-preview is the latest
+// Provider is selected, not assumed — see ./_embedder.ts. Plain retrieval works on either.
 const embedder = new AiSdkEmbedder({
-  model: google.embedding('gemini-embedding-001'),
+  model: embeddingModel(),
 });
 
 try { rmSync(LANCEDB_DIR, { recursive: true }); } catch {}

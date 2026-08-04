@@ -41,7 +41,28 @@ function cosineSimilarity(a: readonly number[], b: readonly number[]): number {
 
 const API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 
-const describeIf = API_KEY ? describe : describe.skip;
+// Presence is not validity. This suite previously gated on the key existing, so a key that
+// was set but REJECTED (401 ACCESS_TOKEN_TYPE_UNSUPPORTED) ran the suite and failed it —
+// reporting a retrieval failure for what was purely a credential problem. Probe the key
+// once and skip when it does not actually authenticate.
+const API_KEY_WORKS = await (async () => {
+  if (!API_KEY) return false;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) {
+      console.warn(`[rag] Skipping Gemini task-type suite: key rejected (HTTP ${res.status}).`);
+    }
+    return res.ok;
+  } catch {
+    console.warn('[rag] Skipping Gemini task-type suite: could not reach the Gemini API.');
+    return false;
+  }
+})();
+
+const describeIf = API_KEY_WORKS ? describe : describe.skip;
 
 describeIf('Task-Type-Aware Embedding (Gemini)', () => {
   // Lazy import to avoid errors when @ai-sdk/google is not available
