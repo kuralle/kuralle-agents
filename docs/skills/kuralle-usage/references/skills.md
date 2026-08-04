@@ -1,5 +1,17 @@
 # Skills — procedural memory for agents
 
+> **Corrections (skills v2, a1-a7):** the filesystem discovery root actually used by
+> `fsSkillStore` is **`/.agents/skills`**, not `.kuralle/skill/` as shown in the directory
+> diagrams below — those diagrams predate the current API and are illustrative only, not a
+> convention the runtime reads. A skill's `allowed-tools` is now **enforced** at the tool
+> boundary (a `Policy` denies a disallowed call once the skill is active), not merely
+> descriptive. A fourth supply mode exists: a **packaged directory**
+> (`packageSkillsDirectory` in `@kuralle-agents/build` + `packagedSkillStore`), which needs no
+> workspace filesystem at runtime. See `apps/docs/src/content/docs/guides/skills.mdx`
+> for the current, verified reference; treat the JSONC `"type": "skill-loader"` tool config and
+> the `kuralle list skills` / `kuralle debug` CLI commands later in this file as unverified —
+> they do not correspond to anything in `packages/cli` or `packages/core` today.
+
 ## What are skills?
 
 **Skills are Anthropic-style procedural bundles** (`SKILL.md` + optional resources) loaded via **progressive disclosure** in `@kuralle-agents/core`:
@@ -393,18 +405,25 @@ All orders include tracking. Check status at: example.com/track
 ```ts
 import { defineSkill } from '@kuralle-agents/core';
 
+const returnsPolicy = defineSkill({
+  name: 'returns-policy',
+  description: 'Return and refund policy.',
+  instructions: 'Run `lookup_order` with the order id.', // NOT `body` — the defineSkill config field is `instructions`
+});
+
 const agent = defineAgent({
   id: 'support',
   model,
   instructions: 'Calm support agent.',
   tools: { lookup_order: lookupOrder },
-  skills: [returnsPolicy], // or fsSkillStore(fs) / a workspace path
+  skills: [returnsPolicy], // or a packaged directory, fsSkillStore(fs) / a workspace path, or a per-tenant resolver
 });
 ```
 
 Runtime auto-registers `load_skill` + `read_skill_resource` and injects Level-1 metadata into the prompt.
+Filesystem discovery (`fsSkillStore`) defaults to root **`/.agents/skills`**.
 
-### Scripts = allow-listed tools (not bash)
+### `allowedTools` — enforced, but activation-scoped
 
 A skill's `allowedTools` lists durable tool or flow names the body may reference. Each name must exist on the agent at wire time (`tools`, `globalTools`, or `flows`) — unknown names throw immediately.
 
@@ -413,9 +432,16 @@ defineSkill({
   name: 'returns-policy',
   description: '...',
   allowedTools: ['lookup_order'],
-  body: 'Run `lookup_order` with the order id.',
+  instructions: 'Run `lookup_order` with the order id.',
 });
 ```
+
+This is now **enforced**, not just recorded: once `load_skill('returns-policy')` succeeds, a
+`Policy` denies any tool call outside the union of every currently-active skill's `allowedTools`
+(plus `load_skill`/`read_skill_resource`). It only applies once activation succeeds — a model that
+never calls `load_skill` for a restricting skill is unrestricted — so treat it as a guard-rail for
+an honest model, not an adversarial security boundary. See `apps/docs/src/content/docs/guides/skills.mdx`
+for the union rule and a live-verified example.
 
 Portable bash is intentionally unsupported (Workers + "tools return data only").
 
