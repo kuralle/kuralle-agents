@@ -234,6 +234,7 @@
         "zod": "^4.0.0",
       },
       "devDependencies": {
+        "@ai-sdk/xai": "^3.0.73",
         "@types/node": "^22.0.0",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",

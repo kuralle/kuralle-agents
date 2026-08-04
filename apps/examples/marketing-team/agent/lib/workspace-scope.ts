@@ -32,12 +32,25 @@ export async function resolveScope(
   return resolve(ctx);
 }
 
-/** The acting agent, for the audit columns (`authored_by_agent`, `edited_by_agent`, ...). */
+/**
+ * The acting agent, for the audit columns (`authored_by_agent`, `edited_by_agent`, ...).
+ *
+ * Reads `ctx.runState.activeAgentId`, not `ctx.session.currentAgent`: the runtime updates
+ * `runState.activeAgentId` synchronously the moment a handoff fires (`Runtime.ts`'s turn loop),
+ * but only writes the new value back to `session.currentAgent` once the whole turn closes. A
+ * tool call made by the HANDOFF TARGET — which is every specialist's very first tool call,
+ * since the lead always hands off before any specialist runs — executes while the turn is
+ * still open, so `session.currentAgent` is still the SOURCE agent (the lead) at that point.
+ * Verified live 2026-08-04: with `session.currentAgent` a routed `create_content` call landed
+ * `authored_by_agent = 'lead'` for a piece content-marketer wrote; switching to
+ * `runState.activeAgentId` (updated in place before the target's tools run) fixed it to
+ * `'content-marketer'`.
+ */
 export function actingAgent(ctx: ToolContext | undefined): string {
   if (!ctx) {
     throw new Error('This tool requires a run context to identify the acting agent.');
   }
-  return ctx.session.currentAgent;
+  return ctx.runState.activeAgentId;
 }
 
 export type Db = typeof marketingDb;

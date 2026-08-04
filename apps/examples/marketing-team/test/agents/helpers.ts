@@ -16,7 +16,7 @@ export function testDeps(): MarketingToolsDeps & { model: LanguageModel } {
     db: unusedDb,
     resolveScope: () => ({ workspaceId: 'unused', principalId: 'unused' }),
     storageRoot: '/tmp/unused',
-    surfaces: ['blog', 'x', 'linkedin', 'threads', 'bluesky', 'mastodon'],
+    surfaces: ['blog', 'x', 'linkedin', 'threads', 'bluesky', 'mastodon', 'email'],
     model: unusedModel,
   };
 }

@@ -12,7 +12,7 @@ import { workspaces } from '../db/schema.js';
 
 const WORKSPACE_NAME = 'Acme Marketing';
 const STORAGE_ROOT = join(import.meta.dir, '..', 'storage');
-const SURFACES = ['blog', 'x', 'linkedin', 'threads', 'bluesky', 'mastodon'] as const;
+const SURFACES = ['blog', 'x', 'linkedin', 'threads', 'bluesky', 'mastodon', 'email'] as const;
 
 let workspaceIdPromise: Promise<string> | undefined;
 
