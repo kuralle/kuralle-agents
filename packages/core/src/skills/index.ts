@@ -22,7 +22,20 @@ export {
   prepareSkillStore,
   isSkillStore,
   type SkillWireAgent,
+  type SkillResolverInput,
 } from './collectSkills.js';
+export {
+  isSkillResolver,
+  normalizeSkillSource,
+  substituteSkillResolvers,
+  type SubstitutedSkillEntries,
+} from './skillResolver.js';
+export { materializeSkillStore } from './materializeSkillStore.js';
+export {
+  readResolvedSkillsCache,
+  mergeResolvedSkills,
+  type PersistedResolvedSkills,
+} from './resolvedSkillsState.js';
 export { InlineSkillStore } from './inlineSkillStore.js';
 export { CompositeSkillStore } from './compositeSkillStore.js';
 export { fsSkillStore } from './fsSkillStore.js';

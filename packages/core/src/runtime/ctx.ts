@@ -55,6 +55,7 @@ import {
   SKILL_CATALOG_NOTE_TAG,
 } from '../skills/skillCatalog.js';
 import { addSystemNote } from './systemNotes.js';
+import { withInternalState, readInternalState } from './internalRunState.js';
 
 const APPROVAL_SIGNAL = '__approval';
 const APPROVAL_DELIVERY_SCHEMA = z.object({}).strict();
@@ -199,7 +200,9 @@ function makeCtx(deps: CtxDeps): RunContext {
     const text = renderSkillCatalogDelta(delta, roster);
     addSystemNote(deps.runState, text, { lifetime: 'run', tag: SKILL_CATALOG_NOTE_TAG });
     catalog.setAnnouncedSnapshot(catalog.entries());
-    deps.runState.state.skillCatalog = catalog.serialize();
+    withInternalState(deps.runState.state, (internal) => {
+      internal.skillCatalog = catalog.serialize();
+    });
     deps.runState.updatedAt = Date.now();
     await deps.runStore.putRunState(deps.runState);
   };

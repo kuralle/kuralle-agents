@@ -59,7 +59,15 @@ export type {
   InitialFiles,
   FsError,
 } from './filesystem.js';
-export type { SkillMeta, SkillLike, SkillStoreLike, SkillSource, SkillEntry } from './skills.js';
+export type {
+  SkillMeta,
+  SkillLike,
+  SkillStoreLike,
+  SkillSource,
+  SkillEntry,
+  SkillResolver,
+  SkillResolverContext,
+} from './skills.js';
 export type { PackagedSkill, PackagedSkillFile } from '../skills/packagedSkill.js';
 export { reply, collect, action, decide, confirmGate, defineFlow } from './flow.js';
 export type {

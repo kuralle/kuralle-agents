@@ -4,9 +4,10 @@ import {
   skillCatalogEntries,
   type SkillCatalogEntry,
 } from './skillCatalog.js';
+import { readInternalState } from '../runtime/internalRunState.js';
 
 /**
- * Persisted shape of a live catalog, stored on `runState.state.skillCatalog` so a resumed
+ * Persisted shape of a live catalog, stored on `runState.state.__kuralle.skillCatalog` so a resumed
  * or replayed run restores the exact roster it had — added skills, withdrawals, and the
  * last-announced snapshot — and neither re-resolves a withdrawn skill nor re-narrates a
  * change it already narrated.
@@ -188,14 +189,14 @@ export class LiveSkillCatalog {
   }
 }
 
-/** Restore a catalog from persisted run state (`runState.state.skillCatalog`). No-op when the
+/** Restore a catalog from persisted run state (`runState.state.__kuralle.skillCatalog`). No-op when the
  *  agent has no skills or nothing was persisted, so a fresh run starts from the baseline. */
 export function restoreLiveSkillCatalog(
   catalog: LiveSkillCatalog | undefined,
   state: Record<string, unknown> | undefined,
 ): void {
   if (!catalog || !state) return;
-  const persisted = state.skillCatalog;
+  const persisted = readInternalState(state).skillCatalog;
   if (!persisted || typeof persisted !== 'object') return;
   catalog.restore(persisted as PersistedLiveSkillCatalog);
 }

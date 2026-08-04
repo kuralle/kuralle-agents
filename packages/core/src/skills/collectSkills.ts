@@ -1,19 +1,37 @@
 import type { AnyTool } from '../types/effectTool.js';
 import type { FileSystem } from '../types/filesystem.js';
-import type { SkillEntry, SkillLike, SkillMeta, SkillSource, SkillStoreLike } from '../types/skills.js';
+import type {
+  SkillEntry,
+  SkillLike,
+  SkillMeta,
+  SkillResolverContext,
+  SkillSource,
+  SkillStoreLike,
+} from '../types/skills.js';
 import { InlineSkillStore } from './inlineSkillStore.js';
 import { CompositeSkillStore } from './compositeSkillStore.js';
 import { fsSkillStore } from './fsSkillStore.js';
 import { isPackagedSkill, isPackagedSkillArray } from './packagedSkill.js';
 import { packagedSkillStore } from './packagedSkillStore.js';
 import { canonicalSkillContent, sha256 } from './contentHash.js';
+import { materializeSkillStore } from './materializeSkillStore.js';
+import { isSkillResolver, normalizeSkillSource, substituteSkillResolvers } from './skillResolver.js';
 
 export interface SkillWireAgent {
+  /** Threaded to `SkillResolverContext.agentId` when `skills` contains a resolver. */
+  id?: string;
   skills?: SkillSource;
   tools?: Record<string, AnyTool>;
   globalTools?: Record<string, AnyTool>;
   flows?: Array<{ name: string }>;
   workspace?: unknown;
+}
+
+/** Session context a `SkillResolver` entry needs, plus this session's previously resolved
+ *  output (by resolver position) so a repeat call reuses it instead of re-invoking. */
+export interface SkillResolverInput {
+  ctx: SkillResolverContext;
+  cached?: Readonly<Record<string, SkillLike[]>>;
 }
 
 export function isSkillStore(value: SkillEntry | SkillSource): value is SkillStoreLike {
@@ -24,25 +42,6 @@ export function isSkillStore(value: SkillEntry | SkillSource): value is SkillSto
     'list' in value &&
     typeof (value as SkillStoreLike).list === 'function'
   );
-}
-
-async function collectSkillsFromSource(
-  source: SkillStoreLike,
-): Promise<{ metas: SkillMeta[]; skills: SkillLike[] }> {
-  const metas = await source.list();
-  const skills: SkillLike[] = [];
-  for (const meta of metas) {
-    const body = await source.loadBody(meta.name);
-    skills.push({
-      name: meta.name,
-      description: meta.description,
-      body,
-      ...(meta.allowedTools ? { allowedTools: meta.allowedTools } : {}),
-      ...(meta.contentHash ? { contentHash: meta.contentHash } : {}),
-      ...(meta.path ? { path: meta.path } : {}),
-    });
-  }
-  return { metas, skills };
 }
 
 async function hashSkillSnapshot(skills: readonly SkillLike[]): Promise<string> {
@@ -91,24 +90,43 @@ export function validateSkillAllowedTools(skills: SkillLike[], registered: Set<s
 export async function prepareSkillStore(
   source: SkillSource,
   fs?: FileSystem,
+  resolver?: SkillResolverInput,
 ): Promise<{
   store: SkillStoreLike;
   metas: SkillMeta[];
   skills: SkillLike[];
   contentHash: string;
+  /** This session's resolver output, by resolver position — present only when `source`
+   *  contained a `SkillResolver`. The caller persists it so a later turn reuses it. */
+  resolvedSkillsByIndex?: Record<string, SkillLike[]>;
 }> {
-  const entries: SkillEntry[] = Array.isArray(source)
-    ? (source.length > 0 && source.every(isPackagedSkill)
-        ? [source as readonly import('./packagedSkill.js').PackagedSkill[]]
-        : [...source])
-    : [source as SkillEntry];
+  const normalized = normalizeSkillSource(source);
+
+  let entries: SkillEntry[] = normalized;
+  let resolvedSkillsByIndex: Record<string, SkillLike[]> | undefined;
+  if (normalized.some(isSkillResolver)) {
+    if (!resolver) {
+      throw new Error(
+        '[skills] A skill resolver requires session context. Use wireAgentSkills(), which ' +
+          'supplies it, rather than calling prepareSkillStore() directly.',
+      );
+    }
+    const substituted = await substituteSkillResolvers(normalized, resolver.ctx, resolver.cached);
+    entries = substituted.entries;
+    resolvedSkillsByIndex = substituted.resolvedByIndex;
+  }
 
   // A lone store stays itself: wrapping one store in a composite would add a layer with
   // nothing to compose, and lose any extra capability the store exposes.
   if (entries.length === 1 && isSkillStore(entries[0]!)) {
     const only = entries[0] as SkillStoreLike;
-    const collected = await collectSkillsFromSource(only);
-    return { store: only, ...collected, contentHash: await hashSkillSnapshot(collected.skills) };
+    const collected = await materializeSkillStore(only);
+    return {
+      store: only,
+      ...collected,
+      contentHash: await hashSkillSnapshot(collected.skills),
+      ...(resolvedSkillsByIndex ? { resolvedSkillsByIndex } : {}),
+    };
   }
 
   const stores: SkillStoreLike[] = [];
@@ -158,11 +176,21 @@ export async function prepareSkillStore(
 
   if (stores.length === 1) {
     const only = stores[0]!;
-    const collected = await collectSkillsFromSource(only);
-    return { store: only, ...collected, contentHash: await hashSkillSnapshot(collected.skills) };
+    const collected = await materializeSkillStore(only);
+    return {
+      store: only,
+      ...collected,
+      contentHash: await hashSkillSnapshot(collected.skills),
+      ...(resolvedSkillsByIndex ? { resolvedSkillsByIndex } : {}),
+    };
   }
 
   const store = new CompositeSkillStore(stores);
-  const collected = await collectSkillsFromSource(store);
-  return { store, ...collected, contentHash: await hashSkillSnapshot(collected.skills) };
+  const collected = await materializeSkillStore(store);
+  return {
+    store,
+    ...collected,
+    contentHash: await hashSkillSnapshot(collected.skills),
+    ...(resolvedSkillsByIndex ? { resolvedSkillsByIndex } : {}),
+  };
 }

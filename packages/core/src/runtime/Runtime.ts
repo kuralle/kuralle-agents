@@ -23,6 +23,7 @@ import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
 import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
 import { restoreLiveSkillCatalog } from '../skills/liveSkillCatalog.js';
+import { readResolvedSkillsCache, mergeResolvedSkills } from '../skills/resolvedSkillsState.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isHandoffOscillating } from './handoffOscillation.js';
 import { applyHandoffContinuation } from './handoffContinuation.js';
@@ -86,6 +87,7 @@ import {
 } from '../skills/skillActivation.js';
 import { currentFlowState } from '../flow/flowState.js';
 import { resolveReplyNode } from '../flow/nodeBuilders.js';
+import { withInternalState, readInternalState } from './internalRunState.js';
 /**
  * What the user is told when the run hands off to a human and the app has not configured an
  * escalation handler to say something better. Silence is the wrong default: an escalation
@@ -304,6 +306,7 @@ export class Runtime {
         configTools: this.config.tools,
         knowledgeProvider,
         defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+        resolvedSkillCache: readResolvedSkillsCache(opened.runState.state, opened.agent.id),
       });
       if (openingSurface.skillContentHash) {
         recorder?.recordSkillSnapshot(opened.agent.id, openingSurface.skillContentHash);
@@ -330,6 +333,20 @@ export class Runtime {
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =
         (await opened.runStore.getRunState(opened.runState.runId)) ?? opened.runState;
+      // Persist a freshly-resolved SkillResolver snapshot immediately (not deferred to some
+      // later save in the turn) so "once per session" holds even for a turn that never hits
+      // another `putRunState` call. A cache-hit (nothing changed) skips the write.
+      if (openingSurface.resolvedSkillSnapshot) {
+        const changed = mergeResolvedSkills(
+          freshRunState.state,
+          opened.agent.id,
+          openingSurface.resolvedSkillSnapshot,
+        );
+        if (changed) {
+          freshRunState.updatedAt = Date.now();
+          await opened.runStore.putRunState(freshRunState);
+        }
+      }
       if (
         opts.signalDelivery &&
         !steps.some((step) => step.signalId === opts.signalDelivery!.signalId)
@@ -595,9 +612,21 @@ export class Runtime {
               configTools: this.config.tools,
               knowledgeProvider,
               defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+              resolvedSkillCache: readResolvedSkillsCache(runCtx.runState.state, target.id),
             });
             if (targetSurface.skillContentHash) {
               recorder?.recordSkillSnapshot(target.id, targetSurface.skillContentHash);
+            }
+            if (targetSurface.resolvedSkillSnapshot) {
+              const changed = mergeResolvedSkills(
+                runCtx.runState.state,
+                target.id,
+                targetSurface.resolvedSkillSnapshot,
+              );
+              if (changed) {
+                runCtx.runState.updatedAt = Date.now();
+                await runCtx.runStore.putRunState(runCtx.runState);
+              }
             }
             runCtx.autoRetrieve = knowledgeProvider
               ? buildAutoRetrieveProvider(knowledgeProvider, target)
@@ -967,7 +996,9 @@ export class Runtime {
       const catalog = runCtx.skillCatalog;
       runCtx.skillPrompt = renderSkillCatalogPrompt(catalog.entries());
       catalog.rebaseline();
-      runCtx.runState.state.skillCatalog = catalog.serialize();
+      withInternalState(runCtx.runState.state, (internal) => {
+        internal.skillCatalog = catalog.serialize();
+      });
       removeSystemNote(runCtx.runState, SKILL_CATALOG_NOTE_TAG);
     }
 

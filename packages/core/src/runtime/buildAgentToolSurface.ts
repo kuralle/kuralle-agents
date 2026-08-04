@@ -7,7 +7,7 @@ import { createShellTool } from '../tools/fs/createShellTool.js';
 import { wireAgentSkills } from '../skills/wireAgentSkills.js';
 import type { SkillHandle } from '../skills/skillHandle.js';
 import { LiveSkillCatalog } from '../skills/liveSkillCatalog.js';
-import type { SkillMeta } from '../types/skills.js';
+import type { SkillLike, SkillMeta } from '../types/skills.js';
 import type { KnowledgeProvider } from './KnowledgeProvider.js';
 import { buildKnowledgeTool, wireWorkingMemory } from './grounding/index.js';
 import {
@@ -27,12 +27,19 @@ export interface AgentToolSurface {
   getSkill?: (name: string) => SkillHandle;
   skillMetaByName?: ReadonlyMap<string, SkillMeta>;
   resolvedWorkspace?: ResolvedAgentWorkspace;
+  /** Present only when `agent.skills` contained a `SkillResolver`: this session's resolver
+   *  output, by resolver position. The caller persists it (see `resolvedSkillsState.ts`) so
+   *  the resolver runs once per session, not once per turn. */
+  resolvedSkillSnapshot?: Record<string, SkillLike[]>;
 }
 
 export interface BuildAgentToolSurfaceDeps {
   configTools?: Record<string, AnyTool>;
   knowledgeProvider?: KnowledgeProvider;
   defaultWorkingMemoryStore?: PersistentMemoryStore;
+  /** This agent's previously resolved `SkillResolver` output for the session, if any —
+   *  read from `runState.state.resolvedSkills` by the caller (`resolvedSkillsState.ts`). */
+  resolvedSkillCache?: Readonly<Record<string, SkillLike[]>>;
 }
 
 export async function buildAgentToolSurface(
@@ -87,8 +94,12 @@ export async function buildAgentToolSurface(
   let getSkill: ((name: string) => SkillHandle) | undefined;
   let skillMetaByName: ReadonlyMap<string, SkillMeta> | undefined;
   let skillTools: Record<string, AnyTool> = {};
+  let resolvedSkillSnapshot: Record<string, SkillLike[]> | undefined;
   if (agent.skills) {
-    const wired = await wireAgentSkills(agent, resolvedWorkspace?.fs);
+    const wired = await wireAgentSkills(agent, resolvedWorkspace?.fs, {
+      session,
+      cached: deps.resolvedSkillCache,
+    });
     if (wired) {
       skillTools = wired.tools;
       Object.assign(executorTools, wired.tools);
@@ -97,6 +108,7 @@ export async function buildAgentToolSurface(
       skillCatalog = wired.catalog;
       getSkill = wired.getSkill;
       skillMetaByName = new Map(wired.metas.map((meta) => [meta.name, meta]));
+      resolvedSkillSnapshot = wired.resolvedSkillsByIndex;
     }
   }
 
@@ -127,5 +139,6 @@ export async function buildAgentToolSurface(
     getSkill,
     skillMetaByName,
     resolvedWorkspace,
+    resolvedSkillSnapshot,
   };
 }

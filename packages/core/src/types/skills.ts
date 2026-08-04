@@ -26,6 +26,7 @@ export interface SkillLike {
 }
 
 import type { PackagedSkill } from '../skills/packagedSkill.js';
+import type { Session } from './session.js';
 
 export interface SkillStoreLike {
   list(): Promise<SkillMeta[]>;
@@ -36,19 +37,45 @@ export interface SkillStoreLike {
   loadAllSkills?(): Promise<SkillLike[]>;
 }
 
-/**
- * One way to supply skills. A `string` is a filesystem root scanned for
- * `<dir>/SKILL.md`, resolved against the agent's `workspace` filesystem.
- */
-export type SkillEntry = SkillLike | SkillStoreLike | string | readonly PackagedSkill[];
+export interface SkillResolverContext {
+  session: Session;
+  agentId: string;
+}
 
 /**
- * Skills for an agent: one entry, or an ordered array mixing inline skills, stores, and
- * workspace paths. **Later entries win** on a name collision, so layering reads in the
- * order you write it:
+ * Resolves a tenant- or principal-scoped skill set at session start. Called once per session
+ * (not per turn) by `buildAgentToolSurface`; its output is merged into the frozen baseline the
+ * same way a statically declared entry is, then persisted so a later turn or a replay reuses
+ * the result instead of re-invoking the resolver against a tenant lookup that may have moved on.
+ */
+export type SkillResolver = (
+  ctx: SkillResolverContext,
+) => SkillLike[] | SkillStoreLike | Promise<SkillLike[] | SkillStoreLike>;
+
+/**
+ * One way to supply skills. A `string` is a filesystem root scanned for
+ * `<dir>/SKILL.md`, resolved against the agent's `workspace` filesystem. A `SkillResolver`
+ * function resolves per-session/per-tenant skills; it is the only callable member of this
+ * union (see `isSkillResolver`).
+ */
+export type SkillEntry =
+  | SkillLike
+  | SkillStoreLike
+  | string
+  | readonly PackagedSkill[]
+  | SkillResolver;
+
+/**
+ * Skills for an agent: one entry, or an ordered array mixing inline skills, stores,
+ * workspace paths, and resolvers. **Later entries win** on a name collision, so layering
+ * reads in the order you write it:
  *
  * ```ts
  * skills: ['/.agents/skills/org', '/.agents/skills/team', defineSkill({ name: 'override', … })]
  * ```
+ *
+ * Two `SkillResolver` entries producing the same skill name is different: there is no
+ * ordering the author intended between two per-tenant resolutions, so it throws instead of
+ * picking a winner.
  */
 export type SkillSource = SkillEntry | ReadonlyArray<SkillEntry>;
