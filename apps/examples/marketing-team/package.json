@@ -14,6 +14,7 @@
     "test": "bun test test/"
   },
   "dependencies": {
+    "@kuralle-agents/build": "workspace:*",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/hono-server": "workspace:*",
     "hono": "^4.12.19",

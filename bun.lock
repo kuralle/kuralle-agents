@@ -202,6 +202,7 @@
       "name": "@kuralle-examples/marketing-team",
       "version": "1.0.0",
       "dependencies": {
+        "@kuralle-agents/build": "workspace:*",
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/hono-server": "workspace:*",
         "drizzle-orm": "^0.45.2",
