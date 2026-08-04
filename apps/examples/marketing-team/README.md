@@ -127,8 +127,8 @@ bun run e2e
 Run twice against a freshly recreated volume, both green, before this task was called done —
 a scenario that only passes on a database carrying yesterday's rows proves nothing.
 
-Set `E2E_PROVIDER=xai` (with `XAI_API_KEY` set) to run the scenario against xAI instead of the
-OpenAI default — see the note in `scripts/e2e.ts`.
+Set `MARKETING_TEAM_PROVIDER=xai` (with `XAI_API_KEY` set) to run against xAI instead of the
+OpenAI default — see `agent/select-model.ts`.
 
 ## What the port taught us
 

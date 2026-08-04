@@ -16,10 +16,8 @@
  *
  * Usage: bun run scripts/e2e.ts   (needs OPENAI_API_KEY and DATABASE_URL in the environment)
  */
-import { createOpenAI } from '@ai-sdk/openai';
-import { createXai } from '@ai-sdk/xai';
 import { createRuntime, MemoryStore, MemoryTraceStore } from '@kuralle-agents/core';
-import type { LanguageModel } from 'ai';
+import { selectModel } from '../agent/select-model.js';
 import type { StreamPart } from '@kuralle-agents/core';
 import { and, eq, desc } from 'drizzle-orm';
 import { join } from 'node:path';
@@ -72,30 +70,9 @@ function note(message: string): void {
   console.log(`  ⚠ ${message}`);
 }
 
-/**
- * Defaults to OpenAI gpt-4.1-mini. Set E2E_PROVIDER=xai to use xAI instead — added after
- * OPENAI_API_KEY ran out of credits mid-verification on 2026-08-04 (`AI_APICallError:
- * insufficient_quota`), with XAI_API_KEY already confirmed working. Both are real providers
- * behind the same AI SDK `LanguageModel` interface; nothing else in the runtime wiring changes.
- */
-function resolveModel(): LanguageModel {
-  const provider = process.env.E2E_PROVIDER?.trim().toLowerCase();
-  if (provider === 'xai') {
-    const apiKey = process.env.XAI_API_KEY?.trim();
-    if (!apiKey) throw new Error('E2E_PROVIDER=xai but XAI_API_KEY is not set.');
-    const modelId = process.env.XAI_MODEL?.trim() || 'grok-4-fast';
-    return createXai({ apiKey })(modelId);
-  }
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY is required to run this scenario live (or set E2E_PROVIDER=xai).');
-  }
-  const modelId = process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';
-  return createOpenAI({ apiKey })(modelId);
-}
 
 async function main(): Promise<void> {
-  const model = resolveModel();
+  const model = selectModel();
 
   // --- 1. Seed a workspace ---------------------------------------------------------------
   const workspaceName = `E2E ${crypto.randomUUID()}`;

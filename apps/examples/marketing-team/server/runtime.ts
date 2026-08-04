@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import { createOpenAI } from '@ai-sdk/openai';
 import { createRuntime, type AgentConfig, type Runtime } from '@kuralle-agents/core';
 import { eq } from 'drizzle-orm';
 import type { LanguageModel } from 'ai';
 import { createLeadAgent } from '../agent/lead.js';
+import { selectModel } from '../agent/select-model.js';
 import { createSpecialistAgents } from '../agent/specialists.js';
 import type { MarketingToolsDeps } from '../agent/lib/index.js';
 import type { WorkspaceScope } from '../agent/lib/workspace-scope.js';
@@ -55,14 +55,11 @@ export function getRuntime(): Promise<Runtime> {
 }
 
 async function buildRuntime(): Promise<Runtime> {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error(
-      'OPENAI_API_KEY is required. Add it to apps/examples/marketing-team/.env (see .env.example).',
-    );
-  }
-  const modelId = process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';
-  const model: LanguageModel = createOpenAI({ apiKey })(modelId);
+  // Provider is selected, not assumed — the same choice `scripts/e2e.ts` already offers.
+  // Without it the server is pinned to one vendor, so an exhausted quota (a 429, which is
+  // exactly what happened during the first live chat) makes the whole app unusable while a
+  // perfectly good second key sits unused in the environment.
+  const model: LanguageModel = selectModel();
   const deps = { ...marketingToolsDeps(), model };
 
   const lead = createLeadAgent(deps);
