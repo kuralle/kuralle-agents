@@ -6,6 +6,7 @@ import type {
   ToolDeclaration,
 } from '../capabilities/index.js';
 import type { SkillMeta, SkillStoreLike } from '../types/skills.js';
+import { assertSafeSkillResourcePath } from './assertSafeSkillResourcePath.js';
 import { buildSkillBriefing } from './buildSkillBriefing.js';
 
 export class SkillsCapability implements Capability {
@@ -45,10 +46,7 @@ export class SkillsCapability implements Capability {
             return this.formatUnavailableSkill(args.name);
           }
 
-          const normalized = args.path.trim().replace(/^\.?\//, '');
-          if (normalized.includes('..') || normalized.startsWith('/')) {
-            throw new Error(`[skills] Invalid resource path "${args.path}".`);
-          }
+          const normalized = assertSafeSkillResourcePath(args.path);
 
           try {
             const content = await this.store.loadResource(args.name, args.path);

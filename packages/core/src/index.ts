@@ -360,12 +360,19 @@ export {
   fsSkillStore,
   defineSkill,
   parseSkillFrontmatter,
+  packagedSkillStore,
+  brandPackagedSkill,
+  isPackagedSkill,
+  isPackagedSkillArray,
+  classifySkillFileKind,
 } from './skills/index.js';
 export type {
   WiredAgentSkills,
   SkillWireAgent,
   DefineSkillConfig,
   ParsedSkill,
+  PackagedSkill,
+  PackagedSkillFile,
 } from './skills/index.js';
 export {
   buildToolSet,

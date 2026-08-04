@@ -2,10 +2,12 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import {
   FS_SKILL_BODY,
+  PACKAGED_BINARY_BYTES,
   SKILL_BODY,
   SKILL_RESOURCE,
   runFsRoundTrip,
   runInlineRoundTrip,
+  runPackagedRoundTrip,
   runPathSourceRoundTrip,
 } from './skill-workers.fixture.js';
 
@@ -30,5 +32,11 @@ describe('test:skill-workers', () => {
 
   it('resolves a workspace path source on workerd', async () => {
     expect(await runPathSourceRoundTrip()).toEqual(['returns-policy']);
+  });
+
+  it('packagedSkillStore loads body and binary resource on workerd', async () => {
+    const result = await runPackagedRoundTrip();
+    expect(result.body).toBe('PACKAGED_BODY');
+    expect(result.resource).toEqual(PACKAGED_BINARY_BYTES);
   });
 });

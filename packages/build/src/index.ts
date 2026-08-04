@@ -1,5 +1,6 @@
 export { compileAgentDirectory } from './compiler.js';
 export { generateCapabilityRegistrySource } from './codegen.js';
+export { packageSkillsDirectory } from './packageSkillsDirectory.js';
 export { AgentBuildError } from './errors.js';
 export { analyzeModule } from './module-analysis.js';
 export {

@@ -1,5 +1,6 @@
 import type { FileSystem } from '../types/filesystem.js';
 import type { SkillMeta, SkillStoreLike } from '../types/skills.js';
+import { assertSafeSkillResourcePath } from './assertSafeSkillResourcePath.js';
 import { parseSkillFrontmatter } from './parseSkillFrontmatter.js';
 import { sha256 } from './contentHash.js';
 
@@ -66,10 +67,7 @@ export function fsSkillStore(
         throw new Error(`[skills] Skill "${name}" not found.`);
       }
 
-      const normalized = path.trim().replace(/^\.?\//, '');
-      if (normalized.includes('..') || normalized.startsWith('/')) {
-        throw new Error(`[skills] Invalid resource path "${path}".`);
-      }
+      const normalized = assertSafeSkillResourcePath(path);
 
       const resourcePath = fs.resolvePath(skill.root, `${skill.folder}/${normalized}`);
       if (!(await fs.exists(resourcePath))) {

@@ -12,6 +12,7 @@ export {
 export { InlineSkillStore } from './inlineSkillStore.js';
 export { CompositeSkillStore } from './compositeSkillStore.js';
 export { fsSkillStore } from './fsSkillStore.js';
+export { packagedSkillStore } from './packagedSkillStore.js';
 export { defineSkill, type DefineSkillConfig } from './defineSkill.js';
 export {
   parseSkillFrontmatter,
@@ -20,3 +21,11 @@ export {
   type ParsedSkill,
   type ParseSkillContext,
 } from './parseSkillFrontmatter.js';
+export {
+  brandPackagedSkill,
+  isPackagedSkill,
+  isPackagedSkillArray,
+  classifySkillFileKind,
+  type PackagedSkill,
+  type PackagedSkillFile,
+} from './packagedSkill.js';

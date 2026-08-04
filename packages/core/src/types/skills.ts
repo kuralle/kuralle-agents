@@ -25,6 +25,8 @@ export interface SkillLike {
   path?: string;
 }
 
+import type { PackagedSkill } from '../skills/packagedSkill.js';
+
 export interface SkillStoreLike {
   list(): Promise<SkillMeta[]>;
   loadBody(name: string): Promise<string>;
@@ -38,7 +40,7 @@ export interface SkillStoreLike {
  * One way to supply skills. A `string` is a filesystem root scanned for
  * `<dir>/SKILL.md`, resolved against the agent's `workspace` filesystem.
  */
-export type SkillEntry = SkillLike | SkillStoreLike | string;
+export type SkillEntry = SkillLike | SkillStoreLike | string | readonly PackagedSkill[];
 
 /**
  * Skills for an agent: one entry, or an ordered array mixing inline skills, stores, and

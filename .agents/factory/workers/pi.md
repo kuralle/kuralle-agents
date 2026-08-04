@@ -22,6 +22,13 @@ provider/model per task:
 
 - `zai`/`glm-5.2` (DEFAULT — ZhipuAI direct API, 1M ctx) — general
   implementation. Requires `ZAI_API_KEY`.
+
+**Do not infer availability from `$ZAI_API_KEY`.** pi holds its own credentials
+(`pi /login`), so the env var is routinely unset in a shell where the provider
+is configured and working. The probe at the top of this file — `command -v pi` —
+is the whole test; `pi --list-models` confirms which providers are live. A run
+was misrouted to the `codex` fallback on exactly this bad inference, when the
+defined probe had already passed.
 - `opencode-go`/`kimi-k2.7-code` (262K, image-capable) — agentic,
   multi-step work. Requires `OPENCODE_API_KEY` (or `pi /login`).
 - `deepseek`/`deepseek-v4-pro` (1M ctx) — long-context, deep reasoning;

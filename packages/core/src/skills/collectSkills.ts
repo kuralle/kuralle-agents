@@ -4,6 +4,8 @@ import type { SkillEntry, SkillLike, SkillMeta, SkillSource, SkillStoreLike } fr
 import { InlineSkillStore } from './inlineSkillStore.js';
 import { CompositeSkillStore } from './compositeSkillStore.js';
 import { fsSkillStore } from './fsSkillStore.js';
+import { isPackagedSkill, isPackagedSkillArray } from './packagedSkill.js';
+import { packagedSkillStore } from './packagedSkillStore.js';
 import { canonicalSkillContent, sha256 } from './contentHash.js';
 
 export interface SkillWireAgent {
@@ -96,7 +98,9 @@ export async function prepareSkillStore(
   contentHash: string;
 }> {
   const entries: SkillEntry[] = Array.isArray(source)
-    ? [...source]
+    ? (source.length > 0 && source.every(isPackagedSkill)
+        ? [source as readonly import('./packagedSkill.js').PackagedSkill[]]
+        : [...source])
     : [source as SkillEntry];
 
   // A lone store stays itself: wrapping one store in a composite would add a layer with
@@ -133,8 +137,22 @@ export async function prepareSkillStore(
       stores.push(entry);
       continue;
     }
+    if (isPackagedSkillArray(entry)) {
+      flushInline();
+      stores.push(packagedSkillStore(entry));
+      continue;
+    }
+    if (isPackagedSkill(entry)) {
+      throw new Error(
+        '[skills] A packaged skill must be passed as an array entry (`skills: [[pkgA, pkgB], inlineSkill]`), not as a bare inline skill.',
+      );
+    }
+    const inlineSkill = entry as SkillLike;
+    if (inlineSkill.body === undefined) {
+      throw new Error(`[skills] Inline skill "${inlineSkill.name ?? 'unknown'}" is missing a body.`);
+    }
     // Consecutive inline skills share one store so ordering within a run is preserved.
-    inline.push(entry);
+    inline.push(inlineSkill);
   }
   flushInline();
 

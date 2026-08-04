@@ -1,4 +1,5 @@
 import type { SkillLike, SkillMeta, SkillStoreLike } from '../types/skills.js';
+import { assertSafeSkillResourcePath } from './assertSafeSkillResourcePath.js';
 import { canonicalSkillContent, sha256 } from './contentHash.js';
 
 export class InlineSkillStore implements SkillStoreLike {
@@ -39,10 +40,7 @@ export class InlineSkillStore implements SkillStoreLike {
     if (!skill) {
       throw new Error(`[skills] Skill "${name}" not found.`);
     }
-    const normalized = path.trim().replace(/^\.?\//, '');
-    if (normalized.includes('..') || normalized.startsWith('/')) {
-      throw new Error(`[skills] Invalid resource path "${path}".`);
-    }
+    const normalized = assertSafeSkillResourcePath(path);
     const content = skill.resources?.[normalized];
     if (content === undefined) {
       throw new Error(`[skills] Resource "${normalized}" not found for skill "${name}".`);
