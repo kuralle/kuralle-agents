@@ -359,3 +359,15 @@ tr td a {
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
+
+/*
+ * The user's own messages, restored to the accent bubble this app had before the chat moved to
+ * AI Elements. `MessageContent` styles them with `bg-secondary`, and `--color-secondary` maps
+ * to the page background here — correct for the tool status badges that share that token, but
+ * it renders the user's bubble invisible. Overriding the token would fix the bubble and turn
+ * every badge brown, so the rule is scoped to the bubble instead.
+ */
+.chat .is-user > * {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
