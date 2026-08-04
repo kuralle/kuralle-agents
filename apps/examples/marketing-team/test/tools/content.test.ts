@@ -31,6 +31,49 @@ const dbIt = (name: string, fn: () => Promise<void>) =>
   });
 
 describe('create_content', () => {
+  dbIt('rejects a duplicate slug with an actionable error, not a raw SQL failure', async () => {
+    const sfx = suffix();
+    const workspace = await createWorkspace(db, `content-dupe-${sfx}`);
+    const { create_content } = createContentTools({
+      db,
+      resolveScope: () => ({ workspaceId: workspace.id, principalId: 'p' }),
+    });
+    const taken = `taken-${sfx}`;
+    const ctx = makeCtx({ currentAgent: 'content-marketer' });
+
+    const { id } = (await create_content.execute(
+      { kind: 'blog', title: 'The original', slug: taken, markdown: 'First body.' },
+      ctx,
+    )) as { id: string };
+
+    // Same slug, same workspace: the `(workspace_id, slug)` unique index rejects it. What the
+    // model receives back is the whole point — a raw driver error carries the full INSERT and
+    // every bound parameter (including the entire document body) and says nothing about which
+    // piece holds the slug, so the model cannot recover from it.
+    let caught: unknown;
+    try {
+      await create_content.execute(
+        { kind: 'blog', title: 'A second piece', slug: taken, markdown: 'Second body.' },
+        ctx,
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = (caught as Error).message;
+    expect((caught as Error).name).toBe('RecoverableToolError');
+    expect(message).toContain(taken);
+    expect(message).toContain(id); // names the conflicting piece so `update_content` is reachable
+    expect(message).toContain('update_content');
+    expect(message).not.toContain('insert into'); // no SQL, and therefore no body dump
+    expect(message).not.toContain('Second body.');
+
+    // The failed call must not have written a partial row or an orphan revision.
+    const rows = await db.select().from(contentPieces).where(eq(contentPieces.workspaceId, workspace.id));
+    expect(rows).toHaveLength(1);
+  });
+
   dbIt('writes body_json and body_markdown together, and a revision row, in one call', async () => {
     const s = suffix();
     const workspace = await createWorkspace(db, `content-create-${s}`);

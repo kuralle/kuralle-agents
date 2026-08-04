@@ -1,4 +1,4 @@
-import { defineTool } from '@kuralle-agents/core';
+import { defineTool, RecoverableToolError } from '@kuralle-agents/core';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { markdownToTiptap } from '../../../db/content-format.js';
@@ -14,6 +14,27 @@ const kind = z.enum(contentKind.enumValues);
 const status = z.enum(contentStatus.enumValues);
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const slug = z.string().min(1).max(80).regex(SLUG, 'lowercase letters, numbers, and single hyphens only');
+
+/** Postgres `unique_violation`. The `(workspace_id, slug)` index is the only one that can fire here. */
+const UNIQUE_VIOLATION = '23505';
+
+/**
+ * Walks the `cause` chain rather than reading `error.code` off the top.
+ *
+ * Drizzle wraps every driver failure in a `DrizzleQueryError` whose own `code` is undefined and
+ * whose `message` is the full SQL plus bound parameters; the `PostgresError` carrying `23505`
+ * sits underneath on `cause`. A top-level check compiles, typechecks, and silently never
+ * matches — which is how the raw statement reached the model in the first place.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  for (let current = error, depth = 0; current && depth < 5; depth++) {
+    if (typeof current === 'object' && (current as { code?: unknown }).code === UNIQUE_VIOLATION) {
+      return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
 
 /**
  * The Notion replacement. Agents always pass Markdown; `body_json` (Tiptap) is derived from
@@ -38,18 +59,44 @@ export function createContentTools(deps: ContentToolsDeps) {
       const bodyJson = markdownToTiptap(markdown);
 
       return db.transaction(async (tx) => {
-        const [saved] = await tx
-          .insert(contentPieces)
-          .values({
-            workspaceId,
-            kind: k,
-            title,
-            slug: s,
-            bodyJson,
-            bodyMarkdown: markdown,
-            authoredByAgent,
-          })
-          .returning();
+        let saved;
+        try {
+          [saved] = await tx
+            .insert(contentPieces)
+            .values({
+              workspaceId,
+              kind: k,
+              title,
+              slug: s,
+              bodyJson,
+              bodyMarkdown: markdown,
+              authoredByAgent,
+            })
+            .returning();
+        } catch (error) {
+          // `(workspace_id, slug)` is unique. Without this the driver's raw failure — the full
+          // INSERT statement and every bound parameter, including the entire document body —
+          // is what reaches the model, and from there the user's screen. It is also not
+          // actionable: nothing in that text says which piece already holds the slug.
+          //
+          // A collision almost always means the piece already exists and the intent was to
+          // revise it, so the recovery is to name the existing id and let the model choose
+          // between `update_content` and a genuinely different slug. Auto-suffixing to
+          // `…-2` would silently create a near-duplicate and hide that choice.
+          if (!isUniqueViolation(error)) throw error;
+          const [existing] = await db
+            .select({ id: contentPieces.id, title: contentPieces.title })
+            .from(contentPieces)
+            .where(and(eq(contentPieces.workspaceId, workspaceId), eq(contentPieces.slug, s)))
+            .limit(1);
+          throw new RecoverableToolError(
+            existing
+              ? `The slug "${s}" is already used by "${existing.title}" (id ${existing.id}). ` +
+                'Call update_content with that id to revise it, or create this piece under a different slug.'
+              : `The slug "${s}" is already used in this workspace. Choose a different slug.`,
+            { userMessage: `There is already a piece at "${s}".` },
+          );
+        }
         if (!saved) {
           throw new Error('create_content: insert returned no row');
         }
