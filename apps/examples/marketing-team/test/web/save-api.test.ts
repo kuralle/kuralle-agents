@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { eq, inArray, like } from 'drizzle-orm';
 import { createContentTools } from '../../agent/lib/content/tools.js';
 import { app } from '../../server/index.js';
 import { resolveDefaultWorkspaceId } from '../../server/runtime.js';
@@ -30,7 +30,28 @@ beforeAll(async () => {
   reachable = true;
 });
 
+/**
+ * These drive the REST routes, which resolve the app's DEFAULT workspace — the same one the demo
+ * uses. Without this the Content library fills up with "Save API test …" and "Status test …"
+ * rows that never go away, one set per run, and the example looks broken to anyone who opens it.
+ * The rows cannot simply go in a throwaway workspace: the route under test is the one that picks
+ * the default, so the test has to write there and tidy up after itself.
+ */
+const CLEANUP_PREFIX = 'save-api-test-';
+
 afterAll(async () => {
+  if (reachable) {
+    const doomed = await db
+      .select({ id: contentPieces.id })
+      .from(contentPieces)
+      .where(like(contentPieces.slug, `${CLEANUP_PREFIX}%`));
+    const ids = doomed.map((row) => row.id);
+    if (ids.length > 0) {
+      // Revisions first — they reference the piece.
+      await db.delete(contentRevisions).where(inArray(contentRevisions.contentPieceId, ids));
+      await db.delete(contentPieces).where(inArray(contentPieces.id, ids));
+    }
+  }
   await sqlClient?.end({ timeout: 5 });
 });
 
