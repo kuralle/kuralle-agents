@@ -13,6 +13,13 @@ export { InlineSkillStore } from './inlineSkillStore.js';
 export { CompositeSkillStore } from './compositeSkillStore.js';
 export { fsSkillStore } from './fsSkillStore.js';
 export { packagedSkillStore } from './packagedSkillStore.js';
+export {
+  createSkillHandle,
+  createAgentGetSkill,
+  createNoSkillsGetSkill,
+  type SkillHandle,
+  type SkillFileHandle,
+} from './skillHandle.js';
 export { defineSkill, type DefineSkillConfig } from './defineSkill.js';
 export {
   parseSkillFrontmatter,

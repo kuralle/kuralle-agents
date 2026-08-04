@@ -48,7 +48,7 @@ export type SkillEntry = SkillLike | SkillStoreLike | string | readonly Packaged
  * order you write it:
  *
  * ```ts
- * skills: ['/skills/org', '/skills/team', defineSkill({ name: 'override', … })]
+ * skills: ['/.agents/skills/org', '/.agents/skills/team', defineSkill({ name: 'override', … })]
  * ```
  */
 export type SkillSource = SkillEntry | ReadonlyArray<SkillEntry>;

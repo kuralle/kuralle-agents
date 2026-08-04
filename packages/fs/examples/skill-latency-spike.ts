@@ -60,7 +60,7 @@ function correct(text: string, parts: StreamPart[]): boolean {
 
 async function runOnce(withSkills: boolean, model: unknown, label: string) {
   const { fs, shell } = virtualShell({
-    initialFiles: withSkills ? { ...SEED, '/skills/greeter/SKILL.md': GREETER_SKILL } : SEED,
+    initialFiles: withSkills ? { ...SEED, '/.agents/skills/greeter/SKILL.md': GREETER_SKILL } : SEED,
   });
   const agent = defineAgent({
     id: `spike-${label}`,

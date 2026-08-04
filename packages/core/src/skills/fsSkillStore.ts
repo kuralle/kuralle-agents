@@ -4,7 +4,7 @@ import { assertSafeSkillResourcePath } from './assertSafeSkillResourcePath.js';
 import { parseSkillFrontmatter } from './parseSkillFrontmatter.js';
 import { sha256 } from './contentHash.js';
 
-const DEFAULT_ROOT = '/skills';
+const DEFAULT_ROOT = '/.agents/skills';
 
 interface SkillLocation {
   root: string;

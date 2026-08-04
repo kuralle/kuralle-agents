@@ -100,7 +100,7 @@ You can also load skills from `SKILL.md` folders or a custom `SkillStore` instea
 import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';
 
 const fs = new InMemoryFs({
-  '/skills/refunds/SKILL.md': '---\nname: refunds\ndescription: Handle refunds.\n---\n\n# Refunds\n...',
+  '/.agents/skills/refunds/SKILL.md': '---\nname: refunds\ndescription: Handle refunds.\n---\n\n# Refunds\n...',
 });
 const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkillStore(fs) });
 ```
@@ -109,11 +109,10 @@ const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkill
 progressive disclosure works identically. On a persistent
 [`SqlFileSystem`](/guides/workspace/#persistence--pick-a-backend-by-platform), skills survive restarts.
 
-Layer shared defaults with agent- or project-specific skills by passing ordered roots. Later roots
-override earlier roots by frontmatter `name`; the winning root supplies the body and resources:
+Omitting the second argument scans `/.agents/skills` for `SKILL.md` folders. Pass explicit roots when layering shared and project-specific skills:
 
 ```typescript
-const skills = fsSkillStore(fs, ['/skills/shared', '/skills/project']);
+const skills = fsSkillStore(fs, ['/.agents/skills/shared', '/.agents/skills/project']);
 ```
 
 ## Validation, caching, and audit hashes

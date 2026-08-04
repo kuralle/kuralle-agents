@@ -55,7 +55,7 @@ async function main() {
   // One virtual workspace: fs + shell, seeded with a skill and a data file.
   const { fs, shell } = virtualShell({
     initialFiles: {
-      '/skills/greeter/SKILL.md': GREETER_SKILL,
+      '/.agents/skills/greeter/SKILL.md': GREETER_SKILL,
       '/data/orders.txt': 'ORD-1\nORD-2\nORD-3\n',
     },
   });

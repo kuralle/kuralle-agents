@@ -59,15 +59,15 @@ Do alpha things.
   describe('fsSkillStore', () => {
     it('lists skills, loads body and resources, and blocks path traversal', async () => {
       const fs = new InMemoryFs({
-        '/skills/alpha/SKILL.md': validSkill,
-        '/skills/beta/SKILL.md': `---
+        '/.agents/skills/alpha/SKILL.md': validSkill,
+        '/.agents/skills/beta/SKILL.md': `---
 name: beta
 description: Beta skill.
 ---
 
 Beta body content.`,
-        '/skills/alpha/references/x.md': '# Reference X',
-        '/skills/empty-dir/.gitkeep': '',
+        '/.agents/skills/alpha/references/x.md': '# Reference X',
+        '/.agents/skills/empty-dir/.gitkeep': '',
       });
 
       const store = fsSkillStore(fs);
@@ -139,8 +139,8 @@ Project gamma body.`,
 
     it('skips an invalid discovered SKILL.md without aborting discovery', async () => {
       const fs = new InMemoryFs({
-        '/skills/broken/SKILL.md': '---\nname: broken\n---\nMissing description.',
-        '/skills/good/SKILL.md': `---
+        '/.agents/skills/broken/SKILL.md': '---\nname: broken\n---\nMissing description.',
+        '/.agents/skills/good/SKILL.md': `---
 name: good
 description: A valid skill.
 ---
@@ -154,7 +154,7 @@ Good body.`,
     });
 
     it('reuses one validated discovery snapshot across catalog and body loads', async () => {
-      const fs = new InMemoryFs({ '/skills/alpha/SKILL.md': validSkill });
+      const fs = new InMemoryFs({ '/.agents/skills/alpha/SKILL.md': validSkill });
       const originalRead = fs.readFile.bind(fs);
       let reads = 0;
       fs.readFile = async (...args) => {
@@ -170,13 +170,13 @@ Good body.`,
     });
 
     it('refreshes on the next catalog snapshot and keys it by content hash', async () => {
-      const fs = new InMemoryFs({ '/skills/alpha/SKILL.md': validSkill });
+      const fs = new InMemoryFs({ '/.agents/skills/alpha/SKILL.md': validSkill });
       const store = fsSkillStore(fs);
 
       const first = (await store.list())[0]!;
       expect(await store.loadBody('alpha')).toContain('Do alpha things.');
 
-      await fs.writeFile('/skills/alpha/SKILL.md', `---
+      await fs.writeFile('/.agents/skills/alpha/SKILL.md', `---
 name: alpha
 description: Updated alpha instructions.
 ---
@@ -193,7 +193,7 @@ Do the new thing.
 
     it('preserves allowed-tools enforcement metadata outside the model catalog', async () => {
       const fs = new InMemoryFs({
-        '/skills/alpha/SKILL.md': `---
+        '/.agents/skills/alpha/SKILL.md': `---
 name: alpha
 description: Alpha skill instructions.
 allowed-tools: [lookup, checkout]

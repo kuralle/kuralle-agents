@@ -40,6 +40,8 @@ import { appendConversationAudit } from '../audit/record.js';
 import { toolDeniedResult, toolErrorResult } from '../tools/controlResults.js';
 import { z } from 'zod';
 import { toolResultMessage } from './channels/executeModelTool.js';
+import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
+import type { SkillHandle } from '../skills/skillHandle.js';
 
 const APPROVAL_SIGNAL = '__approval';
 const APPROVAL_DELIVERY_SCHEMA = z.object({}).strict();
@@ -83,6 +85,7 @@ export interface CtxDeps {
   /** Decides allow / ask / deny per tool call. Defaults to honouring `needsApproval`. */
   policy?: Policy;
   signalDelivery?: SignalDelivery;
+  getSkill?: (name: string) => SkillHandle;
 }
 
 function publicInterrupt(request: InterruptRequest): HitlInterrupt {
@@ -133,6 +136,7 @@ function makeCtx(deps: CtxDeps): RunContext {
   // acting, and the new agent's policy must govern its calls. Leaving the source agent's
   // policy in place would let a delegated read-only worker inherit write permission.
   const policyHolder = { policy: deps.policy ?? needsApprovalPolicy };
+  const getSkill = deps.getSkill ?? createNoSkillsGetSkill();
 
   let pendingAppendTail = Promise.resolve();
   const serializePendingAppend = <T>(operation: () => Promise<T>): Promise<T> => {
@@ -484,6 +488,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     autoRetrieve: deps.autoRetrieve,
     memoryService: deps.memoryService,
     fs: deps.fs,
+    getSkill,
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
     turnInputConsumed: false,
@@ -678,6 +683,7 @@ function makeCtx(deps: CtxDeps): RunContext {
               uuid: context.uuid.bind(context),
               emit: context.emit.bind(context),
               fs: context.fs,
+              getSkill: context.getSkill.bind(context),
               abortSignal: deps.bargeIn ?? deps.abortSignal,
             },
           });

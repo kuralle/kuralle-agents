@@ -37,7 +37,7 @@ This is sample commerce data, not prescribing guidance.
 } as const;
 
 const SKILL_FILES = {
-  '/skills/prescription-intake/SKILL.md': `---
+  '/.agents/skills/prescription-intake/SKILL.md': `---
 name: prescription-intake
 description: Use when a customer shares or describes a prescription and needs safe medicine identification or availability checking.
 allowed-tools: [workspace, search_inventory, record_case_note]
@@ -53,7 +53,7 @@ Reference: when you need the six intake questions, call read_skill_resource with
 5. Call record_case_note with a minimal, non-diagnostic summary when follow-up is needed.
 6. Explain that availability is not dispensing approval; a pharmacist performs the final review.
 `,
-  '/skills/prescription-intake/references/clarification-checklist.md': `# Clarification checklist
+  '/.agents/skills/prescription-intake/references/clarification-checklist.md': `# Clarification checklist
 
 - Medicine name readable?
 - Strength and unit readable?
@@ -62,7 +62,7 @@ Reference: when you need the six intake questions, call read_skill_resource with
 - Prescription-only or controlled item?
 - Any urgent symptom requiring emergency redirection?
 `,
-  '/skills/order-fulfilment/SKILL.md': `---
+  '/.agents/skills/order-fulfilment/SKILL.md': `---
 name: order-fulfilment
 description: Use when a customer asks to add, remove, review, or prepare medicines for pharmacy fulfilment.
 allowed-tools: [search_inventory, add_to_cart, remove_from_cart, view_cart, record_case_note, workspace]
@@ -94,7 +94,7 @@ export function createPharmacyWorkspace(notes: FileSystem): CompositeFileSystem 
 /** Skills live outside the model-traversable workspace and disclose progressively. */
 export function createPharmacySkillStore(): SkillStoreLike {
   const skillFs = new InMemoryFs(SKILL_FILES);
-  return fsSkillStore(skillFs, ['/skills']);
+  return fsSkillStore(skillFs, ['/.agents/skills']);
 }
 
 export function knowledgeFixture(): FileSystem {

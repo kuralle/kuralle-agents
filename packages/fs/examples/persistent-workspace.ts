@@ -49,10 +49,10 @@ async function main() {
     const fs = sqlFileSystem(bunSqliteBackend(db));
     await fs.mkdir('/kb', { recursive: true });
     await fs.writeFile('/kb/hours.md', 'Open 9-5, Mon-Fri.');
-    await fs.mkdir('/skills/refunds', { recursive: true });
-    await fs.writeFile('/skills/refunds/SKILL.md', SKILL);
+    await fs.mkdir('/.agents/skills/refunds', { recursive: true });
+    await fs.writeFile('/.agents/skills/refunds/SKILL.md', SKILL);
     db.close();
-    console.log('process 1 wrote /kb/hours.md and /skills/refunds/SKILL.md, then closed the db');
+    console.log('process 1 wrote /kb/hours.md and /.agents/skills/refunds/SKILL.md, then closed the db');
   }
 
   // ── Process 2: a fresh SqlFileSystem over the SAME db file (restart). ──

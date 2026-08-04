@@ -13,6 +13,7 @@ import type { FileSystem } from './filesystem.js';
 import type { Instructions } from './agentConfig.js';
 import type { AgentKnowledgeOverrides, SourceRef, RetrievalCacheAdapter } from './knowledge.js';
 import type { StandardSchemaV1 } from './standard-schema.js';
+import type { SkillHandle } from '../skills/skillHandle.js';
 
 export interface ResumedToolOutcome {
   requestId: string;
@@ -114,6 +115,8 @@ export interface RunContext {
   workingMemoryTools?: Record<string, AnyTool>;
   /** Agent workspace filesystem (same instance as `AgentConfig.workspace`). */
   fs?: FileSystem;
+  /** Read-only access to bundled skill resources for tool/action code. */
+  getSkill(name: string): SkillHandle;
   tool(
     name: string,
     args: unknown,
@@ -157,12 +160,12 @@ export interface RunContext {
 
 export type ActionContext = Pick<
   RunContext,
-  'tool' | 'approve' | 'signal' | 'now' | 'uuid' | 'emit' | 'fs'
+  'tool' | 'approve' | 'signal' | 'now' | 'uuid' | 'emit' | 'fs' | 'getSkill'
 >;
 
 export type ToolContext = Pick<
   RunContext,
-  'session' | 'runState' | 'tool' | 'now' | 'uuid' | 'emit' | 'fs' | 'abortSignal'
+  'session' | 'runState' | 'tool' | 'now' | 'uuid' | 'emit' | 'fs' | 'abortSignal' | 'getSkill'
 >;
 
 export type { ModelMessage };

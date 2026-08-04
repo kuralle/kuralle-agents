@@ -154,15 +154,15 @@ describe('skill load briefing', () => {
 
   it('fsSkillStore.listResources returns nested paths sorted and excludes SKILL.md', async () => {
     const fs = new InMemoryFs({
-      '/skills/nested/SKILL.md': `---
+      '/.agents/skills/nested/SKILL.md': `---
 name: nested
 description: Nested resources.
 ---
 
 Body.`,
-      '/skills/nested/references/b.md': '# B',
-      '/skills/nested/references/a.md': '# A',
-      '/skills/nested/templates/t.md': '# T',
+      '/.agents/skills/nested/references/b.md': '# B',
+      '/.agents/skills/nested/references/a.md': '# A',
+      '/.agents/skills/nested/templates/t.md': '# T',
     });
 
     const store = fsSkillStore(fs);
@@ -174,7 +174,7 @@ Body.`,
 
   it('fsSkillStore.loadResource treats SKILL.md as a miss, not a resource', async () => {
     const fs = new InMemoryFs({
-      '/skills/nested/SKILL.md': `---
+      '/.agents/skills/nested/SKILL.md': `---
 name: nested
 description: Nested resources.
 ---

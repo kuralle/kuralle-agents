@@ -365,6 +365,9 @@ export {
   isPackagedSkill,
   isPackagedSkillArray,
   classifySkillFileKind,
+  createSkillHandle,
+  createAgentGetSkill,
+  createNoSkillsGetSkill,
 } from './skills/index.js';
 export type {
   WiredAgentSkills,
@@ -373,6 +376,8 @@ export type {
   ParsedSkill,
   PackagedSkill,
   PackagedSkillFile,
+  SkillHandle,
+  SkillFileHandle,
 } from './skills/index.js';
 export {
   buildToolSet,

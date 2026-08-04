@@ -24,7 +24,7 @@ describe('Kuralle-native pharmacy agent', () => {
     const wired = await wireAgentSkills(agent, fs);
 
     expect(await fs.readdir('/')).toEqual(['knowledge', 'notes']);
-    expect(await fs.exists('/skills')).toBe(false);
+    expect(await fs.exists('/.agents/skills')).toBe(false);
     expect(wired?.promptSections[0]?.content).toContain('prescription-intake');
     expect(wired?.promptSections[0]?.content).not.toContain('Clarification checklist');
     const briefing = await wired?.tools.load_skill?.execute?.({ name: 'prescription-intake' });

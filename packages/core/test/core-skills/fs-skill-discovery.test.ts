@@ -5,8 +5,8 @@ import { InMemoryFs } from '@kuralle-agents/fs';
 describe('fsSkillStore discovery hardening', () => {
   it('skips a malformed SKILL.md and returns only the valid skill', async () => {
     const fs = new InMemoryFs({
-      '/skills/broken/SKILL.md': '---\nname: broken\n---\nMissing description.',
-      '/skills/good/SKILL.md': `---
+      '/.agents/skills/broken/SKILL.md': '---\nname: broken\n---\nMissing description.',
+      '/.agents/skills/good/SKILL.md': `---
 name: good
 description: A valid skill.
 ---
@@ -23,13 +23,13 @@ Good body.`,
 
   it('keys and loads resources by directory name when name agrees', async () => {
     const fs = new InMemoryFs({
-      '/skills/foo/SKILL.md': `---
+      '/.agents/skills/foo/SKILL.md': `---
 name: foo
 description: Agrees with directory.
 ---
 
 Foo body.`,
-      '/skills/foo/references/x.md': '# Reference X',
+      '/.agents/skills/foo/references/x.md': '# Reference X',
     });
 
     const store = fsSkillStore(fs);

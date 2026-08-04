@@ -47,6 +47,9 @@ export async function executeModelToolCall(
           now: ctx.now.bind(ctx),
           uuid: ctx.uuid.bind(ctx),
           emit: ctx.emit.bind(ctx),
+          fs: ctx.fs,
+          getSkill: ctx.getSkill.bind(ctx),
+          abortSignal: ctx.abortSignal,
         },
       }),
     });

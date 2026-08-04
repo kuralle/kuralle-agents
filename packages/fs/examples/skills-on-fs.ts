@@ -23,8 +23,8 @@ description: Handle refund requests within the 30-day policy window.
 async function main() {
   // Skills live on the workspace fs as SKILL.md folders (+ a reference file).
   const fs = new InMemoryFs({
-    '/skills/refunds/SKILL.md': REFUNDS_SKILL,
-    '/skills/refunds/references/policy.md': '# Refund policy\n30-day window applies.',
+    '/.agents/skills/refunds/SKILL.md': REFUNDS_SKILL,
+    '/.agents/skills/refunds/references/policy.md': '# Refund policy\n30-day window applies.',
   });
 
   const store = fsSkillStore(fs);

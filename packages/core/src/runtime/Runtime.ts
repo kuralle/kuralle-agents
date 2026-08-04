@@ -21,6 +21,7 @@ import { createRunContext } from './ctx.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
+import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isHandoffOscillating } from './handoffOscillation.js';
 import { applyHandoffContinuation } from './handoffContinuation.js';
@@ -381,6 +382,7 @@ export class Runtime {
           ? buildMemoryService(this.config.memoryService, opened.agent)
           : undefined,
         fs: openingSurface.resolvedWorkspace?.fs,
+        getSkill: openingSurface.getSkill,
         signalDelivery: opts.signalDelivery,
       });
 
@@ -591,6 +593,7 @@ export class Runtime {
             );
             runCtx.workingMemoryTools = targetSurface.workingMemoryTools;
             runCtx.fs = targetSurface.resolvedWorkspace?.fs;
+            runCtx.getSkill = targetSurface.getSkill ?? createNoSkillsGetSkill();
             runCtx.memoryService = this.config.memoryService
               ? buildMemoryService(this.config.memoryService, target)
               : undefined;

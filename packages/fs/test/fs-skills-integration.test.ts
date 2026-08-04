@@ -43,9 +43,9 @@ Track order status.
 
   it('buildAgentToolSurface discloses fsSkillStore skills and tools execute', async () => {
     const fs = new InMemoryFs({
-      '/skills/refunds/SKILL.md': refundsSkill,
-      '/skills/orders/SKILL.md': ordersSkill,
-      '/skills/refunds/references/policy.md': policyResource,
+      '/.agents/skills/refunds/SKILL.md': refundsSkill,
+      '/.agents/skills/orders/SKILL.md': ordersSkill,
+      '/.agents/skills/refunds/references/policy.md': policyResource,
     });
 
     const agent = {
