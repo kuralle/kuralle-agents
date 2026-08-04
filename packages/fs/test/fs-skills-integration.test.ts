@@ -73,9 +73,13 @@ Track order status.
     }
 
     const loaded = await loadSkill.execute({ name: 'refunds' });
-    expect(loaded).toMatchObject({
-      body: '# Refunds skill body\nProcess refunds per policy.\n',
-    });
+    expect(typeof loaded).toBe('string');
+    expect(loaded).toContain('Run the skill named "refunds".');
+    expect(loaded).toContain('# Refunds skill body\nProcess refunds per policy.\n');
+    expect(loaded).toContain('references/policy.md');
+    expect(loaded).toContain(
+      'read_skill_resource { name: "refunds", path: "references/policy.md" }',
+    );
 
     const resource = await readResource.execute({
       name: 'refunds',

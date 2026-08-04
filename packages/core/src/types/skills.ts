@@ -29,6 +29,7 @@ export interface SkillStoreLike {
   list(): Promise<SkillMeta[]>;
   loadBody(name: string): Promise<string>;
   loadResource(name: string, path: string): Promise<string | Uint8Array>;
+  listResources?(name: string): Promise<string[]>;
   getAllSkills?(): SkillLike[] | Promise<SkillLike[]>;
   loadAllSkills?(): Promise<SkillLike[]>;
 }

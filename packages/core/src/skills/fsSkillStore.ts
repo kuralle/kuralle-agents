@@ -48,6 +48,18 @@ export function fsSkillStore(
       return skill.body;
     },
 
+    async listResources(name: string): Promise<string[]> {
+      const skill = current(name) ?? (await discover()).get(name);
+      if (!skill) {
+        throw new Error(`[skills] Skill "${name}" not found.`);
+      }
+
+      const skillDir = fs.resolvePath(skill.root, skill.folder);
+      const paths: string[] = [];
+      await collectResourcePaths(fs, skillDir, '', paths);
+      return paths.sort();
+    },
+
     async loadResource(name: string, path: string): Promise<string | Uint8Array> {
       const skill = current(name) ?? (await discover()).get(name);
       if (!skill) {
@@ -123,4 +135,28 @@ async function discoverSkills(
   }
 
   return skills;
+}
+
+async function collectResourcePaths(
+  fs: FileSystem,
+  dir: string,
+  relPrefix: string,
+  out: string[],
+): Promise<void> {
+  let entries;
+  try {
+    entries = await fs.readdirWithFileTypes(dir);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name === 'SKILL.md') continue;
+    const rel = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+    if (entry.type === 'directory') {
+      await collectResourcePaths(fs, fs.resolvePath(dir, entry.name), rel, out);
+    } else if (entry.type === 'file') {
+      out.push(rel);
+    }
+  }
 }

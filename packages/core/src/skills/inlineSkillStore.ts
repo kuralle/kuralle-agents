@@ -26,6 +26,14 @@ export class InlineSkillStore implements SkillStoreLike {
     return skill.body;
   }
 
+  async listResources(name: string): Promise<string[]> {
+    const skill = this.byName.get(name);
+    if (!skill) {
+      throw new Error(`[skills] Skill "${name}" not found.`);
+    }
+    return Object.keys(skill.resources ?? {}).sort();
+  }
+
   async loadResource(name: string, path: string): Promise<string | Uint8Array> {
     const skill = this.byName.get(name);
     if (!skill) {

@@ -27,9 +27,12 @@ describe('Kuralle-native pharmacy agent', () => {
     expect(await fs.exists('/skills')).toBe(false);
     expect(wired?.promptSections[0]?.content).toContain('prescription-intake');
     expect(wired?.promptSections[0]?.content).not.toContain('Clarification checklist');
-    expect(await wired?.tools.load_skill?.execute?.({ name: 'prescription-intake' })).toMatchObject({
-      body: expect.stringContaining('references/clarification-checklist.md'),
-    });
+    const briefing = await wired?.tools.load_skill?.execute?.({ name: 'prescription-intake' });
+    expect(briefing).toContain('<skill_instructions>');
+    expect(briefing).toContain('references/clarification-checklist.md');
+    // The briefing hands the model the exact call for each sibling file, so it never
+    // has to infer a resource path from prose in the body.
+    expect(briefing).toContain('read_skill_resource { name: "prescription-intake"');
     expect(await wired?.tools.read_skill_resource?.execute?.({
       name: 'prescription-intake',
       path: 'references/clarification-checklist.md',

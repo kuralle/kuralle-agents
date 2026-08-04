@@ -349,6 +349,7 @@ export type { CreateShellToolOptions } from './tools/fs/createShellTool.js';
 export type { Shell, ShellResult, ShellExecOptions } from './types/shell.js';
 export {
   SkillsCapability,
+  buildSkillBriefing,
   wireAgentSkills,
   collectRegisteredNames,
   validateSkillAllowedTools,

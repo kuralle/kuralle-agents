@@ -1,4 +1,5 @@
 export { SkillsCapability } from './SkillsCapability.js';
+export { buildSkillBriefing } from './buildSkillBriefing.js';
 export { wireAgentSkills } from './wireAgentSkills.js';
 export type { WiredAgentSkills } from './wireAgentSkills.js';
 export {
