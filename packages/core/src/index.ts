@@ -368,6 +368,11 @@ export {
   createSkillHandle,
   createAgentGetSkill,
   createNoSkillsGetSkill,
+  FRAMEWORK_SKILL_TOOLS,
+  permittedToolNames,
+  skillRestrictionPolicy,
+  recordSkillActivation,
+  resetSkillActivations,
 } from './skills/index.js';
 export type {
   WiredAgentSkills,
@@ -378,6 +383,7 @@ export type {
   PackagedSkillFile,
   SkillHandle,
   SkillFileHandle,
+  SkillActivation,
 } from './skills/index.js';
 export {
   buildToolSet,

@@ -82,7 +82,17 @@ export class CoreToolExecutor implements EffectToolExecutor {
   private callHistory: ToolCallRecord[] = [];
 
   constructor(config: CoreToolExecutorConfig) {
-    this.tools = new Map(Object.entries(config.tools));
+    // Key by the model-facing identifier (`def.name`, falling back to the object key) — the
+    // same identifier `buildToolSet` exposes to the model and `collectRegisteredNames`/
+    // `allowed-tools` compare against. Keying the registry by the object key instead let a
+    // tool whose object key differs from its `name` (e.g. `tools: { publish: toolNamed_publish_copy }`)
+    // diverge: the model and the restriction reasoned about `publish_copy` while the executor
+    // resolved `publish`, so a permitted name could run a different tool than the one allowed.
+    const tools = new Map<string, Tool>();
+    for (const [key, def] of Object.entries(config.tools)) {
+      tools.set(def.name || key, def);
+    }
+    this.tools = tools;
     this.enforcer = config.enforcer;
     this.parallelExecution = config.parallelExecution ?? false;
     this.agentId = config.agentId ?? 'agent';

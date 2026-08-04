@@ -34,5 +34,9 @@ echo "== core examples =="
 run "core/examples" "packages/core/tsconfig.examples.json"
 
 echo ""
+echo "== build examples =="
+run "build/examples" "packages/build/tsconfig.examples.json"
+
+echo ""
 [ "$fail" -eq 0 ] && echo "✓ typecheck: all green" || echo "✗ typecheck: failures above"
 exit "$fail"

@@ -77,7 +77,11 @@ import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
 import { addSystemNote } from './systemNotes.js';
-import { needsApprovalPolicy, type Policy } from './policies/toolPolicy.js';
+import { needsApprovalPolicy, composePolicies, type Policy } from './policies/toolPolicy.js';
+import {
+  skillRestrictionPolicy,
+  type SkillActivation,
+} from '../skills/skillActivation.js';
 import { currentFlowState } from '../flow/flowState.js';
 import { resolveReplyNode } from '../flow/nodeBuilders.js';
 /**
@@ -359,8 +363,15 @@ export class Runtime {
         throw new Error('Runtime requires agent.model or config.defaultModel');
       }
 
+      const skillActivations: SkillActivation[] = [];
+
       runCtx = await createRunContext({
-        policy: opened.agent.policy ?? this.config.policy,
+        policy: composePolicies(
+          skillRestrictionPolicy(() => skillActivations),
+          opened.agent.policy ?? this.config.policy ?? needsApprovalPolicy,
+        ),
+        skillActivations,
+        skillMetaByName: openingSurface.skillMetaByName,
         session: opened.session,
         runState: freshRunState,
         runStore: opened.runStore,
@@ -594,6 +605,13 @@ export class Runtime {
             runCtx.workingMemoryTools = targetSurface.workingMemoryTools;
             runCtx.fs = targetSurface.resolvedWorkspace?.fs;
             runCtx.getSkill = targetSurface.getSkill ?? createNoSkillsGetSkill();
+            // Swap alongside getSkill/policy/toolExecutor so a `load_skill` the target issues
+            // after the handoff records the TARGET's `allowed-tools`. `skillActivations` is
+            // intentionally shared (not reset here): a restriction activated before the handoff
+            // survives into the target, which is the safer reading — a composed policy may only
+            // grow more restrictive, and silently dropping a restriction across a handoff would
+            // let a delegated worker shed a boundary it was meant to keep.
+            runCtx.skillMetaByName = targetSurface.skillMetaByName;
             runCtx.memoryService = this.config.memoryService
               ? buildMemoryService(this.config.memoryService, target)
               : undefined;
@@ -615,7 +633,10 @@ export class Runtime {
             runCtx.validationPolicies = targetPolicies.validationPolicies;
             runCtx.inputProcessors = targetPolicies.inputProcessors;
             runCtx.outputProcessors = targetPolicies.outputProcessors;
-            runCtx.policy = target.policy ?? this.config.policy ?? needsApprovalPolicy;
+            runCtx.policy = composePolicies(
+              skillRestrictionPolicy(() => runCtx.skillActivations ?? []),
+              target.policy ?? this.config.policy ?? needsApprovalPolicy,
+            );
             runCtx.toolExecutor = new CoreToolExecutor({
               tools: targetSurface.executorTools,
               enforcer: targetPolicies.enforcer,

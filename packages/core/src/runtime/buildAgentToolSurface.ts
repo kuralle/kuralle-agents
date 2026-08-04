@@ -6,6 +6,7 @@ import { createFsTool } from '../tools/fs/createFsTool.js';
 import { createShellTool } from '../tools/fs/createShellTool.js';
 import { wireAgentSkills } from '../skills/wireAgentSkills.js';
 import type { SkillHandle } from '../skills/skillHandle.js';
+import type { SkillMeta } from '../types/skills.js';
 import type { KnowledgeProvider } from './KnowledgeProvider.js';
 import { buildKnowledgeTool, wireWorkingMemory } from './grounding/index.js';
 import {
@@ -21,6 +22,7 @@ export interface AgentToolSurface {
   skillPrompt?: string;
   skillContentHash?: string;
   getSkill?: (name: string) => SkillHandle;
+  skillMetaByName?: ReadonlyMap<string, SkillMeta>;
   resolvedWorkspace?: ResolvedAgentWorkspace;
 }
 
@@ -79,6 +81,7 @@ export async function buildAgentToolSurface(
   let skillPrompt: string | undefined;
   let skillContentHash: string | undefined;
   let getSkill: ((name: string) => SkillHandle) | undefined;
+  let skillMetaByName: ReadonlyMap<string, SkillMeta> | undefined;
   let skillTools: Record<string, AnyTool> = {};
   if (agent.skills) {
     const wired = await wireAgentSkills(agent, resolvedWorkspace?.fs);
@@ -88,6 +91,7 @@ export async function buildAgentToolSurface(
       skillPrompt = wired.promptSections.map((s) => s.content).join('\n\n');
       skillContentHash = wired.contentHash;
       getSkill = wired.getSkill;
+      skillMetaByName = new Map(wired.metas.map((meta) => [meta.name, meta]));
     }
   }
 
@@ -115,6 +119,7 @@ export async function buildAgentToolSurface(
     skillPrompt,
     skillContentHash,
     getSkill,
+    skillMetaByName,
     resolvedWorkspace,
   };
 }

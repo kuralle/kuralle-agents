@@ -36,3 +36,13 @@ export {
   type PackagedSkill,
   type PackagedSkillFile,
 } from './packagedSkill.js';
+export {
+  FRAMEWORK_SKILL_TOOLS,
+  permittedToolNames,
+  skillRestrictionPolicy,
+  isSuccessfulLoadSkillResult,
+  recordSkillActivation,
+  resetSkillActivations,
+  resetSkillActivationsOnTurnStart,
+  type SkillActivation,
+} from './skillActivation.js';

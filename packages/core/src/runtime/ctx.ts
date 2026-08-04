@@ -42,6 +42,12 @@ import { z } from 'zod';
 import { toolResultMessage } from './channels/executeModelTool.js';
 import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
 import type { SkillHandle } from '../skills/skillHandle.js';
+import type { SkillMeta } from '../types/skills.js';
+import {
+  isSuccessfulLoadSkillResult,
+  recordSkillActivation,
+  type SkillActivation,
+} from '../skills/skillActivation.js';
 
 const APPROVAL_SIGNAL = '__approval';
 const APPROVAL_DELIVERY_SCHEMA = z.object({}).strict();
@@ -86,6 +92,8 @@ export interface CtxDeps {
   policy?: Policy;
   signalDelivery?: SignalDelivery;
   getSkill?: (name: string) => SkillHandle;
+  skillMetaByName?: ReadonlyMap<string, SkillMeta>;
+  skillActivations?: SkillActivation[];
 }
 
 function publicInterrupt(request: InterruptRequest): HitlInterrupt {
@@ -137,6 +145,30 @@ function makeCtx(deps: CtxDeps): RunContext {
   // policy in place would let a delegated read-only worker inherit write permission.
   const policyHolder = { policy: deps.policy ?? needsApprovalPolicy };
   const getSkill = deps.getSkill ?? createNoSkillsGetSkill();
+  const skillActivations = deps.skillActivations;
+
+  // Swappable for the same reason `getSkill`/`policy`/`toolExecutor` are: a handoff changes
+  // which agent is acting, and `load_skill` issued after a handoff must record the TARGET's
+  // activation — which needs the target's skill metadata. Leaving the source agent's map in
+  // place silently dropped the activation: load_skill returned instructions, but no
+  // restriction was ever recorded, so the target's `allowed-tools` boundary evaporated.
+  const skillMetaHolder = { map: deps.skillMetaByName };
+
+  const maybeActivateLoadedSkill = (toolName: string, args: unknown, result: unknown): void => {
+    if (
+      toolName !== 'load_skill' ||
+      !skillActivations ||
+      !skillMetaHolder.map ||
+      !isSuccessfulLoadSkillResult(result)
+    ) {
+      return;
+    }
+    const skillName = (args as { name?: string }).name;
+    if (!skillName) return;
+    const meta = skillMetaHolder.map.get(skillName);
+    if (!meta) return;
+    recordSkillActivation(skillActivations, meta);
+  };
 
   let pendingAppendTail = Promise.resolve();
   const serializePendingAppend = <T>(operation: () => Promise<T>): Promise<T> => {
@@ -489,6 +521,13 @@ function makeCtx(deps: CtxDeps): RunContext {
     memoryService: deps.memoryService,
     fs: deps.fs,
     getSkill,
+    skillActivations,
+    get skillMetaByName(): ReadonlyMap<string, SkillMeta> | undefined {
+      return skillMetaHolder.map;
+    },
+    set skillMetaByName(map: ReadonlyMap<string, SkillMeta> | undefined) {
+      skillMetaHolder.map = map;
+    },
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
     turnInputConsumed: false,
@@ -583,9 +622,9 @@ function makeCtx(deps: CtxDeps): RunContext {
         return result;
       };
 
-      return finishImperative(
-        await replayOrExecute(effectKey, 'tool', name, executeTool, { index: options?.index }),
-      );
+      const result = await replayOrExecute(effectKey, 'tool', name, executeTool, { index: options?.index });
+      maybeActivateLoadedSkill(name, args, result);
+      return finishImperative(result);
     },
     approve: async (req) => {
       return pauseEffect(APPROVAL_SIGNAL, {
@@ -695,6 +734,7 @@ function makeCtx(deps: CtxDeps): RunContext {
             execute,
             { index: operation.stepIndex },
           );
+          maybeActivateLoadedSkill(operation.toolName, operation.args, result);
           appendConversationAudit(deps.session, auditContext(deps), {
             type: 'interrupt-executed',
             requestId: request.requestId,

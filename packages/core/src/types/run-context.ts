@@ -14,6 +14,7 @@ import type { Instructions } from './agentConfig.js';
 import type { AgentKnowledgeOverrides, SourceRef, RetrievalCacheAdapter } from './knowledge.js';
 import type { StandardSchemaV1 } from './standard-schema.js';
 import type { SkillHandle } from '../skills/skillHandle.js';
+import type { SkillActivation } from '../skills/skillActivation.js';
 
 export interface ResumedToolOutcome {
   requestId: string;
@@ -117,6 +118,11 @@ export interface RunContext {
   fs?: FileSystem;
   /** Read-only access to bundled skill resources for tool/action code. */
   getSkill(name: string): SkillHandle;
+  /** Turn-scoped skills activated by successful `load_skill` with `allowed-tools`. */
+  skillActivations?: SkillActivation[];
+  /** @internal Skill metadata indexed by name; swapped on handoff so the target's
+   *  `load_skill` records the right `allowed-tools` activation (see `ctx.tool`). */
+  skillMetaByName?: ReadonlyMap<string, import('../types/skills.js').SkillMeta>;
   tool(
     name: string,
     args: unknown,

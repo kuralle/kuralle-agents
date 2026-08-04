@@ -9,14 +9,15 @@ import {
   type SkillWireAgent,
 } from './collectSkills.js';
 import { SkillsCapability } from './SkillsCapability.js';
-import { createAgentGetSkill } from './skillHandle.js';
-import type { SkillHandle } from './skillHandle.js';
+import { createAgentGetSkill, type SkillHandle } from './skillHandle.js';
+import type { SkillMeta } from '../types/skills.js';
 
 export interface WiredAgentSkills {
   capability: SkillsCapability;
   tools: Record<string, AnyTool>;
   promptSections: PromptSection[];
   contentHash: string;
+  metas: SkillMeta[];
   getSkill: (name: string) => SkillHandle;
 }
 
@@ -46,6 +47,7 @@ export async function wireAgentSkills(
     tools,
     promptSections: capability.getPromptSections(),
     contentHash,
+    metas,
     getSkill: createAgentGetSkill(store, metas),
   };
 }

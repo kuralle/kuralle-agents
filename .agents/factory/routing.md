@@ -65,3 +65,22 @@ record a note when a worker surprises you in either direction.
 A worker file may name a model id. Model ids rot — a stale one fails the
 dispatch instantly with an unknown-model error. When a dispatch fails that way,
 fix the worker file as part of the cycle rather than working around it.
+
+### When `cursor` is unavailable, fall through to `claude`
+
+Decided 2026-08-04, by the operator. `cursor` fails a dispatch with
+`RetriableError: [resource_exhausted]` once its quota is spent — an
+*availability* failure, not a quality one, and it leaves the tree untouched.
+Do not retry it in place; fall through to **`claude` (`--model sonnet`, pinned
+in its worker file)** for implementation.
+
+Distinguish the two failure modes, because they call for opposite responses:
+
+- **`resource_exhausted` / connection retries exhausted** — the worker never
+  worked. Re-dispatch the same brief to another worker.
+- **A result file whose claims do not survive re-running** — the worker worked
+  and was wrong. Escalate to a stronger worker *and* tighten the brief.
+
+`pi` also serves as an implementation worker, not only as the reviewer; it is
+the right choice when the task needs long context. Reviewing still must be
+cross-family from whoever authored the diff — that rule outranks this one.
