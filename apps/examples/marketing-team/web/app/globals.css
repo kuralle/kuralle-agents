@@ -1,3 +1,40 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind is here only for `components/ai-elements/*` — the AI Elements chat components,
+ * which ship as Tailwind-utility markup. Everything below this block is the app's original
+ * hand-written CSS and still styles the Content, Brand and Assets pages unchanged.
+ *
+ * The shadcn token names the Elements components reference are mapped onto the palette this
+ * app already had, rather than pulling in shadcn's default stone ramp. Two sets of colours
+ * would make the chat panel look like it came from a different product.
+ */
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-contrast);
+  --color-secondary: var(--bg);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--bg);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--bg);
+  --color-accent-foreground: var(--text);
+  --color-destructive: #b3261e;
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
 :root {
   --bg: #fbfaf8;
   --surface: #ffffff;
