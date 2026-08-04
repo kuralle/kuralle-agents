@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { SkillsCapability } from '../../src/skills/SkillsCapability.js';
 import { InlineSkillStore } from '../../src/skills/inlineSkillStore.js';
 import { fsSkillStore } from '../../src/skills/fsSkillStore.js';
+import { LiveSkillCatalog } from '../../src/skills/liveSkillCatalog.js';
 import { InMemoryFs } from '@kuralle-agents/fs';
 
 function getTool<T extends { execute?: (...args: never[]) => unknown }>(
@@ -26,9 +27,9 @@ describe('skill load briefing', () => {
         },
       },
     ]);
-    const cap = new SkillsCapability(store, [
-      { name: 'checklist-skill', description: 'Uses references.' },
-    ]);
+    const cap = new SkillsCapability(
+      new LiveSkillCatalog(store, [{ name: 'checklist-skill', description: 'Uses references.' }]),
+    );
     const loadSkill = getTool<{ execute: (args: { name: string }) => Promise<string> }>(
       cap,
       'load_skill',
@@ -54,7 +55,9 @@ describe('skill load briefing', () => {
     const store = new InlineSkillStore([
       { name: 'bare-skill', description: 'No files.', body: 'Just instructions.' },
     ]);
-    const cap = new SkillsCapability(store, [{ name: 'bare-skill', description: 'No files.' }]);
+    const cap = new SkillsCapability(
+      new LiveSkillCatalog(store, [{ name: 'bare-skill', description: 'No files.' }]),
+    );
     const loadSkill = getTool<{ execute: (args: { name: string }) => Promise<string> }>(
       cap,
       'load_skill',
@@ -72,10 +75,12 @@ describe('skill load briefing', () => {
       { name: 'alpha', description: 'A', body: 'a' },
       { name: 'beta', description: 'B', body: 'b' },
     ]);
-    const cap = new SkillsCapability(store, [
-      { name: 'alpha', description: 'A' },
-      { name: 'beta', description: 'B' },
-    ]);
+    const cap = new SkillsCapability(
+      new LiveSkillCatalog(store, [
+        { name: 'alpha', description: 'A' },
+        { name: 'beta', description: 'B' },
+      ]),
+    );
     const loadSkill = getTool<{ execute: (args: { name: string }) => Promise<string> }>(
       cap,
       'load_skill',
@@ -88,7 +93,7 @@ describe('skill load briefing', () => {
 
   it('load_skill with unknown name and empty catalog resolves to no-skills wording', async () => {
     const store = new InlineSkillStore([]);
-    const cap = new SkillsCapability(store, []);
+    const cap = new SkillsCapability(new LiveSkillCatalog(store, []));
     const loadSkill = getTool<{ execute: (args: { name: string }) => Promise<string> }>(
       cap,
       'load_skill',
@@ -108,7 +113,9 @@ describe('skill load briefing', () => {
         resources: { 'references/a.md': 'A', 'templates/b.md': 'B' },
       },
     ]);
-    const cap = new SkillsCapability(store, [{ name: 'docs-skill', description: 'Docs.' }]);
+    const cap = new SkillsCapability(
+      new LiveSkillCatalog(store, [{ name: 'docs-skill', description: 'Docs.' }]),
+    );
     const readResource = getTool<{
       execute: (args: { name: string; path: string }) => Promise<string | { content: string }>;
     }>(cap, 'read_skill_resource');
@@ -140,9 +147,9 @@ describe('skill load briefing', () => {
       loadResource: async () => 'must-not-reach',
       listResources: async () => [],
     };
-    const cap = new SkillsCapability(store as never, [
-      { name: 'secure-skill', description: 'Secure.' },
-    ]);
+    const cap = new SkillsCapability(
+      new LiveSkillCatalog(store as never, [{ name: 'secure-skill', description: 'Secure.' }]),
+    );
     const readResource = getTool<{
       execute: (args: { name: string; path: string }) => Promise<unknown>;
     }>(cap, 'read_skill_resource');

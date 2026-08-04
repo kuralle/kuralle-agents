@@ -42,12 +42,15 @@ import { z } from 'zod';
 import { toolResultMessage } from './channels/executeModelTool.js';
 import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
 import type { SkillHandle } from '../skills/skillHandle.js';
-import type { SkillMeta } from '../types/skills.js';
+import type { SkillLike, SkillMeta } from '../types/skills.js';
 import {
   isSuccessfulLoadSkillResult,
   recordSkillActivation,
   type SkillActivation,
 } from '../skills/skillActivation.js';
+import type { LiveSkillCatalog } from '../skills/liveSkillCatalog.js';
+import { diffSkillCatalog, renderSkillCatalogDelta } from '../skills/skillCatalog.js';
+import { addSystemNote } from './systemNotes.js';
 
 const APPROVAL_SIGNAL = '__approval';
 const APPROVAL_DELIVERY_SCHEMA = z.object({}).strict();
@@ -94,6 +97,7 @@ export interface CtxDeps {
   getSkill?: (name: string) => SkillHandle;
   skillMetaByName?: ReadonlyMap<string, SkillMeta>;
   skillActivations?: SkillActivation[];
+  skillCatalog?: LiveSkillCatalog;
 }
 
 function publicInterrupt(request: InterruptRequest): HitlInterrupt {
@@ -154,20 +158,46 @@ function makeCtx(deps: CtxDeps): RunContext {
   // restriction was ever recorded, so the target's `allowed-tools` boundary evaporated.
   const skillMetaHolder = { map: deps.skillMetaByName };
 
+  // Swappable for the same reason as the skill metadata: a handoff changes which agent is
+  // acting, and add/remove must mutate the TARGET's live catalog. Held (not captured by value)
+  // so the add/remove methods below keep reading the current agent's catalog after a swap.
+  const liveCatalogHolder = { current: deps.skillCatalog };
+
   const maybeActivateLoadedSkill = (toolName: string, args: unknown, result: unknown): void => {
     if (
       toolName !== 'load_skill' ||
       !skillActivations ||
-      !skillMetaHolder.map ||
+      (!skillMetaHolder.map && !liveCatalogHolder.current) ||
       !isSuccessfulLoadSkillResult(result)
     ) {
       return;
     }
     const skillName = (args as { name?: string }).name;
     if (!skillName) return;
-    const meta = skillMetaHolder.map.get(skillName);
+    // A skill added mid-session is not in the frozen baseline map — resolve its metadata
+    // (including `allowedTools`) from the live catalog so the a3 tool boundary still applies.
+    const meta = skillMetaHolder.map?.get(skillName) ?? liveCatalogHolder.current?.meta(skillName);
     if (!meta) return;
     recordSkillActivation(skillActivations, meta);
+  };
+
+  // Announce a live-catalog change exactly once: diff against the last-announced snapshot,
+  // and if nothing moved, do nothing (handles a repeated add/remove). Otherwise deliver the
+  // delta as a runtime system note (never by rewriting `skillPrompt`), advance the snapshot,
+  // and persist the catalog state with the note in one write — so a committed change cannot
+  // be narrated twice on resume, and a crash before the write re-diffs and emits once.
+  const announceCatalogChange = async (): Promise<void> => {
+    const catalog = liveCatalogHolder.current;
+    if (!catalog) return;
+    const delta = diffSkillCatalog(catalog.announcedSnapshot(), catalog.entries());
+    if (delta.added.length === 0 && delta.removed.length === 0) return;
+    const roster = catalog.entries().map((entry) => entry.name);
+    const text = renderSkillCatalogDelta(delta, roster);
+    addSystemNote(deps.runState, text, { lifetime: 'run', tag: 'skill-catalog' });
+    catalog.setAnnouncedSnapshot(catalog.entries());
+    deps.runState.state.skillCatalog = catalog.serialize();
+    deps.runState.updatedAt = Date.now();
+    await deps.runStore.putRunState(deps.runState);
   };
 
   let pendingAppendTail = Promise.resolve();
@@ -527,6 +557,23 @@ function makeCtx(deps: CtxDeps): RunContext {
     },
     set skillMetaByName(map: ReadonlyMap<string, SkillMeta> | undefined) {
       skillMetaHolder.map = map;
+    },
+    get skillCatalog(): LiveSkillCatalog | undefined {
+      return liveCatalogHolder.current;
+    },
+    set skillCatalog(catalog: LiveSkillCatalog | undefined) {
+      liveCatalogHolder.current = catalog;
+    },
+    addSkill: async (skill: SkillLike) => {
+      const catalog = liveCatalogHolder.current;
+      if (!catalog) return;
+      catalog.add(skill);
+      await announceCatalogChange();
+    },
+    removeSkill: async (name: string) => {
+      const catalog = liveCatalogHolder.current;
+      if (!catalog || !catalog.remove(name)) return;
+      await announceCatalogChange();
     },
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,

@@ -10,6 +10,7 @@ import {
 } from './collectSkills.js';
 import { SkillsCapability } from './SkillsCapability.js';
 import { createAgentGetSkill, type SkillHandle } from './skillHandle.js';
+import { LiveSkillCatalog } from './liveSkillCatalog.js';
 import type { SkillMeta } from '../types/skills.js';
 
 export interface WiredAgentSkills {
@@ -18,6 +19,8 @@ export interface WiredAgentSkills {
   promptSections: PromptSection[];
   contentHash: string;
   metas: SkillMeta[];
+  /** Live catalog `load_skill` resolves against; mutated by the runtime add/remove API. */
+  catalog: LiveSkillCatalog;
   getSkill: (name: string) => SkillHandle;
 }
 
@@ -30,7 +33,8 @@ export async function wireAgentSkills(
   const { store, metas, skills, contentHash } = await prepareSkillStore(agent.skills, fs);
   validateSkillAllowedTools(skills, collectRegisteredNames(agent));
 
-  const capability = new SkillsCapability(store, metas);
+  const catalog = new LiveSkillCatalog(store, metas);
+  const capability = new SkillsCapability(catalog);
   const tools: Record<string, AnyTool> = {};
 
   for (const decl of capability.getTools()) {
@@ -48,6 +52,7 @@ export async function wireAgentSkills(
     promptSections: capability.getPromptSections(),
     contentHash,
     metas,
+    catalog,
     getSkill: createAgentGetSkill(store, metas),
   };
 }

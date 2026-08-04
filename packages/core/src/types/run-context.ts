@@ -15,6 +15,8 @@ import type { AgentKnowledgeOverrides, SourceRef, RetrievalCacheAdapter } from '
 import type { StandardSchemaV1 } from './standard-schema.js';
 import type { SkillHandle } from '../skills/skillHandle.js';
 import type { SkillActivation } from '../skills/skillActivation.js';
+import type { LiveSkillCatalog } from '../skills/liveSkillCatalog.js';
+import type { SkillLike } from './skills.js';
 
 export interface ResumedToolOutcome {
   requestId: string;
@@ -123,6 +125,16 @@ export interface RunContext {
   /** @internal Skill metadata indexed by name; swapped on handoff so the target's
    *  `load_skill` records the right `allowed-tools` activation (see `ctx.tool`). */
   skillMetaByName?: ReadonlyMap<string, import('../types/skills.js').SkillMeta>;
+  /** The live skill catalog `load_skill` resolves against for this run. The frozen roster
+   *  in `skillPrompt` is the baseline; this mutates freely and changes are announced in the
+   *  transcript (never by rewriting `skillPrompt`). Undefined when the agent has no skills. */
+  skillCatalog?: LiveSkillCatalog;
+  /** Add a skill to the live catalog for the current session. Announces the change once in
+   *  the transcript and leaves `skillPrompt` byte-identical. No-op when the agent has no skills. */
+  addSkill(skill: SkillLike): Promise<void>;
+  /** Withdraw a skill from the live catalog. Announces the withdrawal once. No-op when the
+   *  agent has no skills or the skill was never available. */
+  removeSkill(name: string): Promise<void>;
   tool(
     name: string,
     args: unknown,

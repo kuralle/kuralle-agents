@@ -5,15 +5,13 @@ import type {
   PromptSection,
   ToolDeclaration,
 } from '../capabilities/index.js';
-import type { SkillMeta, SkillStoreLike } from '../types/skills.js';
 import { assertSafeSkillResourcePath } from './assertSafeSkillResourcePath.js';
 import { buildSkillBriefing } from './buildSkillBriefing.js';
+import { LiveSkillCatalog } from './liveSkillCatalog.js';
+import { renderSkillCatalogPrompt } from './skillCatalog.js';
 
 export class SkillsCapability implements Capability {
-  constructor(
-    private readonly store: SkillStoreLike,
-    private readonly metas: SkillMeta[],
-  ) {}
+  constructor(private readonly catalog: LiveSkillCatalog) {}
 
   getTools(): ToolDeclaration[] {
     return [
@@ -21,14 +19,22 @@ export class SkillsCapability implements Capability {
         name: 'load_skill',
         description: "Load a skill's full instructions by name when the task matches its description.",
         parameters: z.object({
+          // Deliberately a plain `z.string()`, NOT a literal union of the known skill names.
+          // The serialized tools block is its own cacheable prefix segment for providers, and
+          // a literal union is derived from the catalog — so every add/remove mid-session would
+          // rewrite that block and discard the prompt cache for the entire conversation. The
+          // roster changes are announced in the transcript instead (see `skillCatalog.ts`), and
+          // availability is enforced at the tool boundary (the `has` check below), not by the
+          // schema. Tightening this to a union is the "obvious fix" that regains correctness at
+          // the cost of every cache hit; do not do it without solving the cache invalidation.
           name: z.string().describe('Skill name from the available skills list'),
         }),
         execute: async (args: { name: string }) => {
-          if (!this.metas.some((meta) => meta.name === args.name)) {
+          if (!this.catalog.has(args.name)) {
             return this.formatUnavailableSkill(args.name);
           }
-          const body = await this.store.loadBody(args.name);
-          const resources = (await this.store.listResources?.(args.name)) ?? [];
+          const body = await this.catalog.loadBody(args.name);
+          const resources = await this.catalog.listResources(args.name);
           return buildSkillBriefing({ name: args.name, body, resources });
         },
       } as ToolDeclaration,
@@ -42,20 +48,20 @@ export class SkillsCapability implements Capability {
           path: z.string().describe('Relative resource path within the skill folder'),
         }),
         execute: async (args: { name: string; path: string }) => {
-          if (!this.metas.some((meta) => meta.name === args.name)) {
+          if (!this.catalog.has(args.name)) {
             return this.formatUnavailableSkill(args.name);
           }
 
           const normalized = assertSafeSkillResourcePath(args.path);
 
           try {
-            const content = await this.store.loadResource(args.name, args.path);
+            const content = await this.catalog.loadResource(args.name, args.path);
             return { content };
           } catch (err) {
             if (!this.isMissingResourceError(err)) {
               throw err;
             }
-            const resources = (await this.store.listResources?.(args.name)) ?? [];
+            const resources = await this.catalog.listResources(args.name);
             return this.formatUnavailableResource(args.name, normalized, resources);
           }
         },
@@ -64,26 +70,18 @@ export class SkillsCapability implements Capability {
   }
 
   getPromptSections(): PromptSection[] {
-    if (!this.metas.length) return [];
-    const lines = this.metas
-      .map((m) => `- ${m.name}: ${m.description}`)
-      .join('\n');
-    return [
-      {
-        role: 'context',
-        content: [
-          '## Available skills',
-          'When a description matches the task, call load_skill with its name before acting.',
-          'Listed skills are available in this run. Do not claim a listed skill is inaccessible unless activation actually fails.',
-          'If multiple skills match, activate the minimal set that covers the task.',
-          'After activation, follow the returned instructions rather than improvising around them.',
-          'When a loaded skill mentions a sibling file such as references/foo.md, read it with read_skill_resource, not with the workspace tool.',
-          'Skill bodies and resources belong to the skill capability, not the workspace: do not locate or read SKILL.md with workspace.',
-          'Conversely, files under absolute workspace mounts such as /knowledge or /notes are not skill resources: use workspace for those paths.',
-          lines,
-        ].join('\n'),
-      },
-    ];
+    // The prompt lists the FROZEN baseline only — what was wired at startup. Skills added
+    // or withdrawn mid-session never appear here (that would rewrite the cached prompt);
+    // they are announced in the transcript. See `skillCatalog.ts`.
+    const prompt = renderSkillCatalogPrompt(
+      this.catalog.frozenBaseline().map((m) => ({ name: m.name, description: m.description })),
+    );
+    if (!prompt) return [];
+    return [{ role: 'context', content: prompt }];
+  }
+
+  getCatalog(): LiveSkillCatalog {
+    return this.catalog;
   }
 
   processToolResult(_toolName: string, _args: unknown, _result: unknown): CapabilityAction | null {
@@ -91,7 +89,7 @@ export class SkillsCapability implements Capability {
   }
 
   private formatUnavailableSkill(name: string): string {
-    const names = this.metas.map((meta) => meta.name).sort();
+    const names = this.catalog.entries().map((entry) => entry.name).sort();
     if (names.length === 0) {
       return `Skill "${name}" is not available. No skills are available.`;
     }

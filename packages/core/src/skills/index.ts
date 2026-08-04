@@ -3,6 +3,20 @@ export { buildSkillBriefing } from './buildSkillBriefing.js';
 export { wireAgentSkills } from './wireAgentSkills.js';
 export type { WiredAgentSkills } from './wireAgentSkills.js';
 export {
+  diffSkillCatalog,
+  renderSkillCatalogDelta,
+  renderSkillCatalogPrompt,
+  skillCatalogEntries,
+  SKILL_CATALOG_PROMPT_HEADER,
+  type SkillCatalogEntry,
+  type SkillCatalogDelta,
+} from './skillCatalog.js';
+export {
+  LiveSkillCatalog,
+  restoreLiveSkillCatalog,
+  type PersistedLiveSkillCatalog,
+} from './liveSkillCatalog.js';
+export {
   collectRegisteredNames,
   validateSkillAllowedTools,
   prepareSkillStore,

@@ -22,6 +22,7 @@ import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
 import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
+import { restoreLiveSkillCatalog } from '../skills/liveSkillCatalog.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isHandoffOscillating } from './handoffOscillation.js';
 import { applyHandoffContinuation } from './handoffContinuation.js';
@@ -372,6 +373,7 @@ export class Runtime {
         ),
         skillActivations,
         skillMetaByName: openingSurface.skillMetaByName,
+        skillCatalog: openingSurface.skillCatalog,
         session: opened.session,
         runState: freshRunState,
         runStore: opened.runStore,
@@ -408,6 +410,10 @@ export class Runtime {
       runCtx.agentTools = opened.agent.tools ?? {};
       runCtx.outOfBandControl = resolveOutOfBandControl(opened.agent);
       runCtx.skillPrompt = openingSurface.skillPrompt;
+      // Restore the live catalog from the persisted run state so a resumed or replayed run
+      // keeps the skills it added, the ones it withdrew, and the snapshot of what it already
+      // announced — without re-narrating a committed change or re-resolving a withdrawn skill.
+      restoreLiveSkillCatalog(openingSurface.skillCatalog, freshRunState.state);
       runCtx.workingMemoryPrompt = appendGoalsPrompt(
         openingSurface.workingMemoryPrompt,
         opened.session.workingMemory,
@@ -612,6 +618,9 @@ export class Runtime {
             // grow more restrictive, and silently dropping a restriction across a handoff would
             // let a delegated worker shed a boundary it was meant to keep.
             runCtx.skillMetaByName = targetSurface.skillMetaByName;
+            // Swap the live catalog with the metadata so add/remove mutate the target's
+            // roster and `load_skill` resolves against it after the handoff.
+            runCtx.skillCatalog = targetSurface.skillCatalog;
             runCtx.memoryService = this.config.memoryService
               ? buildMemoryService(this.config.memoryService, target)
               : undefined;
