@@ -7,18 +7,22 @@ produce marketing content. Unlike the original, this version is self-contained �
 SaaS dependency (Vercel Blob, Notion, Typefully, Resend) is replaced by local Postgres, so it runs
 with no third-party accounts.
 
-**There is no agent yet.** The database schema (`db/`) and the ported tool surface
-(`agent/lib/` — brand context, artifacts, assets, content, style lint, tracked links, user
-preferences, all Postgres-backed and workspace-scoped) exist, but nothing wires them into an
-agent or exposes them over HTTP. Do not expect marketing functionality from this state of the app.
+The lead and five specialists (`agent/`) run behind a Hono server (`server/`) exposing chat and
+a REST surface over the same tools the agents use. A Next.js App Router frontend (`web/`) is the
+place a human works: chat with the team at `/`, browse and edit content at `/content`, edit the
+shared brand context at `/brand`, and manage uploaded assets at `/assets`.
 
-## Setup
+The web app never talks to Postgres directly and never sees `DATABASE_URL` — it proxies every
+`/api/*` call to the standalone Hono server (`web/next.config.ts`), because the agent runtime
+reads its instructions/skills off disk with a Bun-only API a bundler can't resolve. Run the two
+processes side by side:
 
 ```bash
 docker compose up -d          # starts Postgres on localhost:5433
 cp .env.example .env
 bun install
-bun run dev:server             # starts the Hono server
+bun run dev:server             # starts the Hono server on :4001
+bun run dev                    # starts the Next.js app on :3000, proxying to it
 ```
 
 ## Scripts
@@ -28,6 +32,9 @@ bun run dev:server             # starts the Hono server
 | `db:generate` | Generate a Drizzle migration from `db/schema.ts` |
 | `db:migrate` | Apply pending migrations |
 | `db:studio` | Open Drizzle Studio against the local database |
-| `dev:server` | Run the Hono server |
-| `typecheck` | `tsc --noEmit` |
+| `db:seed` | Seed a demo workspace, brand context, and content pieces |
+| `dev:server` | Run the Hono server (agents, tools, REST API) on `:4001` |
+| `dev` | Run the Next.js frontend on `:3000` |
+| `build` / `start` | Production build / serve of the Next.js frontend |
+| `typecheck` | `tsc --noEmit` over `db/`, `server/`, `agent/`, `test/` |
 | `test` | Run the test suite |
