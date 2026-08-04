@@ -8,6 +8,7 @@ export interface PackagedSkillFile {
 }
 
 export interface PackagedSkill {
+  readonly kind: 'packaged-skill';
   id: string;
   name: string;
   description: string;
@@ -27,20 +28,24 @@ export function classifySkillFileKind(bytes: Uint8Array): 'text' | 'binary' {
   }
 }
 
-export function brandPackagedSkill(skill: PackagedSkill): PackagedSkill {
-  Object.defineProperty(skill, PACKAGED_SKILL_BRAND, {
+export function brandPackagedSkill(
+  skill: Omit<PackagedSkill, 'kind'> & Partial<Pick<PackagedSkill, 'kind'>>,
+): PackagedSkill {
+  const branded = Object.assign(skill, { kind: 'packaged-skill' as const });
+  Object.defineProperty(branded, PACKAGED_SKILL_BRAND, {
     value: true,
     enumerable: false,
     configurable: false,
   });
-  return skill;
+  return branded;
 }
 
 export function isPackagedSkill(value: unknown): value is PackagedSkill {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as Record<symbol, unknown>)[PACKAGED_SKILL_BRAND] === true
+    ((value as Record<symbol, unknown>)[PACKAGED_SKILL_BRAND] === true ||
+      (value as PackagedSkill).kind === 'packaged-skill')
   );
 }
 

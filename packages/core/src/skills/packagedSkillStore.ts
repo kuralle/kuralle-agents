@@ -57,6 +57,9 @@ export function packagedSkillStore(packages: readonly PackagedSkill[]): SkillSto
         throw new Error(`[skills] Skill "${name}" not found.`);
       }
       const normalized = assertSafeSkillResourcePath(path);
+      if (normalized === 'SKILL.md') {
+        throw new Error(`[skills] Resource "${normalized}" not found for skill "${name}".`);
+      }
       const file = pkg.files[normalized];
       if (!file) {
         throw new Error(`[skills] Resource "${normalized}" not found for skill "${name}".`);

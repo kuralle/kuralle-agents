@@ -75,6 +75,10 @@ describe('packagedSkillStore', () => {
   it('lists resources excluding SKILL.md', async () => {
     expect(await store.listResources('demo')).toEqual(['data.bin', 'references/note.md']);
   });
+
+  it('loadResource treats SKILL.md as a miss, not a resource', async () => {
+    await expect(store.loadResource('demo', 'SKILL.md')).rejects.toThrow(/not found for skill/);
+  });
 });
 
 describe('prepareSkillStore packaged layering', () => {
@@ -89,6 +93,15 @@ describe('prepareSkillStore packaged layering', () => {
     const { skills } = await prepareSkillStore([[packaged], inline]);
     expect(skills).toHaveLength(1);
     expect(skills[0]?.body).toBe('Inline body.');
+  });
+
+  it('loads a JSON round-tripped packaged skill array through prepareSkillStore', async () => {
+    const packaged = buildPackagedSkill('json-roundtrip', 'JSON.', 'Round-tripped body.');
+    const roundTripped = JSON.parse(JSON.stringify([packaged])) as typeof packaged[];
+    const { skills } = await prepareSkillStore([roundTripped]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.name).toBe('json-roundtrip');
+    expect(skills[0]?.body).toBe('Round-tripped body.');
   });
 });
 

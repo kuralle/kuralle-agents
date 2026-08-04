@@ -32,12 +32,16 @@ const SENSITIVE_FILE_NAMES = new Set([
 
 const SENSITIVE_EXTENSIONS = new Set(['.key', '.pem', '.p12', '.pfx']);
 
-const SKIP_FILE_PATTERNS = [/\.swp$/, /\.swo$/, /~$/];
+const SKIP_FILE_PATTERNS = [/\.swp$/i, /\.swo$/i, /~$/i];
 
 const ONE_MB = 1024 * 1024;
 
 function isSensitiveDirName(name: string): boolean {
-  return SENSITIVE_DIR_NAMES.has(name.toLowerCase());
+  const lower = name.toLowerCase();
+  if (SENSITIVE_DIR_NAMES.has(lower)) return true;
+  if (lower === '.env' || lower.startsWith('.env.')) return true;
+  if (lower === '.dev.vars' || lower.startsWith('.dev.vars.')) return true;
+  return false;
 }
 
 /**
@@ -56,6 +60,9 @@ function isSensitiveFileName(name: string): boolean {
   if (lower.startsWith('.dev.vars')) {
     return true;
   }
+  if (lower.endsWith('.env') || lower.endsWith('.vars')) {
+    return true;
+  }
   const base = basename(lower);
   const ext = base.includes('.') ? `.${base.split('.').pop()}` : '';
   if (SENSITIVE_EXTENSIONS.has(ext)) return true;
@@ -63,11 +70,12 @@ function isSensitiveFileName(name: string): boolean {
 }
 
 function shouldSkipDir(name: string): boolean {
-  return SKIP_DIR_NAMES.has(name);
+  return SKIP_DIR_NAMES.has(name.toLowerCase());
 }
 
 function shouldSkipFile(name: string): boolean {
-  if (SKIP_FILE_NAMES.has(name)) return true;
+  const lower = name.toLowerCase();
+  if (SKIP_FILE_NAMES.has(lower)) return true;
   return SKIP_FILE_PATTERNS.some((pattern) => pattern.test(name));
 }
 
@@ -170,6 +178,7 @@ async function packageOneSkill(root: string, entryName: string): Promise<Package
   }
 
   const skill: PackagedSkill = {
+    kind: 'packaged-skill',
     id: computeSkillId(parsed.name, files),
     name: parsed.name,
     description: parsed.description,

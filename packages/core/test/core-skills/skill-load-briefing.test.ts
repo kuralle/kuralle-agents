@@ -120,6 +120,19 @@ describe('skill load briefing', () => {
     );
   });
 
+  it('inlineSkillStore.loadResource treats SKILL.md as a miss, not a resource', async () => {
+    const store = new InlineSkillStore([
+      {
+        name: 'inline',
+        description: 'Inline.',
+        body: 'Body.',
+        resources: { 'SKILL.md': 'should-not-serve' },
+      },
+    ]);
+
+    await expect(store.loadResource('inline', 'SKILL.md')).rejects.toThrow(/not found for skill/);
+  });
+
   it('read_skill_resource rejects traversal paths', async () => {
     const store = {
       list: async () => [],
@@ -157,5 +170,19 @@ Body.`,
 
     expect(resources).toEqual(['references/a.md', 'references/b.md', 'templates/t.md']);
     expect(resources).not.toContain('SKILL.md');
+  });
+
+  it('fsSkillStore.loadResource treats SKILL.md as a miss, not a resource', async () => {
+    const fs = new InMemoryFs({
+      '/skills/nested/SKILL.md': `---
+name: nested
+description: Nested resources.
+---
+
+Body.`,
+    });
+
+    const store = fsSkillStore(fs);
+    await expect(store.loadResource('nested', 'SKILL.md')).rejects.toThrow(/not found for skill/);
   });
 });

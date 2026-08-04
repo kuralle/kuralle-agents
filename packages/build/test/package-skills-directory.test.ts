@@ -123,6 +123,65 @@ describe('packageSkillsDirectory', () => {
     expect(skills.find((skill) => skill.name === 'ok')).toBeDefined();
   });
 
+  it('refuses a file whose extension is .env, not only dotfile .env forms', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'skills-prod-env-'));
+    await mkdir(join(root, 'leaky'), { recursive: true });
+    await writeFile(
+      join(root, 'leaky', 'SKILL.md'),
+      '---\nname: leaky\ndescription: Leaky.\n---\n\nBody.\n',
+    );
+    await writeFile(join(root, 'leaky', 'production.env'), 'API_KEY=sk-live-XXXX');
+
+    await expect(packageSkillsDirectory(root)).rejects.toThrow(/sensitive file/i);
+  });
+
+  it('refuses a file whose extension is .vars', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'skills-prod-vars-'));
+    await mkdir(join(root, 'leaky'), { recursive: true });
+    await writeFile(
+      join(root, 'leaky', 'SKILL.md'),
+      '---\nname: leaky\ndescription: Leaky.\n---\n\nBody.\n',
+    );
+    await writeFile(join(root, 'leaky', 'production.vars'), 'API_KEY=sk-live-XXXX');
+
+    await expect(packageSkillsDirectory(root)).rejects.toThrow(/sensitive file/i);
+  });
+
+  it('refuses a subdirectory named .env and files inside it', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'skills-env-dir-'));
+    await mkdir(join(root, 'leaky', '.env'), { recursive: true });
+    await writeFile(
+      join(root, 'leaky', 'SKILL.md'),
+      '---\nname: leaky\ndescription: Leaky.\n---\n\nBody.\n',
+    );
+    await writeFile(join(root, 'leaky', '.env', 'production'), 'DB=postgres://u:p@h');
+
+    await expect(packageSkillsDirectory(root)).rejects.toThrow(/sensitive directory/i);
+  });
+
+  it('skips node_modules regardless of case', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'skills-node-modules-case-'));
+    await mkdir(join(root, 'cased', 'Node_Modules'), { recursive: true });
+    await writeFile(
+      join(root, 'cased', 'SKILL.md'),
+      '---\nname: cased\ndescription: Case probe.\n---\n\nBody.\n',
+    );
+    await writeFile(join(root, 'cased', 'Node_Modules', 'j.js'), 'module.exports = 1;');
+
+    const skills = await packageSkillsDirectory(root);
+    const skill = skills.find((s) => s.name === 'cased');
+    expect(skill).toBeDefined();
+    expect(Object.keys(skill!.files)).toEqual(['SKILL.md']);
+  });
+
+  it('sets kind packaged-skill on every packaged output', async () => {
+    const skills = await packageSkillsDirectory(FIXTURES);
+    expect(skills.length).toBeGreaterThan(0);
+    for (const skill of skills) {
+      expect(skill.kind).toBe('packaged-skill');
+    }
+  });
+
   it('packages __proto__ and constructor filenames without id collision', async () => {
     const root = await mkdtemp(join(tmpdir(), 'skills-proto-'));
     await mkdir(join(root, 's1'), { recursive: true });

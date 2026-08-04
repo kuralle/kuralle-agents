@@ -68,6 +68,12 @@ export function fsSkillStore(
       }
 
       const normalized = assertSafeSkillResourcePath(path);
+      if (normalized === 'SKILL.md') {
+        const err = new Error(
+          `ENOENT: [skills] Resource "${normalized}" not found for skill "${name}".`,
+        );
+        throw err;
+      }
 
       const resourcePath = fs.resolvePath(skill.root, `${skill.folder}/${normalized}`);
       if (!(await fs.exists(resourcePath))) {
