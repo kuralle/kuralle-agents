@@ -77,7 +77,8 @@ import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
-import { addSystemNote } from './systemNotes.js';
+import { addSystemNote, removeSystemNote } from './systemNotes.js';
+import { renderSkillCatalogPrompt, SKILL_CATALOG_NOTE_TAG } from '../skills/skillCatalog.js';
 import { needsApprovalPolicy, composePolicies, type Policy } from './policies/toolPolicy.js';
 import {
   skillRestrictionPolicy,
@@ -955,6 +956,21 @@ export class Runtime {
     }
 
     runCtx.runState.messages = result.messages;
+
+    // Compaction is already rewriting the cached prefix (a new summary message replaces the
+    // older ones), so it is the one point in the run where paying to rebase `skillPrompt` to
+    // the live roster is free — everywhere else that rewrite would discard prompt caching for
+    // no reason (see `skillCatalog.ts`). Folding the live roster into the prompt also makes
+    // the outstanding delta note redundant (the prompt now states the roster directly), so
+    // retire it rather than let it keep repeating information the prompt already carries.
+    if (runCtx.skillCatalog) {
+      const catalog = runCtx.skillCatalog;
+      runCtx.skillPrompt = renderSkillCatalogPrompt(catalog.entries());
+      catalog.rebaseline();
+      runCtx.runState.state.skillCatalog = catalog.serialize();
+      removeSystemNote(runCtx.runState, SKILL_CATALOG_NOTE_TAG);
+    }
+
     runCtx.runState.updatedAt = Date.now();
     await runCtx.runStore.putRunState(runCtx.runState);
 

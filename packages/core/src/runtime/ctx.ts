@@ -49,7 +49,11 @@ import {
   type SkillActivation,
 } from '../skills/skillActivation.js';
 import type { LiveSkillCatalog } from '../skills/liveSkillCatalog.js';
-import { diffSkillCatalog, renderSkillCatalogDelta } from '../skills/skillCatalog.js';
+import {
+  diffSkillCatalog,
+  renderSkillCatalogDelta,
+  SKILL_CATALOG_NOTE_TAG,
+} from '../skills/skillCatalog.js';
 import { addSystemNote } from './systemNotes.js';
 
 const APPROVAL_SIGNAL = '__approval';
@@ -193,7 +197,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     if (delta.added.length === 0 && delta.removed.length === 0) return;
     const roster = catalog.entries().map((entry) => entry.name);
     const text = renderSkillCatalogDelta(delta, roster);
-    addSystemNote(deps.runState, text, { lifetime: 'run', tag: 'skill-catalog' });
+    addSystemNote(deps.runState, text, { lifetime: 'run', tag: SKILL_CATALOG_NOTE_TAG });
     catalog.setAnnouncedSnapshot(catalog.entries());
     deps.runState.state.skillCatalog = catalog.serialize();
     deps.runState.updatedAt = Date.now();
