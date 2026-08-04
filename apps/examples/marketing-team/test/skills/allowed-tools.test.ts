@@ -1,45 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { createMarketingTools } from '../../agent/lib/index.js';
-import type { Db } from '../../agent/lib/workspace-scope.js';
+import { buildAllAgents, flattenSkills, toolNames } from '../agents/helpers.js';
 import { packageAllSkills } from './helpers.js';
 
-// Only tool *names* are inspected below; no tool is ever executed, so `db` is never
-// dereferenced. Typed as `Db` (not `any`), matching the convention in
-// `test/tools/schema-tenancy.test.ts`, so a real signature change is still caught.
-const unusedDb = {} as unknown as Db;
-
-/**
- * Agent wiring (b5) doesn't exist yet, so there is no per-specialist tool subset to validate
- * `allowed-tools` against. The full `createMarketingTools()` registry is the closed set every
- * specialist's real tool subset will be drawn from, so it is the strictest check available
- * pre-b5: any name outside it can never resolve for any specialist once wiring lands.
- */
-function fullToolSurface(): Set<string> {
-  const tools = createMarketingTools({
-    db: unusedDb,
-    resolveScope: () => ({ workspaceId: 'unused', principalId: 'unused' }),
-    storageRoot: '/tmp/unused',
-    surfaces: ['blog', 'x', 'linkedin', 'threads', 'bluesky', 'mastodon'],
-  });
-  return new Set(Object.keys(tools));
-}
-
 describe('every allowed-tools entry names a real tool', () => {
-  it('the full tool surface has more than a token number of tools (the check is real)', () => {
-    expect(fullToolSurface().size).toBeGreaterThanOrEqual(19);
-  });
-
-  it('every skill.allowedTools entry exists in createMarketingTools()', async () => {
-    const registered = fullToolSurface();
-    const skills = await packageAllSkills();
-    for (const skill of skills) {
-      for (const toolName of skill.allowedTools ?? []) {
-        expect(registered.has(toolName), `${skill.name}: unknown tool "${toolName}"`).toBe(true);
-      }
-    }
-  });
-
-  it('at least one skill actually declares allowed-tools (the loop above checks something)', async () => {
+  it('at least one skill actually declares allowed-tools (the loop below checks something)', async () => {
     const skills = await packageAllSkills();
     const withAllowedTools = skills.filter((s) => (s.allowedTools?.length ?? 0) > 0);
     expect(withAllowedTools.length).toBeGreaterThanOrEqual(1);
@@ -52,5 +16,30 @@ describe('every allowed-tools entry names a real tool', () => {
         expect(skill.allowedTools.length, `${skill.name}: allowedTools: []`).toBeGreaterThan(0);
       }
     }
+  });
+
+  /**
+   * Agent wiring (b5) now exists, so this checks each skill's `allowed-tools` against the ONE
+   * tool surface it can actually run under: the specific specialist that loads it. Checking
+   * against the full 19-tool registry (the pre-b5 version of this test) would pass a name that
+   * belongs to a *different* specialist's surface — a check that doesn't mean anything once a
+   * real per-specialist boundary exists.
+   */
+  it("every skill.allowedTools entry exists in the specialist that actually loads it", async () => {
+    const { specialists } = await buildAllAgents();
+    let checked = 0;
+    for (const agent of specialists) {
+      const surface = toolNames(agent);
+      for (const skill of flattenSkills(agent.skills)) {
+        for (const toolName of skill.allowedTools ?? []) {
+          checked += 1;
+          expect(
+            surface.has(toolName),
+            `${agent.id}/${skill.name}: "${toolName}" is not in ${agent.id}'s own tool surface`,
+          ).toBe(true);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(2);
   });
 });
