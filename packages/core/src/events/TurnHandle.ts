@@ -66,6 +66,24 @@ export function createTurnHandle(options: TurnHandleOptions): TurnHandle {
     bus.close();
   });
 
+  // A failing turn delivers its error twice: once onto the bus as a `client` error part, which
+  // the stream surfaces to the caller, and once by rejecting this promise. Consumers that only
+  // stream — `toUIMessageStreamResponse()`, `toResponseStream()`, or `for await (…of handle
+  // .events)` — never touch the promise side, so that second delivery lands with no handler
+  // attached and takes the whole process down on `unhandledRejection`. One bad provider call
+  // then kills a server for every other session on it.
+  //
+  // Attaching the sink here rather than at each call site is deliberate: the hazard belongs to
+  // the handle's dual nature (it is a promise AND an event source), so every consumer that
+  // opts out of the promise half would otherwise have to remember this. `hono-server`'s SSE
+  // router did remember; the UIMessageStream path did not.
+  //
+  // This marks the rejection handled without swallowing it — `handle` is the same object, so
+  // anyone who does `await runtime.run(...)` still gets the error. A sink on a *derived*
+  // promise would not settle the original's handled-ness, which is why the `.catch` goes on
+  // `resultPromise` itself and its return value is discarded.
+  void resultPromise.catch(() => undefined);
+
   const handle = Object.assign(resultPromise, {
     events: bus.events(),
     toResponseStream(format: 'sse' | 'ndjson' = 'sse'): ReadableStream {
