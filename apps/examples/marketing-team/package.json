@@ -1,0 +1,29 @@
+{
+  "name": "@kuralle-examples/marketing-team",
+  "private": true,
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "dev:server": "bun run server/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test test/*.test.ts"
+  },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/hono-server": "workspace:*",
+    "hono": "^4.12.19",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.9.0",
+    "@types/node": "^22.0.0",
+    "bun-types": "^1.3.10"
+  }
+}

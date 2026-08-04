@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: marketing
+      POSTGRES_PASSWORD: marketing
+      POSTGRES_DB: marketing
+    ports:
+      - "5433:5432"
+    volumes:
+      - marketing-team-postgres:/var/lib/postgresql/data
+
+volumes:
+  marketing-team-postgres:
