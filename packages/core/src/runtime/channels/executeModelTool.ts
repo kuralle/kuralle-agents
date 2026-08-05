@@ -171,11 +171,7 @@ export async function dispatchModelToolCalls(
     outcome: ModelToolCallOutcome;
   }) => void,
 ): Promise<void> {
-  /** Resolves to a control-flow signal when the call suspended, otherwise `undefined`. */
-  const runOne = async (
-    call: ModelToolCall,
-    durableOpts?: { callsite?: string; index?: number },
-  ): Promise<unknown> => {
+  const emitToolCall = (call: ModelToolCall) => {
     ctx.emit({
       channel: 'internal',
       type: 'tool-call',
@@ -185,11 +181,9 @@ export async function dispatchModelToolCalls(
         toolCallId: call.toolCallId,
       },
     });
-    const outcome = await executeModelToolCall(ctx, call, localTools, durableOpts);
-    if (outcome.signal !== undefined) {
-      // Suspended: no result exists, so nothing may reach the model or the transcript.
-      return outcome.signal;
-    }
+  };
+
+  const emitToolResult = (call: ModelToolCall, outcome: ModelToolCallOutcome) => {
     onEach({ call, outcome });
     ctx.emit({
       channel: 'internal',
@@ -200,6 +194,20 @@ export async function dispatchModelToolCalls(
         toolCallId: call.toolCallId,
       },
     });
+  };
+
+  /** Serial path only: one call at a time, so emitting inline is already source order. */
+  const runOne = async (
+    call: ModelToolCall,
+    durableOpts?: { callsite?: string; index?: number },
+  ): Promise<unknown> => {
+    emitToolCall(call);
+    const outcome = await executeModelToolCall(ctx, call, localTools, durableOpts);
+    if (outcome.signal !== undefined) {
+      // Suspended: no result exists, so nothing may reach the model or the transcript.
+      return outcome.signal;
+    }
+    emitToolResult(call, outcome);
     return undefined;
   };
 
@@ -235,17 +243,43 @@ export async function dispatchModelToolCalls(
       return { call, callsite: callsites[i]!, index };
     });
 
+    // Announce the whole batch, then every tool-call, in source order and before any dispatch —
+    // a UI can allocate a stable block for the batch before the work starts, and a replay
+    // rebuilds the same event sequence regardless of which call happens to settle first.
+    ctx.emit({
+      channel: 'internal',
+      type: 'tool-batch-start',
+      payload: {
+        calls: parallel.map((call) => ({ toolCallId: call.toolCallId, toolName: call.toolName })),
+      },
+    });
+    for (const call of parallel) emitToolCall(call);
+
     // executeModelToolCall never rejects — tool errors resolve with failed: true and control-flow
     // signals resolve as outcome.signal — so no sibling can be abandoned mid-flight with its
-    // finalizeStep unawaited. A suspend is rethrown only after every sibling has settled: you
-    // cannot cancel an in-flight promise, so failing fast here would let the work happen anyway
-    // while the journal recorded it as still running.
-    const signals = await runWithConcurrency(
+    // finalizeStep unawaited. `runWithConcurrency` writes into an index-keyed array, so `outcomes`
+    // is in source order regardless of completion order; only the walk below decides when onEach
+    // and tool-result fire, which is what keeps them in source order too. A suspend is rethrown
+    // only after every sibling has settled: you cannot cancel an in-flight promise, so failing
+    // fast here would let the work happen anyway while the journal recorded it as still running.
+    const outcomes = await runWithConcurrency(
       assignments,
-      ({ call, callsite, index }) => runOne(call, { callsite, index }),
+      ({ call, callsite, index }) => executeModelToolCall(ctx, call, localTools, { callsite, index }),
       ctx.limits?.maxToolConcurrency ?? DEFAULT_MAX_TOOL_CONCURRENCY,
     );
-    const suspended = signals.find((signal) => signal !== undefined);
+
+    let suspended: unknown;
+    for (let i = 0; i < parallel.length; i += 1) {
+      const outcome = outcomes[i]!;
+      if (outcome.signal !== undefined) {
+        // Suspended: no result exists, so nothing may reach the model or the transcript.
+        // Keep only the first source-order suspend to rethrow — `outcomes` is index-ordered
+        // by `runWithConcurrency`, same as before this change.
+        suspended ??= outcome.signal;
+        continue;
+      }
+      emitToolResult(parallel[i]!, outcome);
+    }
     if (suspended !== undefined) throw suspended;
   };
 

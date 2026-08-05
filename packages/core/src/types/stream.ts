@@ -26,6 +26,11 @@ export interface TextCancelPayload {
   reason: string;
 }
 
+export interface ToolBatchStartPayload {
+  /** Source order — the order the model emitted the calls in, before dispatch. */
+  calls: Array<{ toolCallId: string; toolName: string }>;
+}
+
 export interface ToolCallPayload {
   toolName: string;
   args: unknown;
@@ -231,6 +236,7 @@ interface StreamPayloadMap {
   'text-delta': TextDeltaPayload;
   'text-end': TextEndPayload;
   'text-cancel': TextCancelPayload;
+  'tool-batch-start': ToolBatchStartPayload;
   'tool-call': ToolCallPayload;
   'tool-result': ToolResultPayload;
   'model-call-start': ModelCallStartPayload;
@@ -288,6 +294,7 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   'text-delta': 'client',
   'text-end': 'client',
   'text-cancel': 'client',
+  'tool-batch-start': 'internal',
   'tool-call': 'internal',
   'tool-result': 'internal',
   'model-call-start': 'internal',

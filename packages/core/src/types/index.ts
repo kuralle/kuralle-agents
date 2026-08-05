@@ -131,6 +131,7 @@ export type {
   TextDeltaPayload,
   TextEndPayload,
   TextCancelPayload,
+  ToolBatchStartPayload,
   ToolCallPayload,
   ToolResultPayload,
   FlowEnterPayload,
