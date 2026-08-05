@@ -173,7 +173,13 @@ interface ScenarioResult {
   close_tail_ms: number | null;
   peak_tool_concurrency: number;
   tool_result_order: string[];
-  prompt_chars_by_step: number[];
+  /** Serialized size of every tool-result payload on the EVENT stream. The
+   *  transcript cap deliberately does NOT bound this — events and the durable
+   *  journal keep full fidelity. Recorded to make that separation visible. */
+  tool_result_event_bytes: number;
+  /** Serialized size of the persisted transcript the next model call pays for.
+   *  THIS is what the transcript-boundary cap bounds. */
+  transcript_bytes: number;
   abnormal_finish_observed: boolean;
   /** Client-channel `error` parts. Above 8-way tool concurrency the session
    *  store's CAS rejects concurrent writes and surfaces "Stale write for
@@ -189,13 +195,14 @@ const SENTENCE_END = /[.!?](\s|$)/;
 
 async function measure(
   scenario: string,
-  build: () => { runtime: ReturnType<typeof createRuntime>; input: string },
+  build: () => { runtime: ReturnType<typeof createRuntime>; input: string; store: MemoryStore },
   jsonl: string[],
 ): Promise<ScenarioResult> {
   resetConcurrency();
   const partCounts: Record<string, number> = {};
   const toolResultOrder: string[] = [];
-  const promptCharsByStep: number[] = [];
+  let toolResultBytes = 0;
+  let transcriptBytes = 0;
   let ttft: number | null = null;
   let ttfs: number | null = null;
   let donePart: number | null = null;
@@ -204,13 +211,14 @@ async function measure(
   let clientErrors = 0;
   const clientErrorSamples: string[] = [];
 
-  const { runtime, input } = build();
+  const { runtime, input, store } = build();
+  const sessionId = newSessionId();
   const t0 = performance.now();
 
   try {
     // userId is required for memory preload/ingest to engage at all — without it
     // the ingest scenario silently measures nothing.
-    const handle = runtime.run({ sessionId: newSessionId(), input, userId: 'bench-user' });
+    const handle = runtime.run({ sessionId, input, userId: 'bench-user' });
 
     for await (const part of handle.events as AsyncIterable<StreamPart>) {
       const at = performance.now() - t0;
@@ -225,9 +233,11 @@ async function measure(
       }
       if (part.type === 'tool-result' && !(part.payload as { preliminary?: boolean }).preliminary) {
         toolResultOrder.push(String((part.payload as { toolCallId?: string }).toolCallId ?? ''));
-      }
-      if (part.type === 'model-call-start') {
-        promptCharsByStep.push(0); // filled below from the model-call-end usage if present
+        try {
+          toolResultBytes += JSON.stringify((part.payload as { result: unknown }).result)?.length ?? 0;
+        } catch {
+          /* unserialisable result — not counted */
+        }
       }
       // A turn that ended abnormally should be visible on the stream. Before the
       // finish-reason work this never fires, which is exactly the point.
@@ -246,6 +256,17 @@ async function measure(
     await handle;
     const turn = performance.now() - t0;
 
+    // The event stream does not carry the transcript, so read what was actually
+    // persisted: this is the payload every subsequent model call re-sends.
+    try {
+      const persisted = await store.get(sessionId);
+      for (const m of persisted?.messages ?? []) {
+        transcriptBytes += (JSON.stringify(m) ?? '').length;
+      }
+    } catch {
+      /* store unreadable — leave at 0 */
+    }
+
     return {
       scenario,
       ok: true,
@@ -256,7 +277,8 @@ async function measure(
       close_tail_ms: donePart === null ? null : round(turn - donePart),
       peak_tool_concurrency: peakInFlight,
       tool_result_order: toolResultOrder,
-      prompt_chars_by_step: promptCharsByStep,
+      tool_result_event_bytes: toolResultBytes,
+      transcript_bytes: transcriptBytes,
       abnormal_finish_observed: abnormal,
       client_errors: clientErrors,
       client_error_samples: clientErrorSamples,
@@ -275,7 +297,8 @@ async function measure(
       close_tail_ms: null,
       peak_tool_concurrency: peakInFlight,
       tool_result_order: toolResultOrder,
-      prompt_chars_by_step: promptCharsByStep,
+      tool_result_event_bytes: toolResultBytes,
+      transcript_bytes: transcriptBytes,
       abnormal_finish_observed: abnormal,
       client_errors: clientErrors,
       client_error_samples: clientErrorSamples,
@@ -303,10 +326,11 @@ function runtimeWith(
     limits: { maxSteps: 6 },
   } as Parameters<typeof defineAgent>[0]);
 
-  return createRuntime({
+  const store = new MemoryStore();
+  const runtime = createRuntime({
     agents: [agent],
     defaultAgentId: agent.id,
-    sessionStore: new MemoryStore(),
+    sessionStore: store,
     defaultModel: model,
     ...(opts.memoryIngest
       ? {
@@ -322,6 +346,7 @@ function runtimeWith(
         }
       : {}),
   } as Parameters<typeof createRuntime>[0]);
+  return { runtime, store };
 }
 
 // ---------------------------------------------------------------------------
@@ -329,17 +354,20 @@ function runtimeWith(
 // ---------------------------------------------------------------------------
 const SENTENCES = ['Your order ', 'is on ', 'its way. ', 'It arrives ', 'Tuesday.'];
 
-const SCENARIOS: Record<string, () => { runtime: ReturnType<typeof createRuntime>; input: string }> = {
+const SCENARIOS: Record<
+  string,
+  () => { runtime: ReturnType<typeof createRuntime>; input: string; store: MemoryStore }
+> = {
   /** Floor for TTFT / TTFS with nothing else in the way. */
   'text-only': () => ({
-    runtime: runtimeWith(scriptedModel([textChunks(SENTENCES)])),
+    ...runtimeWith(scriptedModel([textChunks(SENTENCES)])),
     input: 'Where is my order?',
   }),
 
   /** 12 parallel-safe calls in one batch — probes the concurrency ceiling and
    *  the order results reach the transcript. */
   'tools-parallel-12': () => ({
-    runtime: runtimeWith(
+    ...runtimeWith(
       scriptedModel([
         toolCallChunks(
           Array.from({ length: 12 }, (_, i) => ({
@@ -357,7 +385,7 @@ const SCENARIOS: Record<string, () => { runtime: ReturnType<typeof createRuntime
 
   /** One oversized tool result — probes transcript growth into the next step. */
   'tool-huge-result': () => ({
-    runtime: runtimeWith(
+    ...runtimeWith(
       scriptedModel([
         toolCallChunks([{ id: 'call-dump', name: 'dump_archive', input: {} }]) as never,
         textChunks(SENTENCES),
@@ -369,16 +397,13 @@ const SCENARIOS: Record<string, () => { runtime: ReturnType<typeof createRuntime
 
   /** Post-turn memory ingest — probes what the user waits for after `done`. */
   'memory-ingest': () => ({
-    runtime: runtimeWith(scriptedModel([textChunks(SENTENCES)]), { memoryIngest: true }),
+    ...runtimeWith(scriptedModel([textChunks(SENTENCES)]), { memoryIngest: true }),
     input: 'My name is Mithushan and I live in Colombo.',
   }),
 
   /** Output-limit truncation — probes whether an abnormal finish is visible. */
   'finish-length': () => ({
-    runtime: runtimeWith(
-      scriptedModel([textChunks(['Your order is on its wa'], 'length')]),
-      {},
-    ),
+    ...runtimeWith(scriptedModel([textChunks(['Your order is on its wa'], 'length')]), {}),
     input: 'Write a long answer.',
   }),
 };
@@ -414,6 +439,9 @@ function compare(a: string, b: string): void {
     metric('ttfs_ms', bef.ttfs_ms, aft.ttfs_ms);
     metric('turn_ms', bef.turn_ms, aft.turn_ms);
     metric('close_tail_ms', bef.close_tail_ms, aft.close_tail_ms);
+    if (bef.transcript_bytes || aft.transcript_bytes) {
+      metric('transcript_bytes', bef.transcript_bytes, aft.transcript_bytes);
+    }
     if (bef.peak_tool_concurrency || aft.peak_tool_concurrency) {
       rows.push(
         `| ${bef.scenario} | peak_concurrency | ${bef.peak_tool_concurrency} | ${aft.peak_tool_concurrency} | ${pct(bef.peak_tool_concurrency, aft.peak_tool_concurrency)} |`,
@@ -456,7 +484,7 @@ async function main(): Promise<void> {
     results.push(r);
     const flag = r.ok ? '' : `  ERROR: ${r.error}`;
     console.log(
-      `${name.padEnd(20)} ttft=${String(r.ttft_ms).padStart(7)}  ttfs=${String(r.ttfs_ms).padStart(7)}  turn=${String(r.turn_ms).padStart(7)}  tail=${String(r.close_tail_ms).padStart(7)}  peak=${r.peak_tool_concurrency}  errs=${r.client_errors}${flag}`,
+      `${name.padEnd(20)} ttft=${String(r.ttft_ms).padStart(7)}  ttfs=${String(r.ttfs_ms).padStart(7)}  turn=${String(r.turn_ms).padStart(7)}  tail=${String(r.close_tail_ms).padStart(7)}  peak=${r.peak_tool_concurrency}  tx=${String(r.transcript_bytes).padStart(7)}  errs=${r.client_errors}${flag}`,
     );
   }
 

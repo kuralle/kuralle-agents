@@ -116,7 +116,7 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
             });
             state.control ??= control;
 
-            const resultMessage = toolResultMessage(call, toolResult);
+            const resultMessage = toolResultMessage(call, toolResult, ctx.limits?.maxToolResultTokens);
             messages.push(resultMessage);
             state.toolMessages.push(resultMessage);
           });

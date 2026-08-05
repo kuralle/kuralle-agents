@@ -20,4 +20,7 @@ export interface Limits {
    * session store's CAS starts rejecting concurrent writes.
    */
   maxToolConcurrency?: number;
+  /** Token ceiling on a single tool result as the MODEL sees it. Default 8000.
+   *  The journal and `ctx.tool()` always keep the full value. */
+  maxToolResultTokens?: number;
 }

@@ -835,6 +835,7 @@ function makeCtx(deps: CtxDeps): RunContext {
               toolCallId: operation.toolCallId,
             },
             result,
+            context.limits?.maxToolResultTokens,
           ),
         ];
         resumedToolOutcome = {

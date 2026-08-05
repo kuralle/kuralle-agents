@@ -7,6 +7,7 @@ import { toolDeniedResult, toolErrorResult } from '../../tools/controlResults.js
 import { idempotencyKey, logicalRunId } from '../durable/idempotency.js';
 import { findStepByKey } from '../durable/replay.js';
 import { isApprovalDenial, isControlFlowSignal, isRecoverableToolError } from '../controlFlowSignal.js';
+import { DEFAULT_MAX_TOOL_RESULT_TOKENS, truncateForTranscript } from './truncateToolResult.js';
 
 export interface ModelToolCall {
   toolName: string;
@@ -246,9 +247,16 @@ export async function dispatchModelToolCalls(
   }
 }
 
+/**
+ * Builds the transcript-facing tool-result message. This is the transcript boundary: the
+ * result is bounded to `maxTokens` here so the model never re-reads an unbounded payload on
+ * every subsequent call. `ctx.tool()` and the durable journal are unaffected — they receive
+ * the full value before this function is ever called.
+ */
 export function toolResultMessage(
   call: ModelToolCall,
   result: unknown,
+  maxTokens: number = DEFAULT_MAX_TOOL_RESULT_TOKENS,
 ): {
   role: 'tool';
   content: [
@@ -267,7 +275,7 @@ export function toolResultMessage(
         type: 'tool-result',
         toolCallId: call.toolCallId,
         toolName: call.toolName,
-        output: { type: 'json', value: result as JSONValue },
+        output: { type: 'json', value: truncateForTranscript(result, maxTokens) as JSONValue },
       },
     ],
   };
