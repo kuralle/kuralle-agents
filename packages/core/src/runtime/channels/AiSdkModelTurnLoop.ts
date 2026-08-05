@@ -4,6 +4,7 @@ import { applyPromptCache } from '../promptCache.js';
 import { addTurnUsage, languageModelId } from './turnUsage.js';
 import { dispatchModelToolCalls, toolResultMessage } from './executeModelTool.js';
 import { isControlFlowSignal } from '../controlFlowSignal.js';
+import type { TurnIncompletePayload } from '../../types/stream.js';
 
 /** Built-in AI SDK implementation of the inner model/tool loop. */
 export class AiSdkModelTurnLoop implements ModelTurnLoop {
@@ -15,11 +16,12 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
     const { ctx, model, maxSteps } = input;
     const messages = [...input.messages];
 
-    // Whether the loop ended because the model was finished, rather than because it ran out of
-    // steps. See the wrap-up call after the loop for why the difference matters.
-    let endedDeliberately = false;
+    // Why the loop ended, distinct from "did we run out of steps". See the wrap-up call
+    // after the loop for why that distinction matters: only 'step-budget' gets one.
+    let exitReason: 'stop' | 'abnormal' | 'step-budget' | 'control' = 'step-budget';
 
     for (let step = 0; step < maxSteps; step += 1) {
+      let stepHadText = false;
       const cached = applyPromptCache({
         model,
         sessionId: ctx.session.id,
@@ -50,7 +52,10 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
         });
 
         for await (const part of result.fullStream) {
-          if (part.type === 'text-delta') emitToken(part.text);
+          if (part.type === 'text-delta') {
+            if (part.text) stepHadText = true;
+            emitToken(part.text);
+          }
           if (part.type === 'error') {
             const error = (part as { error?: unknown }).error;
             const message = error instanceof Error ? error.message : String(error);
@@ -85,8 +90,19 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
         ended = true;
 
         messages.push(...response.messages);
+        if (finishReason === 'stop') {
+          exitReason = 'stop';
+          break;
+        }
         if (finishReason !== 'tool-calls') {
-          endedDeliberately = true;
+          const reason = (finishReason ?? 'other') as TurnIncompletePayload['reason'];
+          state.incomplete = { reason, step };
+          ctx.emit({
+            channel: 'internal',
+            type: 'turn-incomplete',
+            payload: { reason, step, hadText: stepHadText },
+          });
+          exitReason = 'abnormal';
           break;
         }
 
@@ -128,7 +144,7 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
         }
 
         if (state.control || (await input.stopAfterToolResults?.(state) ?? false)) {
-          endedDeliberately = true;
+          exitReason = 'control';
           break;
         }
       } catch (error) {
@@ -148,12 +164,15 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
       }
     }
 
-    // The loop above exits one of two ways, and only one of them is the model being done.
+    // The loop above exits one of four ways, and only running out of steps warrants a wrap-up.
     //
-    // `finishReason !== 'tool-calls'` means the model stopped on its own — it spoke, and the
-    // turn is complete. Running out of `maxSteps` while the last step was still calling tools
-    // means the opposite: the model was mid-chain and never got to say anything. The turn then
-    // ends with tool results and total silence.
+    // `stop` means the model finished on its own — it spoke, and the turn is complete.
+    // `abnormal` (`length` / `content-filter` / `error` / `other`) means the model was cut off,
+    // not that it chose to stop; re-calling it tool-less reproduces the same ceiling one step
+    // later (`length` most of all — the model would just hit the output cap again mid-sentence).
+    // `control` is a deliberate handoff/end/escalation and must not be second-guessed with a
+    // free-form reply. Only `step-budget` — running out of `maxSteps` while the last step was
+    // still calling tools — means the model was mid-chain and never got to say anything.
     //
     // That is not hypothetical. `maxSteps` defaults to 5, and a specialist that grounds itself,
     // loads two skills, writes a piece and lints it has spent the budget before it ever
@@ -165,9 +184,9 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
     // them leaves the model nothing to do but write the answer it already has.
     //
     // Only for `speaking`. Typed extraction is deliberately mute and ends through
-    // `stopAfterToolResults`, which counts as a deliberate exit — forcing prose there would put
+    // `stopAfterToolResults`, which counts as a `control` exit — forcing prose there would put
     // stray text on a path whose whole point is not to produce any.
-    if (!endedDeliberately && input.purpose === 'speaking' && !state.control) {
+    if (exitReason === 'step-budget' && input.purpose === 'speaking' && !state.control) {
       await this.wrapUp(input, state, messages, emitToken);
     }
   }

@@ -5,6 +5,7 @@ import { streamText, tool } from 'ai';
 import { AiSdkModelTurnLoop } from '../../src/runtime/channels/AiSdkModelTurnLoop.ts';
 import { createEventBus, createTurnHandle } from '../../src/events/TurnHandle.ts';
 import type { ModelTurnLoopInput, ModelTurnLoopState } from '../../src/runtime/channels/ModelTurnLoop.ts';
+import type { StreamPart } from '../../src/types/stream.ts';
 import { CoreToolExecutor } from '../../src/tools/effect/index.ts';
 import { createRunContext } from '../../src/runtime/ctx.ts';
 import { setupDurableHarness } from '../core-durable/helpers.ts';
@@ -19,6 +20,8 @@ import { setupDurableHarness } from '../core-durable/helpers.ts';
 const USAGE = { inputTokens: { total: 1 }, outputTokens: { total: 1 } };
 const TOOL_CALLS = { unified: 'tool-calls' };
 const STOP = { unified: 'stop' };
+const LENGTH = { unified: 'length' };
+const CONTENT_FILTER = { unified: 'content-filter' };
 
 /**
  * A turn that spends its whole step budget calling tools must still answer.
@@ -163,8 +166,9 @@ describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
   });
 
   maybe('does not add a wrap-up when the model stopped on its own', async () => {
-    // A budget of 1 with a model that speaks immediately: `finishReason` is not `tool-calls`,
-    // so the loop exits deliberately and no extra call is made.
+    // A budget of 1 with a model that speaks immediately: `finishReason` is `stop`, so the
+    // loop exits deliberately, no extra call is made, and no `turn-incomplete` is emitted —
+    // `stop` is a completed turn, not an abnormal one.
     let toolLessCalls = 0;
     const model = new MockLanguageModelV3({
       doStream: async ({ tools }) => {
@@ -182,7 +186,12 @@ describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
         } as never;
       },
     });
-    const { session, runStore, runState } = await setupDurableHarness();
+    harnessSeq += 1;
+    const { session, runStore, runState } = await setupDurableHarness(
+      `wrapup-sess-${harnessSeq}`,
+      `wrapup-run-${harnessSeq}`,
+    );
+    const streamParts: StreamPart[] = [];
     const ctx = await createRunContext({
       session,
       runStore,
@@ -190,7 +199,7 @@ describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
       model: model as never,
-      emit: () => {},
+      emit: (part) => streamParts.push(part),
     });
     const emitted: string[] = [];
     const state: ModelTurnLoopState = { toolResults: [], toolCallsMade: [], toolMessages: [] };
@@ -212,7 +221,120 @@ describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
 
     expect(toolLessCalls).toBe(0);
     expect(emitted.join('')).toBe('done');
+    expect(streamParts.filter((p) => p.type === 'turn-incomplete')).toHaveLength(0);
+    expect(state.incomplete).toBeUndefined();
   });
+});
+
+/**
+ * `FinishReason` in ai v6 is `'stop' | 'length' | 'content-filter' | 'tool-calls' | 'error' |
+ * 'other'`. Before this loop distinguished them, all four abnormal values (`length`,
+ * `content-filter`, `error`, `other`) fell into the same `finishReason !== 'tool-calls'` branch
+ * as a clean `stop` — a response truncated at the output-token ceiling ended the turn as a
+ * success, with nothing recorded and no caller able to tell.
+ */
+describe('AiSdkModelTurnLoop — abnormal finish reasons', () => {
+  /** Runs a single-call turn whose model finishes with `reasonUnified` and returns what the
+   *  loop observed: the emitted `turn-incomplete` parts, `state.incomplete`, call count, and
+   *  spoken text. */
+  async function runAbnormalReasonLoop(
+    reasonUnified: string,
+    chunks: 'with-text' | 'no-text',
+  ) {
+    let callCount = 0;
+    const streamChunks =
+      chunks === 'with-text'
+        ? [
+            { type: 'stream-start', warnings: [] },
+            { type: 'text-start', id: '1' },
+            { type: 'text-delta', id: '1', delta: 'truncated mid-sen' },
+            { type: 'finish', finishReason: { unified: reasonUnified }, usage: USAGE },
+          ]
+        : [
+            { type: 'stream-start', warnings: [] },
+            { type: 'finish', finishReason: { unified: reasonUnified }, usage: USAGE },
+          ];
+    const model = new MockLanguageModelV3({
+      doStream: async () => {
+        callCount += 1;
+        return { stream: simulateReadableStream({ chunks: streamChunks as never[] }) } as never;
+      },
+    });
+    harnessSeq += 1;
+    const { session, runStore, runState } = await setupDurableHarness(
+      `abnormal-sess-${harnessSeq}`,
+      `abnormal-run-${harnessSeq}`,
+    );
+    const streamParts: StreamPart[] = [];
+    const ctx = await createRunContext({
+      session,
+      runStore,
+      runState,
+      steps: [],
+      toolExecutor: new CoreToolExecutor({ tools: {} }),
+      model: model as never,
+      emit: (part) => streamParts.push(part),
+    });
+    const emitted: string[] = [];
+    const state: ModelTurnLoopState = { toolResults: [], toolCallsMade: [], toolMessages: [] };
+    await new AiSdkModelTurnLoop().run(
+      {
+        purpose: 'speaking',
+        node: { id: 'answer', localTools: {} },
+        ctx,
+        model: model as never,
+        messages: [{ role: 'user', content: 'write me something long' }],
+        system: [],
+        volatileSystemBlocks: [],
+        // Budget of 3 so a wrap-up call (or any further call) would be visible in callCount —
+        // an abnormal finish must break the loop outright, not merely skip the LAST step.
+        maxSteps: 3,
+      } as unknown as ModelTurnLoopInput,
+      state,
+      (delta) => emitted.push(delta),
+    );
+
+    return {
+      turnIncomplete: streamParts.filter((p) => p.type === 'turn-incomplete'),
+      incomplete: state.incomplete,
+      callCount,
+      text: emitted.join(''),
+    };
+  }
+
+  maybe('length: emits turn-incomplete, records state.incomplete, does not wrap up', async () => {
+    const { turnIncomplete, incomplete, callCount, text } = await runAbnormalReasonLoop(
+      'length',
+      'with-text',
+    );
+
+    expect(turnIncomplete).toHaveLength(1);
+    expect(turnIncomplete[0]?.payload).toEqual({ reason: 'length', step: 0, hadText: true });
+    expect(incomplete).toEqual({ reason: 'length', step: 0 });
+    // Exactly the one truncated call — no wrap-up, and no further step-loop iteration.
+    expect(callCount).toBe(1);
+    expect(text).toBe('truncated mid-sen');
+  });
+
+  maybe(
+    'content-filter: emits turn-incomplete with its own reason, does not wrap up',
+    async () => {
+      const { turnIncomplete, incomplete, callCount, text } = await runAbnormalReasonLoop(
+        'content-filter',
+        'no-text',
+      );
+
+      expect(turnIncomplete).toHaveLength(1);
+      expect(turnIncomplete[0]?.payload).toEqual({
+        reason: 'content-filter',
+        step: 0,
+        hadText: false,
+      });
+      expect(incomplete).toEqual({ reason: 'content-filter', step: 0 });
+      expect(callCount).toBe(1);
+      expect(text).toBe('');
+    },
+  );
 });
 
 /**

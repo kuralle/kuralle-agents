@@ -145,6 +145,7 @@ export type {
   ConversationOutcomePayload,
   InteractivePayload,
   TurnEndPayload,
+  TurnIncompletePayload,
   PipelineValidationBlockPayload,
   SafetyBlockedPayload,
   WakePayload,

@@ -40,6 +40,8 @@ function readNarrowedPayload(part: StreamPart): unknown {
       return part.payload.options;
     case 'turn-end':
       return part.payload;
+    case 'turn-incomplete':
+      return part.payload.reason;
     case 'pipeline-validation-block':
       return part.payload.rationale;
     case 'safety-blocked':
@@ -79,7 +81,7 @@ function readNarrowedPayload(part: StreamPart): unknown {
 
 describe('public StreamPart export', () => {
   it('classifies every publicly exported variant', () => {
-    expect(Object.keys(PART_CHANNEL)).toHaveLength(34);
+    expect(Object.keys(PART_CHANNEL)).toHaveLength(35);
     expect(readNarrowedPayload).toBeFunction();
   });
 });

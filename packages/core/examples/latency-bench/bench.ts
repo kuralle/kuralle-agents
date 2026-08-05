@@ -240,11 +240,8 @@ async function measure(
         }
       }
       // A turn that ended abnormally should be visible on the stream. Before the
-      // finish-reason work this never fires, which is exactly the point.
-      // `turn-incomplete` does not exist on StreamPart yet — it is added by the
-      // abnormal-finish-reason work. The widened compare is what lets this
-      // benchmark record `false` before that lands and `true` after.
-      if ((part.type as string) === 'turn-incomplete') abnormal = true;
+      // finish-reason work this never fired, which was exactly the point.
+      if (part.type === 'turn-incomplete') abnormal = true;
       if (part.type === 'error') {
         clientErrors += 1;
         const msg = String((part.payload as { error?: unknown }).error ?? '');

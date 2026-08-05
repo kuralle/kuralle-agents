@@ -3,6 +3,7 @@ import type { TurnControl, TurnResult, ToolResultRecord } from '../../types/chan
 import type { RunContext } from '../../types/run-context.js';
 import type { ResolvedNode, TurnUsageSnapshot } from '../../types/channel.js';
 import type { ToolCallRecord } from '../../types/session.js';
+import type { TurnIncompletePayload } from '../../types/stream.js';
 
 /**
  * Stable boundary between Kuralle's turn-composition pipeline and a model/tool
@@ -35,6 +36,8 @@ export interface ModelTurnLoopState {
   toolMessages: ModelMessage[];
   control?: TurnControl;
   usage?: TurnUsageSnapshot;
+  /** Set when the model call ended on an abnormal `FinishReason` rather than `stop`. */
+  incomplete?: { reason: TurnIncompletePayload['reason']; step: number };
 }
 
 export interface ModelTurnLoop {
@@ -54,4 +57,5 @@ export function applyModelTurnLoopState(result: TurnResult, state: ModelTurnLoop
   result.control ??= state.control;
   if (state.toolMessages.length > 0) result.toolMessages = state.toolMessages;
   if (state.usage && state.usage.totalTokens > 0) result.usage = state.usage;
+  if (state.incomplete) result.incomplete = state.incomplete;
 }

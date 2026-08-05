@@ -129,6 +129,12 @@ export interface InteractivePayload {
 
 export interface TurnEndPayload {}
 
+export interface TurnIncompletePayload {
+  reason: 'length' | 'content-filter' | 'error' | 'other';
+  step: number;
+  hadText: boolean;
+}
+
 export interface PipelineValidationBlockPayload {
   rationale: string;
   userFacingMessage?: string;
@@ -240,6 +246,7 @@ interface StreamPayloadMap {
   'conversation-outcome': ConversationOutcomePayload;
   interactive: InteractivePayload;
   'turn-end': TurnEndPayload;
+  'turn-incomplete': TurnIncompletePayload;
   'pipeline-validation-block': PipelineValidationBlockPayload;
   'safety-blocked': SafetyBlockedPayload;
   wake: WakePayload;
@@ -296,6 +303,7 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   'conversation-outcome': 'client',
   interactive: 'internal',
   'turn-end': 'internal',
+  'turn-incomplete': 'internal',
   'pipeline-validation-block': 'internal',
   'safety-blocked': 'internal',
   wake: 'internal',
