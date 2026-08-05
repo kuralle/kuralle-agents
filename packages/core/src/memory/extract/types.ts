@@ -1,4 +1,4 @@
-import type { ZodTypeAny } from 'zod';
+import type { ZodType } from 'zod';
 import type { MemoryBlockScope } from '../blocks/types.js';
 
 /** Per-turn context an extractor's function-form `instructions`/`schema` resolve against. */
@@ -24,7 +24,7 @@ export interface Extractor<T = unknown> {
   /** Derived from `name` via `slugifyExtractorName`. */
   readonly slug: string;
   readonly instructions: string | ((c: ExtractorRuntimeContext) => string | Promise<string>);
-  readonly schema: ZodTypeAny | ((c: ExtractorRuntimeContext) => ZodTypeAny | Promise<ZodTypeAny>);
+  readonly schema: ZodType<T> | ((c: ExtractorRuntimeContext) => ZodType<T> | Promise<ZodType<T>>);
   readonly scope: MemoryBlockScope;
   /** Include the previously extracted value in the prompt. Default `true`. */
   readonly includePrevious: boolean;
@@ -37,5 +37,5 @@ export interface Extractor<T = unknown> {
 /** An `Extractor` with function-form `instructions`/`schema` resolved to concrete values. */
 export interface ResolvedExtractor<T = unknown> extends Omit<Extractor<T>, 'instructions' | 'schema'> {
   instructions: string;
-  schema: ZodTypeAny;
+  schema: ZodType<T>;
 }

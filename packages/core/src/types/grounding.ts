@@ -36,6 +36,9 @@ export interface AgentMemory {
   };
   /** Persistent markdown blocks (USER/MEMORY) loaded at session start and editable via memory_block. */
   workingMemory?: WorkingMemoryConfig;
-  /** Named, typed things to learn from a conversation. Superseded `ingest`. */
-  extract?: Extractor[];
+  /** Named, typed things to learn from a conversation. Superseded `ingest`.
+   *  `Extractor<any>`, not `Extractor<unknown>` — the array holds extractors with
+   *  different `T`s, and `T` appears contravariantly (in `onExtracted`'s
+   *  parameter), so a heterogeneous array only typechecks under `any`. */
+  extract?: Extractor<any>[];
 }

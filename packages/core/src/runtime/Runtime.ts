@@ -52,6 +52,7 @@ import {
   runMemoryIngest,
 } from './grounding/index.js';
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
+import { validateExtractorList } from '../memory/extract/defineExtractor.js';
 import { SessionMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
 import {
@@ -218,6 +219,14 @@ export class Runtime {
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
+    // Defence in depth: `defineAgent` validates `memory.extract` for callers that use it, but
+    // the runtime also accepts raw `AgentConfig` literals (e.g. from a deployment binder) that
+    // never went through `defineAgent` — validate again here so those configs fail fast too.
+    for (const agent of this.agentsById.values()) {
+      if (agent.memory?.extract) {
+        validateExtractorList(agent.memory.extract);
+      }
+    }
     this.sessionStore = config.sessionStore ?? new MemoryStore();
     this.defaultModel = config.defaultModel;
     this.maxHandoffs = config.maxHandoffs ?? 5;

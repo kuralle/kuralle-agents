@@ -5,8 +5,10 @@ import {
   slugifyExtractorName,
   validateExtractorList,
   resolveExtractor,
+  MAX_SLUG_LENGTH,
 } from '../../src/memory/extract/defineExtractor.js';
 import { defineAgent } from '../../src/authoring/index.js';
+import { createRuntime } from '../../src/runtime/Runtime.js';
 
 describe('slugifyExtractorName', () => {
   it('lowercases and hyphenates a plain name', () => {
@@ -24,6 +26,24 @@ describe('slugifyExtractorName', () => {
   it('throws with the source name when the slug does not start with a letter', () => {
     expect(() => slugifyExtractorName('123 Profile')).toThrow(/123 Profile/);
   });
+
+  it('NFKD-normalises accented names instead of dropping the accent', () => {
+    expect(slugifyExtractorName('Café Profile')).toBe('cafe-profile');
+    expect(slugifyExtractorName('Cafe Profile')).toBe('cafe-profile');
+  });
+
+  it('NFKD-normalises diaeresis so distinct-looking words fold correctly', () => {
+    expect(slugifyExtractorName('naïve prefs')).toBe('naive-prefs');
+  });
+
+  it('normalises fullwidth digits before the leading-digit guard runs', () => {
+    expect(() => slugifyExtractorName('２ Profile')).toThrow(/２ Profile/);
+  });
+
+  it('throws with the source name when the slug exceeds the max length', () => {
+    const longName = 'a'.repeat(MAX_SLUG_LENGTH + 1);
+    expect(() => slugifyExtractorName(longName)).toThrow(new RegExp(longName));
+  });
 });
 
 describe('validateExtractorList', () => {
@@ -33,15 +53,22 @@ describe('validateExtractorList', () => {
     expect(() => validateExtractorList([a, b])).toThrow(/Support Profile.*support   profile|support   profile.*Support Profile/);
   });
 
-  it('throws when a slug collides with a reserved key', () => {
-    const reserved = defineExtractor({ name: 'Facts', instructions: 'a', schema: z.object({}) });
-    expect(() => validateExtractorList([reserved])).toThrow(/reserved/);
+  it('throws loudly when non-ASCII normalisation makes two distinct names collide', () => {
+    const a = defineExtractor({ name: 'Café Profile', instructions: 'a', schema: z.object({}) });
+    const b = defineExtractor({ name: 'Cafe Profile', instructions: 'b', schema: z.object({}) });
+    expect(() => validateExtractorList([a, b])).toThrow(/Café Profile.*Cafe Profile|Cafe Profile.*Café Profile/);
   });
 
   it('passes through a list of distinct, non-reserved extractors', () => {
     const a = defineExtractor({ name: 'Support Profile', instructions: 'a', schema: z.object({}) });
     const b = defineExtractor({ name: 'Order History', instructions: 'b', schema: z.object({}) });
     expect(validateExtractorList([a, b])).toEqual([a, b]);
+  });
+});
+
+describe('defineExtractor', () => {
+  it('throws immediately when the name resolves to a reserved slug', () => {
+    expect(() => defineExtractor({ name: 'Facts', instructions: 'a', schema: z.object({}) })).toThrow(/reserved/);
   });
 });
 
@@ -65,6 +92,41 @@ describe('resolveExtractor', () => {
     expect(resolved.instructions).toBe('static instructions');
     expect(resolved.schema).toBe(schema);
   });
+
+  it('throws naming the extractor when a function-form instructions resolves to undefined', async () => {
+    const extractor = defineExtractor({
+      name: 'Broken Instructions',
+      // @ts-expect-error deliberately returning a value that violates the declared type
+      instructions: () => undefined,
+      schema: z.object({}),
+    });
+    await expect(resolveExtractor(extractor, { agentId: 'a', sessionId: 's' })).rejects.toThrow(
+      /Broken Instructions/,
+    );
+  });
+
+  it('throws naming the extractor when a function-form schema resolves to a non-Zod value', async () => {
+    const extractor = defineExtractor({
+      name: 'Broken Schema',
+      instructions: 'ok',
+      // @ts-expect-error deliberately returning a value that violates the declared type
+      schema: () => ({ notAZodSchema: true }),
+    });
+    await expect(resolveExtractor(extractor, { agentId: 'a', sessionId: 's' })).rejects.toThrow(/Broken Schema/);
+  });
+
+  it('surfaces a throwing resolver with the extractor name in the message', async () => {
+    const extractor = defineExtractor({
+      name: 'Throwing Resolver',
+      instructions: () => {
+        throw new Error('boom');
+      },
+      schema: z.object({}),
+    });
+    await expect(resolveExtractor(extractor, { agentId: 'a', sessionId: 's' })).rejects.toThrow(
+      /Throwing Resolver/,
+    );
+  });
 });
 
 describe('defineAgent + memory.extract', () => {
@@ -83,5 +145,34 @@ describe('defineAgent + memory.extract', () => {
     const a = defineExtractor({ name: 'Support Profile', instructions: 'a', schema: z.object({}) });
     const config = defineAgent({ id: 'ok-extract-agent', memory: { extract: [a] } });
     expect(config.memory?.extract).toEqual([a]);
+  });
+});
+
+describe('createRuntime + memory.extract', () => {
+  it('throws at runtime construction when a raw AgentConfig literal carries duplicate extractor slugs', () => {
+    const a = defineExtractor({ name: 'Support Profile', instructions: 'a', schema: z.object({}) });
+    const b = defineExtractor({ name: 'support   profile', instructions: 'b', schema: z.object({}) });
+    expect(() =>
+      createRuntime({
+        agents: [{ id: 'raw-agent', memory: { extract: [a, b] } }],
+        defaultAgentId: 'raw-agent',
+      }),
+    ).toThrow();
+  });
+});
+
+describe('Extractor<T> generic threading', () => {
+  it('infers T from a concrete zod schema so onExtracted.current is typed', () => {
+    const extractor = defineExtractor({
+      name: 'Typed Profile',
+      instructions: 'extract it',
+      schema: z.object({ os: z.string() }),
+      onExtracted: ({ current }) => {
+        // If T were not inferred, `current` would be `unknown` and this line would not typecheck.
+        const os: string = current.os;
+        void os;
+      },
+    });
+    expect(extractor.slug).toBe('typed-profile');
   });
 });
