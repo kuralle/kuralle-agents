@@ -28,7 +28,13 @@ export function defineTool<
   estimatedDurationMs?: number;
   timeoutMs?: number;
   replay?: boolean;
-  parallelSafe?: boolean;
+  /**
+   * Safe to run concurrently with sibling calls in the same model-emitted batch. A function
+   * form receives the RAW (unvalidated) model args — classification happens before schema
+   * validation — and must not throw; a throw or a non-boolean return is treated as NOT
+   * parallel-safe. Never model-controlled: the model cannot assert this, only the tool author.
+   */
+  parallelSafe?: boolean | ((args: InferToolInput<S>) => boolean);
   idempotencyKey?: (args: InferToolInput<S>) => string;
   execute: (
     args: InferToolInput<S>,

@@ -95,8 +95,21 @@ export async function executeModelToolCall(
  */
 export const DEFAULT_MAX_TOOL_CONCURRENCY = 8;
 
-function isParallelSafeTool(def: AnyTool | undefined): boolean {
-  return def?.parallelSafe === true || def?.replay === false;
+/**
+ * Classifies a tool call as safe to run in a parallel batch. Evaluated on the RAW model args,
+ * before schema validation, so a function `parallelSafe` must be total: any throw or
+ * non-boolean return fails closed to serial rather than crashing the dispatcher.
+ */
+function isParallelSafeTool(def: AnyTool | undefined, args: unknown): boolean {
+  if (!def) return false;
+  const p = def.parallelSafe;
+  if (p === true) return true;
+  if (typeof p !== 'function') return false;
+  try {
+    return (p as (args: unknown) => boolean)(args) === true;
+  } catch {
+    return false;
+  }
 }
 
 function resolveToolDef(
@@ -228,7 +241,7 @@ export async function dispatchModelToolCalls(
 
   for (let cursor = 0; cursor < toolCalls.length;) {
     const call = toolCalls[cursor]!;
-    if (!isParallelSafeTool(resolveToolDef(call.toolName, localTools, ctx))) {
+    if (!isParallelSafeTool(resolveToolDef(call.toolName, localTools, ctx), call.input)) {
       const signal = await runOne(call);
       if (signal !== undefined) throw signal;
       cursor += 1;
@@ -238,7 +251,10 @@ export async function dispatchModelToolCalls(
     const parallel: ModelToolCall[] = [];
     while (
       cursor < toolCalls.length &&
-      isParallelSafeTool(resolveToolDef(toolCalls[cursor]!.toolName, localTools, ctx))
+      isParallelSafeTool(
+        resolveToolDef(toolCalls[cursor]!.toolName, localTools, ctx),
+        toolCalls[cursor]!.input,
+      )
     ) {
       parallel.push(toolCalls[cursor]!);
       cursor += 1;

@@ -38,6 +38,7 @@ export function buildReleaseGovernanceAgent(options: {
     description: 'Capture the authoritative current branch, HEAD, cleanliness, commits, changed paths, changesets, and latest tag. Always call before release work.',
     input: z.object({}),
     replay: false,
+    parallelSafe: true,
     execute: async () => service.inspect(),
   });
   const runReleaseChecks = defineTool({
@@ -66,6 +67,7 @@ export function buildReleaseGovernanceAgent(options: {
     description: 'Read the exact saved release candidate and its revision before asking to publish.',
     input: z.object({}),
     replay: false,
+    parallelSafe: true,
     execute: async () => ({ candidate: await service.getCandidate() ?? null }),
   });
   const publishDraftRelease = defineTool({

@@ -62,6 +62,7 @@ const lint_copy = defineTool({
   name: 'lint_copy',
   description: 'Lint a draft against the house banned-words list.',
   replay: false,
+  parallelSafe: true,
   input: z.object({ draft: z.string() }),
   execute: async ({ draft }, ctx) => {
     calls.push('lint_copy');

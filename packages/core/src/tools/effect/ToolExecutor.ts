@@ -59,6 +59,23 @@ function rejectOnAbort(signal: AbortSignal, makeError: () => Error): Promise<nev
   });
 }
 
+/**
+ * Classifies a tool call as safe to run in a parallel batch. Evaluated on the RAW model args,
+ * before schema validation, so a function `parallelSafe` must be total: any throw or
+ * non-boolean return fails closed to serial rather than crashing the executor.
+ */
+function isParallelSafe(def: AnyTool | undefined, args: unknown): boolean {
+  if (!def) return false;
+  const p = def.parallelSafe;
+  if (p === true) return true;
+  if (typeof p !== 'function') return false;
+  try {
+    return (p as (args: unknown) => boolean)(args) === true;
+  } catch {
+    return false;
+  }
+}
+
 export interface CoreExecuteArgs {
   name: string;
   args: unknown;
@@ -111,7 +128,7 @@ export class CoreToolExecutor implements EffectToolExecutor {
   async execute(args: CoreExecuteArgs): Promise<unknown> {
     const registryDef = this.tools.get(args.name);
     const def = args.def ?? registryDef;
-    const parallelSafe = def?.parallelSafe === true || def?.replay === false;
+    const parallelSafe = isParallelSafe(def, args.args);
     if (!this.parallelExecution && !parallelSafe) {
       return this.withSerialGate(() => this.executeInner(args));
     }
