@@ -84,6 +84,8 @@ export function createApi(): Hono {
 
     const runtime = await getRuntime();
     const handle = runtime.run({ input, sessionId: conversationId });
+    // Anti-buffering headers live in `toUIMessageStreamResponse` (see TurnHandle), because a
+    // proxy in front of the server is the normal case for every Kuralle runtime, not just this one.
     return handle.toUIMessageStreamResponse({ sessionId: conversationId });
   });
 

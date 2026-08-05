@@ -3,6 +3,7 @@ import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { z } from 'zod';
 import { streamText, tool } from 'ai';
 import { AiSdkModelTurnLoop } from '../../src/runtime/channels/AiSdkModelTurnLoop.ts';
+import { createEventBus, createTurnHandle } from '../../src/events/TurnHandle.ts';
 import type { ModelTurnLoopInput, ModelTurnLoopState } from '../../src/runtime/channels/ModelTurnLoop.ts';
 import { CoreToolExecutor } from '../../src/tools/effect/index.ts';
 import { createRunContext } from '../../src/runtime/ctx.ts';
@@ -211,5 +212,32 @@ describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
 
     expect(toolLessCalls).toBe(0);
     expect(emitted.join('')).toBe('done');
+  });
+});
+
+/**
+ * A streamed turn must tell intermediaries not to buffer it.
+ *
+ * These live here rather than needing the real `streamText`, because the headers are set on the
+ * Response and do not depend on a model running at all.
+ */
+describe('toUIMessageStreamResponse — anti-buffering headers', () => {
+  it('refuses compression and re-encoding so a proxy cannot buffer the stream', async () => {
+    const bus = createEventBus();
+    const handle = createTurnHandle({
+      run: () => Promise.resolve({ output: 'ok' } as never),
+      bus,
+    });
+    const response = handle.toUIMessageStreamResponse({ sessionId: 's' });
+
+    // `no-transform` is the standard signal; `identity` refuses compression outright. A Next.js
+    // rewrite buffered the whole turn when the browser negotiated encoding, so the UI showed a
+    // spinner and then everything at once.
+    expect(response.headers.get('Cache-Control')).toContain('no-transform');
+    expect(response.headers.get('Content-Encoding')).toBe('identity');
+    // nginx's equivalent, for anyone terminating there.
+    expect(response.headers.get('X-Accel-Buffering')).toBe('no');
+
+    await handle;
   });
 });
