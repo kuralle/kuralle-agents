@@ -78,6 +78,22 @@ export async function executeModelToolCall(
   }
 }
 
+/**
+ * Ceiling on parallel-safe tools running at once within one model-emitted batch.
+ *
+ * The model's batch size must never be the concurrency policy: an unbounded
+ * `Promise.all` lets a twelve-call response open twelve sockets, twelve
+ * subprocesses, or twelve rate-limited vendor calls at once.
+ *
+ * Eight is not an arbitrary round number. Above eight-way in-process tool
+ * concurrency the session store's optimistic-concurrency check starts rejecting
+ * concurrent writes and surfacing `Stale write for session …` as client-visible
+ * error parts; at eight and below it does not. Measured in
+ * `packages/core/examples/latency-bench` — twelve unbounded calls emit four such
+ * errors, the same twelve at a limit of eight emit none.
+ */
+export const DEFAULT_MAX_TOOL_CONCURRENCY = 8;
+
 function isParallelSafeTool(def: AnyTool | undefined): boolean {
   return def?.parallelSafe === true || def?.replay === false;
 }
@@ -95,7 +111,7 @@ function resolveToolDef(
  *
  * Unbounded `Promise.all` over a model-emitted batch lets the model decide how many
  * sockets, subprocesses, or rate-limited API calls open at once. `limit` is a ceiling on
- * that; omitting it keeps the previous unbounded behaviour.
+ * that, and callers always pass one — see `DEFAULT_MAX_TOOL_CONCURRENCY`.
  *
  * `task` is expected not to reject (see the caller's contract). If one does, the rejection
  * propagates and in-flight siblings still run to completion — they are not cancelled, so
@@ -203,7 +219,7 @@ export async function dispatchModelToolCalls(
     const signals = await runWithConcurrency(
       assignments,
       ({ call, callsite, index }) => runOne(call, { callsite, index }),
-      ctx.limits?.maxToolConcurrency,
+      ctx.limits?.maxToolConcurrency ?? DEFAULT_MAX_TOOL_CONCURRENCY,
     );
     const suspended = signals.find((signal) => signal !== undefined);
     if (suspended !== undefined) throw suspended;

@@ -39,6 +39,7 @@ import { z } from 'zod';
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
+import type { AnyTool } from '../../src/types/effectTool.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
@@ -230,7 +231,10 @@ async function measure(
       }
       // A turn that ended abnormally should be visible on the stream. Before the
       // finish-reason work this never fires, which is exactly the point.
-      if (part.type === 'turn-incomplete') abnormal = true;
+      // `turn-incomplete` does not exist on StreamPart yet — it is added by the
+      // abnormal-finish-reason work. The widened compare is what lets this
+      // benchmark record `false` before that lands and `true` after.
+      if ((part.type as string) === 'turn-incomplete') abnormal = true;
       if (part.type === 'error') {
         clientErrors += 1;
         const msg = String((part.payload as { error?: unknown }).error ?? '');
@@ -287,7 +291,7 @@ function round(v: number | null): number | null {
 
 function runtimeWith(
   model: ReturnType<typeof scriptedModel>,
-  opts: { tools?: Record<string, ReturnType<typeof defineTool>>; memoryIngest?: boolean } = {},
+  opts: { tools?: Record<string, AnyTool>; memoryIngest?: boolean } = {},
 ) {
   const agent = defineAgent({
     id: 'bench',
@@ -346,7 +350,7 @@ const SCENARIOS: Record<string, () => { runtime: ReturnType<typeof createRuntime
         ) as never,
         textChunks(SENTENCES),
       ]),
-      { tools: { read_record } },
+      { tools: { read_record: read_record as AnyTool } },
     ),
     input: 'Read all twelve records.',
   }),
@@ -358,7 +362,7 @@ const SCENARIOS: Record<string, () => { runtime: ReturnType<typeof createRuntime
         toolCallChunks([{ id: 'call-dump', name: 'dump_archive', input: {} }]) as never,
         textChunks(SENTENCES),
       ]),
-      { tools: { dump_archive } },
+      { tools: { dump_archive: dump_archive as AnyTool } },
     ),
     input: 'Summarise the archive.',
   }),
