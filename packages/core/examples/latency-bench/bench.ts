@@ -45,7 +45,10 @@ import { newSessionId } from '../../src/runtime/openRun.js';
 import type { StreamPart } from '../../src/types/stream.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+/** Bulky per-part traces: gitignored (`runs/` is factory transient state). */
 const RUNS = join(HERE, 'runs');
+/** Small summaries and comparisons: committed, they are the review evidence. */
+const BASELINES = join(HERE, 'baselines');
 
 // ---------------------------------------------------------------------------
 // Simulated provider timing. Fixed so runs are comparable across machines.
@@ -387,7 +390,7 @@ function pct(before: number | null, after: number | null): string {
 
 function compare(a: string, b: string): void {
   const readSummary = (label: string) => {
-    const p = join(RUNS, `${label}.summary.json`);
+    const p = join(BASELINES, `${label}.summary.json`);
     if (!existsSync(p)) throw new Error(`no baseline at ${p} — run with --label ${label} first`);
     return JSON.parse(readFileSync(p, 'utf8')) as { results: ScenarioResult[] };
   };
@@ -425,11 +428,12 @@ function compare(a: string, b: string): void {
   }
   const md = rows.join('\n');
   console.log(md);
-  writeFileSync(join(RUNS, `compare-${a}-${b}.md`), `${md}\n`);
+  writeFileSync(join(BASELINES, `compare-${a}-${b}.md`), `${md}\n`);
 }
 
 async function main(): Promise<void> {
   mkdirSync(RUNS, { recursive: true });
+  mkdirSync(BASELINES, { recursive: true });
   const argv = process.argv.slice(2);
 
   const cmpAt = argv.indexOf('--compare');
@@ -454,10 +458,10 @@ async function main(): Promise<void> {
 
   writeFileSync(join(RUNS, `${label}.jsonl`), `${jsonl.join('\n')}\n`);
   writeFileSync(
-    join(RUNS, `${label}.summary.json`),
+    join(BASELINES, `${label}.summary.json`),
     `${JSON.stringify({ label, generatedBy: 'latency-bench', results }, null, 2)}\n`,
   );
-  console.log(`\nwrote ${join(RUNS, `${label}.jsonl`)} and ${label}.summary.json`);
+  console.log(`\nwrote runs/${label}.jsonl (trace) and baselines/${label}.summary.json (evidence)`);
 }
 
 await main();

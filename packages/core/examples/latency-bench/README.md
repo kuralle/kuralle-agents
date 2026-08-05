@@ -12,8 +12,9 @@ bun packages/core/examples/latency-bench/bench.ts --label after
 bun packages/core/examples/latency-bench/bench.ts --compare before after
 ```
 
-Writes `runs/<label>.jsonl` (every `StreamPart` with its arrival offset),
-`runs/<label>.summary.json`, and `runs/compare-<a>-<b>.md`.
+Writes `runs/<label>.jsonl` (every `StreamPart` with its arrival offset — gitignored,
+it is bulky machine state), plus committed evidence in
+`baselines/<label>.summary.json` and `baselines/compare-<a>-<b>.md`.
 
 ## Metrics
 
