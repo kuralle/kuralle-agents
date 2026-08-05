@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { EffectToolExecutor } from '../../src/types/run-context.js';
 import { dispatchModelToolCalls } from '../../src/runtime/channels/executeModelTool.js';
+import { CoreToolExecutor } from '../../src/tools/effect/ToolExecutor.js';
 import { buildCtx, setupDurableHarness } from './helpers.js';
 
 function sleep(ms: number): Promise<void> {
@@ -162,5 +163,45 @@ describe('parallelSafe as a predicate over raw args', () => {
     // `isParallelSafeTool` must turn this assertion false, which is how this test
     // proves it discriminates.
     expect(sawOverlap).toBe(false);
+  });
+});
+
+describe('parallelSafe predicate: async is a type-system bypass, handled not crashed', () => {
+  it('classifies an async predicate serial without leaking an unhandled rejection', async () => {
+    const leaked: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      leaked.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const harness = await setupDurableHarness('async-pred-sess', 'async-pred-run');
+      const tools = {
+        rejecter: {
+          name: 'rejecter',
+          description: 'rejecter',
+          // Only reachable by bypassing the type system: the declared type is
+          // `(args) => boolean`, so an async predicate does not compile.
+          parallelSafe: (() => Promise.reject(new Error('async boom'))) as unknown as (
+            args: unknown,
+          ) => boolean,
+          execute: async () => ({ ok: true }),
+        },
+      };
+      const ctx = await buildCtx({ ...harness, toolExecutor: new CoreToolExecutor({ tools }) });
+      const outcomes: Array<{ failed: boolean }> = [];
+      await dispatchModelToolCalls(
+        ctx,
+        [{ toolName: 'rejecter', input: {}, toolCallId: 'ap1' }],
+        tools,
+        ({ outcome }) => outcomes.push({ failed: outcome.failed }),
+      );
+      // The call still runs — it is merely scheduled serially rather than batched.
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]!.failed).toBe(false);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(leaked).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });

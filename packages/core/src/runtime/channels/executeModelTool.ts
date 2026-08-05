@@ -106,7 +106,17 @@ function isParallelSafeTool(def: AnyTool | undefined, args: unknown): boolean {
   if (p === true) return true;
   if (typeof p !== 'function') return false;
   try {
-    return (p as (args: unknown) => boolean)(args) === true;
+    const verdict = (p as (args: unknown) => unknown)(args);
+    // Classification is synchronous — a batch is assembled before anything runs —
+    // so a promise cannot be awaited here and fails closed to serial. Attach a
+    // catch first: returning without one leaves a rejected promise unhandled,
+    // which Bun and Node surface as a process-level warning or crash. TypeScript
+    // already rejects an async predicate, so this only catches a type-system bypass.
+    if (typeof (verdict as { then?: unknown } | null)?.then === 'function') {
+      void (verdict as Promise<unknown>).catch(() => {});
+      return false;
+    }
+    return verdict === true;
   } catch {
     return false;
   }
