@@ -182,6 +182,21 @@ export type {
   RoutedPersistentMemoryStoreConfig,
   MemoryRouteFn,
 } from './memory/index.js';
+export type {
+  Extractor,
+  ExtractorRuntimeContext,
+  ExtractorOnExtractedContext,
+  ResolvedExtractor,
+  DefineExtractorConfig,
+} from './memory/index.js';
+export {
+  defineExtractor,
+  slugifyExtractorName,
+  assertValidSlug,
+  validateExtractorList,
+  resolveExtractor,
+  RESERVED_EXTRACTOR_SLUGS,
+} from './memory/index.js';
 export {
   wireWorkingMemory,
   loadWorkingMemoryBlocks,

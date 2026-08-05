@@ -38,3 +38,20 @@ export {
 export { TieredPersistentMemoryStore } from './blocks/TieredPersistentMemoryStore.js';
 export { scanMemoryWrite, type SafetyScanResult } from './blocks/safetyScanner.js';
 export { buildMemoryBlockTool, type MemoryBlockToolOptions } from './blocks/memoryBlockTool.js';
+
+// ── Memory extractors ───────────────────────────────────────────────
+export type {
+  Extractor,
+  ExtractorRuntimeContext,
+  ExtractorOnExtractedContext,
+  ResolvedExtractor,
+} from './extract/types.js';
+export {
+  defineExtractor,
+  slugifyExtractorName,
+  assertValidSlug,
+  validateExtractorList,
+  resolveExtractor,
+  RESERVED_EXTRACTOR_SLUGS,
+  type DefineExtractorConfig,
+} from './extract/defineExtractor.js';

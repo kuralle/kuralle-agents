@@ -4,6 +4,7 @@ import type { Flow } from './flow.js';
 import type { Route, RoutingPolicy } from './route.js';
 import type { Guardrails, Limits } from './guardrails.js';
 import type { AgentKnowledge, AgentMemory } from './grounding.js';
+import { validateExtractorList } from '../memory/extract/defineExtractor.js';
 import type { RefinementCapability } from '../capabilities/RefinementCapability.js';
 import type { ValidationCapability } from '../capabilities/ValidationCapability.js';
 import type { Policy } from '../runtime/policies/toolPolicy.js';
@@ -95,5 +96,8 @@ export interface AgentConfig {
 }
 
 export function defineAgent(config: AgentConfig): AgentConfig {
+  if (config.memory?.extract) {
+    validateExtractorList(config.memory.extract);
+  }
   return config;
 }
