@@ -140,6 +140,13 @@ export interface TurnIncompletePayload {
   hadText: boolean;
 }
 
+export interface ExtractionPayload {
+  slug: string;
+  value: unknown;
+  /** True when the extracted value differs from the prior stored value. */
+  changed: boolean;
+}
+
 export interface PipelineValidationBlockPayload {
   rationale: string;
   userFacingMessage?: string;
@@ -253,6 +260,7 @@ interface StreamPayloadMap {
   interactive: InteractivePayload;
   'turn-end': TurnEndPayload;
   'turn-incomplete': TurnIncompletePayload;
+  extraction: ExtractionPayload;
   'pipeline-validation-block': PipelineValidationBlockPayload;
   'safety-blocked': SafetyBlockedPayload;
   wake: WakePayload;
@@ -311,6 +319,7 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   interactive: 'internal',
   'turn-end': 'internal',
   'turn-incomplete': 'internal',
+  extraction: 'internal',
   'pipeline-validation-block': 'internal',
   'safety-blocked': 'internal',
   wake: 'internal',

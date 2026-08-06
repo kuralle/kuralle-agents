@@ -201,8 +201,13 @@ export {
   InMemoryExtractedValueStore,
   FileExtractedValueStore,
   extractedValueStoreConformanceCases,
+  runExtractors,
 } from './memory/index.js';
-export type { ExtractedValueStoreConformanceCase } from './memory/index.js';
+export type {
+  ExtractedValueStoreConformanceCase,
+  RunExtractorsOptions,
+  ExtractionRunResult,
+} from './memory/index.js';
 export {
   wireWorkingMemory,
   loadWorkingMemoryBlocks,
@@ -478,6 +483,7 @@ export type {
   InteractivePayload,
   TurnEndPayload,
   TurnIncompletePayload,
+  ExtractionPayload,
   PipelineValidationBlockPayload,
   SafetyBlockedPayload,
   WakePayload,

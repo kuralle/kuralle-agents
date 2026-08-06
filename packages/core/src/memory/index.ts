@@ -62,3 +62,8 @@ export {
   extractedValueStoreConformanceCases,
   type ExtractedValueStoreConformanceCase,
 } from './extract/testing.js';
+export {
+  runExtractors,
+  type RunExtractorsOptions,
+  type ExtractionRunResult,
+} from './extract/runExtractors.js';
