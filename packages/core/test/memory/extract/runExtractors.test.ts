@@ -52,7 +52,7 @@ function collectEmit() {
 }
 
 describe('runExtractors', () => {
-  it('issues one generateObject whose schema has all slugs optional', async () => {
+  it('issues one generateObject whose schema keeps every slug required-but-nullable', async () => {
     const { calls } = mockGenerateObject(async () => ({
       object: {
         'favorite-color': 'blue',
@@ -93,7 +93,10 @@ describe('runExtractors', () => {
     const schema = calls[0]!.schema as z.ZodObject<Record<string, z.ZodTypeAny>>;
     for (const slug of ['favorite-color', 'home-city', 'job-title']) {
       expect(schema.shape[slug]).toBeDefined();
-      expect(schema.shape[slug]!.safeParse(undefined).success).toBe(true);
+      // Nullable, NOT optional — the key must stay in the JSON Schema's
+      // `required` array or OpenAI rejects the whole request.
+      expect(schema.shape[slug]!.safeParse(null).success).toBe(true);
+      expect(schema.shape[slug]!.safeParse(undefined).success).toBe(false);
     }
     expect(result.failures).toHaveLength(0);
     expect(Object.keys(result.values).sort()).toEqual(['favorite-color', 'home-city', 'job-title']);
@@ -451,5 +454,31 @@ describe('runExtractors partial-success guard', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]!.volatile).toContain('SECRET-PRIOR');
     expect(seen[0]!.stable).not.toContain('SECRET-PRIOR');
+  });
+
+  it('emits a JSON Schema with every slug in `required`, which OpenAI demands', async () => {
+    // Regression guard for a defect no mock could catch: with `.optional()` the
+    // generated JSON Schema omits keys from `required`, and OpenAI's structured
+    // output rejects the whole request — so extraction never ran on OpenAI at
+    // all while every unit test stayed green.
+    const { calls } = mockGenerateObject(async () => ({ object: { alpha: null, beta: null } }));
+    const { emit } = collectEmit();
+    await runExtractors({
+      extractors: [
+        defineExtractor({ name: 'Alpha', instructions: 'a', schema: z.string() }),
+        defineExtractor({ name: 'Beta', instructions: 'b', schema: z.object({ n: z.number() }) }),
+      ],
+      store: new InMemoryExtractedValueStore(),
+      model: {} as LanguageModel,
+      messages: [{ role: 'user', content: 'hi' }],
+      ctx: { ...baseCtx, emit },
+    });
+
+    const json = z.toJSONSchema(calls[0]!.schema as z.ZodType, { io: 'output' }) as {
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
+    expect(Object.keys(json.properties).sort()).toEqual(['alpha', 'beta']);
+    expect((json.required ?? []).sort()).toEqual(['alpha', 'beta']);
   });
 });

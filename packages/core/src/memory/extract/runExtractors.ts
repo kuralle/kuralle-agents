@@ -75,10 +75,27 @@ function buildPriorBlock(
   ].join('\n');
 }
 
+/**
+ * One object across every extractor, each slug NULLABLE — not optional.
+ *
+ * `.optional()` omits the key from the JSON Schema's `required` array, and
+ * OpenAI's structured-output mode rejects that outright:
+ *
+ *   Invalid schema for response_format 'response': 'required' is required to be
+ *   supplied and to be an array including every key in properties.
+ *
+ * With `.optional()` the entire extraction pipeline fails on every OpenAI call
+ * — which unit tests against a mock model cannot show, because the mock never
+ * validates the schema it is handed.
+ *
+ * `.nullable()` keeps every key in `required` while still letting the model
+ * decline a slug, and the semantics are unchanged: `runExtractors` already
+ * treats `null` exactly as it treats an absent key — the prior value stands.
+ */
 function buildMergedSchema(extractors: readonly ResolvedExtractor[]): z.ZodObject<Record<string, ZodTypeAny>> {
   const shape: Record<string, ZodTypeAny> = {};
   for (const extractor of extractors) {
-    shape[extractor.slug] = extractor.schema.optional();
+    shape[extractor.slug] = extractor.schema.nullable();
   }
   return z.object(shape);
 }
