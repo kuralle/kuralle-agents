@@ -40,14 +40,11 @@ export interface AgentMemory {
     enabled?: boolean;
     tokenBudget?: number;
   };
-  ingest?: {
-    enabled?: boolean;
-  };
   /** Persistent markdown blocks (USER/MEMORY) loaded at session start and editable via memory_block. */
   workingMemory?: WorkingMemoryConfig;
   /** When and how `memory.extract` runs relative to turn completion. */
   extraction?: ExtractionConfig;
-  /** Named, typed things to learn from a conversation. Superseded `ingest`.
+  /** Named, typed things to learn from a conversation.
    *  `Extractor<never>`, not `Extractor<unknown>` — the array holds extractors with
    *  different `T`s and `T` appears contravariantly (in `onExtracted`'s parameter), so the
    *  common supertype is the one whose parameter accepts least: `never`. `unknown` would be

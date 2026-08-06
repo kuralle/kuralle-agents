@@ -59,7 +59,6 @@ export interface AutoRetrieveProvider {
 
 export interface MemoryService {
   preload?(ctx: RunContext, scope?: GatherScope): Promise<string | undefined>;
-  ingest?(ctx: RunContext): Promise<void>;
 }
 
 export interface RunContext {

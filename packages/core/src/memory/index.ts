@@ -8,10 +8,6 @@ export type {
 export { InMemoryMemoryService } from './stores/InMemoryMemoryService.js';
 export { preloadMemoryContext } from './preloadMemory.js';
 export { extractMemories } from './utils.js';
-export {
-  createFactMemoryService,
-  type FactMemoryServiceOptions,
-} from './factMemoryService.js';
 
 // ── Persistent memory blocks (PR-5) ─────────────────────────────────
 export type {
@@ -80,3 +76,9 @@ export {
   extractionSucceeded,
 } from './extract/runExtraction.js';
 export { resolveExtractedValueStore } from './extract/resolveExtractedValueStore.js';
+export {
+  factsExtractor,
+  FACTS_EXTRACTOR_SLUG,
+  type FactsExtractorOptions,
+  type FactsValue,
+} from './extract/builtin/factsExtractor.js';

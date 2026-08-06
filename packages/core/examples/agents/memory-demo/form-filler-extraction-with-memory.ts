@@ -11,6 +11,8 @@ import { collect, defineFlow, reply } from '../../../src/authoring/nodes.js';
 import { buildToolSet, defineTool } from '../../../src/tools/effect/defineTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
 import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
+import { factsExtractor } from '../../../src/memory/extract/builtin/factsExtractor.js';
+import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { loadExampleEnv } from '../../_shared/v2Runner.js';
 
@@ -121,7 +123,8 @@ const agent = defineAgent({
   instructions: prompt,
   memory: {
     preload: { enabled: true, tokenBudget: 2000 },
-    ingest: { enabled: true },
+    extract: [factsExtractor()],
+    extraction: { blocking: true, trigger: 'each-turn' },
   },
   tools: { submit_form: submitForm, end_call: endCall },
   flows: [
@@ -135,6 +138,7 @@ const agent = defineAgent({
 });
 
 const memoryService = new InMemoryMemoryService();
+const extractedValueStore = new InMemoryExtractedValueStore();
 const sessionStore = new MemoryStore();
 
 const runtime = createRuntime({
@@ -142,6 +146,7 @@ const runtime = createRuntime({
   defaultAgentId: agent.id,
   defaultModel: model,
   sessionStore,
+  extractedValueStore,
   memoryService,
 });
 

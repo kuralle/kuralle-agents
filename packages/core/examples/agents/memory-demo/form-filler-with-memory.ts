@@ -10,6 +10,8 @@ import { defineAgent } from '../../../src/authoring/defineAgent.js';
 import { buildToolSet, defineTool } from '../../../src/tools/effect/defineTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
 import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
+import { factsExtractor } from '../../../src/memory/extract/builtin/factsExtractor.js';
+import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { loadExampleEnv } from '../../_shared/v2Runner.js';
 
@@ -198,7 +200,8 @@ function createFormRuntime(form: FormFiller) {
     tools: { record_answer: recordAnswerTool, end_call: endCallTool },
     memory: {
       preload: { enabled: true },
-      ingest: { enabled: true },
+      extract: [factsExtractor()],
+      extraction: { blocking: true, trigger: 'each-turn' },
     },
   });
 
@@ -207,6 +210,7 @@ function createFormRuntime(form: FormFiller) {
     defaultAgentId: agent.id,
     defaultModel: model,
     sessionStore,
+    extractedValueStore: new InMemoryExtractedValueStore(),
     memoryService,
   });
 }

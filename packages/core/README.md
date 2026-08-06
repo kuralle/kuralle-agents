@@ -32,7 +32,7 @@ One tagless primitive — `defineAgent` — derives behavior from the fields you
 - **`HarnessConfig.escalation` + `resumeFromEscalation`** — the human-handoff loop: handoff brief, handler, ownership claim (via engagement), resume-with-resolution.
 - **`RunOptions.wake` + `Scheduler`** — agent-initiated turns (follow-ups, cart abandonment) on in-process timers or Cloudflare DO alarms (`@kuralle-agents/cf-agent`).
 - **`HarnessConfig.compaction`** — automatic history summarization + context-overflow recovery for long-running threads.
-- **`createFactMemoryService`** — cross-session fact memory (LLM merge-on-ingest) keyed by `userId` on any persistent block store.
+- **`factsExtractor()`** — built-in cross-session fact memory via `memory.extract`; merge-on-update with `includePrevious`, preload via `memory.preload`.
 - **Built-in guardrails** — `createPromptInjectionGuard`, `createPiiInputGuard`/`OutputGuard`, `createModerationGuard`, `createGroundingValidator` (see `guides/GUARDRAILS.md`).
 - **Simulation eval** — `simulateConversation` + `createJudge` + `runSimulationSuite`: persona-driven simulated users scored by an LLM judge.
 - **Pending-input drain-and-merge** — `setPendingUserInput` / `consumeAllPendingUserInput`: mid-turn messages enqueue; the next `awaitUser` drains the FIFO into one merged turn (pair with `@kuralle-agents/messaging` `inboundCoalescing` for WhatsApp bursts).

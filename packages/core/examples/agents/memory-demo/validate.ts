@@ -10,6 +10,8 @@ import { createLoadMemoryTool } from '../../../src/tools/memory.js';
 import { wrapAiSdkTool } from '../../../src/tools/effect/wrapAiSdkTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
 import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
+import { factsExtractor, FACTS_EXTRACTOR_SLUG } from '../../../src/memory/extract/builtin/factsExtractor.js';
+import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { preloadMemoryContext } from '../../../src/memory/preloadMemory.js';
 import type { Session } from '../../../src/types/session.js';
@@ -37,6 +39,7 @@ function separator(title: string) {
 }
 
 const memoryService = new InMemoryMemoryService();
+const extractedValueStore = new InMemoryExtractedValueStore();
 const sessionStore = new MemoryStore();
 const model = openai('gpt-4o-mini');
 
@@ -51,7 +54,8 @@ Keep responses concise (1-2 sentences).`,
   tools: { loadMemory: wrapAiSdkTool('loadMemory', createLoadMemoryTool()) },
   memory: {
     preload: { enabled: true, tokenBudget: 5000 },
-    ingest: { enabled: true },
+    extract: [factsExtractor()],
+    extraction: { blocking: true, trigger: 'each-turn' },
   },
 });
 
@@ -60,6 +64,7 @@ const runtime = createRuntime({
   defaultAgentId: agent.id,
   defaultModel: model,
   sessionStore,
+  extractedValueStore,
   memoryService,
 });
 
@@ -118,16 +123,11 @@ async function main() {
 
   separator('MEMORY INSPECTION');
 
-  const allMemories = await memoryService.searchMemory({
-    userId: USER_ID,
-    query: 'Alex Tokyo ramen NeonLabs name food work',
-    limit: 20,
-  });
-  log('Total memories found', allMemories.memories.length);
-  for (const mem of allMemories.memories) {
-    console.log(
-      `  [score=${mem.score?.toFixed(2)}] [author=${mem.author}] [session=${mem.sessionId}] ${mem.content.slice(0, 120)}`,
-    );
+  const extracted = await extractedValueStore.load('user', USER_ID, FACTS_EXTRACTOR_SLUG);
+  const factLines = (extracted?.value as { facts?: string[] })?.facts ?? [];
+  log('Extracted facts count', factLines.length);
+  for (const fact of factLines) {
+    console.log(`  ${fact.slice(0, 120)}`);
   }
 
   const mockSession: Session = {
@@ -144,7 +144,12 @@ async function main() {
     handoffHistory: [],
   };
 
-  const preloadName = await preloadMemoryContext(memoryService, mockSession, 'What is my name?', 5000);
+  const preloadName = await preloadMemoryContext(
+    extractedValueStore,
+    mockSession,
+    'What is my name?',
+    5000,
+  );
   log('preloadMemoryContext("What is my name?")', preloadName ?? '(null)');
 
   separator('SESSION 2: Cross-session recall');
@@ -170,22 +175,19 @@ async function main() {
   );
 
   separator('MEMORY DELETION');
-  await memoryService.deleteMemories(USER_ID);
-  const afterDel = await memoryService.searchMemory({ userId: USER_ID, query: 'anything' });
-  log(
-    'After deletion',
-    afterDel.memories.length === 0 ? 'EMPTY ✓' : `${afterDel.memories.length} entries remain ✗`,
-  );
+  await extractedValueStore.delete('user', USER_ID, FACTS_EXTRACTOR_SLUG);
+  const afterDel = await extractedValueStore.load('user', USER_ID, FACTS_EXTRACTOR_SLUG);
+  log('After deletion', afterDel === null ? 'EMPTY ✓' : 'entries remain ✗');
 
   separator('VALIDATION SUMMARY');
   const checks = [
     ['Agent produces responses', turn1.response.length > 0],
     ['Assistant messages in session', (session1?.messages.filter((m) => m.role === 'assistant').length ?? 0) > 0],
-    ['Memory ingestion works', allMemories.memories.length > 0],
+    ['Fact extraction works', factLines.length > 0],
     ['preloadMemory returns content', preloadName !== null],
     ['Agent recalls name (alex)', r1.includes('alex')],
     ['Agent recalls food (ramen)', r2.includes('ramen')],
-    ['Memory deletion works', afterDel.memories.length === 0],
+    ['Memory deletion works', afterDel === null],
   ];
 
   let passCount = 0;

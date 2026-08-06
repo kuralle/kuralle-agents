@@ -17,7 +17,7 @@ import {
   type InMemoryKnowledgeDocument,
 } from '../../src/runtime/grounding/inMemoryKnowledge.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
-import { InMemoryMemoryService } from '../../src/memory/stores/InMemoryMemoryService.js';
+import { InMemoryExtractedValueStore } from '../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { resetMissingUserIdWarningsForTests } from '../../src/runtime/grounding/memory.js';
 import type { KnowledgeRetrieverAdapter } from '../../src/types/knowledge.js';
 import * as preloadMemory from '../../src/memory/preloadMemory.js';
@@ -175,28 +175,22 @@ describe('node-scoped grounding (W3)', () => {
   });
 
   it('memory.preload false skips preload; tokenBudget is forwarded', async () => {
-    const memoryStore = new InMemoryMemoryService();
-    const priorSession = {
-      id: 'prior',
-      conversationId: 'prior',
-      channelId: 'api',
-      userId: 'user-1',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      messages: [{ role: 'user' as const, content: 'Favorite snack is mango.' }],
-      workingMemory: {},
-      currentAgent: 'support',
-      activeAgentId: 'support',
-      agentStates: {},
-      handoffHistory: [],
-    };
-    await memoryStore.addSessionToMemory(priorSession);
+    const store = new InMemoryExtractedValueStore();
+    await store.save(
+      {
+        slug: 'facts',
+        scope: 'user',
+        value: { facts: ['Favorite snack is mango.'] },
+        updatedAt: '2026-08-06T00:00:00.000Z',
+      },
+      'user-1',
+    );
 
     const agent = defineAgent({
       id: 'support',
-      memory: { preload: { enabled: true, tokenBudget: 500 }, ingest: { enabled: false } },
+      memory: { preload: { enabled: true, tokenBudget: 500 } },
     });
-    const memoryService = buildMemoryService(memoryStore, agent);
+    const memoryService = buildMemoryService(agent, store);
     expect(memoryService?.preload).toBeDefined();
 
     const { ctx } = await ctxWithMessages('What snack do I like?', undefined, memoryService);
@@ -213,7 +207,7 @@ describe('node-scoped grounding (W3)', () => {
 
     const capturedBudgets: number[] = [];
     const preloadSpy = spyOn(preloadMemory, 'preloadMemoryContext').mockImplementation(
-      async (_service, _session, _userInput, maxTokens) => {
+      async (_store, _session, _userInput, maxTokens) => {
         capturedBudgets.push(maxTokens);
         return '## Context from Past Conversations\n\nbudget probe';
       },

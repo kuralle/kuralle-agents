@@ -1,4 +1,4 @@
-import { defineAgent, defineTool, type ToolContext } from '@kuralle-agents/core';
+import { defineAgent, defineTool, factsExtractor, type ToolContext } from '@kuralle-agents/core';
 import type { LanguageModel } from 'ai';
 import { z } from 'zod';
 import { HackerRepository } from './database';
@@ -87,7 +87,7 @@ Profile and memory writes are durable and require human approval. Never claim a 
       forget_detail: forgetDetail,
     },
     knowledge: { autoRetrieve: true },
-    memory: { preload: { enabled: true, tokenBudget: 500 }, ingest: { enabled: true } },
+    memory: { preload: { enabled: true, tokenBudget: 500 }, extract: [factsExtractor()] },
     limits: { maxSteps: 20, toolMaxSteps: 12, maxToolConcurrency: 3 },
   });
 }

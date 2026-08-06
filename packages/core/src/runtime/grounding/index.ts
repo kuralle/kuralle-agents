@@ -7,7 +7,6 @@ export {
 export {
   buildMemoryService,
   resetMissingUserIdWarningsForTests,
-  runMemoryIngest,
   warnMissingUserId,
 } from './memory.js';
 export {

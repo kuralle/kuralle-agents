@@ -41,6 +41,7 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import type { AnyTool } from '../../src/types/effectTool.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
+import { defineExtractor } from '../../src/memory/extract/defineExtractor.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
 import type { StreamPart } from '../../src/types/stream.js';
@@ -57,7 +58,17 @@ const BASELINES = join(HERE, 'baselines');
 const PROVIDER_FIRST_BYTE_MS = 20;
 const PROVIDER_CHUNK_MS = 5;
 const TOOL_WORK_MS = 40;
-const MEMORY_INGEST_MS = 150;
+const MEMORY_EXTRACTION_MS = 150;
+
+const slowExtractionProbe = defineExtractor({
+  name: 'Slow Probe',
+  instructions: 'Extract nothing meaningful — latency probe only.',
+  schema: z.string(),
+  onExtracted: async () => {
+    await sleep(MEMORY_EXTRACTION_MS);
+    return 'done';
+  },
+});
 
 const USAGE = {
   inputTokens: { total: 100, noCache: 100, cacheRead: undefined, cacheWrite: undefined },
@@ -311,7 +322,7 @@ function round(v: number | null): number | null {
 
 function runtimeWith(
   model: ReturnType<typeof scriptedModel>,
-  opts: { tools?: Record<string, AnyTool>; memoryIngest?: boolean } = {},
+  opts: { tools?: Record<string, AnyTool>; memoryExtraction?: boolean } = {},
 ) {
   const agent = defineAgent({
     id: 'bench',
@@ -319,7 +330,14 @@ function runtimeWith(
     instructions: 'Answer briefly.',
     model,
     ...(opts.tools ? { tools: opts.tools } : {}),
-    ...(opts.memoryIngest ? { memory: { ingest: { enabled: true } } } : {}),
+    ...(opts.memoryExtraction
+      ? {
+          memory: {
+            extract: [slowExtractionProbe],
+            extraction: { blocking: true, trigger: 'each-turn' },
+          },
+        }
+      : {}),
     limits: { maxSteps: 6 },
   } as Parameters<typeof defineAgent>[0]);
 
@@ -329,19 +347,6 @@ function runtimeWith(
     defaultAgentId: agent.id,
     sessionStore: store,
     defaultModel: model,
-    ...(opts.memoryIngest
-      ? {
-          // Stands in for the post-turn extraction model call. The number is
-          // arbitrary; what matters is whether the user waits for it.
-          memoryService: {
-            addSessionToMemory: async () => {
-              await sleep(MEMORY_INGEST_MS);
-            },
-            searchMemory: async () => ({ memories: [] }),
-            deleteMemories: async () => {},
-          },
-        }
-      : {}),
   } as Parameters<typeof createRuntime>[0]);
   return { runtime, store };
 }
@@ -392,9 +397,9 @@ const SCENARIOS: Record<
     input: 'Summarise the archive.',
   }),
 
-  /** Post-turn memory ingest — probes what the user waits for after `done`. */
-  'memory-ingest': () => ({
-    ...runtimeWith(scriptedModel([textChunks(SENTENCES)]), { memoryIngest: true }),
+  /** Post-turn blocking extraction — probes what the user waits for after `done`. */
+  'memory-extraction': () => ({
+    ...runtimeWith(scriptedModel([textChunks(SENTENCES)]), { memoryExtraction: true }),
     input: 'My name is Mithushan and I live in Colombo.',
   }),
 

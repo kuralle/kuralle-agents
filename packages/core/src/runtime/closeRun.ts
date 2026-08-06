@@ -30,7 +30,6 @@ export interface CloseRunOptions {
   ctx: RunContext;
   terminalOutcome?: ConversationOutcome;
   outcomeReason?: string;
-  memoryIngest?: (ctx: RunContext) => Promise<void>;
   extraction?: CloseRunExtractionOptions;
 }
 
@@ -42,10 +41,6 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
     runState.status = 'finished';
   }
   await runStore.putRunState(runState);
-
-  if (options.memoryIngest) {
-    await options.memoryIngest(ctx);
-  }
 
   if (options.extraction) {
     await runExtractionAtClose({

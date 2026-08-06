@@ -49,7 +49,6 @@ import {
   buildAutoRetrieveProvider,
   buildKnowledgeProvider,
   buildMemoryService,
-  runMemoryIngest,
 } from './grounding/index.js';
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { validateExtractorList } from '../memory/extract/defineExtractor.js';
@@ -430,9 +429,7 @@ export class Runtime {
         autoRetrieve: knowledgeProvider
           ? buildAutoRetrieveProvider(knowledgeProvider, opened.agent)
           : undefined,
-        memoryService: this.config.memoryService
-          ? buildMemoryService(this.config.memoryService, opened.agent)
-          : undefined,
+        memoryService: buildMemoryService(opened.agent, this.extractedValueStore),
         fs: openingSurface.resolvedWorkspace?.fs,
         getSkill: openingSurface.getSkill,
         signalDelivery: opts.signalDelivery,
@@ -672,9 +669,7 @@ export class Runtime {
             // Swap the live catalog with the metadata so add/remove mutate the target's
             // roster and `load_skill` resolves against it after the handoff.
             runCtx.skillCatalog = targetSurface.skillCatalog;
-            runCtx.memoryService = this.config.memoryService
-              ? buildMemoryService(this.config.memoryService, target)
-              : undefined;
+            runCtx.memoryService = buildMemoryService(target, this.extractedValueStore);
 
             const targetPolicies = resolveAgentPolicies(target);
             const targetModel = target.model ?? this.defaultModel;
@@ -795,15 +790,6 @@ export class Runtime {
           ctx: runCtx,
           terminalOutcome,
           outcomeReason: loopResult.kind === 'ended' ? loopResult.reason : undefined,
-          memoryIngest: async () => {
-            await runMemoryIngest(runCtx);
-            if (this.config.trackGoals) {
-              const controlModel =
-                this.agentsById.get(runCtx.runState.activeAgentId)?.controlModel ??
-                runCtx.controlModel;
-              await updateGoalsFromTurn(runCtx, controlModel);
-            }
-          },
           extraction:
             extractionConfig && extractors?.length && extractionModel
               ? {
@@ -829,6 +815,12 @@ export class Runtime {
                 }
               : undefined,
         });
+        if (this.config.trackGoals) {
+          const controlModel =
+            this.agentsById.get(runCtx.runState.activeAgentId)?.controlModel ??
+            runCtx.controlModel;
+          await updateGoalsFromTurn(runCtx, controlModel);
+        }
         await runHookSafely('onEnd', () => this.hooks?.onEnd?.(runCtx));
         emit({
           channel: 'client',

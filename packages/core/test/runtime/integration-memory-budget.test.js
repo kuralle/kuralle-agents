@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryMemoryService } from '../../dist/memory/stores/InMemoryMemoryService.js';
+import { InMemoryExtractedValueStore } from '../../dist/memory/extract/InMemoryExtractedValueStore.js';
 import { preloadMemoryContext } from '../../dist/memory/preloadMemory.js';
 import {
   DEFAULT_CONTEXT_BUDGET,
@@ -16,25 +16,21 @@ import {
 
 describe('Integration: Memory + ContextBudget', () => {
   it('should preload memory within token budget from context budget system', async () => {
-    const memoryService = new InMemoryMemoryService();
-
-    const pastSession = {
-      id: 'past-session',
-      userId: 'user-1',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      messages: [
-        { role: 'user', content: 'I prefer window seats on flights' },
-        { role: 'assistant', content: 'Noted! I will remember your preference for window seats.' },
-        { role: 'user', content: 'My frequent flyer number is FF12345' },
-        { role: 'assistant', content: 'Got it, FF12345 saved.' },
-      ],
-      workingMemory: {},
-      currentAgent: 'agent-1',
-      agentStates: {},
-      handoffHistory: [],
-    };
-    await memoryService.addSessionToMemory(pastSession);
+    const store = new InMemoryExtractedValueStore();
+    await store.save(
+      {
+        slug: 'facts',
+        scope: 'user',
+        value: {
+          facts: [
+            'User prefers window seats on flights',
+            'Frequent flyer number is FF12345',
+          ],
+        },
+        updatedAt: '2026-08-06T00:00:00.000Z',
+      },
+      'user-1',
+    );
 
     const budget = { ...DEFAULT_CONTEXT_BUDGET };
     const basePromptTokens = 500;
@@ -57,7 +53,7 @@ describe('Integration: Memory + ContextBudget', () => {
     };
 
     const memoryBlock = await preloadMemoryContext(
-      memoryService,
+      store,
       currentSession,
       'What seat do I prefer on flights?',
       budget.maxLongTermMemoryTokens,
@@ -179,40 +175,25 @@ describe('Integration: Handoff Filters + Memory', () => {
   });
 });
 
-describe('Integration: Full Memory Pipeline', () => {
-  it('should ingest, search, preload, and respect budget end-to-end', async () => {
-    const memoryService = new InMemoryMemoryService();
+describe('Integration: Extracted facts preload pipeline', () => {
+  it('should preload extracted facts and respect budget end-to-end', async () => {
+    const store = new InMemoryExtractedValueStore();
+    await store.save(
+      {
+        slug: 'facts',
+        scope: 'user',
+        value: {
+          facts: [
+            'Order number from session 0 was ORD-000',
+            'Order number from session 1 was ORD-100',
+            'Order number from session 2 was ORD-200',
+          ],
+        },
+        updatedAt: '2026-08-06T00:00:00.000Z',
+      },
+      'user-1',
+    );
 
-    // Step 1: Ingest multiple sessions
-    for (let i = 0; i < 3; i++) {
-      const session = {
-        id: `session-${i}`,
-        userId: 'user-1',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        messages: [
-          { role: 'user', content: `In session ${i}, my order number was ORD-${i}00` },
-          { role: 'assistant', content: `Got it, order ORD-${i}00 noted.` },
-        ],
-        workingMemory: {},
-        currentAgent: 'agent-1',
-        agentStates: {},
-        handoffHistory: [],
-      };
-      await memoryService.addSessionToMemory(session);
-    }
-
-    // Step 2: Search for specific memory
-    const searchResult = await memoryService.searchMemory({
-      userId: 'user-1',
-      query: 'order ORD-200',
-      limit: 5,
-    });
-    assert.ok(searchResult.memories.length > 0);
-    const topResult = searchResult.memories[0];
-    assert.ok(topResult.content.includes('ORD-2'));
-
-    // Step 3: Preload with budget
     const currentSession = {
       id: 'new-session',
       userId: 'user-1',
@@ -225,53 +206,56 @@ describe('Integration: Full Memory Pipeline', () => {
       handoffHistory: [],
     };
     const memoryBlock = await preloadMemoryContext(
-      memoryService,
+      store,
       currentSession,
-      'What was my order number?',
+      'What was my order number ORD-200?',
       2000,
     );
 
     assert.ok(memoryBlock !== null);
-    assert.ok(memoryBlock.includes('ORD-'));
+    assert.ok(memoryBlock.includes('ORD-200'));
     assert.ok(memoryBlock.includes('Context from Past Conversations'));
 
-    // Step 4: Verify budget compliance
     const tokens = estimateTokenCount(memoryBlock);
     assert.ok(tokens <= 2050);
 
-    // Step 5: Delete memories and verify
-    await memoryService.deleteMemories('user-1');
-    const afterDelete = await memoryService.searchMemory({
-      userId: 'user-1',
-      query: 'order',
-    });
-    assert.equal(afterDelete.memories.length, 0);
+    await store.delete('user', 'user-1', 'facts');
+    const afterDelete = await preloadMemoryContext(
+      store,
+      currentSession,
+      'order',
+      2000,
+    );
+    assert.equal(afterDelete, null);
   });
 
-  it('should handle idempotent re-ingestion across the pipeline', async () => {
-    const memoryService = new InMemoryMemoryService();
+  it('should return stable facts on repeated preload reads', async () => {
+    const store = new InMemoryExtractedValueStore();
+    await store.save(
+      {
+        slug: 'facts',
+        scope: 'user',
+        value: { facts: ['User name is Alice'] },
+        updatedAt: '2026-08-06T00:00:00.000Z',
+      },
+      'user-1',
+    );
 
     const session = {
       id: 'session-1',
       userId: 'user-1',
       createdAt: new Date(),
       updatedAt: new Date(),
-      messages: [
-        { role: 'user', content: 'My name is Alice' },
-      ],
+      messages: [],
       workingMemory: {},
       currentAgent: 'agent-1',
       agentStates: {},
       handoffHistory: [],
     };
 
-    await memoryService.addSessionToMemory(session);
-    await memoryService.addSessionToMemory(session);
-
-    const result = await memoryService.searchMemory({
-      userId: 'user-1',
-      query: 'Alice',
-    });
-    assert.equal(result.memories.length, 1);
+    const first = await preloadMemoryContext(store, session, 'Alice', 2000);
+    const second = await preloadMemoryContext(store, session, 'Alice', 2000);
+    assert.equal(first, second);
+    assert.ok(first.includes('Alice'));
   });
 });

@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 Kuralle agents have two complementary memory axes:
 
 - **Working memory** — small, durable, human-readable **blocks** (e.g. a `USER` profile) that the agent maintains with a tool and that are injected into the system prompt every turn. Persists across sessions. This is the right tool for "remember this caller's name / preferences / account".
-- **Semantic recall** — vector-retrieved facts extracted from past conversation (`memory.preload` / `memory.ingest`). Best for "search everything we've ever discussed".
+- **Semantic recall** — cross-session facts extracted via `memory.extract` (e.g. `factsExtractor()`) and preloaded with `memory.preload`. Best for "remember durable facts about this user across sessions".
 
 This guide focuses on **working memory**.
 
@@ -148,6 +148,22 @@ Pass a `FilePersistentMemoryStore` (or a Postgres/Redis store) to the agent, or 
 
 The DO-SQLite store is scoped to the **Durable Object instance**. If you address one DO per conversation, a `user`-scope block only spans that conversation. To get true cross-session per-user memory on CF, either address the DO by `userId` (so a user's sessions share one DO) or use an external store (`PostgresPersistentMemoryStore` / `RedisPersistentMemoryStore` via Upstash) so memory is shared across DOs.
 
-## Semantic recall (the other axis)
+## Semantic recall (extracted facts)
 
-For retrieval over everything ever discussed, enable `memory.preload` / `memory.ingest` with a `MemoryService` (`RedisMemoryService`, `PostgresMemoryService`, or `InMemoryMemoryService`). Working memory and semantic recall are independent — use both: working memory for the always-in-context profile, semantic recall for searching the long tail.
+For cross-session fact memory, enable `memory.preload` and `memory.extract` with the built-in `factsExtractor()`:
+
+```typescript
+import { defineAgent, factsExtractor } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  memory: {
+    preload: { enabled: true, tokenBudget: 500 },
+    extract: [factsExtractor()],
+    extraction: { trigger: { tokens: 2000 } },
+  },
+});
+```
+
+Working memory and extracted facts are independent — use both: working memory for the always-in-context profile, extracted facts for LLM-merged cross-session recall keyed by `userId`.

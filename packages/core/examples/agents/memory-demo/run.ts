@@ -11,10 +11,13 @@ import { createLoadMemoryTool } from '../../../src/tools/memory.js';
 import { wrapAiSdkTool } from '../../../src/tools/effect/wrapAiSdkTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
 import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
+import { factsExtractor } from '../../../src/memory/extract/builtin/factsExtractor.js';
+import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { loadExampleEnv } from '../../_shared/v2Runner.js';
 
 const memoryService = new InMemoryMemoryService();
+const extractedValueStore = new InMemoryExtractedValueStore();
 
 loadExampleEnv(import.meta.url);
 
@@ -36,7 +39,8 @@ Be conversational and refer to past context naturally.`,
   tools: { loadMemory: wrapAiSdkTool('loadMemory', createLoadMemoryTool()) },
   memory: {
     preload: { enabled: true },
-    ingest: { enabled: true },
+    extract: [factsExtractor()],
+    extraction: { blocking: true, trigger: 'each-turn' },
   },
 });
 
@@ -45,6 +49,7 @@ const runtime = createRuntime({
   defaultAgentId: agent.id,
   defaultModel: model,
   sessionStore: new MemoryStore(),
+  extractedValueStore,
   memoryService,
 });
 
@@ -75,7 +80,7 @@ async function runSession(sessionNum: number) {
     console.log();
   }
 
-  console.log(`\nSession ${sessionNum} ended. Memories have been ingested.`);
+  console.log(`\nSession ${sessionNum} ended. Facts have been extracted.`);
 }
 
 async function main() {

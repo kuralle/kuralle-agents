@@ -26,7 +26,7 @@
 
 import type { Session } from '../types/index.js';
 import type { CapabilityHost, ToolDeclaration } from './index.js';
-import type { MemoryService } from '../memory/MemoryService.js';
+import type { ExtractedValueStore } from '../memory/extract/store.js';
 import { preloadMemoryContext } from '../memory/preloadMemory.js';
 import {
   formatMemoryWithBudget,
@@ -49,8 +49,8 @@ export interface LivePromptContext {
   /** Current session — used for working memory injection. */
   session?: Session;
 
-  /** Cross-session memory service for long-term context. */
-  memoryService?: MemoryService;
+  /** Cross-session extracted facts store for long-term context. */
+  extractedValueStore?: ExtractedValueStore;
 
   /** Latest user input — used as search query for memory retrieval. */
   lastUserInput?: string;
@@ -78,7 +78,7 @@ export interface LivePromptAssembler {
    * Synchronous variant for initial connect (before any user input).
    * Skips async memory preloading.
    */
-  assembleSync(ctx: Omit<LivePromptContext, 'memoryService' | 'lastUserInput'>): string;
+  assembleSync(ctx: Omit<LivePromptContext, 'extractedValueStore' | 'lastUserInput'>): string;
 }
 
 // ─── Default Voice Rules & Guardrails ───────────────────────────────────────
@@ -150,9 +150,9 @@ export class DefaultLivePromptAssembler implements LivePromptAssembler {
     const sections = this.buildCoreSections(ctx);
 
     // Async: long-term memory preload
-    if (ctx.memoryService && ctx.session && ctx.lastUserInput) {
+    if (ctx.extractedValueStore && ctx.session && ctx.lastUserInput) {
       const preloaded = await preloadMemoryContext(
-        ctx.memoryService,
+        ctx.extractedValueStore,
         ctx.session,
         ctx.lastUserInput,
         this.budget.maxLongTermMemoryTokens,
@@ -166,7 +166,7 @@ export class DefaultLivePromptAssembler implements LivePromptAssembler {
     return sections.join('\n\n');
   }
 
-  assembleSync(ctx: Omit<LivePromptContext, 'memoryService' | 'lastUserInput'>): string {
+  assembleSync(ctx: Omit<LivePromptContext, 'extractedValueStore' | 'lastUserInput'>): string {
     return this.buildCoreSections(ctx).join('\n\n');
   }
 
@@ -175,7 +175,7 @@ export class DefaultLivePromptAssembler implements LivePromptAssembler {
    * Subclasses can override to add/reorder sections.
    */
   protected buildCoreSections(
-    ctx: Omit<LivePromptContext, 'memoryService' | 'lastUserInput'>,
+    ctx: Omit<LivePromptContext, 'extractedValueStore' | 'lastUserInput'>,
   ): string[] {
     const sections: string[] = [];
 

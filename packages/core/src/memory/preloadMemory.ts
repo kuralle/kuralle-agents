@@ -1,5 +1,6 @@
 import type { Session } from '../types/index.js';
-import type { MemoryService } from './MemoryService.js';
+import type { ExtractedValueStore } from './extract/store.js';
+import { FACTS_EXTRACTOR_SLUG } from './extract/builtin/factsExtractor.js';
 
 /**
  * Token estimation function. Matches the estimator used in ContextManager.ts:
@@ -10,13 +11,29 @@ function estimateTokenCount(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+const QUERY_TOKEN_MIN_LENGTH = 4;
+
+function lexicalScore(query: string, fact: string): number {
+  const factLower = fact.toLowerCase();
+  const tokens = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= QUERY_TOKEN_MIN_LENGTH);
+  if (tokens.length === 0) return 0;
+  let hits = 0;
+  for (const token of tokens) {
+    if (factLower.includes(token)) hits += 1;
+  }
+  return hits / tokens.length;
+}
+
 /**
- * Preloads relevant memories into the system prompt before each LLM call.
+ * Preloads relevant extracted facts into the system prompt before each LLM call.
  *
  * This is NOT a tool the LLM calls. It is a Runtime-level middleware that:
  * 1. Takes the user's latest message as a search query
- * 2. Searches long-term memory for relevant context
- * 3. Formats matching memories as a markdown section
+ * 2. Loads cross-session facts from `ExtractedValueStore` (slug `facts`)
+ * 3. Formats matching facts as a markdown section
  * 4. Truncates the output to fit within the allocated token budget
  *
  * The maxTokens parameter is mandatory. If the formatted output exceeds
@@ -24,7 +41,7 @@ function estimateTokenCount(text: string): number {
  * the output fits.
  */
 export async function preloadMemoryContext(
-  memoryService: MemoryService,
+  store: ExtractedValueStore,
   session: Session,
   userInput: string,
   maxTokens: number,
@@ -32,13 +49,27 @@ export async function preloadMemoryContext(
   if (!session.userId) return null;
   if (maxTokens <= 0) return null;
 
-  const result = await memoryService.searchMemory({
-    userId: session.userId,
-    query: userInput,
-    limit: 10,
-  });
+  const loaded = await store.load('user', session.userId, FACTS_EXTRACTOR_SLUG);
+  if (!loaded) return null;
 
-  if (result.memories.length === 0) return null;
+  const facts = (loaded.value as { facts?: string[] }).facts ?? [];
+  if (facts.length === 0) return null;
+
+  const createdAt = loaded.updatedAt ? new Date(loaded.updatedAt) : new Date();
+  const limit = 10;
+
+  const scored = facts.map((fact, index) => ({
+    fact,
+    index,
+    score: lexicalScore(userInput, fact),
+  }));
+  const relevant = scored.filter((entry) => entry.score > 0);
+  // Facts are few and curated: when nothing matches lexically, return them
+  // all (up to limit) — continuity beats false-negative emptiness.
+  const selected = (relevant.length > 0 ? relevant.sort((a, b) => b.score - a.score) : scored).slice(
+    0,
+    limit,
+  );
 
   const headerLines = [
     '## Context from Past Conversations',
@@ -52,12 +83,9 @@ export async function preloadMemoryContext(
 
   const includedLines: string[] = [];
 
-  for (const m of result.memories) {
-    const author = m.author ? `${m.author}: ` : '';
-    const date = m.createdAt
-      ? `[${m.createdAt.toISOString().split('T')[0]}] `
-      : '';
-    const line = `${date}${author}${m.content}`;
+  for (const entry of selected) {
+    const date = createdAt ? `[${createdAt.toISOString().split('T')[0]}] ` : '';
+    const line = `${date}memory: ${entry.fact}`;
     const lineTokens = estimateTokenCount(line);
 
     if (estimatedTokens + lineTokens > maxTokens) {

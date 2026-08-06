@@ -14,8 +14,6 @@ import { fileURLToPath } from 'node:url';
 import { defineAgent } from '../src/authoring/defineAgent.js';
 import { createRuntime } from '../src/runtime/Runtime.js';
 import { MemoryStore } from '../src/session/stores/MemoryStore.js';
-import { InMemoryPersistentMemoryStore } from '../src/memory/blocks/InMemoryPersistentMemoryStore.js';
-import { createFactMemoryService } from '../src/memory/factMemoryService.js';
 import { createPromptInjectionGuard } from '../src/processors/builtin/promptInjectionGuard.js';
 import { createPiiInputGuard } from '../src/processors/builtin/piiGuard.js';
 import { simulateConversation, createJudge } from '../src/eval/simulation.js';
@@ -265,29 +263,31 @@ async function collect(handle: import('../src/types/stream.js').TurnHandle) {
 
 // ── 6. Fact memory ───────────────────────────────────────────────────────────
 {
-  const store = new InMemoryPersistentMemoryStore();
-  const service = createFactMemoryService({ store, model: live.model });
-  await service.addSessionToMemory({
-    id: 'mem-1',
-    conversationId: 'mem-1',
-    channelId: 'api',
-    userId: 'jane',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  const { factsExtractor } = await import('../src/memory/extract/builtin/factsExtractor.js');
+  const { InMemoryExtractedValueStore } = await import('../src/memory/extract/InMemoryExtractedValueStore.js');
+  const { runExtractors } = await import('../src/memory/extract/runExtractors.js');
+  const store = new InMemoryExtractedValueStore();
+  await runExtractors({
+    extractors: [factsExtractor()] as unknown as readonly import('../src/memory/extract/types.js').Extractor[],
+    store,
+    model: live.model,
     messages: [
       { role: 'user', content: 'I am Jane. Always deliver to 12 Galle Road, Colombo 03.' },
       { role: 'assistant', content: 'Noted Jane — 12 Galle Road, Colombo 03 it is.' },
     ],
-    workingMemory: {},
-    currentAgent: 'shop',
-    agentStates: {},
-    handoffHistory: [],
+    ctx: {
+      agentId: 'shop',
+      sessionId: 'mem-1',
+      userId: 'jane',
+      emit: () => {},
+    },
   });
-  const found = await service.searchMemory({ userId: 'jane', query: 'delivery address' });
+  const loaded = await store.load('user', 'jane', 'facts');
+  const facts = (loaded?.value as { facts?: string[] })?.facts ?? [];
   check(
-    'fact memory extracted + retrieved the delivery address',
-    found.memories.some((memory) => /galle road/i.test(memory.content)),
-    JSON.stringify(found.memories.map((memory) => memory.content)),
+    'fact memory extracted + stored the delivery address',
+    facts.some((fact) => /galle road/i.test(fact)),
+    JSON.stringify(facts),
   );
 }
 

@@ -157,8 +157,12 @@ export type {
 export { InMemoryMemoryService } from './memory/index.js';
 export { preloadMemoryContext } from './memory/index.js';
 export { extractMemories } from './memory/index.js';
-export { createFactMemoryService } from './memory/index.js';
-export type { FactMemoryServiceOptions } from './memory/index.js';
+export {
+  factsExtractor,
+  FACTS_EXTRACTOR_SLUG,
+  type FactsExtractorOptions,
+  type FactsValue,
+} from './memory/index.js';
 
 export type {
   PersistentMemoryStore,
