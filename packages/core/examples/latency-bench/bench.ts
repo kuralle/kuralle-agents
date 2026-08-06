@@ -120,6 +120,19 @@ function scriptedModel(script: Array<ReturnType<typeof textChunks>>) {
         }),
       } as never;
     },
+    // `generateObject` (the extraction path) calls doGenerate, not doStream.
+    // Without this the extraction scenario measures a call that fails
+    // immediately with "Not implemented" — i.e. it proves the turn is fast
+    // because nothing ran, which is the opposite of the point.
+    doGenerate: async () => {
+      await sleep(PROVIDER_FIRST_BYTE_MS);
+      return {
+        content: [{ type: 'text', text: '{"slow-probe":"value"}' }],
+        finishReason: { unified: 'stop' as const, raw: undefined },
+        usage: USAGE,
+        warnings: [],
+      } as never;
+    },
   });
 }
 
@@ -322,7 +335,7 @@ function round(v: number | null): number | null {
 
 function runtimeWith(
   model: ReturnType<typeof scriptedModel>,
-  opts: { tools?: Record<string, AnyTool>; memoryExtraction?: boolean } = {},
+  opts: { tools?: Record<string, AnyTool>; memoryExtraction?: 'blocking' | 'background' } = {},
 ) {
   const agent = defineAgent({
     id: 'bench',
@@ -334,7 +347,10 @@ function runtimeWith(
       ? {
           memory: {
             extract: [slowExtractionProbe],
-            extraction: { blocking: true, trigger: 'each-turn' },
+            extraction: {
+              blocking: opts.memoryExtraction === 'blocking',
+              trigger: 'each-turn',
+            },
           },
         }
       : {}),
@@ -397,9 +413,19 @@ const SCENARIOS: Record<
     input: 'Summarise the archive.',
   }),
 
-  /** Post-turn blocking extraction — probes what the user waits for after `done`. */
+  /** The shipped default: extraction runs AFTER the turn closes, so its cost
+   *  does not reach the user. `turn_ms` should stay at the text-only floor even
+   *  though the extraction itself takes MEMORY_EXTRACTION_MS. */
   'memory-extraction': () => ({
-    ...runtimeWith(scriptedModel([textChunks(SENTENCES)]), { memoryExtraction: true }),
+    ...runtimeWith(scriptedModel([textChunks(SENTENCES)]), { memoryExtraction: 'background' }),
+    input: 'My name is Mithushan and I live in Colombo.',
+  }),
+
+  /** Control: the same extraction with `blocking: true`, i.e. what the old
+   *  awaited-ingest path cost. The delta between this and the row above IS the
+   *  feature. */
+  'memory-extraction-blocking': () => ({
+    ...runtimeWith(scriptedModel([textChunks(SENTENCES)]), { memoryExtraction: 'blocking' }),
     input: 'My name is Mithushan and I live in Colombo.',
   }),
 
