@@ -11,7 +11,9 @@ function getTool<T extends { execute?: (...args: never[]) => unknown }>(
 ): T {
   const tool = cap.getTools().find((t) => t.name === name);
   if (!tool?.execute) throw new Error(`missing tool ${name}`);
-  return tool as T;
+  // `T` is chosen by the caller and the registry is untyped, so this widens through `unknown`
+  // rather than asserting an overlap the compiler cannot see.
+  return tool as unknown as T;
 }
 
 describe('skill load briefing', () => {

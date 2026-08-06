@@ -37,8 +37,9 @@ export interface AgentMemory {
   /** Persistent markdown blocks (USER/MEMORY) loaded at session start and editable via memory_block. */
   workingMemory?: WorkingMemoryConfig;
   /** Named, typed things to learn from a conversation. Superseded `ingest`.
-   *  `Extractor<any>`, not `Extractor<unknown>` — the array holds extractors with
-   *  different `T`s, and `T` appears contravariantly (in `onExtracted`'s
-   *  parameter), so a heterogeneous array only typechecks under `any`. */
-  extract?: Extractor<any>[];
+   *  `Extractor<never>`, not `Extractor<unknown>` — the array holds extractors with
+   *  different `T`s and `T` appears contravariantly (in `onExtracted`'s parameter), so the
+   *  common supertype is the one whose parameter accepts least: `never`. `unknown` would be
+   *  backwards, and `any` merely silences the check while failing the repo's lint rule. */
+  extract?: Extractor<never>[];
 }

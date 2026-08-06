@@ -36,7 +36,10 @@ export const hasEmbeddingCredentials =
 export const EMBEDDING_MODEL_ID =
   EMBEDDING_PROVIDER === 'openai' ? 'text-embedding-3-small' : 'gemini-embedding-001';
 
-export function embeddingModel(): EmbeddingModel<string> {
+// `EmbeddingModel` stopped being generic in ai 6.x — it is now a union
+// (`string | EmbeddingModelV3 | EmbeddingModelV2<string>`), so the old `EmbeddingModel<string>`
+// form fails `typecheck:all` even though `bun test` never typechecks this file.
+export function embeddingModel(): EmbeddingModel {
   return EMBEDDING_PROVIDER === 'openai'
     ? openai.embedding('text-embedding-3-small')
     : google.embedding('gemini-embedding-001');

@@ -73,7 +73,11 @@ describe('packagedSkillStore', () => {
   });
 
   it('lists resources excluding SKILL.md', async () => {
-    expect(await store.listResources('demo')).toEqual(['data.bin', 'references/note.md']);
+    // `listResources` is optional on the store interface, so a store that omits it is legal.
+    // This one must have it — asserting that is the point, rather than reaching past the type.
+    const { listResources } = store;
+    if (!listResources) throw new Error('packagedSkillStore must expose listResources');
+    expect(await listResources('demo')).toEqual(['data.bin', 'references/note.md']);
   });
 
   it('loadResource treats SKILL.md as a miss, not a resource', async () => {
@@ -109,7 +113,11 @@ describe('prepareSkillStore authoring errors', () => {
   it('throws when a branded packaged skill is mixed into a bare inline entry list', async () => {
     const packaged = buildPackagedSkill('pkg', 'Pkg.', 'Pkg body.');
     const inline = defineSkill({ name: 'inline', description: 'Inline.', instructions: 'Inline body.' });
-    await expect(prepareSkillStore([packaged, inline])).rejects.toThrow(/must be passed as an array entry/);
+    // The mix is deliberately ill-typed — that is what the test asserts is rejected at runtime,
+    // so the cast is the subject of the test rather than a way around it.
+    await expect(prepareSkillStore([packaged, inline] as never)).rejects.toThrow(
+      /must be passed as an array entry/,
+    );
   });
 
   it('throws when an inline skill object is missing a body', async () => {

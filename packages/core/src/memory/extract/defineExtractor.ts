@@ -56,8 +56,8 @@ export function slugifyExtractorName(name: string): string {
 }
 
 /** Rejects duplicate slugs, naming both extractors that collided. */
-export function validateExtractorList(extractors: readonly Extractor<any>[]): Extractor<any>[] {
-  const bySlug = new Map<string, Extractor<any>[]>();
+export function validateExtractorList(extractors: readonly Extractor<never>[]): Extractor<never>[] {
+  const bySlug = new Map<string, Extractor<never>[]>();
   for (const extractor of extractors) {
     const group = bySlug.get(extractor.slug);
     if (group) {
@@ -75,7 +75,7 @@ export function validateExtractorList(extractors: readonly Extractor<any>[]): Ex
       );
     }
   }
-  return extractors as Extractor<any>[];
+  return extractors as Extractor<never>[];
 }
 
 export interface DefineExtractorConfig<T> {

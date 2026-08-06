@@ -28,7 +28,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
+import { type PluginConfig, Streamdown } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -321,7 +321,12 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+// `streamdown@2.5` resolves shiki 4 while `@streamdown/code@1.1.1` — the latest — still pins
+// shiki ^3.19, and the two majors disagree on the `BundledLanguage` string-literal union
+// (shiki 4 renamed `actionscript` to `actionscript-3`, among others). The highlighters are
+// runtime-compatible; only the literal unions differ, and no combination of published versions
+// reconciles them, so the cast is the narrowest place to absorb an upstream skew.
+const streamdownPlugins = { cjk, code, math, mermaid } as PluginConfig;
 
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
