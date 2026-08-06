@@ -1,0 +1,373 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind is here only for `components/ai-elements/*` — the AI Elements chat components,
+ * which ship as Tailwind-utility markup. Everything below this block is the app's original
+ * hand-written CSS and still styles the Content, Brand and Assets pages unchanged.
+ *
+ * The shadcn token names the Elements components reference are mapped onto the palette this
+ * app already had, rather than pulling in shadcn's default stone ramp. Two sets of colours
+ * would make the chat panel look like it came from a different product.
+ */
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-contrast);
+  --color-secondary: var(--bg);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--bg);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--bg);
+  --color-accent-foreground: var(--text);
+  --color-destructive: #b3261e;
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+:root {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --border: #e2ddd3;
+  --text: #1f1b16;
+  --text-muted: #746a5c;
+  --accent: #b5502f;
+  --accent-contrast: #ffffff;
+  --radius: 6px;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.topbar__brand {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.topbar__nav {
+  display: flex;
+  gap: 4px;
+}
+
+.topbar__nav a {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.topbar__nav a[data-active='true'] {
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+main.page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px;
+  gap: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+tr td a {
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filters select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  background: var(--surface);
+}
+
+.status-message {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.status-message[data-tone='error'] {
+  color: #b3261e;
+}
+
+.toolbar {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 6px;
+  background: var(--bg);
+}
+
+.toolbar button {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toolbar button[data-active='true'] {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.editor-shell {
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface);
+  min-height: 320px;
+  padding: 16px;
+}
+
+.editor-shell .ProseMirror {
+  outline: none;
+  min-height: 280px;
+}
+
+.editor-shell .ProseMirror h1 {
+  font-size: 1.6em;
+}
+
+.editor-shell .ProseMirror h2 {
+  font-size: 1.3em;
+}
+
+.editor-shell .ProseMirror pre {
+  background: #1f1b16;
+  color: #f5f0e8;
+  padding: 10px 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.editor-shell .ProseMirror blockquote {
+  border-left: 3px solid var(--border);
+  margin-left: 0;
+  padding-left: 12px;
+  color: var(--text-muted);
+}
+
+.editor-shell .ProseMirror code {
+  background: var(--bg);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat__messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+}
+
+.chat__message {
+  max-width: 70ch;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+}
+
+.chat__message[data-role='user'] {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+.chat__message[data-role='assistant'] {
+  align-self: flex-start;
+  background: var(--surface);
+}
+
+.chat__form {
+  display: flex;
+  gap: 8px;
+}
+
+.chat__form textarea {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 44px;
+}
+
+.asset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.asset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/*
+ * The user's own messages, restored to the accent bubble this app had before the chat moved to
+ * AI Elements. `MessageContent` styles them with `bg-secondary`, and `--color-secondary` maps
+ * to the page background here — correct for the tool status badges that share that token, but
+ * it renders the user's bubble invisible. Overriding the token would fix the bubble and turn
+ * every badge brown, so the rule is scoped to the bubble instead.
+ */
+.chat .is-user > * {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}

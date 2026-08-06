@@ -35,6 +35,7 @@ export function buildSupportAgent({ model, backend, config }: BuildSupportAgentO
     description: 'Read one authenticated customer order from the authoritative order system. Never infer order state from chat history.',
     input: z.object({ orderId }),
     replay: false,
+    parallelSafe: true,
     timeoutMs: 12_000,
     execute: async ({ orderId: requestedOrder }, ctx) => {
       const order = await backend.lookupOrder({

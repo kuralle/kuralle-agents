@@ -15,7 +15,12 @@ export interface Limits {
   maxOscillations?: number;
   /**
    * Ceiling on parallel-safe tools executing at once within one model-emitted batch.
-   * Unset means unbounded — the model's batch size decides how many run concurrently.
+   * Defaults to `DEFAULT_MAX_TOOL_CONCURRENCY` (8). Raise it deliberately; the
+   * model's batch size must never be the concurrency policy, and above eight the
+   * session store's CAS starts rejecting concurrent writes.
    */
   maxToolConcurrency?: number;
+  /** Token ceiling on a single tool result as the MODEL sees it. Default 8000.
+   *  The journal and `ctx.tool()` always keep the full value. */
+  maxToolResultTokens?: number;
 }

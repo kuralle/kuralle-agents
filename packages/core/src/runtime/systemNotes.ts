@@ -73,3 +73,15 @@ export function consumeTurnNotes(run: Pick<RunState, 'state'>): void {
 export function clearSystemNotes(run: Pick<RunState, 'state'>): void {
   delete run.state[NOTES_KEY];
 }
+
+/**
+ * Drop the note carrying `tag`, if any. Used when the fact a note carries has been folded
+ * into something more durable than the note itself — e.g. a skill-catalog delta note once
+ * the roster it announced has been baked into a rebaselined `skillPrompt` at compaction —
+ * so the note does not keep restating information the prompt now already contains.
+ */
+export function removeSystemNote(run: Pick<RunState, 'state'>, tag: string): void {
+  const kept = read(run.state).filter((n) => n.tag !== tag);
+  if (kept.length === 0) delete run.state[NOTES_KEY];
+  else run.state[NOTES_KEY] = kept;
+}

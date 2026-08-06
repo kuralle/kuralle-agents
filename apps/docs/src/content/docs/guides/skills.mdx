@@ -5,10 +5,12 @@ description: Anthropic-style Agent Skills — SKILL.md knowledge an agent loads 
 
 import { Aside } from '@astrojs/starlight/components';
 
-Skills are reusable units of procedural knowledge — a name, a one-line description, and a body of
-instructions (plus optional bundled resources). The agent sees only the **names and descriptions**
-up front and pulls a skill's full body **on demand** when the task matches. This keeps the prompt
-small no matter how many skills you attach.
+A skill is reusable procedural knowledge — a name, a one-line description, and a body of
+instructions (plus optional bundled resources). A **tool executes**: it calls an API, writes to a
+database, returns structured data. A **skill teaches**: it returns text the model reads and then
+acts on, using whatever tools the task calls for. The agent sees only a skill's **name and
+description** up front and pulls the full body **on demand** when the task matches, so the prompt
+stays small no matter how many skills you attach.
 
 ```bash
 npm install @kuralle-agents/core
@@ -17,14 +19,13 @@ npm install @kuralle-agents/core
 ## Quick start
 
 ```typescript
-import { defineSkill } from '@kuralle-agents/core';
-import { defineAgent } from '@kuralle-agents/core';
+import { defineSkill, defineAgent } from '@kuralle-agents/core';
 
 const returnsPolicy = defineSkill({
   name: 'returns-policy',
   description: 'Returns, refunds, exchanges, and the 30-day window. Use when a customer asks about returning an order.',
   allowedTools: ['lookup_order'],
-  body: [
+  instructions: [
     '# Returns',
     '1. Confirm the order id, then run `lookup_order`.',
     '2. If the order is under 30 days old, it is returnable.',
@@ -48,15 +49,239 @@ const agent = defineAgent({
    block listing each skill's `name` + `description`. That's all the model sees by default —
    N skills cost only N description lines, not N full bodies.
 2. **Level 2 — on demand.** When a task matches a description, the model calls the
-   `load_skill(name)` tool and gets that skill's full `body` back as a tool result.
+   `load_skill(name)` tool and gets that skill's full body back as a tool result, framed with a
+   `<skill_instructions>` block and (if the skill has any) a `<skill_resources>` block naming the
+   exact `read_skill_resource` call for each bundled file.
 3. **Level 3 — bundled resources.** A skill can ship reference files in `resources`; the model
    reads one with `read_skill_resource(name, path)` only when it needs it.
 
 ```
 system prompt ──▶ ## Available skills      (names + descriptions — every turn)
-   model ──▶ load_skill("returns-policy")  ──▶ full SKILL.md body (tool result)
+   model ──▶ load_skill("returns-policy")  ──▶ <skill_instructions> body (tool result)
    model ──▶ read_skill_resource("returns-policy", "exceptions.md")  ──▶ file content
 ```
+
+## Four ways to supply a skill
+
+`AgentConfig.skills` accepts one entry or an ordered array mixing any of the following. **Later
+entries win** on a name collision.
+
+| Mode | Shape | Use it for |
+|---|---|---|
+| Inline | `defineSkill({...})` | Authored in code, versioned with the agent. |
+| Packaged directory | `packageSkillsDirectory(dir)` output, passed as `[[pkg, pkg2]]` | A `SKILL.md` folder baked into the deployable bundle — no filesystem or sandbox needed at runtime. |
+| Filesystem path | a `string`, e.g. `'/.agents/skills/support'` | `SKILL.md` folders on the agent's `workspace`, hot-updatable without a redeploy. |
+| Resolver | `async ({ session, agentId }) => SkillLike[]` | Per-tenant or per-principal skill sets, resolved once per session. |
+
+You can mix them:
+
+```typescript
+skills: [
+  '/.agents/skills/shared',        // filesystem, shared org-wide policies
+  packagedBundle,                  // packaged directory, baked in at build time
+  defineSkill({ name: 'override', /* … */ instructions: '...' }), // wins on a name collision
+]
+```
+
+### Inline — `defineSkill`
+
+Builds a skill in code with no filesystem involved. Validated against the same rules as a
+`SKILL.md` on disk, so moving one to a folder later cannot start failing.
+
+```typescript
+defineSkill({
+  name: 'returns-policy',        // lowercase, hyphen-separated, ≤64 chars
+  description: '...',            // ≤1024 chars — the Level-1 selector
+  instructions: '...',           // the body returned by load_skill
+  allowedTools: ['lookup_order'],// optional — see "allowed-tools" below
+  resources: { 'exceptions.md': '...' }, // optional — Level 3
+});
+```
+
+### Packaged directory
+
+`packageSkillsDirectory` (from `@kuralle-agents/build`) walks a `SKILL.md` folder at build time,
+content-addresses it, and produces a `PackagedSkill[]` your deployment bundles directly — no
+`workspace` filesystem, and no sandbox, is needed at runtime to serve it:
+
+```typescript
+import { packageSkillsDirectory } from '@kuralle-agents/build';
+
+const packaged = await packageSkillsDirectory('./skills/house-style');
+
+const agent = defineAgent({
+  id: 'editor',
+  model,
+  tools: { lint_copy },
+  skills: [packaged], // no `workspace` on this agent — the bundle carries its own files
+});
+```
+
+Packaging refuses to embed secrets: it throws on `.env*`, `.dev.vars*`, `.npmrc`/`.pypirc`/
+`.netrc`, key/cert files (`.key`, `.pem`, `.p12`, `.pfx`), anything named `secret*`, symbolic
+links, and sensitive directories (`.ssh`, `.aws`, `.gnupg`) rather than silently skipping them.
+See it exercised live in
+[`packages/build/examples/packaged-skills-live.ts`](https://github.com/kuralle/kuralle-agents/tree/main/packages/build/examples/packaged-skills-live.ts).
+
+### Filesystem path
+
+Keep skills as `SKILL.md` folders on a [workspace filesystem](/guides/workspace/#skills-on-the-filesystem) —
+the same [agentskills.io](https://agentskills.io) layout Claude and other agents use — and load
+them with `fsSkillStore`:
+
+```typescript
+import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';
+
+const fs = new InMemoryFs({
+  '/.agents/skills/refunds/SKILL.md': '---\nname: refunds\ndescription: Handle refunds.\n---\n\n# Refunds\n...',
+});
+const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkillStore(fs) });
+```
+
+Omitting the second argument scans **`/.agents/skills`** for `SKILL.md` folders — that is the
+discovery root. Pass explicit roots when layering shared and project-specific skills:
+
+```typescript
+const skills = fsSkillStore(fs, ['/.agents/skills/shared', '/.agents/skills/project']);
+```
+
+A plain `string` entry in `skills` (e.g. `skills: ['/.agents/skills/support']`) is shorthand for
+`fsSkillStore(fs, [that path])` against the agent's own `workspace`; it throws at wiring time if
+the agent has no `workspace` filesystem, rather than silently yielding no skills.
+
+`fsSkillStore` discovers a snapshot, parses each `SKILL.md` once for that discovery, and serves
+body loads from the parsed snapshot; resources remain lazy filesystem reads. A malformed
+*discovered* `SKILL.md` warns and is skipped — the rest of the directory still loads — but an
+*authored* skill (inline `defineSkill`, or a packaged directory) that fails the same rules throws,
+since an authoring mistake should fail the build, not vanish silently.
+
+### Resolver
+
+A function resolves a per-session or per-tenant skill set, called **once per session** (not once
+per turn) and persisted so a later turn or a replay reuses the result instead of re-invoking the
+resolver:
+
+```typescript
+const agent = defineAgent({
+  id: 'support',
+  model,
+  skills: [
+    async ({ session, agentId }) => {
+      const tenant = await lookupTenant(session.id);
+      return [
+        defineSkill({
+          name: `policy-${tenant.id}`,
+          description: `${tenant.name}'s support policy.`,
+          instructions: tenant.policyText,
+        }),
+      ];
+    },
+  ],
+});
+```
+
+A resolver may return either a plain array of skills or a `SkillStoreLike`. Two *different*
+resolver entries producing the same skill name is an authoring error and throws — there is no
+ordering the framework can infer between two independent per-tenant resolutions.
+
+## `SKILL.md` frontmatter
+
+```markdown
+---
+name: returns-policy
+description: Returns, refunds, exchanges, and the 30-day window.
+allowed-tools: lookup_order, issue_refund
+---
+
+# Returns
+...
+```
+
+Parsed on `yaml` v2 under the **failsafe** schema — every scalar stays a string, no type
+coercion, mirroring the Agent Skills reference implementation. `name` must equal its directory
+name.
+
+| Field | Enforced? | Notes |
+|---|---|---|
+| `name` | Yes | Required. Lowercase, hyphen-separated, ≤64 chars, no XML tags, no reserved vendor words (`anthropic`, `claude`), must match the containing directory. |
+| `description` | Yes | Required. ≤1024 chars, no XML tags — frontmatter reaches the system prompt, so this is a prompt-injection seam. |
+| `allowed-tools` | Yes | Enforced at the tool boundary once the skill activates — see below. Accepts a YAML list or a comma/space-separated string. |
+| `compatibility` | Accepted, not enforced | Passed through if present (≤500 chars); the runtime does not act on it. |
+| `metadata` | Accepted, not enforced | Passed through as a string-to-string map; not read by the runtime. |
+| `license` | Accepted, not enforced | Passed through if present. |
+
+Any other frontmatter key is ignored, per the Agent Skills spec — it is not an error to include
+one.
+
+## `allowed-tools`
+
+<Aside type="caution" title="Not a security boundary">
+`allowed-tools` is a guard-rail for an honest model that makes mistakes, **not** a boundary
+against an adversarial one. It restricts a turn only once `load_skill` has *succeeded* for a
+skill that declares it. A model that never activates the skill — because it guessed the name
+wrong, or simply chose not to call `load_skill` — is unrestricted, and every tool on the agent
+remains callable. For an unconditional restriction that holds regardless of what the model does
+or doesn't call, set an agent [`policy`](/guides/policy).
+</Aside>
+
+When it does apply, the restriction holds at the tool-execution boundary — a `Policy` decision,
+not a prompt instruction the model could ignore. The permitted set is the **union** of every
+currently-active skill's `allowed-tools`, plus the framework's own `load_skill` /
+`read_skill_resource`:
+
+- A skill that declares no `allowed-tools` imposes no restriction **and does not widen one**. If
+  skill A is active and declares `[lookup_order]`, then loading skill B — which declares
+  nothing — leaves the permitted set at `{lookup_order, load_skill, read_skill_resource}`, not
+  unrestricted. An unconstrained skill activating alongside a restricting one cannot dissolve the
+  restriction.
+- Two restricting skills active together get the union of both lists, not the intersection.
+- The restriction is scoped to the current flow node's turn: a skill activated in one flow node
+  imposes nothing in a different node, even within the same user turn. Each node decides afresh
+  whether to load a skill.
+
+This is demonstrated live, including the activation-scope limitation above, in
+[`packages/build/examples/packaged-skills-live.ts`](https://github.com/kuralle/kuralle-agents/tree/main/packages/build/examples/packaged-skills-live.ts) —
+run it to see a forbidden tool denied by the policy once a restricting skill is active, and then
+see the *same* tool succeed when the agent never calls `load_skill` at all.
+
+## The dynamic catalog
+
+Skills can be added to or withdrawn from a running session (see `LiveSkillCatalog` in
+`@kuralle-agents/core`) — for example, unlocking a skill after a qualification step completes.
+When the roster changes mid-session, Kuralle does **not** rewrite the `## Available skills` block
+in the system prompt. Instead it appends a one-off note to the transcript naming what became
+available or was withdrawn, then restates the current full roster.
+
+The reason is prompt caching: the serialized system prompt (including the catalog block) is a
+provider-cached prefix. Editing it mid-conversation invalidates that cache for every subsequent
+turn, trading a large latency/cost regression for a cosmetic prompt update. An in-transcript
+announcement gets the same information to the model without touching the cached prefix. The
+frozen baseline is only ever rebuilt at compaction — the one point where the cached prompt is
+already being rewritten anyway — folding the live roster back into a fresh baseline and dropping
+the announcement history so it doesn't grow unbounded.
+
+## `ctx.getSkill()`
+
+A tool can read its own skill's bundled files without going through the model — useful when a
+tool needs a reference file the skill ships (a banned-word list, a rate table) rather than asking
+the model to fetch and paste it:
+
+```typescript
+const lint_copy = defineTool({
+  name: 'lint_copy',
+  description: 'Lint a draft against the house banned-words list.',
+  input: z.object({ draft: z.string() }),
+  execute: async ({ draft }, ctx) => {
+    const raw = await ctx.getSkill('house-style').file('references/banned-words.json').text();
+    const banned: string[] = JSON.parse(raw).banned;
+    return { found: banned.filter((w) => draft.toLowerCase().includes(w)) };
+  },
+});
+```
+
+`getSkill(name)` throws if `name` isn't one of the agent's configured skills; the returned handle
+is read-only by construction — `file(path).text()` / `.bytes()` are the only operations it
+exposes. It works regardless of which of the four supply modes served the skill.
 
 ## Many skills, multi-turn
 
@@ -82,45 +307,19 @@ concern (extra tokens + a tool round-trip), never a correctness one.
 |-------|------|-------|
 | `name` | `string` | Stable identifier the model passes to `load_skill`. |
 | `description` | `string` | The Level-1 selector — write it so the model knows *when* to load this skill. |
-| `body` | `string` | The full instructions returned by `load_skill` (your `SKILL.md`). |
-| `allowedTools?` | `string[]` | Tools this skill is allowed to drive (advisory scoping). |
-| `resources?` | `Record<string, string>` | Bundled files exposed via `read_skill_resource`. |
-
-You can also load skills from `SKILL.md` folders or a custom `SkillStore` instead of inline
-`defineSkill` objects — see below for store backends.
-
-## Skills on a filesystem
-
-`defineSkill` builds skills in code. You can also keep them as `SKILL.md` folders on a
-[workspace filesystem](/guides/workspace/#skills-on-the-filesystem) — the same
-[agentskills.io](https://agentskills.io) layout Claude and other agents use — and load them with
-`fsSkillStore`:
-
-```typescript
-import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';
-
-const fs = new InMemoryFs({
-  '/skills/refunds/SKILL.md': '---\nname: refunds\ndescription: Handle refunds.\n---\n\n# Refunds\n...',
-});
-const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkillStore(fs) });
-```
-
-`fsSkillStore` implements the same store interface as an array of `defineSkill` objects, so
-progressive disclosure works identically. On a persistent
-[`SqlFileSystem`](/guides/workspace/#persistence--pick-a-backend-by-platform), skills survive restarts.
-
-Layer shared defaults with agent- or project-specific skills by passing ordered roots. Later roots
-override earlier roots by frontmatter `name`; the winning root supplies the body and resources:
-
-```typescript
-const skills = fsSkillStore(fs, ['/skills/shared', '/skills/project']);
-```
+| `instructions` | `string` | The full instructions returned by `load_skill` (your `SKILL.md` body). |
+| `allowedTools?` | `string[]` | Restricts this skill to a subset of the agent's tools once activated — see "allowed-tools" above. Unknown names throw at wiring time. An empty array is rejected as ambiguous; omit the field entirely for no restriction. |
+| `resources?` | `Record<string, string \| Uint8Array>` | Bundled files exposed via `read_skill_resource`. |
 
 ## Validation, caching, and audit hashes
 
-Filesystem skills are behavior-bearing content, so Kuralle fails loudly when a discovered `SKILL.md` has invalid frontmatter. A malformed skill cannot silently disappear from an agent's available capability list.
+Filesystem and packaged skills are behavior-bearing content, so Kuralle fails loudly when an
+*authored* `SKILL.md` (inline, or in a packaged directory) has invalid frontmatter — that throws.
+A *discovered* filesystem skill that fails to parse warns and is skipped, so one bad folder cannot
+take down the rest of an agent's skill set.
 
-`fsSkillStore` discovers a snapshot, parses each `SKILL.md` once for that discovery, and serves body loads from the parsed snapshot. Resources remain lazy filesystem reads. Every filesystem or inline skill body receives a SHA-256 content hash. Kuralle also hashes the ordered skill set and records that snapshot on the root turn span:
+Every filesystem, packaged, or inline skill body receives a SHA-256 content hash. Kuralle also
+hashes the ordered skill set and records that snapshot on the root turn span:
 
 ```typescript
 const trace = await runtime.getTrace(traceId);
@@ -128,12 +327,21 @@ console.log(trace?.attributes.skillContentHash);
 console.log(trace?.attributes.skillContentHashes); // one snapshot per agent touched by the turn
 ```
 
-The hash identifies the exact `SKILL.md` instruction bodies available during the run. It is evidence for audit and cache identity; it does not embed those bodies in the trace and does not currently cover lazily loaded resource-file bytes.
+The hash identifies the exact `SKILL.md` instruction bodies available during the run. It is
+evidence for audit and cache identity; it does not embed those bodies in the trace and does not
+currently cover lazily loaded resource-file bytes.
 
-To hot-update skills on a persistent filesystem, write the new content before the next turn. Discovery refreshes when the runtime wires that turn; an already wired turn intentionally keeps one stable instruction snapshot rather than changing behavior halfway through execution.
+To hot-update filesystem skills on a persistent workspace, write the new content before the next
+turn. Discovery refreshes when the runtime wires that turn; an already-wired turn intentionally
+keeps one stable instruction snapshot rather than changing behavior halfway through execution.
+Packaged skills are baked into the deployment artifact and change only on redeploy.
 
 ## Where it runs
 
-Skills are pure data + two tools, so they run identically on Node and Cloudflare Workers. The
-workerd parity test verifies a skill body loads byte-identically inside the
-Cloudflare runtime, and a `KuralleAgent` Durable Object loads the same filesystem skill without an adapter. See the [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) and [Examples](/examples/).
+Skills are pure data + two tools, so they run identically on Node and Cloudflare Workers. Packaged
+skills are the strongest form of this: no `node:` builtins and no filesystem or sandbox
+requirement at runtime, so Cloudflare parity needs no special case. The workerd parity test
+verifies a skill body loads byte-identically inside the Cloudflare runtime, and a `KuralleAgent`
+Durable Object loads the same filesystem skill without an adapter. See the
+[Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent)
+and [Examples](/examples/).

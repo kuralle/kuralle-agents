@@ -2,11 +2,14 @@ import { defineSkill } from '../src/skills/defineSkill.js';
 import { InlineSkillStore } from '../src/skills/inlineSkillStore.js';
 import { fsSkillStore } from '../src/skills/fsSkillStore.js';
 import { prepareSkillStore } from '../src/skills/collectSkills.js';
+import { brandPackagedSkill, classifySkillFileKind } from '../src/skills/packagedSkill.js';
+import { packagedSkillStore } from '../src/skills/packagedSkillStore.js';
 import type { FileSystem } from '../src/types/filesystem.js';
 
 export const SKILL_BODY = 'WORKERS_BODY_BYTES';
 export const SKILL_RESOURCE = 'WORKERS_RESOURCE_BYTES';
 export const FS_SKILL_BODY = 'FS_WORKERS_BODY_BYTES';
+export const PACKAGED_BINARY_BYTES = new Uint8Array([0xff, 0xfe, 0xfd, 0x00, 0x01, 0x02]);
 
 const skill = defineSkill({
   name: 'returns-policy',
@@ -78,4 +81,43 @@ export async function runPathSourceRoundTrip(): Promise<string[]> {
   });
   const { skills } = await prepareSkillStore(['/skills'], fs);
   return skills.map((s) => s.name);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return btoa(binary);
+}
+
+/** Packaged skills with a binary resource must load on workerd. */
+export async function runPackagedRoundTrip(): Promise<{ body: string; resource: Uint8Array }> {
+  const skillMd = `---\nname: packaged-demo\ndescription: Packaged on workerd.\n---\n\nPACKAGED_BODY`;
+  const pkg = brandPackagedSkill({
+    id: 'skill:packaged-demo:workerd',
+    name: 'packaged-demo',
+    description: 'Packaged on workerd.',
+    files: {
+      'SKILL.md': {
+        path: 'SKILL.md',
+        encoding: 'base64',
+        kind: 'text',
+        content: bytesToBase64(new TextEncoder().encode(skillMd)),
+      },
+      'data.bin': {
+        path: 'data.bin',
+        encoding: 'base64',
+        kind: classifySkillFileKind(PACKAGED_BINARY_BYTES),
+        content: bytesToBase64(PACKAGED_BINARY_BYTES),
+      },
+    },
+  });
+  const store = packagedSkillStore([pkg]);
+  const body = await store.loadBody('packaged-demo');
+  const resource = await store.loadResource('packaged-demo', 'data.bin');
+  if (!(resource instanceof Uint8Array)) {
+    throw new Error('Expected binary resource to be Uint8Array');
+  }
+  return { body, resource };
 }

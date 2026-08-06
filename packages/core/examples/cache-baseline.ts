@@ -28,6 +28,7 @@ const fetch_archive_page = defineTool({
   name: 'fetch_archive_page',
   description: 'Fetch one archive page by number.',
   replay: false,
+  parallelSafe: true,
   input: z.object({ page: z.string() }),
   execute: async ({ page }) => ({ page, content: PAGES[page] ?? 'not found' }),
 });

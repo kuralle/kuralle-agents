@@ -11,6 +11,8 @@ function readNarrowedPayload(part: StreamPart): unknown {
       return part.payload.delta;
     case 'text-cancel':
       return part.payload.reason;
+    case 'tool-batch-start':
+      return part.payload.calls;
     case 'tool-call':
       return part.payload.args;
     case 'tool-result':
@@ -40,6 +42,8 @@ function readNarrowedPayload(part: StreamPart): unknown {
       return part.payload.options;
     case 'turn-end':
       return part.payload;
+    case 'turn-incomplete':
+      return part.payload.reason;
     case 'pipeline-validation-block':
       return part.payload.rationale;
     case 'safety-blocked':
@@ -79,7 +83,7 @@ function readNarrowedPayload(part: StreamPart): unknown {
 
 describe('public StreamPart export', () => {
   it('classifies every publicly exported variant', () => {
-    expect(Object.keys(PART_CHANNEL)).toHaveLength(34);
+    expect(Object.keys(PART_CHANNEL)).toHaveLength(36);
     expect(readNarrowedPayload).toBeFunction();
   });
 });

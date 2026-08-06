@@ -189,6 +189,21 @@ const { messages } = useChat<KuralleUIMessage>({ api: '/api/chat/sse' });
 
 Kuralle flow/safety/interactive events arrive as `data-kuralle-*` parts — read persistent parts from `message.parts`, transient telemetry from `useChat({ onData })`. See ADR 0005 for the full mapping table.
 
+### Proxies and buffering
+
+The runtime sets `Cache-Control: no-cache, no-transform`, `Content-Encoding: identity` and
+`X-Accel-Buffering: no` on every streamed turn. Leave them alone — they are what stops an
+intermediary collecting the whole turn and delivering it in one frame.
+
+This is worth knowing about because the failure looks like a slow model rather than a broken proxy:
+the server streams correctly, the client shows a spinner for the entire turn, and then everything
+appears at once. It is also easy to mis-diagnose. A plain `curl` sends no `Accept-Encoding`, so it
+measures a healthy stream while a browser — which always negotiates encoding — sees nothing until
+the end. If you are checking whether streaming works, use `curl --compressed`, or measure in the
+browser.
+
+A Next.js `rewrites()` proxy in front of the server is the common case that trips this.
+
 ### Raw JSON-SSE (`?format=raw`)
 
 Non-UI consumers that parsed `StreamPart` JSON from 0.4.x append `?format=raw`:

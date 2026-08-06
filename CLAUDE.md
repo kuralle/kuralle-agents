@@ -29,6 +29,14 @@ routing, and durable tool execution. Monorepo on Bun workspaces, built on the Ve
   against an effect log → **exactly-once-modulo-idempotency**: a finished step replays without
   re-executing; a crash between execute and finalize re-runs the effect, so external side
   effects must honour the idempotency key.
+- **Skills** — `AgentConfig.skills`: reusable `SKILL.md`-shaped procedural knowledge, disclosed
+  progressively (name+description always in prompt; full body on `load_skill`; bundled resources
+  on `read_skill_resource`). Four supply modes: inline `defineSkill`, a packaged directory
+  (`@kuralle-agents/build`'s `packageSkillsDirectory`, workerd-clean, no `workspace` needed), a
+  filesystem path (`fsSkillStore`, default discovery root `/.agents/skills`), or a per-tenant
+  `SkillResolver`. A skill's `allowed-tools` is enforced at the tool boundary via `Policy` — but
+  only once `load_skill` succeeds for that skill; it is a guard-rail for an honest model, not an
+  adversarial boundary. See `/guides/skills`.
 - **Policy** — `Policy.decide(req)` returns `allow` / `ask` / `deny` per tool call. Set on
   `HarnessConfig` (runtime default) or `AgentConfig` (per-agent, which is what a delegated
   read-only worker needs). `needsApproval: true` is sugar for a policy returning `ask`.

@@ -9,6 +9,7 @@ import type { AnyTool } from '../../types/effectTool.js';
 import { consumeAllPendingUserInput } from './inputBuffer.js';
 import { runSilentExtraction } from './extractionTurn.js';
 import { applyPreTurnPolicies, applyPostTurnPolicies } from '../policies/agentTurn.js';
+import { resetSkillActivationsOnTurnStart } from '../../skills/skillActivation.js';
 import { resolveMaxSteps } from '../policies/limits.js';
 import { speakWithHostControl } from './streaming/hostControlSpeak.js';
 import { resolveStreamMode } from './streaming/mode.js';
@@ -45,6 +46,9 @@ export class TextDriver implements ChannelDriver {
   }
 
   async runAgentTurn(node: ResolvedNode, ctx: RunContext): Promise<TurnResult> {
+    // Per node: each flow node re-plans with node-scoped instructions, so a skill activated
+    // in a prior node must not silently constrain this one (see resetSkillActivationsOnTurnStart).
+    resetSkillActivationsOnTurnStart(ctx);
     const replyNode = node.node as ReplyNode;
     if (replyNode.kind !== 'reply') {
       throw new Error(`TextDriver.runAgentTurn expects a reply node, got ${replyNode.kind}`);

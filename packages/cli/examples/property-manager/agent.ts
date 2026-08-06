@@ -68,6 +68,7 @@ const lookup_unit = defineTool({
     'and the owner-set spend approval threshold. Use before raising or dispatching anything.',
   input: z.object({ unitId: z.string().describe('Unit id such as A-101') }),
   replay: false,
+  parallelSafe: true,
   execute: async ({ unitId }) => {
     const unit = UNITS[unitId.toUpperCase().trim()];
     if (!unit) {

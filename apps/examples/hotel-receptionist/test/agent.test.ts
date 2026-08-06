@@ -25,7 +25,10 @@ function context(): ToolContext {
     now: async () => Date.now(),
     uuid: async () => crypto.randomUUID(),
     emit: () => undefined,
-  } as ToolContext;
+    // A hand-built stub covers only the fields these tool tests touch, so it no longer overlaps
+    // `ToolContext` closely enough for a direct assertion — widen through `unknown` rather than
+    // padding the stub with fields nothing here reads.
+  } as unknown as ToolContext;
 }
 
 async function execute(agent: ReturnType<typeof buildHotelReceptionist>, name: string, args: unknown, ctx: ToolContext) {

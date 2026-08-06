@@ -31,6 +31,18 @@ export function defineSkill(config: DefineSkillConfig): SkillLike {
   validateSkillName(name, name);
   validateSkillDescription(description, name);
 
+  // `allowedTools: []` is ambiguous: an author plausibly means "this skill may use no tools
+  // at all", but the runtime reads an empty list as "no restriction" (see `recordSkillActivation`
+  // and `permittedToolNames`, both of which treat `?.length` as "declares nothing"). Frontmatter
+  // parsing already normalises an empty list to `undefined`, so the only way to reach this is in
+  // code — where it is almost certainly a mistake. Reject it at authoring time rather than guess.
+  if (config.allowedTools !== undefined && config.allowedTools.length === 0) {
+    throw new Error(
+      `[skills] Skill "${name}" set allowedTools: [] — this is ambiguous. ` +
+        'Omit the field entirely to impose no restriction, or list the tools this skill may use.',
+    );
+  }
+
   return {
     name,
     description,

@@ -21,6 +21,9 @@ import { createRunContext } from './ctx.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
+import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
+import { restoreLiveSkillCatalog } from '../skills/liveSkillCatalog.js';
+import { readResolvedSkillsCache, mergeResolvedSkills } from '../skills/resolvedSkillsState.js';
 import { hostLoop, type HostLoopResult } from './hostLoop.js';
 import { isHandoffOscillating } from './handoffOscillation.js';
 import { applyHandoffContinuation } from './handoffContinuation.js';
@@ -49,6 +52,7 @@ import {
   runMemoryIngest,
 } from './grounding/index.js';
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
+import { validateExtractorList } from '../memory/extract/defineExtractor.js';
 import { SessionMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
 import {
@@ -75,10 +79,16 @@ import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
-import { addSystemNote } from './systemNotes.js';
-import { needsApprovalPolicy, type Policy } from './policies/toolPolicy.js';
+import { addSystemNote, removeSystemNote } from './systemNotes.js';
+import { renderSkillCatalogPrompt, SKILL_CATALOG_NOTE_TAG } from '../skills/skillCatalog.js';
+import { needsApprovalPolicy, composePolicies, type Policy } from './policies/toolPolicy.js';
+import {
+  skillRestrictionPolicy,
+  type SkillActivation,
+} from '../skills/skillActivation.js';
 import { currentFlowState } from '../flow/flowState.js';
 import { resolveReplyNode } from '../flow/nodeBuilders.js';
+import { withInternalState, readInternalState } from './internalRunState.js';
 /**
  * What the user is told when the run hands off to a human and the app has not configured an
  * escalation handler to say something better. Silence is the wrong default: an escalation
@@ -209,6 +219,14 @@ export class Runtime {
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
+    // Defence in depth: `defineAgent` validates `memory.extract` for callers that use it, but
+    // the runtime also accepts raw `AgentConfig` literals (e.g. from a deployment binder) that
+    // never went through `defineAgent` — validate again here so those configs fail fast too.
+    for (const agent of this.agentsById.values()) {
+      if (agent.memory?.extract) {
+        validateExtractorList(agent.memory.extract);
+      }
+    }
     this.sessionStore = config.sessionStore ?? new MemoryStore();
     this.defaultModel = config.defaultModel;
     this.maxHandoffs = config.maxHandoffs ?? 5;
@@ -297,6 +315,7 @@ export class Runtime {
         configTools: this.config.tools,
         knowledgeProvider,
         defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+        resolvedSkillCache: readResolvedSkillsCache(opened.runState.state, opened.agent.id),
       });
       if (openingSurface.skillContentHash) {
         recorder?.recordSkillSnapshot(opened.agent.id, openingSurface.skillContentHash);
@@ -323,6 +342,20 @@ export class Runtime {
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =
         (await opened.runStore.getRunState(opened.runState.runId)) ?? opened.runState;
+      // Persist a freshly-resolved SkillResolver snapshot immediately (not deferred to some
+      // later save in the turn) so "once per session" holds even for a turn that never hits
+      // another `putRunState` call. A cache-hit (nothing changed) skips the write.
+      if (openingSurface.resolvedSkillSnapshot) {
+        const changed = mergeResolvedSkills(
+          freshRunState.state,
+          opened.agent.id,
+          openingSurface.resolvedSkillSnapshot,
+        );
+        if (changed) {
+          freshRunState.updatedAt = Date.now();
+          await opened.runStore.putRunState(freshRunState);
+        }
+      }
       if (
         opts.signalDelivery &&
         !steps.some((step) => step.signalId === opts.signalDelivery!.signalId)
@@ -358,8 +391,16 @@ export class Runtime {
         throw new Error('Runtime requires agent.model or config.defaultModel');
       }
 
+      const skillActivations: SkillActivation[] = [];
+
       runCtx = await createRunContext({
-        policy: opened.agent.policy ?? this.config.policy,
+        policy: composePolicies(
+          skillRestrictionPolicy(() => skillActivations),
+          opened.agent.policy ?? this.config.policy ?? needsApprovalPolicy,
+        ),
+        skillActivations,
+        skillMetaByName: openingSurface.skillMetaByName,
+        skillCatalog: openingSurface.skillCatalog,
         session: opened.session,
         runState: freshRunState,
         runStore: opened.runStore,
@@ -381,6 +422,7 @@ export class Runtime {
           ? buildMemoryService(this.config.memoryService, opened.agent)
           : undefined,
         fs: openingSurface.resolvedWorkspace?.fs,
+        getSkill: openingSurface.getSkill,
         signalDelivery: opts.signalDelivery,
       });
 
@@ -395,6 +437,10 @@ export class Runtime {
       runCtx.agentTools = opened.agent.tools ?? {};
       runCtx.outOfBandControl = resolveOutOfBandControl(opened.agent);
       runCtx.skillPrompt = openingSurface.skillPrompt;
+      // Restore the live catalog from the persisted run state so a resumed or replayed run
+      // keeps the skills it added, the ones it withdrew, and the snapshot of what it already
+      // announced — without re-narrating a committed change or re-resolving a withdrawn skill.
+      restoreLiveSkillCatalog(openingSurface.skillCatalog, freshRunState.state);
       runCtx.workingMemoryPrompt = appendGoalsPrompt(
         openingSurface.workingMemoryPrompt,
         opened.session.workingMemory,
@@ -575,9 +621,21 @@ export class Runtime {
               configTools: this.config.tools,
               knowledgeProvider,
               defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+              resolvedSkillCache: readResolvedSkillsCache(runCtx.runState.state, target.id),
             });
             if (targetSurface.skillContentHash) {
               recorder?.recordSkillSnapshot(target.id, targetSurface.skillContentHash);
+            }
+            if (targetSurface.resolvedSkillSnapshot) {
+              const changed = mergeResolvedSkills(
+                runCtx.runState.state,
+                target.id,
+                targetSurface.resolvedSkillSnapshot,
+              );
+              if (changed) {
+                runCtx.runState.updatedAt = Date.now();
+                await runCtx.runStore.putRunState(runCtx.runState);
+              }
             }
             runCtx.autoRetrieve = knowledgeProvider
               ? buildAutoRetrieveProvider(knowledgeProvider, target)
@@ -591,6 +649,17 @@ export class Runtime {
             );
             runCtx.workingMemoryTools = targetSurface.workingMemoryTools;
             runCtx.fs = targetSurface.resolvedWorkspace?.fs;
+            runCtx.getSkill = targetSurface.getSkill ?? createNoSkillsGetSkill();
+            // Swap alongside getSkill/policy/toolExecutor so a `load_skill` the target issues
+            // after the handoff records the TARGET's `allowed-tools`. `skillActivations` is
+            // intentionally shared (not reset here): a restriction activated before the handoff
+            // survives into the target, which is the safer reading — a composed policy may only
+            // grow more restrictive, and silently dropping a restriction across a handoff would
+            // let a delegated worker shed a boundary it was meant to keep.
+            runCtx.skillMetaByName = targetSurface.skillMetaByName;
+            // Swap the live catalog with the metadata so add/remove mutate the target's
+            // roster and `load_skill` resolves against it after the handoff.
+            runCtx.skillCatalog = targetSurface.skillCatalog;
             runCtx.memoryService = this.config.memoryService
               ? buildMemoryService(this.config.memoryService, target)
               : undefined;
@@ -612,7 +681,10 @@ export class Runtime {
             runCtx.validationPolicies = targetPolicies.validationPolicies;
             runCtx.inputProcessors = targetPolicies.inputProcessors;
             runCtx.outputProcessors = targetPolicies.outputProcessors;
-            runCtx.policy = target.policy ?? this.config.policy ?? needsApprovalPolicy;
+            runCtx.policy = composePolicies(
+              skillRestrictionPolicy(() => runCtx.skillActivations ?? []),
+              target.policy ?? this.config.policy ?? needsApprovalPolicy,
+            );
             runCtx.toolExecutor = new CoreToolExecutor({
               tools: targetSurface.executorTools,
               enforcer: targetPolicies.enforcer,
@@ -922,6 +994,23 @@ export class Runtime {
     }
 
     runCtx.runState.messages = result.messages;
+
+    // Compaction is already rewriting the cached prefix (a new summary message replaces the
+    // older ones), so it is the one point in the run where paying to rebase `skillPrompt` to
+    // the live roster is free — everywhere else that rewrite would discard prompt caching for
+    // no reason (see `skillCatalog.ts`). Folding the live roster into the prompt also makes
+    // the outstanding delta note redundant (the prompt now states the roster directly), so
+    // retire it rather than let it keep repeating information the prompt already carries.
+    if (runCtx.skillCatalog) {
+      const catalog = runCtx.skillCatalog;
+      runCtx.skillPrompt = renderSkillCatalogPrompt(catalog.entries());
+      catalog.rebaseline();
+      withInternalState(runCtx.runState.state, (internal) => {
+        internal.skillCatalog = catalog.serialize();
+      });
+      removeSystemNote(runCtx.runState, SKILL_CATALOG_NOTE_TAG);
+    }
+
     runCtx.runState.updatedAt = Date.now();
     await runCtx.runStore.putRunState(runCtx.runState);
 

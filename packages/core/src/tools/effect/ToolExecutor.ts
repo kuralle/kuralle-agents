@@ -59,6 +59,33 @@ function rejectOnAbort(signal: AbortSignal, makeError: () => Error): Promise<nev
   });
 }
 
+/**
+ * Classifies a tool call as safe to run in a parallel batch. Evaluated on the RAW model args,
+ * before schema validation, so a function `parallelSafe` must be total: any throw or
+ * non-boolean return fails closed to serial rather than crashing the executor.
+ */
+function isParallelSafe(def: AnyTool | undefined, args: unknown): boolean {
+  if (!def) return false;
+  const p = def.parallelSafe;
+  if (p === true) return true;
+  if (typeof p !== 'function') return false;
+  try {
+    const verdict = (p as (args: unknown) => unknown)(args);
+    // Classification is synchronous — a batch is assembled before anything runs —
+    // so a promise cannot be awaited here and fails closed to serial. Attach a
+    // catch first: returning without one leaves a rejected promise unhandled,
+    // which Bun and Node surface as a process-level warning or crash. TypeScript
+    // already rejects an async predicate, so this only catches a type-system bypass.
+    if (typeof (verdict as { then?: unknown } | null)?.then === 'function') {
+      void (verdict as Promise<unknown>).catch(() => {});
+      return false;
+    }
+    return verdict === true;
+  } catch {
+    return false;
+  }
+}
+
 export interface CoreExecuteArgs {
   name: string;
   args: unknown;
@@ -82,7 +109,17 @@ export class CoreToolExecutor implements EffectToolExecutor {
   private callHistory: ToolCallRecord[] = [];
 
   constructor(config: CoreToolExecutorConfig) {
-    this.tools = new Map(Object.entries(config.tools));
+    // Key by the model-facing identifier (`def.name`, falling back to the object key) — the
+    // same identifier `buildToolSet` exposes to the model and `collectRegisteredNames`/
+    // `allowed-tools` compare against. Keying the registry by the object key instead let a
+    // tool whose object key differs from its `name` (e.g. `tools: { publish: toolNamed_publish_copy }`)
+    // diverge: the model and the restriction reasoned about `publish_copy` while the executor
+    // resolved `publish`, so a permitted name could run a different tool than the one allowed.
+    const tools = new Map<string, Tool>();
+    for (const [key, def] of Object.entries(config.tools)) {
+      tools.set(def.name || key, def);
+    }
+    this.tools = tools;
     this.enforcer = config.enforcer;
     this.parallelExecution = config.parallelExecution ?? false;
     this.agentId = config.agentId ?? 'agent';
@@ -101,7 +138,7 @@ export class CoreToolExecutor implements EffectToolExecutor {
   async execute(args: CoreExecuteArgs): Promise<unknown> {
     const registryDef = this.tools.get(args.name);
     const def = args.def ?? registryDef;
-    const parallelSafe = def?.parallelSafe === true || def?.replay === false;
+    const parallelSafe = isParallelSafe(def, args.args);
     if (!this.parallelExecution && !parallelSafe) {
       return this.withSerialGate(() => this.executeInner(args));
     }

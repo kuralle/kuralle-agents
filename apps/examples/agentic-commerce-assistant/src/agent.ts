@@ -39,6 +39,7 @@ export function buildCommerceAgent(options: BuildCommerceAgentOptions) {
       limit: z.number().int().min(1).max(12).default(6),
     }),
     replay: false,
+    parallelSafe: true,
     timeoutMs: 20_000,
     execute: async (request) => {
       const result = await options.retrieval.find({

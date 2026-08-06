@@ -26,6 +26,11 @@ export interface TextCancelPayload {
   reason: string;
 }
 
+export interface ToolBatchStartPayload {
+  /** Source order — the order the model emitted the calls in, before dispatch. */
+  calls: Array<{ toolCallId: string; toolName: string }>;
+}
+
 export interface ToolCallPayload {
   toolName: string;
   args: unknown;
@@ -129,6 +134,12 @@ export interface InteractivePayload {
 
 export interface TurnEndPayload {}
 
+export interface TurnIncompletePayload {
+  reason: 'length' | 'content-filter' | 'error' | 'other';
+  step: number;
+  hadText: boolean;
+}
+
 export interface PipelineValidationBlockPayload {
   rationale: string;
   userFacingMessage?: string;
@@ -225,6 +236,7 @@ interface StreamPayloadMap {
   'text-delta': TextDeltaPayload;
   'text-end': TextEndPayload;
   'text-cancel': TextCancelPayload;
+  'tool-batch-start': ToolBatchStartPayload;
   'tool-call': ToolCallPayload;
   'tool-result': ToolResultPayload;
   'model-call-start': ModelCallStartPayload;
@@ -240,6 +252,7 @@ interface StreamPayloadMap {
   'conversation-outcome': ConversationOutcomePayload;
   interactive: InteractivePayload;
   'turn-end': TurnEndPayload;
+  'turn-incomplete': TurnIncompletePayload;
   'pipeline-validation-block': PipelineValidationBlockPayload;
   'safety-blocked': SafetyBlockedPayload;
   wake: WakePayload;
@@ -281,6 +294,7 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   'text-delta': 'client',
   'text-end': 'client',
   'text-cancel': 'client',
+  'tool-batch-start': 'internal',
   'tool-call': 'internal',
   'tool-result': 'internal',
   'model-call-start': 'internal',
@@ -296,6 +310,7 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   'conversation-outcome': 'client',
   interactive: 'internal',
   'turn-end': 'internal',
+  'turn-incomplete': 'internal',
   'pipeline-validation-block': 'internal',
   'safety-blocked': 'internal',
   wake: 'internal',

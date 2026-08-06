@@ -85,9 +85,35 @@ const get_weather = defineTool({
 });
 ```
 
-A `replay: false` tool (one whose result must always be fresh — filesystem reads, shell commands) also qualifies for parallel execution, since it never returns a cached step result to race against. The runtime pre-assigns journal ordinals for the batch (`reserveSteps`) so replay stays aligned no matter which parallel call finishes first.
+`parallelSafe` also accepts a **predicate over the arguments**, for a tool whose safety depends on
+what it was asked to do — a read mode and a write mode behind one name:
 
-A batch is otherwise unbounded — the model decides how many calls it emits, and all of them start at once. Cap it with `limits.maxToolConcurrency` when tools open sockets, spawn subprocesses, or hit a rate-limited API:
+```typescript
+const storage = defineTool({
+  name: 'storage',
+  description: 'Read or write a key',
+  // Evaluated on the RAW model arguments, before schema validation, so it must be total.
+  // Any throw or non-boolean return fails closed to serial.
+  parallelSafe: (args) => (args as { op?: string }).op === 'read',
+  input: z.object({ op: z.enum(['read', 'write']), key: z.string() }),
+  execute: async ({ op, key }) => (op === 'read' ? read(key) : write(key)),
+});
+```
+
+The model cannot influence the decision either way — the predicate is yours, and it runs before
+anything the model supplied has been validated.
+
+`replay: false` does **not** imply parallel-safe. They are unrelated properties: one means "do not
+journal this step", the other means "safe to run concurrently with siblings". Declare `parallelSafe`
+explicitly. The runtime pre-assigns journal ordinals for the batch (`reserveSteps`) so replay stays
+aligned no matter which parallel call finishes first, and results are appended to the transcript in
+**source order** rather than completion order, so a replayed run rebuilds the same layout.
+
+A batch is bounded at **8 concurrent calls** by default. That is measured, not arbitrary: above
+roughly eight-way in-process concurrency the run store's optimistic-concurrency check starts
+rejecting writes, and against the durable store 20 unbounded parallel calls executed only 8 — the
+rest threw `Stale write for session …` without ever reaching their executor. Lower it with
+`limits.maxToolConcurrency` when tools open sockets, spawn subprocesses, or hit a rate-limited API:
 
 ```typescript
 const runtime = createRuntime({
@@ -95,6 +121,13 @@ const runtime = createRuntime({
   limits: { maxToolConcurrency: 4 },
 });
 ```
+
+## Result size
+
+A tool result is capped where it enters the transcript, so one large payload cannot be re-sent to
+the model on every subsequent turn. Truncation is middle-out — the end of a payload usually holds
+the error, the total and the last record — and `ctx.tool()` and the durable journal keep the full
+untruncated value. Only what the model reads is bounded.
 
 ## Timeouts and cancellation
 

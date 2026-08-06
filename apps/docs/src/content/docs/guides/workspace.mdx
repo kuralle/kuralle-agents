@@ -87,23 +87,23 @@ import { defineAgent } from '@kuralle-agents/core';
 import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';
 
 const fs = new InMemoryFs({
-  '/skills/refunds/SKILL.md':
+  '/.agents/skills/refunds/SKILL.md':
     '---\nname: refunds\ndescription: Handle refund requests.\n---\n\n# Refunds\n...',
-  '/skills/refunds/references/policy.md': '# Policy\n30-day window applies.',
+  '/.agents/skills/refunds/references/policy.md': '# Policy\n30-day window applies.',
 });
 
 const agent = defineAgent({
   id: 'support',
   model,
   workspace: fs,
-  skills: fsSkillStore(fs), // gives the agent load_skill + read_skill_resource
+  skills: fsSkillStore(fs), // discovers /.agents/skills by default
 });
 ```
 
 For layered skills, pass roots from broadest to narrowest:
 
 ```typescript
-const skills = fsSkillStore(fs, ['/skills/shared', '/skills/project']);
+const skills = fsSkillStore(fs, ['/.agents/skills/shared', '/.agents/skills/project']);
 ```
 
 If both roots declare the same frontmatter `name`, the later root supplies that skill's metadata,

@@ -1,4 +1,5 @@
 import type { MemoryBlockScope, PersistentMemoryConfig } from '../memory/blocks/types.js';
+import type { Extractor } from '../memory/extract/types.js';
 
 export interface AgentKnowledge {
   /** Whether the runtime retrieves automatically. Default: `true`.
@@ -35,4 +36,10 @@ export interface AgentMemory {
   };
   /** Persistent markdown blocks (USER/MEMORY) loaded at session start and editable via memory_block. */
   workingMemory?: WorkingMemoryConfig;
+  /** Named, typed things to learn from a conversation. Superseded `ingest`.
+   *  `Extractor<never>`, not `Extractor<unknown>` — the array holds extractors with
+   *  different `T`s and `T` appears contravariantly (in `onExtracted`'s parameter), so the
+   *  common supertype is the one whose parameter accepts least: `never`. `unknown` would be
+   *  backwards, and `any` merely silences the check while failing the repo's lint rule. */
+  extract?: Extractor<never>[];
 }

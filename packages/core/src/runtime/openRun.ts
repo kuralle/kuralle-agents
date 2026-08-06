@@ -13,6 +13,7 @@ import type { ResolvedSelection } from '../types/selection.js';
 import { resetTurnCount } from './policies/limits.js';
 import { addSystemNote } from './systemNotes.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
+import { stripInternalKeys } from './internalRunState.js';
 
 export interface OpenRunOptions {
   sessionId: string;
@@ -94,7 +95,9 @@ export async function openRun(
   }
 
   if (options.selection?.formData) {
-    runState.state = { ...runState.state, ...options.selection.formData };
+    // Caller data merges into the shared bag, so the framework namespace is stripped first —
+    // a request must not be able to overwrite internal run state (see internalRunState.ts).
+    runState.state = { ...runState.state, ...stripInternalKeys(options.selection.formData) };
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
   }

@@ -62,7 +62,7 @@ async function main() {
   console.log(`model: ${label}\n`);
 
   // The OKF bundle mounts directly on the workspace fs. Skills live alongside it.
-  const fs = okfBundleToFs({ ...SALES_BUNDLE, '/skills/okf-navigator/SKILL.md': NAVIGATOR_SKILL });
+  const fs = okfBundleToFs({ ...SALES_BUNDLE, '/.agents/skills/okf-navigator/SKILL.md': NAVIGATOR_SKILL });
 
   const agent = defineAgent({
     id: 'okf-analyst',

@@ -8,6 +8,7 @@ import { systemNoteBlocks } from '../systemNotes.js';
 import { resolveNodeTools } from './resolveNodeTools.js';
 import { currentFlowState } from '../../flow/flowState.js';
 import { AiSdkModelTurnLoop } from './AiSdkModelTurnLoop.js';
+import { resetSkillActivationsOnTurnStart } from '../../skills/skillActivation.js';
 import {
   applyModelTurnLoopState,
   createModelTurnLoopState,
@@ -27,6 +28,9 @@ export async function runSilentExtraction(
   agentToolDefs: Record<string, AnyTool> = {},
   modelLoop: ModelTurnLoop = new AiSdkModelTurnLoop(),
 ): Promise<TurnResult> {
+  // Per node, matching runAgentTurn: extraction is its own planning unit, so it starts from
+  // a clean activation slate rather than inheriting a sibling node's restriction.
+  resetSkillActivationsOnTurnStart(ctx);
   const replyNode = node.node as ReplyNode;
   const state = currentFlowState(ctx.runState);
   const nodeSystem = node.prompt || buildNodePrompt(replyNode, state);

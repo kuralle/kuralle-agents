@@ -26,6 +26,7 @@ One tagless primitive — `defineAgent` — derives behavior from the fields you
 - **`defineAgent`** — define an agent; behavior is derived from which fields you set.
 - **`defineFlow` + `reply` / `collect` / `action` / `decide`** — node-graph SOPs. Your procedure lives in typed code you can test.
 - **`defineTool` + `buildToolSet`** — typed effect tools wired to both the model and the executor.
+- **`defineSkill` + `AgentConfig.skills`** — progressively-disclosed procedural knowledge (`SKILL.md`-shaped): name+description always in the prompt, full body on `load_skill`, bundled resources on `read_skill_resource`. Four supply modes — inline, packaged directory, filesystem path, per-tenant resolver.
 - **`createRuntime` / `Runtime`** — orchestrator: sessions, handoffs, streaming, flow state.
 - **`MemoryStore`** — in-process `SessionStore`; swap for Redis or Postgres in production.
 - **`HarnessConfig.escalation` + `resumeFromEscalation`** — the human-handoff loop: handoff brief, handler, ownership claim (via engagement), resume-with-resolution.
@@ -211,6 +212,34 @@ const triage = defineAgent({
 ```
 
 With only `routes`/`agents` and no answering surface (no `instructions`/`flows`/`tools`), `triage` derives as a **pure dispatcher**: it silently classifies and routes. The decision is model-reasoned over the `when` descriptions and never surfaces to the user. Model every fallback as a normal route with a semantic `when` (e.g. "or anything else") — there is no `routing.default`. Optionally set `routing: { model }` to pick the control-reasoning model.
+
+## Skills
+
+A skill is reusable procedural knowledge the model pulls in on demand — a tool executes, a skill teaches:
+
+```ts
+import { defineSkill } from '@kuralle-agents/core';
+
+const returnsPolicy = defineSkill({
+  name: 'returns-policy',
+  description: 'Returns, refunds, and the 30-day window. Use when a customer asks about returning an order.',
+  instructions: '1. Confirm the order id.\n2. If under 30 days old, it is returnable.',
+  allowedTools: ['lookup_order'],
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model: openai('gpt-4o-mini'),
+  tools: { lookup_order: lookupOrder },
+  skills: [returnsPolicy], // or a packaged directory, a workspace path, or a per-tenant resolver
+});
+```
+
+Only `name` + `description` sit in every prompt; the full body loads via `load_skill` and bundled
+resources via `read_skill_resource`, only when the model needs them. `allowedTools` is enforced at
+the tool boundary once the skill activates — a guard-rail for an honest model, not an adversarial
+boundary; see the [Skills guide](https://agents.kuralle.com/guides/skills) for the four supply
+modes and the full frontmatter contract.
 
 ## Sessions
 

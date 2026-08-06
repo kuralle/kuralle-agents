@@ -98,6 +98,17 @@ This repo has closed five separate rounds of workspace-isolation leaks. Every on
 passed a full green suite first, because **a suite with a single tenant has
 nothing to leak to.** Tests exercising one org prove nothing about isolation.
 
+## Do not commit, branch, or rewrite history
+
+Leave your work in the working tree and stop. The supervisor re-runs every claim, reads the
+diff, and commits — that verification is the whole point of the result contract, and a commit
+you made yourself has skipped it.
+
+Concretely: no `git commit`, no `git checkout -b`, no `git rebase`, no `git stash`, no
+`git reset`. Observed 2026-08-04: a worker committed its own half-verified change, which put an
+unreviewed diff into history and forced the supervisor to verify after the fact rather than
+before. If you believe the work is finished, say so in your result file — that is the signal.
+
 If a gate cannot be satisfied honestly, report `blocked` with what you tried — a
 blocked dispatch that names the wall beats a green one that hid it.
 

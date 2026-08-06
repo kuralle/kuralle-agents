@@ -36,6 +36,11 @@ export class CompositeSkillStore implements SkillStoreLike {
     return (await this.ownerOf(name)).loadResource(name, path);
   }
 
+  async listResources(name: string): Promise<string[]> {
+    const owner = await this.ownerOf(name);
+    return (await owner.listResources?.(name)) ?? [];
+  }
+
   async loadAllSkills() {
     const owners = await this.resolveOwners();
     const out = [];

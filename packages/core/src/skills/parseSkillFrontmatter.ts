@@ -1,3 +1,5 @@
+import YAML from 'yaml';
+
 export interface ParsedSkill {
   name: string;
   description: string;
@@ -8,10 +10,15 @@ export interface ParsedSkill {
   metadata?: Record<string, string>;
 }
 
+export interface ParseSkillContext {
+  path: string;
+  directoryName?: string;
+}
+
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)([\s\S]*)$/;
 const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export function parseSkillFrontmatter(content: string, ctx: { path: string }): ParsedSkill {
+export function parseSkillFrontmatter(content: string, ctx: ParseSkillContext): ParsedSkill {
   const stripped = content.replace(/^\uFEFF/, '');
   const match = stripped.match(FRONTMATTER_RE);
   if (!match) {
@@ -21,12 +28,19 @@ export function parseSkillFrontmatter(content: string, ctx: { path: string }): P
     );
   }
 
-  const raw = parseFlatYaml(match[1] ?? '', ctx.path);
+  const raw = parseYamlFrontmatter(match[1] ?? '', ctx.path);
   const name = requireField(raw, 'name', ctx.path);
   const description = requireField(raw, 'description', ctx.path);
 
   validateSkillName(name, ctx.path);
   validateSkillDescription(description, ctx.path);
+
+  if (ctx.directoryName !== undefined && name !== ctx.directoryName) {
+    throw new Error(
+      `[skills] Skill ${ctx.path} frontmatter name "${name}" must match its directory name ` +
+        `"${ctx.directoryName}". Rename the directory or update the name field so they agree.`,
+    );
+  }
 
   const compatibility = optionalString(raw.compatibility);
   if (compatibility !== undefined && codePointLength(compatibility) > 500) {
@@ -54,84 +68,20 @@ export function parseSkillFrontmatter(content: string, ctx: { path: string }): P
   return result;
 }
 
-function parseFlatYaml(yaml: string, path: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  const lines = yaml.split(/\r?\n/);
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i]!;
-    if (line.trim() === '') {
-      i += 1;
-      continue;
-    }
-
-    const keyMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (!keyMatch) {
-      throw new Error(`[skills] Skill ${path} has invalid YAML frontmatter near line: ${line}`);
-    }
-
-    const key = keyMatch[1]!;
-    const rest = (keyMatch[2] ?? '').trim();
-
-    if (rest === '') {
-      i += 1;
-      if (i >= lines.length) break;
-      const next = lines[i]!;
-      if (next.match(/^\s+-\s+/)) {
-        const items: string[] = [];
-        while (i < lines.length) {
-          const listLine = lines[i]!;
-          const itemMatch = listLine.match(/^\s+-\s+(.*)$/);
-          if (!itemMatch) break;
-          items.push(parseScalar(itemMatch[1] ?? ''));
-          i += 1;
-        }
-        result[key] = items;
-        continue;
-      }
-      if (key === 'metadata') {
-        const meta: Record<string, string> = {};
-        while (i < lines.length) {
-          const metaLine = lines[i]!;
-          const metaMatch = metaLine.match(/^\s{2}([A-Za-z0-9_-]+):\s*(.*)$/);
-          if (!metaMatch) break;
-          meta[metaMatch[1]!] = parseScalar((metaMatch[2] ?? '').trim());
-          i += 1;
-        }
-        result[key] = meta;
-        continue;
-      }
-      result[key] = '';
-      continue;
-    }
-
-    if (rest.startsWith('[') && rest.endsWith(']')) {
-      const inner = rest.slice(1, -1).trim();
-      result[key] =
-        inner === ''
-          ? []
-          : inner.split(',').map((s) => parseScalar(s.trim()));
-      i += 1;
-      continue;
-    }
-
-    result[key] = parseScalar(rest);
-    i += 1;
+function parseYamlFrontmatter(yaml: string, path: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = YAML.parse(yaml, { schema: 'failsafe' });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`[skills] Skill ${path} has invalid YAML frontmatter. ${detail}`);
   }
 
-  return result;
-}
-
-function parseScalar(value: string): string {
-  const trimmed = value.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1);
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`[skills] Skill ${path} frontmatter must be a YAML mapping.`);
   }
-  return trimmed;
+
+  return parsed as Record<string, unknown>;
 }
 
 function requireField(raw: Record<string, unknown>, field: string, path: string): string {

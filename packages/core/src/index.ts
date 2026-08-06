@@ -182,6 +182,21 @@ export type {
   RoutedPersistentMemoryStoreConfig,
   MemoryRouteFn,
 } from './memory/index.js';
+export type {
+  Extractor,
+  ExtractorRuntimeContext,
+  ExtractorOnExtractedContext,
+  ResolvedExtractor,
+  DefineExtractorConfig,
+} from './memory/index.js';
+export {
+  defineExtractor,
+  slugifyExtractorName,
+  assertValidSlug,
+  validateExtractorList,
+  resolveExtractor,
+  RESERVED_EXTRACTOR_SLUGS,
+} from './memory/index.js';
 export {
   wireWorkingMemory,
   loadWorkingMemoryBlocks,
@@ -349,6 +364,7 @@ export type { CreateShellToolOptions } from './tools/fs/createShellTool.js';
 export type { Shell, ShellResult, ShellExecOptions } from './types/shell.js';
 export {
   SkillsCapability,
+  buildSkillBriefing,
   wireAgentSkills,
   collectRegisteredNames,
   validateSkillAllowedTools,
@@ -359,12 +375,30 @@ export {
   fsSkillStore,
   defineSkill,
   parseSkillFrontmatter,
+  packagedSkillStore,
+  brandPackagedSkill,
+  isPackagedSkill,
+  isPackagedSkillArray,
+  classifySkillFileKind,
+  createSkillHandle,
+  createAgentGetSkill,
+  createNoSkillsGetSkill,
+  FRAMEWORK_SKILL_TOOLS,
+  permittedToolNames,
+  skillRestrictionPolicy,
+  recordSkillActivation,
+  resetSkillActivations,
 } from './skills/index.js';
 export type {
   WiredAgentSkills,
   SkillWireAgent,
   DefineSkillConfig,
   ParsedSkill,
+  PackagedSkill,
+  PackagedSkillFile,
+  SkillHandle,
+  SkillFileHandle,
+  SkillActivation,
 } from './skills/index.js';
 export {
   buildToolSet,
@@ -376,6 +410,9 @@ export {
 } from './tools/effect/index.js';
 export type { Tool as EffectTool } from './types/effectTool.js';
 export type { AgentRoute } from './types/processors.js';
+// `AgentConfig.limits` is public API, so its type has to be reachable — without this an app
+// setting `limits: { maxSteps: 25 }` cannot name the type it is passing.
+export type { Guardrails, Limits } from './types/guardrails.js';
 export type {
   AgentConfig,
   AgentWorkspaceConfig,
@@ -417,6 +454,7 @@ export type {
   TextDeltaPayload,
   TextEndPayload,
   TextCancelPayload,
+  ToolBatchStartPayload,
   ToolCallPayload,
   ToolResultPayload,
   ModelCallStartPayload,
@@ -433,6 +471,7 @@ export type {
   ConversationOutcomePayload,
   InteractivePayload,
   TurnEndPayload,
+  TurnIncompletePayload,
   PipelineValidationBlockPayload,
   SafetyBlockedPayload,
   WakePayload,

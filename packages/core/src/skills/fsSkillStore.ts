@@ -1,9 +1,10 @@
 import type { FileSystem } from '../types/filesystem.js';
 import type { SkillMeta, SkillStoreLike } from '../types/skills.js';
+import { assertSafeSkillResourcePath } from './assertSafeSkillResourcePath.js';
 import { parseSkillFrontmatter } from './parseSkillFrontmatter.js';
 import { sha256 } from './contentHash.js';
 
-const DEFAULT_ROOT = '/skills';
+const DEFAULT_ROOT = '/.agents/skills';
 
 interface SkillLocation {
   root: string;
@@ -48,15 +49,30 @@ export function fsSkillStore(
       return skill.body;
     },
 
+    async listResources(name: string): Promise<string[]> {
+      const skill = current(name) ?? (await discover()).get(name);
+      if (!skill) {
+        throw new Error(`[skills] Skill "${name}" not found.`);
+      }
+
+      const skillDir = fs.resolvePath(skill.root, skill.folder);
+      const paths: string[] = [];
+      await collectResourcePaths(fs, skillDir, '', paths);
+      return paths.sort();
+    },
+
     async loadResource(name: string, path: string): Promise<string | Uint8Array> {
       const skill = current(name) ?? (await discover()).get(name);
       if (!skill) {
         throw new Error(`[skills] Skill "${name}" not found.`);
       }
 
-      const normalized = path.trim().replace(/^\.?\//, '');
-      if (normalized.includes('..') || normalized.startsWith('/')) {
-        throw new Error(`[skills] Invalid resource path "${path}".`);
+      const normalized = assertSafeSkillResourcePath(path);
+      if (normalized === 'SKILL.md') {
+        const err = new Error(
+          `ENOENT: [skills] Resource "${normalized}" not found for skill "${name}".`,
+        );
+        throw err;
       }
 
       const resourcePath = fs.resolvePath(skill.root, `${skill.folder}/${normalized}`);
@@ -99,23 +115,52 @@ async function discoverSkills(
       const skillPath = fs.resolvePath(root, `${entry}/SKILL.md`);
       if (!(await fs.exists(skillPath))) continue;
 
-      const content = await fs.readFile(skillPath);
-      const parsed = parseSkillFrontmatter(content, { path: skillPath });
-      const contentHash = await sha256(content);
-      skills.set(parsed.name, {
-        root,
-        folder: entry,
-        meta: {
-          name: parsed.name,
-          description: parsed.description,
-          path: skillPath,
-          contentHash,
-          ...(parsed.allowedTools ? { allowedTools: parsed.allowedTools } : {}),
-        },
-        body: parsed.body,
-      });
+      try {
+        const content = await fs.readFile(skillPath);
+        const parsed = parseSkillFrontmatter(content, { path: skillPath, directoryName: entry });
+        const contentHash = await sha256(content);
+        skills.set(entry, {
+          root,
+          folder: entry,
+          meta: {
+            name: parsed.name,
+            description: parsed.description,
+            path: skillPath,
+            contentHash,
+            ...(parsed.allowedTools ? { allowedTools: parsed.allowedTools } : {}),
+          },
+          body: parsed.body,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[skills] Skipping invalid skill "${entry}": ${message}`);
+      }
     }
   }
 
   return skills;
+}
+
+async function collectResourcePaths(
+  fs: FileSystem,
+  dir: string,
+  relPrefix: string,
+  out: string[],
+): Promise<void> {
+  let entries;
+  try {
+    entries = await fs.readdirWithFileTypes(dir);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name === 'SKILL.md') continue;
+    const rel = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+    if (entry.type === 'directory') {
+      await collectResourcePaths(fs, fs.resolvePath(dir, entry.name), rel, out);
+    } else if (entry.type === 'file') {
+      out.push(rel);
+    }
+  }
 }

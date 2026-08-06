@@ -14,6 +14,7 @@ const read_file = defineTool({
   name: 'read_file',
   description: 'Read a file from the project.',
   replay: false,
+  parallelSafe: true,
   input: z.object({ path: z.string() }),
   execute: async ({ path }) => ({ path, content: '…' }),
 });

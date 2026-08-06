@@ -5,6 +5,7 @@ import type { FlowNode, NodeToolScope } from './flow.js';
 import type { Tool, AnyTool } from './effectTool.js';
 import type { DispatchMode } from '../runtime/dispatchMode.js';
 import type { EscalationReason } from '../escalation/types.js';
+import type { TurnIncompletePayload } from './stream.js';
 
 export type DriverOutputCapability =
   | 'kuralle-controlled-text'
@@ -70,6 +71,8 @@ export interface TurnResult {
   toolMessages?: ModelMessage[];
   /** Real token usage from the AI SDK when the driver captured it. */
   usage?: TurnUsageSnapshot;
+  /** Set when the model loop exited on an abnormal `FinishReason` rather than `stop`. */
+  incomplete?: { reason: TurnIncompletePayload['reason']; step: number };
 }
 
 export type UserSignal = { type: 'message'; input: UserInputContent };

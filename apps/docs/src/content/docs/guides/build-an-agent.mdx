@@ -320,6 +320,16 @@ defineAgent({
 These are opt-in — an agent with none of them just runs unconstrained, which is fine for a
 prototype. Add them as the idea moves toward production.
 
+`maxSteps` is the one worth setting deliberately. It defaults to **5**, which an agent that grounds
+itself, loads a couple of skills, writes something and checks it will exhaust before it ever
+summarises. A turn that runs out mid-chain still answers — the runtime makes one final call with no
+tools offered, so you never get a turn that ends in silence — but that wrap-up is a truncation: the
+agent writes its summary from wherever it happened to be cut off. Set the budget high enough that
+real work finishes inside it and the wrap-up stays a backstop, and treat it as a ceiling against
+runaway loops rather than a target to spend.
+
+`Limits` is exported from `@kuralle-agents/core` if you want to name the type.
+
 ## Reading a photo, not just text
 
 Our pharmacy idea opened with *"reads a customer's prescription."* That's an image, not
