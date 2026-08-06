@@ -9,6 +9,15 @@ import type { ConversationOutcome } from '../outcomes/types.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { syncPendingUserInput } from './channels/inputBuffer.js';
 import { runHookSafely } from './runHookSafely.js';
+import type { ExtractionConfig } from '../types/grounding.js';
+import { runExtractionAtClose } from '../memory/extract/runExtraction.js';
+
+export interface CloseRunExtractionOptions {
+  config: ExtractionConfig;
+  turnMessageBaseline: number;
+  run: () => Promise<boolean>;
+  trackBackground: (promise: Promise<void>) => void;
+}
 
 export interface CloseRunOptions {
   session: Session;
@@ -22,6 +31,7 @@ export interface CloseRunOptions {
   terminalOutcome?: ConversationOutcome;
   outcomeReason?: string;
   memoryIngest?: (ctx: RunContext) => Promise<void>;
+  extraction?: CloseRunExtractionOptions;
 }
 
 export async function closeRun(options: CloseRunOptions): Promise<void> {
@@ -35,6 +45,14 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
 
   if (options.memoryIngest) {
     await options.memoryIngest(ctx);
+  }
+
+  if (options.extraction) {
+    await runExtractionAtClose({
+      runState,
+      runStore,
+      ...options.extraction,
+    });
   }
 
   let outcomeRecord = session.metadata?.outcome;

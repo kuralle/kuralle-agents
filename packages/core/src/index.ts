@@ -202,11 +202,18 @@ export {
   FileExtractedValueStore,
   extractedValueStoreConformanceCases,
   runExtractors,
+  shouldExtract,
+  detectTurnHadToolCalls,
+  resolveExtractionConfig,
+  resolveExtractedValueStore,
+  DEFAULT_EXTRACTION_TRIGGER,
 } from './memory/index.js';
 export type {
   ExtractedValueStoreConformanceCase,
   RunExtractorsOptions,
   ExtractionRunResult,
+  ExtractionConfig,
+  ExtractionTrigger,
 } from './memory/index.js';
 export {
   wireWorkingMemory,

@@ -67,3 +67,16 @@ export {
   type RunExtractorsOptions,
   type ExtractionRunResult,
 } from './extract/runExtractors.js';
+export {
+  shouldExtract,
+  detectTurnHadToolCalls,
+  resolveExtractionConfig,
+  DEFAULT_EXTRACTION_TRIGGER,
+  type ExtractionConfig,
+  type ExtractionTrigger,
+} from './extract/trigger.js';
+export {
+  runExtractionAtClose,
+  extractionSucceeded,
+} from './extract/runExtraction.js';
+export { resolveExtractedValueStore } from './extract/resolveExtractedValueStore.js';

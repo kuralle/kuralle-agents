@@ -26,6 +26,15 @@ export interface WorkingMemoryConfig extends Omit<PersistentMemoryConfig, 'autoL
   autoLoad?: WorkingMemoryBlockSpec[];
 }
 
+export type ExtractionTrigger = 'each-turn' | 'idle' | { tokens: number };
+
+export interface ExtractionConfig {
+  /** When to run. Default `{ tokens: 2000 }` of un-extracted history. */
+  trigger?: ExtractionTrigger;
+  /** Await extraction before the run closes. Default false. */
+  blocking?: boolean;
+}
+
 export interface AgentMemory {
   preload?: {
     enabled?: boolean;
@@ -36,6 +45,8 @@ export interface AgentMemory {
   };
   /** Persistent markdown blocks (USER/MEMORY) loaded at session start and editable via memory_block. */
   workingMemory?: WorkingMemoryConfig;
+  /** When and how `memory.extract` runs relative to turn completion. */
+  extraction?: ExtractionConfig;
   /** Named, typed things to learn from a conversation. Superseded `ingest`.
    *  `Extractor<never>`, not `Extractor<unknown>` — the array holds extractors with
    *  different `T`s and `T` appears contravariantly (in `onExtracted`'s parameter), so the

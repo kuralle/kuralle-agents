@@ -53,6 +53,12 @@ import {
 } from './grounding/index.js';
 import type { PersistentMemoryStore } from '../memory/blocks/types.js';
 import { validateExtractorList } from '../memory/extract/defineExtractor.js';
+import { resolveExtractionConfig } from '../memory/extract/trigger.js';
+import { resolveExtractedValueStore } from '../memory/extract/resolveExtractedValueStore.js';
+import { extractionSucceeded } from '../memory/extract/runExtraction.js';
+import { runExtractors } from '../memory/extract/runExtractors.js';
+import type { ExtractedValueStore } from '../memory/extract/store.js';
+import type { Extractor } from '../memory/extract/types.js';
 import { SessionMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
 import {
@@ -133,6 +139,8 @@ export interface HarnessConfig {
   memoryService?: V1MemoryService;
   /** Default store for `agent.memory.workingMemory` when `workingMemory.store` is omitted. */
   defaultWorkingMemoryStore?: PersistentMemoryStore;
+  /** Default store for `agent.memory.extract` when no per-agent store is configured. */
+  extractedValueStore?: ExtractedValueStore;
   /**
    * Optional AI SDK transcription model. When set, inbound audio file parts (voice
    * notes) are transcribed to text before the model turn — so voice input works on
@@ -216,6 +224,8 @@ export class Runtime {
   private readonly traceStore?: TraceStore;
   private readonly traceSinks: TraceSink[];
   private readonly pendingTraceWrites = new Set<Promise<void>>();
+  private readonly pendingExtractions = new Set<Promise<void>>();
+  private readonly extractedValueStore: ExtractedValueStore;
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
@@ -240,6 +250,7 @@ export class Runtime {
     this.traceSinks = this.traceStore
       ? [this.traceStore, ...configuredSinks.filter((sink) => sink !== this.traceStore)]
       : [];
+    this.extractedValueStore = resolveExtractedValueStore(config.extractedValueStore);
   }
 
   run(opts: RunOptions): TurnHandle {
@@ -301,6 +312,7 @@ export class Runtime {
         defaultAgentId: this.config.defaultAgentId,
         sessionStore: this.sessionStore,
       });
+      const turnMessageBaseline = opened.runState.messages.length;
       // `appendConversationAudit` writes into the live session during the turn.
       // Stores with a dedicated audit log need only the entries created by this
       // turn, not the complete inline history loaded with the session.
@@ -766,6 +778,13 @@ export class Runtime {
         }
       } finally {
         this.activeTurnAborts.delete(sessionId);
+        const activeAgentConfig = this.agentsById.get(runCtx.runState.activeAgentId);
+        const extractionConfig = resolveExtractionConfig(activeAgentConfig?.memory);
+        const extractors = activeAgentConfig?.memory?.extract;
+        const extractionModel =
+          activeAgentConfig?.controlModel ??
+          activeAgentConfig?.model ??
+          runCtx.controlModel;
         await closeRun({
           session: opened.session,
           runState: runCtx.runState,
@@ -785,6 +804,30 @@ export class Runtime {
               await updateGoalsFromTurn(runCtx, controlModel);
             }
           },
+          extraction:
+            extractionConfig && extractors?.length && extractionModel
+              ? {
+                  config: extractionConfig,
+                  turnMessageBaseline,
+                  trackBackground: (promise) => this.trackBackgroundExtraction(promise),
+                  run: async () => {
+                    const result = await runExtractors({
+                      extractors: extractors as unknown as readonly Extractor[],
+                      store: this.extractedValueStore,
+                      model: extractionModel,
+                      messages: runCtx.runState.messages,
+                      ctx: {
+                        agentId: runCtx.runState.activeAgentId,
+                        sessionId: runCtx.session.id,
+                        userId: runCtx.session.userId,
+                        emit: runCtx.emit,
+                      },
+                      abortSignal: abortController.signal,
+                    });
+                    return extractionSucceeded(result);
+                  },
+                }
+              : undefined,
         });
         await runHookSafely('onEnd', () => this.hooks?.onEnd?.(runCtx));
         emit({
@@ -855,6 +898,11 @@ export class Runtime {
 
   getSessionStore(): SessionStore {
     return this.sessionStore;
+  }
+
+  /** Resolves once every in-flight background extraction has settled. */
+  async settled(): Promise<void> {
+    await Promise.allSettled([...this.pendingExtractions]);
   }
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -938,6 +986,13 @@ export class Runtime {
   private async settleTraceWrites(): Promise<void> {
     await Promise.allSettled([...this.pendingTraceWrites]);
     await Promise.allSettled(this.traceSinks.map((sink) => sink.flush?.()));
+  }
+
+  private trackBackgroundExtraction(promise: Promise<void>): void {
+    const pending = promise
+      .catch(() => {})
+      .finally(() => this.pendingExtractions.delete(pending));
+    this.pendingExtractions.add(pending);
   }
 
   private flushTraceSinks(): void {

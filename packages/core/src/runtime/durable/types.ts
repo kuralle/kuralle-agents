@@ -102,6 +102,8 @@ export interface RunState {
   effectKeyVersion?: number;
   /** Inbound message idempotency keys already accepted (H2 webhook-retry dedup). */
   processedInboundKeys?: string[];
+  /** Message count at the last completed extraction; drives the token trigger. */
+  lastExtractedMessageCount?: number;
 }
 
 export interface SignalDelivery {
