@@ -19,9 +19,22 @@ import {
   type MemoryBlockScope,
   DEFAULT_BLOCK_CHAR_LIMIT,
 } from './types.js';
+import type { WorkingMemoryBlockSpec } from '../../types/grounding.js';
 
 export interface MemoryBlockToolOptions {
   store: PersistentMemoryStore;
+  /**
+   * The blocks this agent declares. The model can address these and nothing
+   * else — the tool's `block` argument is an enum built from this list, so an
+   * undeclared name is not rejected at runtime, it cannot be expressed.
+   *
+   * Previously `block` was `z.string().min(1).max(64)` with a free-text
+   * `scope`, which let the model create and overwrite arbitrary blocks in any
+   * scope. Nothing consumed those: `loadWorkingMemoryBlocks` only injects
+   * declared keys, so an ad-hoc block was never visible in a later session —
+   * the model could create it and never find it again.
+   */
+  blocks: WorkingMemoryBlockSpec[];
   /** Owner for a scope, or `undefined` when this session has none (no userId).
    *  There is deliberately no placeholder — see `resolveWorkingMemoryOwner`. */
   resolveOwner: (scope: MemoryBlockScope) => string | undefined;
@@ -31,46 +44,34 @@ export interface MemoryBlockToolOptions {
   scanForInjection?: boolean;
 }
 
-const inputSchema = z.object({
-  action: z
-    .enum(['view', 'add', 'replace', 'remove'])
-    .describe(
-      "What to do. 'view' returns the current content. 'add' appends a new entry (separated by a §). 'replace' substitutes the entire block. 'remove' deletes entries whose substring matches `match`.",
-    ),
-  block: z
-    .string()
-    .min(1)
-    .max(64)
-    .describe(
-      "Block name. Common conventions: 'USER' (what you know about the user — scope=user), 'MEMORY' (your own notes — scope=agent).",
-    ),
-  scope: z
-    .enum(['user', 'agent', 'shared'])
-    .optional()
-    .describe(
-      "Storage scope. Defaults: 'user' for USER, 'agent' for MEMORY, 'shared' otherwise. Override only when you have a specific reason.",
-    ),
-  content: z
-    .string()
-    .optional()
-    .describe("Content for 'add' or 'replace'. Required for those actions."),
-  match: z
-    .string()
-    .optional()
-    .describe(
-      "For 'remove' only: substring to match against existing entries. Entries containing this substring are deleted.",
-    ),
-});
+function buildInputSchema(blockKeys: [string, ...string[]]) {
+  return z.object({
+    action: z
+      .enum(['view', 'add', 'replace', 'remove'])
+      .describe(
+        "What to do. 'view' returns the current content. 'add' appends a new entry (separated by a §). 'replace' substitutes the entire block. 'remove' deletes entries whose substring matches `match`.",
+      ),
+    // The enum IS the documentation — the model sees exactly the blocks that
+    // exist, so no prose is needed telling it which names are conventional.
+    // Scope is not an input: it is implied by the block, which removes a second
+    // free-text dimension the model could get wrong.
+    block: z.enum(blockKeys).describe('Which block to act on.'),
+    content: z
+      .string()
+      .optional()
+      .describe("Content for 'add' or 'replace'. Required for those actions."),
+    match: z
+      .string()
+      .optional()
+      .describe(
+        "For 'remove' only: substring to match against existing entries. Entries containing this substring are deleted.",
+      ),
+  });
+}
 
-type Input = z.infer<typeof inputSchema>;
+type Input = z.infer<ReturnType<typeof buildInputSchema>>;
 
 const ENTRY_DELIM = '\n§\n';
-
-function defaultScopeFor(block: string): MemoryBlockScope {
-  if (block === 'USER') return 'user';
-  if (block === 'MEMORY') return 'agent';
-  return 'shared';
-}
 
 function appendEntry(existing: string, newEntry: string): string {
   if (!existing) return newEntry.trim();
@@ -88,12 +89,32 @@ export function buildMemoryBlockTool(opts: MemoryBlockToolOptions) {
   const charLimit = opts.charLimit ?? DEFAULT_BLOCK_CHAR_LIMIT;
   const scanForInjection = opts.scanForInjection !== false;
 
+  // One spec per key. Two declared blocks sharing a key across scopes would
+  // make `block` ambiguous, so that is a config error rather than a silent
+  // last-one-wins.
+  const byKey = new Map<string, MemoryBlockScope>();
+  for (const spec of opts.blocks) {
+    const existing = byKey.get(spec.key);
+    if (existing && existing !== spec.scope) {
+      throw new Error(
+        `[Kuralle] working-memory block "${spec.key}" is declared in both '${existing}' and ` +
+          `'${spec.scope}' scope. Block names must be unique across scopes so the model can ` +
+          `address one unambiguously.`,
+      );
+    }
+    byKey.set(spec.key, spec.scope);
+  }
+  if (byKey.size === 0) {
+    throw new Error('[Kuralle] buildMemoryBlockTool requires at least one declared block.');
+  }
+  const blockKeys = [...byKey.keys()] as [string, ...string[]];
+
   return tool({
     description:
-      'Read or update a persistent memory block. Persistent blocks survive across sessions — use them to remember facts about the user (USER block) or yourself / your environment (MEMORY block). Keep entries short and factual.',
-    inputSchema,
+      'Read or update a persistent memory block. Persistent blocks survive across sessions — use them to remember facts about the user or notes about yourself. Keep entries short and factual.',
+    inputSchema: buildInputSchema(blockKeys),
     async execute(input: Input) {
-      const scope = input.scope ?? defaultScopeFor(input.block);
+      const scope = byKey.get(input.block)!;
       const owner = opts.resolveOwner(scope);
       if (owner === undefined) {
         // Defence in depth: `wireWorkingMemory` already withholds this tool when

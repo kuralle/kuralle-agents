@@ -166,6 +166,9 @@ export async function wireWorkingMemory(
     'memory_block',
     buildMemoryBlockTool({
       store,
+      // Only the addressable blocks — an unaddressable one is not this
+      // session's to write either.
+      blocks: autoLoad,
       resolveOwner,
       charLimit,
       scanForInjection: config.scanForInjection,

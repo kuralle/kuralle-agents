@@ -18,6 +18,7 @@ import path from 'node:path';
 import { FilePersistentMemoryStore } from '../src/memory/blocks/FilePersistentMemoryStore.ts';
 import { scanMemoryWrite } from '../src/memory/blocks/safetyScanner.ts';
 import { buildMemoryBlockTool } from '../src/memory/blocks/memoryBlockTool.ts';
+import { InMemoryPersistentMemoryStore } from '../src/memory/blocks/InMemoryPersistentMemoryStore.ts';
 import type { PersistentMemoryStore, MemoryBlockScope } from '../src/memory/blocks/types.ts';
 
 const TMP_ROOT = path.join(os.tmpdir(), `kuralle-mem-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -159,6 +160,11 @@ describe('memoryBlockTool', () => {
     const owner = `tool-owner-${Math.random().toString(36).slice(2, 8)}`;
     const t = buildMemoryBlockTool({
       store,
+      // The model can address exactly these — `block` is an enum built from them.
+      blocks: [
+        { scope: 'user', key: 'USER' },
+        { scope: 'agent', key: 'MEMORY' },
+      ],
       resolveOwner: (_scope) => owner,
       charLimit: opts?.charLimit,
       scanForInjection: opts?.scanForInjection,
@@ -261,16 +267,39 @@ describe('memoryBlockTool', () => {
     expect(r.ok).toBe(true);
   });
 
-  it('default scope: USER → user, MEMORY → agent', async () => {
-    const { store, t } = makeTool();
+  it('routes each block to the scope it was declared in', async () => {
+    const { store, t, owner } = makeTool();
     await callTool(t, { action: 'add', block: 'USER', content: 'maya' });
     await callTool(t, { action: 'add', block: 'MEMORY', content: 'agent-note' });
-    // We can't easily inspect the resolveOwner since it's random per call,
-    // but we can verify the right scope path was used by listing both.
-    // (This test is somewhat opaque to internals; the surface guarantee
-    // is "scope auto-resolves to a sane default".)
-    // Skip a deep assertion — the round-trip read above already confirms
-    // the write+read on the same scope worked.
-    void store;
+    // Scope is no longer a model input — it comes from the declared spec, so
+    // each block must land in its own scope and nowhere else.
+    expect((await store.loadBlock('user', owner, 'USER'))?.content).toBe('maya');
+    expect((await store.loadBlock('agent', owner, 'MEMORY'))?.content).toBe('agent-note');
+    expect(await store.loadBlock('agent', owner, 'USER')).toBeNull();
+    expect(await store.loadBlock('user', owner, 'MEMORY')).toBeNull();
+  });
+
+  it('cannot express a block the agent did not declare', () => {
+    const { t } = makeTool();
+    const schema = (t as { inputSchema: { safeParse: (v: unknown) => { success: boolean } } })
+      .inputSchema;
+    // Not "is rejected at runtime" — cannot be constructed. The enum is the boundary.
+    expect(schema.safeParse({ action: 'replace', block: 'SECRETS', content: 'x' }).success).toBe(
+      false,
+    );
+    expect(schema.safeParse({ action: 'view', block: 'USER' }).success).toBe(true);
+  });
+
+  it('refuses a config where one block name spans two scopes', () => {
+    expect(() =>
+      buildMemoryBlockTool({
+        store: new InMemoryPersistentMemoryStore(),
+        blocks: [
+          { scope: 'user', key: 'NOTES' },
+          { scope: 'agent', key: 'NOTES' },
+        ],
+        resolveOwner: () => 'o',
+      }),
+    ).toThrow(/unique across scopes/);
   });
 });
