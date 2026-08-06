@@ -21,6 +21,10 @@ function flag(argv: string[], name: string): string | undefined {
 
 export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
   const sessionId = flag(argv, '--session') ?? 'default';
+  // Without this the CLI could not exercise user-scoped memory at all: preload,
+  // extractors and the USER block are all skipped when a session has no userId
+  // (deliberately — a placeholder owner would pool every anonymous session).
+  const userId = flag(argv, '--user');
   const storePath = flag(argv, '--store') ?? join(process.cwd(), 'runs/tui-sessions.json');
   const doReset = argv.includes('--reset');
   const doState = argv.includes('--state');
@@ -101,7 +105,12 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const events: string[] = [];
   const started = performance.now();
   let ttftMs: number | null = null;
-  const handle = demo.runtime.run({ sessionId, input: message, ...(signalDelivery ? { signalDelivery } : {}) });
+  const handle = demo.runtime.run({
+    sessionId,
+    input: message,
+    ...(userId ? { userId } : {}),
+    ...(signalDelivery ? { signalDelivery } : {}),
+  });
   let text = '';
   for await (const part of handle.events as AsyncIterable<StreamPart>) {
     if (part.type === 'text-delta') {
