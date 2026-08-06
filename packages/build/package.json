@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/build",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "Deterministic folder compiler for Kuralle agent artifacts",
   "license": "Apache-2.0",
   "repository": {
@@ -18,7 +18,10 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.json",
@@ -39,5 +42,7 @@
     "ai": "^6.0.0",
     "zod": "^4.0.0"
   },
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

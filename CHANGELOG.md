@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.20.0 — skills second pass, bounded tool execution, and three streaming-turn fixes (BREAKING under 0.x)
+
+Three strands land together: a second pass on the skill system, hardening of how tools actually execute, and three ways a streamed turn could fail a user without failing loudly. The whole package family moves 0.19.x → 0.20.0 in lockstep.
+
+Breaking changes ship here under **0.x rules**, where a minor may break.
+
+Most of what follows was found by building a full worked example — a port of Vercel's marketing-team template — and running it live rather than typechecking it. Every fix below has a test that was verified to fail when the fix is removed.
+
+### Breaking
+
+- **`parallelSafe` is now `boolean | ((args) => boolean)`.** A static boolean forced a tool with a read mode and a write mode to pick one classification for both. The predicate runs on the raw model arguments *before* schema validation, so it must be total: any throw or non-boolean return fails closed to serial. The model cannot influence the decision either way.
+- **`replay: false` no longer implies parallel-safe.** They are unrelated properties — one means "do not journal this step", the other means "safe to run concurrently with siblings". Tools that relied on the implication must declare `parallelSafe` explicitly.
+- **Filesystem skill discovery defaults to `/.agents/skills`**, not `/skills`. Pass an explicit root to `fsSkillStore` to keep the old location.
+
+### Security
+
+**Caller-supplied `formData` could overwrite framework run state.** A request carrying `formData: { resolvedSkills: … }` replaced the per-tenant skill snapshot wholesale: the resolver never ran, the tenant's real skills vanished from the prompt, and attacker-chosen skill names and bodies reached the model in their place. Framework state now lives under one reserved key, and that key is stripped from incoming form data — two overlapping defences, so an internal added later is protected by construction rather than by someone remembering to extend a denylist.
+
+### Three ways a streamed turn failed quietly
+
+**A failing turn killed the process.** A `TurnHandle` is both a promise and an event source, and a failing turn delivers its error down both. Consumers that only stream — `toUIMessageStreamResponse()`, `toResponseStream()`, or iterating `handle.events` — never touch the promise half, so the second delivery landed with no handler attached and took the whole process down on `unhandledRejection`. One bad provider call killed a server for every other session on it. The rejection is now marked handled at the source without being swallowed: `await runtime.run(...)` still throws for anyone who awaits it. `hono-server`'s raw-SSE router had defended itself; the UIMessageStream path had not, which is the asymmetry a per-call-site fix keeps producing.
+
+**Turns could end in silence.** `maxSteps` defaults to 5, and an agent that grounds itself, loads two skills, writes something and lints it exhausts that before it ever summarises. The loop fell out with no further model call — ten tool calls, a `finish`, and not one character for the user. Hitting the ceiling now triggers one wrap-up call with **no tools offered**; offering them would invite another call and reproduce the silence a step later. Typed extraction is unaffected — it is deliberately mute and exits through its own stop condition.
+
+**Proxies buffered the whole turn into one frame.** `toUIMessageStreamResponse` now sets `Cache-Control: no-cache, no-transform`, `Content-Encoding: identity` and `X-Accel-Buffering: no`. A Next.js rewrite in front of the server collected every chunk whenever compression was negotiated — which a browser always does — so the UI showed a spinner for 37 seconds and then everything at once. Measured on the page: 18 DOM mutations for that turn, 17 of them inside the final 700ms. Worth knowing how this hides: a plain `curl` sends no `Accept-Encoding`, so it measures a healthy stream while the browser sees nothing. Use `curl --compressed`, or measure in the browser.
+
+### Bounded tool execution
+
+- **Concurrency defaults to 8** instead of "whatever the model emitted". `Limits.maxToolConcurrency` was optional and documented as unbounded, and nothing ever set it, so the model's batch size *was* the policy. Eight is measured: against the durable run store, 20 unbounded parallel calls executed only 8 — the other 12 threw `Stale write for session …` out of `appendPendingStep` without ever reaching their executor.
+- **Tool results are capped where they enter the transcript.** Any user-defined tool could land an unbounded payload in `run.messages` and re-send it on every subsequent model call. The cap lives at the transcript boundary and nowhere else, so `ctx.tool()` and the durable journal keep the full value — only what the model reads is bounded. Truncation is middle-out, because the end of a payload holds the error, the total and the last record.
+- **Parallel results append in source order**, not completion order, and a batch announces itself with an ordered `tool-batch-start` before any dispatch — so a UI can allocate a stable block before work starts, and a replayed run rebuilds the same layout.
+- **An abnormal finish is distinguishable from a clean stop.** `length`, `content-filter`, `error` and `other` all took the same branch as `stop`, so a response truncated at the output-token limit ended the turn as a success: the user got half a sentence and no caller could tell. A new `turn-incomplete` internal stream part reports the reason, and only a step-budget exit triggers the wrap-up — retrying after an output-limit truncation just reproduces it.
+
+### Skills, second pass
+
+`SKILL.md` front matter parses through a real YAML parser under the failsafe schema, so `version: 1.0` stays the string it was written as instead of becoming `1`, and a malformed skill fails loudly with the file named rather than being silently skipped. `load_skill` returns a framed briefing that lists each bundled resource beside the exact `read_skill_resource` call that fetches it, so a model no longer has to guess that resources exist or how to reach them.
+
+`allowed-tools` is enforced at the tool boundary through `Policy` rather than by asking the model to remember it — though only once `load_skill` has succeeded for that skill, which makes it a guard-rail for an honest model, not an adversarial boundary. Only skills that actually declare a list contribute to the permitted set, so adding an unrestricted skill never silently narrows what another one allowed.
+
+Skills can be packaged into the build with `packageSkillsDirectory` from `@kuralle-agents/build`. Packaged skills are workerd-clean — no `node:` builtins, no filesystem — so one skill set runs on Workers and Node without a second code path. Packaging refuses to bundle secrets, and skill ids are content-addressed over length-prefixed `(path, content)` pairs so two skills cannot collide on name alone.
+
+The prompt catalog is frozen at a per-run baseline with changes announced in-transcript instead of by rewriting the system prompt, so a skill appearing mid-conversation no longer invalidates the cache for every turn that follows; the baseline is rebuilt only at compaction. `ctx.getSkill(name)` gives a read-only handle for reading a skill's own bundled files, and a per-tenant `SkillResolver` lets one deployment serve different skill sets to different tenants.
+
+### Added
+
+- **`defineExtractor` and `AgentMemory.extract`** — the declaration surface for cross-session memory beyond the single hard-coded facts extractor. A Zod schema is required (tag-scraping is only cheap if you already run an observer agent, which Kuralle does not), and the slug is derived from the name rather than declared, so a rename cannot orphan previously persisted values. Declaration only: no runner, no persistence, no model calls yet.
+- **`Limits` and `Guardrails` are exported.** `AgentConfig.limits` was public API whose type was reachable from nowhere, so an app could set `maxSteps` but not name the type it was passing.
+- **`apps/examples/marketing-team`** — lead plus five specialists, 20 skill packages, Postgres via Drizzle, a Next.js frontend with a Tiptap editor and AI Elements chat. Live-verified end to end.
+
+### Fixed elsewhere
+
+`bun run typecheck:all` — the release gate — was red before this release, and three of the five failures it now fixes were already on `main`. `bun test` does not typecheck, so none of them were visible to any suite.
+
 ## 0.14.0 — one trace surface, one stream envelope, skills in core (BREAKING under 0.x)
 
 Combines the stream-envelope break, removal of lifecycle APIs that were publicly exported but never wired to the runtime, the skills consolidation, and the tool-execution fixes. The whole package family moves 0.13.x → 0.14.0 in lockstep.

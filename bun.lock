@@ -27,7 +27,7 @@
     },
     "apps/examples/_shared": {
       "name": "@kuralle-examples/shared",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@earendil-works/pi-ai": "^0.82.1",
@@ -43,7 +43,7 @@
     },
     "apps/examples/agent-builder": {
       "name": "@kuralle-examples/agent-builder",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.90",
         "@ai-sdk/react": "^3.0.239",
@@ -68,7 +68,7 @@
     },
     "apps/examples/agentic-commerce-assistant": {
       "name": "@kuralle-examples/agentic-commerce-assistant",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -107,7 +107,7 @@
     },
     "apps/examples/content-agent": {
       "name": "@kuralle-examples/content-agent",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/fs": "workspace:*",
@@ -122,7 +122,7 @@
     },
     "apps/examples/customer-support-agent": {
       "name": "@kuralle-examples/customer-support-agent",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -156,7 +156,7 @@
     },
     "apps/examples/file-agent-chat": {
       "name": "@kuralle-examples/file-agent-chat",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@kuralle-agents/core": "workspace:*",
@@ -172,7 +172,7 @@
     },
     "apps/examples/healthcare": {
       "name": "@kuralle-examples/healthcare",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-examples/shared": "workspace:*",
@@ -186,7 +186,7 @@
     },
     "apps/examples/hotel-receptionist": {
       "name": "@kuralle-examples/hotel-receptionist",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-examples/shared": "workspace:*",
@@ -200,7 +200,7 @@
     },
     "apps/examples/marketing-team": {
       "name": "@kuralle-examples/marketing-team",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@ai-sdk/react": "3.0.239",
@@ -264,7 +264,7 @@
     },
     "apps/examples/pharmacy-rx-agent": {
       "name": "@kuralle-examples/pharmacy-rx-agent",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -294,7 +294,7 @@
     },
     "apps/examples/postgres-hacker-starter": {
       "name": "@kuralle-examples/postgres-hacker-starter",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@ai-sdk/react": "3.0.239",
@@ -326,7 +326,7 @@
         "pg": "8.22.0",
         "react": "19.2.8",
         "react-dom": "19.2.8",
-        "shiki": "^3.19.0",
+        "shiki": "^4.3.1",
         "streamdown": "^2.5.0",
         "tailwind-merge": "3.6.0",
         "use-stick-to-bottom": "^1.1.6",
@@ -344,7 +344,7 @@
     },
     "apps/examples/release-governance-agent": {
       "name": "@kuralle-examples/release-governance-agent",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/fs": "workspace:*",
@@ -452,7 +452,7 @@
     },
     "apps/playground/pharmacy-rx-agent": {
       "name": "pharmacy-rx-agent",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "dependencies": {
         "@ai-sdk/openai": "latest",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -472,7 +472,7 @@
     },
     "apps/playground/pi-driver-stress": {
       "name": "pi-driver-stress",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.89",
         "@earendil-works/pi-ai": "0.82.1",
@@ -519,7 +519,7 @@
     },
     "packages/analytics-sdk": {
       "name": "@kuralle-agents/analytics-sdk",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "zod": "^4.0.0",
       },
@@ -537,7 +537,7 @@
     },
     "packages/build": {
       "name": "@kuralle-agents/build",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/deployment": "workspace:*",
@@ -554,7 +554,7 @@
     },
     "packages/cf-agent": {
       "name": "@kuralle-agents/cf-agent",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@cloudflare/ai-chat": "^0.10.1",
         "@kuralle-agents/core": "workspace:*",
@@ -578,7 +578,7 @@
     },
     "packages/cli": {
       "name": "@kuralle-agents/cli",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "bin": {
         "kuralle": "./dist/cli.js",
       },
@@ -615,7 +615,7 @@
     },
     "packages/commerce": {
       "name": "@kuralle-agents/commerce",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -633,7 +633,7 @@
     },
     "packages/core": {
       "name": "@kuralle-agents/core",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "chrono-node": "^2.6.0",
         "yaml": "^2.8.0",
@@ -657,7 +657,7 @@
     },
     "packages/create-kuralle-agents": {
       "name": "create-kuralle-agents",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "bin": {
         "create-kuralle-agents": "dist/index.js",
       },
@@ -673,7 +673,7 @@
     },
     "packages/deployment": {
       "name": "@kuralle-agents/deployment",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/fs": "workspace:*",
@@ -692,7 +692,7 @@
     },
     "packages/e2e-tests": {
       "name": "@kuralle-agents/e2e-tests",
-      "version": "0.12.5",
+      "version": "0.12.6",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.0",
         "@kuralle-agents/analytics-sdk": "workspace:*",
@@ -710,7 +710,7 @@
     },
     "packages/engagement": {
       "name": "@kuralle-agents/engagement",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
@@ -726,7 +726,7 @@
     },
     "packages/eval": {
       "name": "@kuralle-agents/eval",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "devDependencies": {
         "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
@@ -734,7 +734,7 @@
     },
     "packages/fs": {
       "name": "@kuralle-agents/fs",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -758,7 +758,7 @@
     },
     "packages/hono-server": {
       "name": "@kuralle-agents/hono-server",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@hono/node-server": "^2.0.12",
         "@kuralle-agents/core": "workspace:*",
@@ -783,7 +783,7 @@
     },
     "packages/http-client": {
       "name": "@kuralle-agents/http-client",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "devDependencies": {
         "@types/node": "^22.13.4",
         "typescript": "^5.8.2",
@@ -791,7 +791,7 @@
     },
     "packages/lancedb-store": {
       "name": "@kuralle-agents/lancedb-store",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@lancedb/lancedb": "^0.13.0",
@@ -805,7 +805,7 @@
     },
     "packages/messaging": {
       "name": "@kuralle-agents/messaging",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "hono": "^4.7.4",
@@ -817,7 +817,7 @@
     },
     "packages/messaging-meta": {
       "name": "@kuralle-agents/messaging-meta",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/http-client": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
@@ -843,7 +843,7 @@
     },
     "packages/pi-driver": {
       "name": "@kuralle-agents/pi-driver",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@earendil-works/pi-agent-core": "0.82.1",
         "@earendil-works/pi-ai": "0.82.1",
@@ -866,7 +866,7 @@
     },
     "packages/postgres-store": {
       "name": "@kuralle-agents/postgres-store",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/deployment": "workspace:*",
@@ -887,7 +887,7 @@
     },
     "packages/rag": {
       "name": "@kuralle-agents/rag",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -909,7 +909,7 @@
     },
     "packages/rag-loaders": {
       "name": "@kuralle-agents/rag-loaders",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -933,7 +933,7 @@
     },
     "packages/redis-store": {
       "name": "@kuralle-agents/redis-store",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -955,7 +955,7 @@
     },
     "packages/tools": {
       "name": "@kuralle-agents/tools",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/rag": "workspace:*",
@@ -975,14 +975,14 @@
     },
     "packages/trace-ui": {
       "name": "@kuralle-agents/trace-ui",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
     },
     "packages/upstash-store": {
       "name": "@kuralle-agents/upstash-store",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -994,7 +994,7 @@
     },
     "packages/vectorize-store": {
       "name": "@kuralle-agents/vectorize-store",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -1006,7 +1006,7 @@
     },
     "packages/widget": {
       "name": "@kuralle-agents/widget",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "dependencies": {
         "nanoid": "^5.0.9",
       },
@@ -2000,6 +2000,8 @@
     "@shikijs/engine-oniguruma": ["@shikijs/engine-oniguruma@3.23.0", "", { "dependencies": { "@shikijs/types": "3.23.0", "@shikijs/vscode-textmate": "^10.0.2" } }, "sha512-1nWINwKXxKKLqPibT5f4pAFLej9oZzQTsby8942OTlsJzOBZ0MWKiwzMsd+jhzu8YPCHAswGnnN1YtQfirL35g=="],
 
     "@shikijs/langs": ["@shikijs/langs@3.23.0", "", { "dependencies": { "@shikijs/types": "3.23.0" } }, "sha512-2Ep4W3Re5aB1/62RSYQInK9mM3HsLeB91cHqznAJMuylqjzNVAVCMnNWRHFtcNHXsoNRayP9z1qj4Sq3nMqYXg=="],
+
+    "@shikijs/primitive": ["@shikijs/primitive@4.4.2", "", { "dependencies": { "@shikijs/types": "4.4.2", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-l6fQQKsOMlz72n38fztmSgZ76MO6KSWuw8o+GJ+FhmqrpC9pIOJNQNXGgbb5yX2AwpzlEHwsaLPnk/8o4Fm+rA=="],
 
     "@shikijs/themes": ["@shikijs/themes@3.23.0", "", { "dependencies": { "@shikijs/types": "3.23.0" } }, "sha512-5qySYa1ZgAT18HR/ypENL9cUSGOeI2x+4IvYJu4JgVJdizn6kG4ia5Q1jDEOi7gTbN4RbuYtmHh0W3eccOrjMA=="],
 
@@ -3977,6 +3979,8 @@
 
     "@kuralle-examples/postgres-hacker-starter/nanoid": ["nanoid@6.0.1", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw=="],
 
+    "@kuralle-examples/postgres-hacker-starter/shiki": ["shiki@4.4.2", "", { "dependencies": { "@shikijs/core": "4.4.2", "@shikijs/engine-javascript": "4.4.2", "@shikijs/engine-oniguruma": "4.4.2", "@shikijs/langs": "4.4.2", "@shikijs/themes": "4.4.2", "@shikijs/types": "4.4.2", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-P8F/dFhRevaw2uSdeIYlq/5SXZNY85DPtmXQ947gD1Zj2JqO5AkNvVVBar0Me9JkFx3uzVud/qOtP5ek9NEQGA=="],
+
     "@kuralle-examples/shared/@ai-sdk/openai": ["@ai-sdk/openai@3.0.90", "", { "dependencies": { "@ai-sdk/provider": "3.0.14", "@ai-sdk/provider-utils": "4.0.41" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-GIucFshCN7JZwTDur25PsnLEMRUFfAKuLaA9TP9fzGxPC2Zxzl94tvat93ZdZLURkKOrDukU0E4fj73tKDWjTA=="],
 
     "@kuralle-playground/shared/@ai-sdk/google": ["@ai-sdk/google@4.0.28", "", { "dependencies": { "@ai-sdk/provider": "4.0.4", "@ai-sdk/provider-utils": "5.0.15" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-/40fma4dtjOXcZrBiv/8X/ggIEY54Crsd5cTssGP8/h5vYcE/JEoyyx0Py4/Tfk1qWnAkuSZ+jJnTeStr633Fw=="],
@@ -4010,6 +4014,8 @@
     "@rolldown/plugin-babel/@babel/core": ["@babel/core@8.0.1", "", { "dependencies": { "@babel/code-frame": "8.0.0", "@babel/generator": "8.0.0", "@babel/helper-compilation-targets": "8.0.0", "@babel/helpers": "8.0.0", "@babel/parser": "8.0.4", "@babel/template": "8.0.0", "@babel/traverse": "8.0.4", "@babel/types": "8.0.4", "@types/gensync": "1.0.5", "convert-source-map": "2.0.0", "empathic": "2.0.1", "gensync": "1.0.0-beta.2", "import-meta-resolve": "4.2.0", "json5": "2.2.3", "obug": "2.1.4", "semver": "7.8.5" } }, "sha512-5FgxM4dLQpMJHSiVATk8foW263dVHQHBVpXYiimNECVWG01f4nFyEbQixeT6Mwvg7TayREJ2gpKl3o2RoMdnqw=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
+
+    "@shikijs/primitive/@shikijs/types": ["@shikijs/types@4.4.2", "", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-PFYitV4vpDr/iPCIhnHp+Q4ftic5N5VeNJ3KQ1O8gn3h2ar8qgwMAXF7tq4m1CWaMS60fV4VqF6vfnWH4F7vqQ=="],
 
     "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": ["@emnapi/core@1.11.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.2", "tslib": "2.8.1" }, "bundled": true }, "sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA=="],
 
@@ -4338,6 +4344,18 @@
     "@kuralle-agents/deployment/bun-types/@types/node": ["@types/node@22.19.17", "", { "dependencies": { "undici-types": "6.21.0" } }, "sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q=="],
 
     "@kuralle-agents/rag/bun-types/@types/node": ["@types/node@22.19.17", "", { "dependencies": { "undici-types": "6.21.0" } }, "sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q=="],
+
+    "@kuralle-examples/postgres-hacker-starter/shiki/@shikijs/core": ["@shikijs/core@4.4.2", "", { "dependencies": { "@shikijs/primitive": "4.4.2", "@shikijs/types": "4.4.2", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5", "hast-util-to-html": "^9.0.5" } }, "sha512-StyzbAyxg2/tBGf78gwbBkGyeQ73lf8UiJArFaQhTQIDqQOCKPCQFanvrs4/Yv3Yfyc+ONInJM6K+FMIf+P+kA=="],
+
+    "@kuralle-examples/postgres-hacker-starter/shiki/@shikijs/engine-javascript": ["@shikijs/engine-javascript@4.4.2", "", { "dependencies": { "@shikijs/types": "4.4.2", "@shikijs/vscode-textmate": "^10.0.2", "oniguruma-to-es": "^4.3.6" } }, "sha512-MnIkeqWdVPUWsxlx8gKLVCJFTsqrQJgpTPBPpQwaFeJ56lOnJxj5aN2LUFnfxUEcvOQuNocmbaMnVrCEln6rkw=="],
+
+    "@kuralle-examples/postgres-hacker-starter/shiki/@shikijs/engine-oniguruma": ["@shikijs/engine-oniguruma@4.4.2", "", { "dependencies": { "@shikijs/types": "4.4.2", "@shikijs/vscode-textmate": "^10.0.2" } }, "sha512-GLhowz1+jixjz+wiZ3wMnOn1jTxiFCGl2PkXufivbnwPHKuyw1AYqu5/hbWhZZ2oAb0NP05WUJhYeigY14drnw=="],
+
+    "@kuralle-examples/postgres-hacker-starter/shiki/@shikijs/langs": ["@shikijs/langs@4.4.2", "", { "dependencies": { "@shikijs/types": "4.4.2" } }, "sha512-8DfeusD+Zdv/eYIDdXyJTUnSMHt+aAWjAOCXV20HNGAHRlInXpG8wh421v6B91WOm9TFwRLN+b/LG5F2NAIojg=="],
+
+    "@kuralle-examples/postgres-hacker-starter/shiki/@shikijs/themes": ["@shikijs/themes@4.4.2", "", { "dependencies": { "@shikijs/types": "4.4.2" } }, "sha512-H0CFoL07ddDC2Dd6EdrPYNkRhUR6YCkJlnuYFceYYUJJA5TIm2b5B33qqiDYryBExgbKMndFJPb2u1gTuqO37g=="],
+
+    "@kuralle-examples/postgres-hacker-starter/shiki/@shikijs/types": ["@shikijs/types@4.4.2", "", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-PFYitV4vpDr/iPCIhnHp+Q4ftic5N5VeNJ3KQ1O8gn3h2ar8qgwMAXF7tq4m1CWaMS60fV4VqF6vfnWH4F7vqQ=="],
 
     "@manypkg/find-root/find-up/locate-path": ["locate-path@5.0.0", "", { "dependencies": { "p-locate": "4.1.0" } }, "sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g=="],
 
