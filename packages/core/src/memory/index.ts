@@ -58,3 +58,7 @@ export {
 export type { ExtractedValue, ExtractedValueStore } from './extract/store.js';
 export { InMemoryExtractedValueStore } from './extract/InMemoryExtractedValueStore.js';
 export { FileExtractedValueStore } from './extract/FileExtractedValueStore.js';
+export {
+  extractedValueStoreConformanceCases,
+  type ExtractedValueStoreConformanceCase,
+} from './extract/testing.js';
