@@ -195,7 +195,6 @@ export {
   assertValidSlug,
   validateExtractorList,
   resolveExtractor,
-  RESERVED_EXTRACTOR_SLUGS,
 } from './memory/index.js';
 export {
   wireWorkingMemory,

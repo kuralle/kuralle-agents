@@ -52,6 +52,9 @@ export {
   assertValidSlug,
   validateExtractorList,
   resolveExtractor,
-  RESERVED_EXTRACTOR_SLUGS,
   type DefineExtractorConfig,
 } from './extract/defineExtractor.js';
+
+export type { ExtractedValue, ExtractedValueStore } from './extract/store.js';
+export { InMemoryExtractedValueStore } from './extract/InMemoryExtractedValueStore.js';
+export { FileExtractedValueStore } from './extract/FileExtractedValueStore.js';

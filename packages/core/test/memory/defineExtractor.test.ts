@@ -67,9 +67,6 @@ describe('validateExtractorList', () => {
 });
 
 describe('defineExtractor', () => {
-  it('throws immediately when the name resolves to a reserved slug', () => {
-    expect(() => defineExtractor({ name: 'Facts', instructions: 'a', schema: z.object({}) })).toThrow(/reserved/);
-  });
 });
 
 describe('resolveExtractor', () => {

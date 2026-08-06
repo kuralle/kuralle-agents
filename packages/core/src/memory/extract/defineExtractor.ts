@@ -3,7 +3,6 @@ import type { MemoryBlockScope } from '../blocks/types.js';
 import type { Extractor, ExtractorRuntimeContext, ResolvedExtractor } from './types.js';
 
 /** Slugs reserved by other memory subsystems — an extractor may not claim one. */
-export const RESERVED_EXTRACTOR_SLUGS: ReadonlySet<string> = new Set(['facts', 'summary', 'working-memory']);
 
 /** Slugs longer than this are rejected — a live risk as a persistence key (file path / DB index). */
 export const MAX_SLUG_LENGTH = 64;
@@ -28,15 +27,6 @@ export function assertValidSlug(slug: string, sourceName: string): void {
 }
 
 /** Throws when `slug` matches a reserved key claimed by another memory subsystem. */
-export function assertNotReservedSlug(slug: string, sourceName: string): void {
-  if (RESERVED_EXTRACTOR_SLUGS.has(slug)) {
-    throw new Error(
-      `[Kuralle] extractor "${sourceName}" resolves to reserved slug "${slug}" ` +
-        `(reserved: ${[...RESERVED_EXTRACTOR_SLUGS].join(', ')}).`,
-    );
-  }
-}
-
 /**
  * Derives an extractor slug from its display name: NFKD-normalised (so accents and
  * fullwidth forms fold to their plain-ASCII base — 'Café' -> 'cafe', '２' -> '2' —
@@ -90,7 +80,6 @@ export interface DefineExtractorConfig<T> {
 
 export function defineExtractor<T = unknown>(config: DefineExtractorConfig<T>): Extractor<T> {
   const slug = slugifyExtractorName(config.name);
-  assertNotReservedSlug(slug, config.name);
   return {
     name: config.name,
     slug,
