@@ -6,6 +6,8 @@ export { PostgresMemoryService } from './PostgresMemoryService.js';
 export type { PostgresMemoryStoreOptions } from './PostgresMemoryService.js';
 export { PostgresPersistentMemoryStore } from './PostgresPersistentMemoryStore.js';
 export type { PostgresPersistentMemoryStoreOptions } from './PostgresPersistentMemoryStore.js';
+export { PostgresExtractedValueStore } from './PostgresExtractedValueStore.js';
+export type { PostgresExtractedValueStoreOptions } from './PostgresExtractedValueStore.js';
 export { PgVectorStore } from './PgVectorStore.js';
 export type { PgVectorStoreOptions } from './PgVectorStore.js';
 export {

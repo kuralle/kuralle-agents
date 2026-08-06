@@ -37,6 +37,7 @@ export { SqlThreadPinStore } from './SqlThreadPinStore.js';
 export { BridgeSessionStore } from './BridgeSessionStore.js';
 export { OrchestrationStore } from './OrchestrationStore.js';
 export { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
+export { SqlExtractedValueStore } from './SqlExtractedValueStore.js';
 export { SqlTraceStore } from './SqlTraceStore.js';
 export { createSqlExecutor } from './sqlExecutor.js';
 export { lastUserInputFromMessages } from './cfMessageInput.js';

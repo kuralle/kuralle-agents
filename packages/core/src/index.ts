@@ -196,6 +196,13 @@ export {
   validateExtractorList,
   resolveExtractor,
 } from './memory/index.js';
+export type { ExtractedValue, ExtractedValueStore } from './memory/index.js';
+export {
+  InMemoryExtractedValueStore,
+  FileExtractedValueStore,
+  extractedValueStoreConformanceCases,
+} from './memory/index.js';
+export type { ExtractedValueStoreConformanceCase } from './memory/index.js';
 export {
   wireWorkingMemory,
   loadWorkingMemoryBlocks,

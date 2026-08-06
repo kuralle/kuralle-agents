@@ -133,6 +133,36 @@ export const extractedValueStoreConformanceCases: ReadonlyArray<ExtractedValueSt
       },
     },
     {
+      // The owner-only table above catches path-style collisions (File), but not
+      // separator-style ones: a key composed as `…:${owner}:${slug}` collides when
+      // owner and slug rearrange ACROSS the separator, which no fixed-slug pair can
+      // produce. `(a, 'b:s')` and `('a:b', s)` both compose to `…:a:b:s`.
+      name: 'never lets an (owner, slug) pair rearrange into another row',
+      async run(store) {
+        const pairs: ReadonlyArray<readonly [string, string]> = [
+          ['a', 'b:s'],
+          ['a:b', 's'],
+          ['x', 'y/z'],
+          ['x/y', 'z'],
+          ['p', 'q.r'],
+          ['p.q', 'r'],
+        ];
+        for (const [owner, slug] of pairs) {
+          await store.save(
+            { slug, scope: 'user', value: `${owner}|${slug}`, updatedAt: ISO },
+            owner,
+          );
+        }
+        for (const [owner, slug] of pairs) {
+          assertEqual(
+            (await store.load('user', owner, slug))?.value,
+            `${owner}|${slug}`,
+            `owner ${JSON.stringify(owner)} + slug ${JSON.stringify(slug)}`,
+          );
+        }
+      },
+    },
+    {
       name: 'delete removes only its own row, and is a no-op when missing',
       async run(store) {
         const base = { slug: 's', scope: 'user' as const, updatedAt: ISO };
