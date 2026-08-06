@@ -5,6 +5,7 @@ import { defineExtractor } from '../../src/memory/extract/defineExtractor.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { closeRun } from '../../src/runtime/closeRun.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
+import { InMemoryExtractedValueStore } from '../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { setupDurableHarness, stubModel, buildCtx } from '../core-durable/helpers.js';
@@ -92,6 +93,7 @@ describe('Runtime extraction wiring', () => {
     }));
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
+      extractedValueStore: new InMemoryExtractedValueStore(),
       agents: [
         defineAgent({
           id: 'a',
@@ -122,6 +124,7 @@ describe('Runtime extraction wiring', () => {
     }));
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
+      extractedValueStore: new InMemoryExtractedValueStore(),
       agents: [
         defineAgent({
           id: 'a',
@@ -150,6 +153,7 @@ describe('Runtime extraction wiring', () => {
     }));
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
+      extractedValueStore: new InMemoryExtractedValueStore(),
       agents: [
         defineAgent({
           id: 'a',
@@ -190,6 +194,7 @@ describe('Runtime extraction wiring', () => {
 
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
+      extractedValueStore: new InMemoryExtractedValueStore(),
       agents: [
         defineAgent({
           id: 'a',
@@ -253,6 +258,7 @@ describe('Runtime extraction wiring', () => {
 
       const sessionStore = new MemoryStore();
       const runtime = createRuntime({
+      extractedValueStore: new InMemoryExtractedValueStore(),
         agents: [
           defineAgent({
             id: 'a',
@@ -293,6 +299,7 @@ describe('Runtime extraction wiring', () => {
 
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
+      extractedValueStore: new InMemoryExtractedValueStore(),
       agents: [
         defineAgent({
           id: 'a',

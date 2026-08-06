@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { MemoryBlockScope } from '../blocks/types.js';
 import type { ExtractedValue, ExtractedValueStore } from './store.js';
+import { registerNodeDefaultExtractedValueStore } from './resolveExtractedValueStore.js';
 
 export interface FileExtractedValueStoreOptions {
   /** Root directory. Defaults to `KURALLE_MEMORY_DIR`/extracted or `~/.kuralle/extracted`. */
@@ -92,3 +93,7 @@ export class FileExtractedValueStore implements ExtractedValueStore {
     }
   }
 }
+
+// Importing this module on Node makes it the default extracted-value store,
+// so a deployment that configures nothing still gets durable facts.
+registerNodeDefaultExtractedValueStore(() => new FileExtractedValueStore());

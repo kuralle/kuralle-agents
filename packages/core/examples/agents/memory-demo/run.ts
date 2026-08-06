@@ -7,8 +7,6 @@
 import { openai } from '@ai-sdk/openai';
 import readline from 'readline';
 import { defineAgent } from '../../../src/authoring/defineAgent.js';
-import { createLoadMemoryTool } from '../../../src/tools/memory.js';
-import { wrapAiSdkTool } from '../../../src/tools/effect/wrapAiSdkTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
 import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
 import { factsExtractor } from '../../../src/memory/extract/builtin/factsExtractor.js';
@@ -36,7 +34,6 @@ const agent = defineAgent({
 You can remember things from past conversations with the user.
 When the user asks about something discussed previously, use the loadMemory tool to search your memory.
 Be conversational and refer to past context naturally.`,
-  tools: { loadMemory: wrapAiSdkTool('loadMemory', createLoadMemoryTool()) },
   memory: {
     preload: { enabled: true },
     extract: [factsExtractor()],
@@ -50,7 +47,6 @@ const runtime = createRuntime({
   defaultModel: model,
   sessionStore: new MemoryStore(),
   extractedValueStore,
-  memoryService,
 });
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });

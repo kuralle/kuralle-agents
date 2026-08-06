@@ -70,7 +70,6 @@ export type { HandoffResult } from './tools/handoff.js';
 export { isFinalResult } from './tools/final.js';
 export type { FinalResult } from './tools/final.js';
 export { createHttpTool } from './tools/http.js';
-export { createLoadMemoryTool } from './tools/memory.js';
 export type {
   HttpToolConfig,
   HttpToolResult,

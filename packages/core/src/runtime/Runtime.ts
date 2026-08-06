@@ -44,7 +44,6 @@ import { loadRecordedSteps } from './durable/replay.js';
 import { markSessionOutcome } from './outcomeMarking.js';
 import { resolveAgentPolicies } from './policies/resolvePolicies.js';
 import type { KnowledgeProviderConfig } from '../types/knowledge.js';
-import type { MemoryService as V1MemoryService } from '../memory/MemoryService.js';
 import {
   buildAutoRetrieveProvider,
   buildKnowledgeProvider,
@@ -135,7 +134,6 @@ export interface HarnessConfig {
   hostSelect?: typeof selectHostTarget;
   tools?: Record<string, AnyTool>;
   knowledge?: KnowledgeProviderConfig;
-  memoryService?: V1MemoryService;
   /** Default store for `agent.memory.workingMemory` when `workingMemory.store` is omitted. */
   defaultWorkingMemoryStore?: PersistentMemoryStore;
   /** Default store for `agent.memory.extract` when no per-agent store is configured. */

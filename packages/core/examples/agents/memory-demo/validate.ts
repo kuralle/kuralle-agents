@@ -6,8 +6,6 @@
 
 import { openai } from '@ai-sdk/openai';
 import { defineAgent } from '../../../src/authoring/defineAgent.js';
-import { createLoadMemoryTool } from '../../../src/tools/memory.js';
-import { wrapAiSdkTool } from '../../../src/tools/effect/wrapAiSdkTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
 import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
 import { factsExtractor, FACTS_EXTRACTOR_SLUG } from '../../../src/memory/extract/builtin/factsExtractor.js';
@@ -51,7 +49,6 @@ const agent = defineAgent({
 You can remember things from past conversations.
 When the user refers to something from before, recall it naturally.
 Keep responses concise (1-2 sentences).`,
-  tools: { loadMemory: wrapAiSdkTool('loadMemory', createLoadMemoryTool()) },
   memory: {
     preload: { enabled: true, tokenBudget: 5000 },
     extract: [factsExtractor()],
@@ -65,7 +62,6 @@ const runtime = createRuntime({
   defaultModel: model,
   sessionStore,
   extractedValueStore,
-  memoryService,
 });
 
 async function chat(

@@ -211,7 +211,6 @@ function createFormRuntime(form: FormFiller) {
     defaultModel: model,
     sessionStore,
     extractedValueStore: new InMemoryExtractedValueStore(),
-    memoryService,
   });
 }
 

@@ -147,7 +147,6 @@ const runtime = createRuntime({
   defaultModel: model,
   sessionStore,
   extractedValueStore,
-  memoryService,
 });
 
 function separator(title: string) {
