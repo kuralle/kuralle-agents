@@ -163,7 +163,11 @@ describe('working memory wiring', () => {
   it('resolves owners: agent scope uses agent id, user scope uses userId', () => {
     expect(resolveWorkingMemoryOwner('agent', 'my-agent', 'user-1')).toBe('my-agent');
     expect(resolveWorkingMemoryOwner('user', 'my-agent', 'user-1')).toBe('user-1');
-    expect(resolveWorkingMemoryOwner('shared', 'my-agent', undefined)).toBe('anonymous');
+    // Previously asserted `'anonymous'` here. That placeholder was the defect:
+    // every session without a userId resolved to the same owner and read each
+    // other's blocks. Absent owner now means the block does not exist for this
+    // session — see working-memory-owner-isolation.test.ts.
+    expect(resolveWorkingMemoryOwner('shared', 'my-agent', undefined)).toBeUndefined();
   });
 
   it('FilePersistentMemoryStore round-trips cross-session USER blocks on Node', async () => {

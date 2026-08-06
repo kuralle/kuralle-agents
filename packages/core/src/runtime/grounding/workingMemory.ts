@@ -11,6 +11,9 @@ import {
 } from '../../memory/blocks/types.js';
 import { wrapAiSdkTool } from '../../tools/effect/wrapAiSdkTool.js';
 import { getNodeDefaultWorkingMemoryStore } from './defaultStoreRegistry.js';
+// Same warning the preload/ingest path uses, so a missing userId reports once
+// per session across every memory surface rather than once per surface.
+import { warnMissingUserId } from './memory.js';
 
 export interface LoadedWorkingMemoryBlock {
   scope: MemoryBlockScope;
@@ -43,22 +46,43 @@ export function resolveWorkingMemoryStore(
   );
 }
 
+/**
+ * The owner a block is stored under, or `undefined` when there is nobody to
+ * store it for.
+ *
+ * There is deliberately no fallback. This previously returned `'anonymous'`
+ * when a session had no `userId`, which made every such session share one
+ * owner — so one visitor's USER block loaded into the next visitor's system
+ * prompt. `userId` is optional on `chatRouter` and the OpenAI-compat endpoint,
+ * so that was reachable on any hosted chat surface that did not pass one.
+ *
+ * `runtime/grounding/memory.ts` already fails closed on a missing `userId` for
+ * preload and ingest. This now matches it: absent owner means the block does
+ * not exist for this session, not that it belongs to everyone.
+ *
+ * `agent` scope is unaffected — `agentId` is always present.
+ */
 export function resolveWorkingMemoryOwner(
   scope: MemoryBlockScope,
   agentId: string,
   userId: string | undefined,
-): string {
-  return scope === 'agent' ? agentId : (userId ?? 'anonymous');
+): string | undefined {
+  return scope === 'agent' ? agentId : userId;
 }
 
 export async function loadWorkingMemoryBlocks(
   store: PersistentMemoryStore,
   autoLoad: WorkingMemoryBlockSpec[],
-  resolveOwner: (scope: MemoryBlockScope) => string,
+  resolveOwner: (scope: MemoryBlockScope) => string | undefined,
 ): Promise<LoadedWorkingMemoryBlock[]> {
   const loaded: LoadedWorkingMemoryBlock[] = [];
   for (const spec of autoLoad) {
     const owner = resolveOwner(spec.scope);
+    if (owner === undefined) {
+      // No owner means this block does not exist for this session. Reading it
+      // under a placeholder would read somebody else's.
+      continue;
+    }
     const block = await store.loadBlock(spec.scope, owner, spec.key);
     let content = block?.content?.trim() ?? '';
     if (!content && spec.template) {
@@ -111,10 +135,22 @@ export async function wireWorkingMemory(
   }
 
   const store = resolveWorkingMemoryStore(config, harnessDefaultStore);
-  const autoLoad = config.autoLoad ?? DEFAULT_AUTO_LOAD_BLOCKS;
+  const declared = config.autoLoad ?? DEFAULT_AUTO_LOAD_BLOCKS;
   const charLimit = config.defaultCharLimit ?? DEFAULT_BLOCK_CHAR_LIMIT;
   const resolveOwner = (scope: MemoryBlockScope) =>
     resolveWorkingMemoryOwner(scope, agent.id, session.userId);
+
+  // A block whose owner cannot be resolved is not this session's to read or
+  // write. Drop it from the surface entirely rather than serving it under a
+  // placeholder owner shared with every other anonymous session.
+  const autoLoad = declared.filter((spec) => resolveOwner(spec.scope) !== undefined);
+  if (autoLoad.length < declared.length) {
+    warnMissingUserId(session.id);
+  }
+  if (autoLoad.length === 0) {
+    // Nothing addressable: no prompt section, and no tool to write with.
+    return undefined;
+  }
 
   const loaded = await loadWorkingMemoryBlocks(store, autoLoad, resolveOwner);
   const promptSection = formatWorkingMemorySection(loaded, autoLoad);

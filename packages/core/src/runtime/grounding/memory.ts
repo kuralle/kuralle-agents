@@ -21,8 +21,10 @@ export function warnMissingUserId(sessionId: string): void {
   }
   warnedSessions.add(sessionId);
   console.warn(
-    '[Kuralle] memory is configured but session has no userId. ' +
-      'Memory preload/ingest will be skipped. Pass userId via run({ userId }).',
+    '[Kuralle] memory is configured but this session has no userId. ' +
+      'User-scoped memory is unavailable for it — preload, ingest and working-memory ' +
+      'blocks are all skipped rather than shared with other userless sessions. ' +
+      'Pass userId via run({ userId }).',
   );
 }
 

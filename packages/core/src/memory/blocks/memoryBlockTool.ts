@@ -22,8 +22,9 @@ import {
 
 export interface MemoryBlockToolOptions {
   store: PersistentMemoryStore;
-  /** Resolved per-session: how to scope writes (typically userId / agentId). */
-  resolveOwner: (scope: MemoryBlockScope) => string;
+  /** Owner for a scope, or `undefined` when this session has none (no userId).
+   *  There is deliberately no placeholder — see `resolveWorkingMemoryOwner`. */
+  resolveOwner: (scope: MemoryBlockScope) => string | undefined;
   /** Per-block char limit (default 10,000). */
   charLimit?: number;
   /** When false, skip the prompt-injection scanner (NOT recommended). */
@@ -94,6 +95,17 @@ export function buildMemoryBlockTool(opts: MemoryBlockToolOptions) {
     async execute(input: Input) {
       const scope = input.scope ?? defaultScopeFor(input.block);
       const owner = opts.resolveOwner(scope);
+      if (owner === undefined) {
+        // Defence in depth: `wireWorkingMemory` already withholds this tool when
+        // no scope is addressable, so reaching here means a caller wired it
+        // directly. Refuse rather than fall back to a shared placeholder owner.
+        return {
+          ok: false,
+          block: input.block,
+          scope,
+          message: `No owner for scope '${scope}' in this session — memory is unavailable without a userId.`,
+        };
+      }
 
       if (input.action === 'view') {
         const block = await opts.store.loadBlock(scope, owner, input.block);
