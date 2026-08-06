@@ -39,6 +39,32 @@ describe('working-memory owner resolution fails closed', () => {
     expect(resolveWorkingMemoryOwner('user', 'agent-a', 'alice')).toBe('alice');
   });
 
+  it('treats an empty, null or whitespace userId as absent, not as an owner', () => {
+    // `chatRouter` forwards `body.userId` with no guard, so '' and null both
+    // reach here from the wire. An `=== undefined` check would make '' a valid
+    // shared owner — the same pooling defect wearing a different value.
+    expect(resolveWorkingMemoryOwner('user', 'agent-a', '')).toBeUndefined();
+    expect(resolveWorkingMemoryOwner('user', 'agent-a', '   ')).toBeUndefined();
+    expect(resolveWorkingMemoryOwner('user', 'agent-a', null as unknown as undefined)).toBeUndefined();
+    // A present id is returned verbatim — not trimmed — so no existing owner is
+    // silently rewritten to a different storage key.
+    expect(resolveWorkingMemoryOwner('user', 'agent-a', ' alice ')).toBe(' alice ');
+  });
+
+  it('two sessions both sending an empty userId cannot share a block', async () => {
+    const store = new InMemoryPersistentMemoryStore();
+    await store.saveBlock(
+      { key: 'USER', scope: 'user', content: 'SHOULD NOT BE VISIBLE', charLimit: 10_000 },
+      '',
+    );
+    const loaded = await loadWorkingMemoryBlocks(
+      store,
+      [{ scope: 'user', key: 'USER' }],
+      (scope) => resolveWorkingMemoryOwner(scope, 'agent-a', ''),
+    );
+    expect(loaded).toEqual([]);
+  });
+
   it('two userless sessions cannot read each other through a shared owner', async () => {
     const store = new InMemoryPersistentMemoryStore();
     // Whatever a previous build wrote under the old placeholder owner...

@@ -67,7 +67,15 @@ export function resolveWorkingMemoryOwner(
   agentId: string,
   userId: string | undefined,
 ): string | undefined {
-  return scope === 'agent' ? agentId : userId;
+  if (scope === 'agent') return agentId;
+  // Falsy, not just undefined. `grounding/memory.ts` guards preload and ingest
+  // with `if (!ctx.session.userId)`, so it already treats '' and null as absent;
+  // an `=== undefined` check here would leave `userId: ''` a valid shared owner
+  // and the two paths would disagree again. `chatRouter` forwards `body.userId`
+  // with no guard at all, so both reach here from the wire. Whitespace-only is
+  // absent too; a present id is returned unchanged rather than trimmed, so no
+  // existing owner is silently rewritten.
+  return userId && userId.trim() ? userId : undefined;
 }
 
 export async function loadWorkingMemoryBlocks(
