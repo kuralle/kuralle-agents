@@ -47,9 +47,3 @@ export {
   type UserInputContent,
 } from './userInput.js';
 
-export {
-  isAbortSignal,
-  type InterruptionEvent,
-  type AbortOptions,
-  type CancellationReason,
-} from '../types/index.js';

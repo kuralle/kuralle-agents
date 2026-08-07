@@ -1,129 +1,95 @@
 # Guardrails Guide
 
-Guardrails harden the runtime against loops, unsafe tools, and prompt injection.
+Guardrails harden the runtime against loops, runaway cost, unsafe tools, and
+prompt injection. Everything here is configured on the **agent**, not on
+`createRuntime`.
 
-## Stop Conditions
+## Limits
 
-Built-in stop conditions live in `guards/StopConditions` and are enabled by default:
-- `maxSteps`
-- `tokenBudget`
-- `timeout`
-- `consecutiveErrors`
-- `loopDetection`
-- `maxHandoffs`
-
-Override them via `HarnessConfig.stopConditions`.
+The structural stop conditions. They are enforced by the runtime itself, not by
+anything you register:
 
 ```ts
-import { StopConditions } from '@kuralle-agents/core';
-
-const runtime = new Runtime({
-  agents,
-  defaultAgentId: 'triage',
-  stopConditions: [
-    StopConditions.maxSteps(15),
-    StopConditions.timeout(60_000),
-    StopConditions.maxHandoffs(5),
-  ],
-});
-```
-
-## Tool Enforcement Rules
-
-`ToolEnforcer` supports call/result rules like rate-limits and dependency ordering.
-
-```ts
-import { EnforcementRules } from '@kuralle-agents/core';
-
-const runtime = new Runtime({
-  agents,
-  defaultAgentId: 'triage',
-  enforcementRules: [
-    EnforcementRules.createSequentialLimitRule(2),
-    EnforcementRules.createRateLimitRule('charge_card', 2, 60_000),
-  ],
-});
-```
-
-## Input & Output Processors
-
-Processors allow allow/modify/block of input or output.
-
-```ts
-const runtime = new Runtime({
-  agents,
-  defaultAgentId: 'support',
-  inputProcessors: [
-    {
-      id: 'block-secrets',
-      process: async ({ input }) =>
-        /api_key/i.test(input)
-          ? { action: 'block', message: 'Do not share secrets here.' }
-          : { action: 'allow' },
-    },
-  ],
-});
-```
-
-## Built-in Guards (0.8.5)
-
-Production-ready processors and validators ship with core — wire them into
-`AgentConfig.guardrails` / `AgentConfig.validate`:
-
-```ts
-import {
-  createPromptInjectionGuard,
-  createPiiInputGuard,
-  createPiiOutputGuard,
-  createModerationGuard,
-  createGroundingValidator,
-} from '@kuralle-agents/core';
+import { defineAgent } from '@kuralle-agents/core';
 
 const agent = defineAgent({
-  id: 'shop',
-  instructions: '...',
-  guardrails: {
-    input: [
-      createPromptInjectionGuard(),                  // deterministic injection patterns → block
-      createPiiInputGuard(),                         // Luhn-checked cards + emails → redact (PCI default)
-      createModerationGuard({ model: controlModel }), // LLM policy classifier → block
-    ],
-    output: [createPiiOutputGuard()],
+  id: 'triage',
+  model,
+  instructions: 'Route the customer.',
+  limits: {
+    maxTurns: 20,             // turns in one session
+    maxSteps: 25,             // model steps in one turn
+    toolMaxSteps: 10,         // tool-calling steps in one turn
+    maxOscillations: 3,       // repeated back-and-forth between two agents
+    maxToolConcurrency: 8,    // parallel-safe tools running at once
+    maxToolResultTokens: 8000 // ceiling on ONE tool result as the model sees it
   },
-  validate: [
-    // state-grounded "no invented actions" gate — rewrite-not-block
-    createGroundingValidator({ model: controlModel }),
-  ],
 });
 ```
 
-- PII detectors default to `['credit-card', 'email']`; `phone`/`iban` are
-  opt-in (they collide with order ids). Cards are Luhn-validated, IBANs
-  checksum-validated — order numbers don't false-positive.
-- The moderation guard fails **open** by default (`onError: 'block'` for
-  zero-tolerance deployments); deterministic guards still run during an
-  outage.
-- The grounding validator flags completed-action claims unsupported by this
-  turn's tool calls, flow state, or citations and rewrites them out; if no
-  safe rewrite exists, it blocks.
-- A pre-turn block emits a `safety-blocked` stream part with the moderator id
-  and rationale, then the user-facing message.
+`maxToolConcurrency` defaults to 8. Raise it deliberately — the model's batch
+size must never be the concurrency policy, and above eight the session store's
+CAS starts rejecting concurrent writes.
 
-## Output Redaction
+`maxToolResultTokens` bounds only what the **model** sees. The durable journal
+and `ctx.tool()` always keep the full value, so truncation never loses data.
 
-`outputRedaction` is a defense-in-depth filter for streamed text.
+## Tool enforcement rules
+
+`ToolEnforcer` applies call- and result-time rules — rate limits, dependency
+ordering, sequential caps. Rules go on the agent's `guardrails.enforcement`:
 
 ```ts
-const runtime = new Runtime({
-  agents,
-  defaultAgentId: 'support',
-  outputRedaction: [
-    { pattern: /\b\d{16}\b/, replacement: '[redacted]' },
-  ],
+const agent = defineAgent({
+  id: 'billing',
+  model,
+  instructions: 'Handle billing.',
+  guardrails: {
+    enforcement: [myRateLimitRule, myDependencyRule],
+  },
 });
 ```
 
-## System Injections
+An `EnforcementRule` is a plain object you write; the framework ships the
+enforcer, not a rule library. `createToolEnforcer(rules)` is exported if you
+need to drive one directly.
 
-Kuralle injects a few system-level guardrails by default (e.g. no secrets, invisible handoffs).
-You can add your own via `InjectionQueue`.
+## Input and output processors
+
+Processors allow, modify, or block input before a turn and output after it:
+
+```ts
+guardrails: {
+  input: [myInjectionScanner],
+  output: [myPiiRedactor],
+}
+```
+
+## Policy — the tool boundary
+
+For allow/ask/deny decisions per tool call, use `Policy` rather than a
+guardrail. It is the enforcement point the rest of the framework defers to:
+`needsApproval: true` on a tool is sugar for a policy returning `ask`. See
+`/guides/policy`.
+
+---
+
+## Removed in 0.21.0
+
+`StopConditions` (`maxSteps()`, `tokenBudget()`, `timeout()`,
+`consecutiveErrors()`, `loopDetection()`, `maxHandoffs()`, `taskComplete()`,
+`anyOf()`, `allOf()`, `defaultStopConditions`, `checkStopConditions`) and
+`EnforcementRules` (`readBeforeEdit`, `createRateLimitRule`,
+`createDependencyRule`, `contentValidation`, `createSequentialLimitRule`,
+`defaultEnforcementRules`) are gone.
+
+An earlier version of this guide said the stop conditions were "enabled by
+default" and configured through `HarnessConfig.stopConditions`. **Neither was
+true.** No such config field ever existed, nothing in the runtime ever called a
+`StopCondition`, and the helpers read fields (`stepCount`, `totalTokens`,
+`consecutiveErrors`) off a context shape the live runtime does not use. They
+were exported from the first commit and wired to nothing.
+
+Use `limits` above — that is, and always was, the mechanism that actually runs.
+The rule constructors have no replacement; write the `EnforcementRule` objects
+your case needs and pass them through `guardrails.enforcement`.

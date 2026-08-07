@@ -1,6 +1,5 @@
 import type { ModelMessage } from 'ai';
 import type { RetrievalCacheAdapter } from './knowledge.js';
-import type { RefinementStageResult } from './runtime.js';
 import type { EscalationReason, EscalationOutcome } from '../escalation/types.js';
 import type { ConversationOutcomeRecord, CsatRecord } from '../outcomes/types.js';
 import type { PersonaExperimentMetadata } from '../persona/types.js';
@@ -61,7 +60,6 @@ export interface Session {
   agentStates: Record<string, AgentState>;
   handoffHistory: HandoffRecord[];
   /** @internal Latest refinement decision for the active turn. Cleared after post-stream persistence. */
-  pendingRefinement?: RefinementStageResult;
   /** @internal Pending key-facts extraction promises. Awaited before session save. */
   __pendingExtractions?: Promise<void>[];
   /** Optimistic-concurrency version; must match the stored row on save (C2 CAS). */
@@ -125,22 +123,3 @@ export interface ToolCallRecord {
   durationMs?: number;
 }
 
-export interface RunContext {
-  session: Session;
-  agentId: string;
-  stepCount: number;
-  totalTokens: number;
-  handoffStack: string[];
-  startTime: number;
-  consecutiveErrors: number;
-  toolCallHistory: ToolCallRecord[];
-  /**
-   * Session-level retrieval cache. Created by KnowledgeProvider at turn
-   * start, persists across agent handoffs within the same session.
-   * Stores recent retrieval results indexed by document embedding for
-   * sub-millisecond semantic lookup.
-   */
-  retrievalCache?: RetrievalCacheAdapter;
-  /** Unique identifier for this turn, used by TurnCache for dedup. */
-  turnId?: string;
-}

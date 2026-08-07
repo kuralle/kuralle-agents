@@ -36,23 +36,10 @@ const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
     files: ['packages/core/src/capabilities/index.ts', 'packages/core/src/prompts/types.ts'],
     reason: 'Capability and prompt-builder surfaces still expose different section contracts; separate cleanup is out of scope.',
   },
-  RunContext: {
-    kind: 'export',
-    files: ['packages/core/src/types/run-context.ts', 'packages/core/src/types/session.ts'],
-    reason: 'Execution and session context contracts still share this public name; separate cleanup is out of scope.',
-  },
   Tool: {
     kind: 'export',
     files: ['packages/core/src/tools/Tool.ts', 'packages/core/src/types/effectTool.ts'],
     reason: 'The legacy tool and effect-tool contracts remain separate public surfaces; unification is out of scope.',
-  },
-  ToolExecutor: {
-    kind: 'module-stem',
-    files: [
-      'packages/core/src/foundation/ToolExecutor.ts',
-      'packages/core/src/tools/effect/ToolExecutor.ts',
-    ],
-    reason: 'Foundation and effect executors share a public module basename; the separate architecture decision is out of scope.',
   },
   TracingConfig: {
     kind: 'export',

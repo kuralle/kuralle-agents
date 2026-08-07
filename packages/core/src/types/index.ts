@@ -95,7 +95,6 @@ export type {
   AgentState,
   HandoffRecord,
   ToolCallRecord,
-  RunContext,
 } from './session.js';
 export type {
   ToolSet,
@@ -165,18 +164,6 @@ export type {
   StreamPart,
   TurnHandle,
 } from './stream.js';
-export { isAbortSignal } from './runtime.js';
-export type {
-  RefinementStageResult,
-  ValidationStageResult,
-  Hook,
-  StopConditionResult,
-  StopCondition,
-  StreamOptions,
-  AbortOptions,
-  InterruptionEvent,
-  CancellationReason,
-} from './runtime.js';
 export type { SpanKind, AgentSpan, AgentTrace, DeploymentTraceContext } from './trace.js';
 export type {
   AuditEntryBase,
