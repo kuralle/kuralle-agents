@@ -5,7 +5,6 @@ import {
   createRuntime,
   type AgentConfig,
   type KnowledgeProviderConfig,
-  type MemoryService,
   type SessionStore,
   type TraceStore,
 } from '@kuralle-agents/core';
@@ -23,7 +22,6 @@ export interface ProductionRuntimeOptions {
   sessionStore?: SessionStore;
   traceStore?: TraceStore;
   knowledge?: KnowledgeProviderConfig;
-  memoryService?: MemoryService;
 }
 
 export function createProductionRuntime(options: ProductionRuntimeOptions) {
@@ -62,6 +60,5 @@ export function createProductionRuntime(options: ProductionRuntimeOptions) {
     ...(options.sessionStore ? { sessionStore: options.sessionStore } : {}),
     ...(options.traceStore ? { tracing: { store: options.traceStore } } : {}),
     ...(options.knowledge ? { knowledge: options.knowledge } : {}),
-    ...(options.memoryService ? { memoryService: options.memoryService } : {}),
   });
 }

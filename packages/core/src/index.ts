@@ -146,16 +146,9 @@ export type { DateParserOptions, ParsedDateResult } from './utils/index.js';
 export { getTemplate, registerTemplate, listTemplates, getAllTemplates } from './prompts/index.js';
 export type { GlossaryTerm, VoiceRulesConfig } from './prompts/index.js';
 
-export type { MemoryService } from './memory/index.js';
 export type {
-  MemoryEntry,
-  SearchMemoryRequest,
-  SearchMemoryResponse,
-  MemoryIngestionOptions,
 } from './memory/index.js';
-export { InMemoryMemoryService } from './memory/index.js';
 export { preloadMemoryContext } from './memory/index.js';
-export { extractMemories } from './memory/index.js';
 export {
   factsExtractor,
   FACTS_EXTRACTOR_SLUG,

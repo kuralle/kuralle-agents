@@ -7,7 +7,6 @@
 import { openai } from '@ai-sdk/openai';
 import { defineAgent } from '../../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
-import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
 import { factsExtractor, FACTS_EXTRACTOR_SLUG } from '../../../src/memory/extract/builtin/factsExtractor.js';
 import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
@@ -36,7 +35,6 @@ function separator(title: string) {
   console.log(`${'━'.repeat(60)}`);
 }
 
-const memoryService = new InMemoryMemoryService();
 const extractedValueStore = new InMemoryExtractedValueStore();
 const sessionStore = new MemoryStore();
 const model = openai('gpt-4o-mini');

@@ -8,13 +8,11 @@ import { openai } from '@ai-sdk/openai';
 import readline from 'readline';
 import { defineAgent } from '../../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
-import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
 import { factsExtractor } from '../../../src/memory/extract/builtin/factsExtractor.js';
 import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { loadExampleEnv } from '../../_shared/v2Runner.js';
 
-const memoryService = new InMemoryMemoryService();
 const extractedValueStore = new InMemoryExtractedValueStore();
 
 loadExampleEnv(import.meta.url);

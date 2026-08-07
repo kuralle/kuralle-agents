@@ -4,7 +4,6 @@ import {
 	type AgentConfig,
 	type StreamPart,
 	type KnowledgeProviderConfig,
-	type MemoryService,
 } from '@kuralle-agents/core';
 import type { LanguageModel } from 'ai';
 import { mergeHarnessTools } from './harnessTools.js';
@@ -16,7 +15,6 @@ export async function runPlaygroundConversation(opts: {
 	prompts: string[];
 	model: LanguageModel;
 	knowledge?: KnowledgeProviderConfig;
-	memoryService?: MemoryService;
 	tools?: Record<string, import('@kuralle-agents/core').EffectTool>;
 }): Promise<{ sessionId: string; transcript: string[] }> {
 	const runtime = createRuntime({
@@ -25,7 +23,6 @@ export async function runPlaygroundConversation(opts: {
 		defaultModel: opts.model,
 		sessionStore: new MemoryStore(),
 		knowledge: opts.knowledge,
-		memoryService: opts.memoryService,
 		tools: opts.tools ?? mergeHarnessTools(opts.agents),
 	});
 

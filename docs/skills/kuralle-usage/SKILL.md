@@ -182,7 +182,7 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'demo' });
 - Flow control via node `next` / returned transitions — not tool prose.
 - Grounding must be explicit if you promise it.
 - Side-effecting tools go through `tools` / `ctx.tool` for exactly-once-modulo-idempotency (finished steps replay without re-executing; a crash mid-effect re-runs it, deduped by the idempotency key).
-- `userId` required for MemoryService.
+- `userId` required for user-scoped memory, and it must match `^[A-Za-z0-9._@+:~|-]+$` — a session without one, or with one outside that set, runs with no user memory rather than a shared fallback.
 
 ## When to stop
 

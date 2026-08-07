@@ -1,13 +1,4 @@
-export type { MemoryService } from './MemoryService.js';
-export type {
-  MemoryEntry,
-  SearchMemoryRequest,
-  SearchMemoryResponse,
-  MemoryIngestionOptions,
-} from './types.js';
-export { InMemoryMemoryService } from './stores/InMemoryMemoryService.js';
 export { preloadMemoryContext } from './preloadMemory.js';
-export { extractMemories } from './utils.js';
 
 // ── Persistent memory blocks (PR-5) ─────────────────────────────────
 export type {

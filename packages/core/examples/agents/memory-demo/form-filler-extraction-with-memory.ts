@@ -10,8 +10,7 @@ import { defineAgent } from '../../../src/authoring/defineAgent.js';
 import { collect, defineFlow, reply } from '../../../src/authoring/nodes.js';
 import { buildToolSet, defineTool } from '../../../src/tools/effect/defineTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
-import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
-import { factsExtractor } from '../../../src/memory/extract/builtin/factsExtractor.js';
+import { factsExtractor, FACTS_EXTRACTOR_SLUG } from '../../../src/memory/extract/builtin/factsExtractor.js';
 import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { loadExampleEnv } from '../../_shared/v2Runner.js';
@@ -137,7 +136,6 @@ const agent = defineAgent({
   ],
 });
 
-const memoryService = new InMemoryMemoryService();
 const extractedValueStore = new InMemoryExtractedValueStore();
 const sessionStore = new MemoryStore();
 
@@ -185,15 +183,12 @@ async function main() {
     await chat('session-1', input);
   }
 
-  const memories = await memoryService.searchMemory({
-    userId: USER_ID,
-    query: 'Jordan Lee BlueCross appointment',
-    limit: 10,
-  });
-  separator('Ingested Memories');
-  console.log(`  Total: ${memories.memories.length} entries`);
-  for (const mem of memories.memories) {
-    console.log(`  [${mem.author}] ${mem.content.slice(0, 120)}`);
+  const extracted = await extractedValueStore.load('user', USER_ID, FACTS_EXTRACTOR_SLUG);
+  const facts = (extracted?.value as { facts?: string[] })?.facts ?? [];
+  separator('Extracted Facts');
+  console.log(`  Total: ${facts.length} facts`);
+  for (const fact of facts) {
+    console.log(`  - ${fact}`);
   }
 
   separator('SESSION 2: Return visit');

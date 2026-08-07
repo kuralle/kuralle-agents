@@ -9,8 +9,7 @@ import { z } from 'zod';
 import { defineAgent } from '../../../src/authoring/defineAgent.js';
 import { buildToolSet, defineTool } from '../../../src/tools/effect/defineTool.js';
 import { createRuntime } from '../../../src/runtime/Runtime.js';
-import { InMemoryMemoryService } from '../../../src/memory/stores/InMemoryMemoryService.js';
-import { factsExtractor } from '../../../src/memory/extract/builtin/factsExtractor.js';
+import { factsExtractor, FACTS_EXTRACTOR_SLUG } from '../../../src/memory/extract/builtin/factsExtractor.js';
 import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { MemoryStore } from '../../../src/session/stores/MemoryStore.js';
 import { loadExampleEnv } from '../../_shared/v2Runner.js';
@@ -161,8 +160,8 @@ class FormFiller {
   }
 }
 
-const memoryService = new InMemoryMemoryService();
 const sessionStore = new MemoryStore();
+const extractedValueStore = new InMemoryExtractedValueStore();
 
 function createFormRuntime(form: FormFiller) {
   const recordAnswerTool = defineTool({
@@ -210,7 +209,7 @@ function createFormRuntime(form: FormFiller) {
     defaultAgentId: agent.id,
     defaultModel: model,
     sessionStore,
-    extractedValueStore: new InMemoryExtractedValueStore(),
+    extractedValueStore,
   });
 }
 
@@ -260,13 +259,13 @@ async function main() {
   separator('Session 1 — Completed Answers');
   console.log('  ' + JSON.stringify(form1.getCompletedAnswers(), null, 2).replace(/\n/g, '\n  '));
 
-  const memories = await memoryService.searchMemory({
-    userId: USER_ID,
-    query: 'Jordan Lee BlueCross appointment',
-    limit: 10,
-  });
-  separator('Ingested Memories');
-  console.log(`  Total: ${memories.memories.length} entries`);
+  const extracted = await extractedValueStore.load('user', USER_ID, FACTS_EXTRACTOR_SLUG);
+  const facts = (extracted?.value as { facts?: string[] })?.facts ?? [];
+  separator('Extracted Facts');
+  console.log(`  Total: ${facts.length} facts`);
+  for (const fact of facts) {
+    console.log(`  - ${fact}`);
+  }
 
   separator('SESSION 2: Return visit');
   const runtime2 = createFormRuntime(new FormFiller());

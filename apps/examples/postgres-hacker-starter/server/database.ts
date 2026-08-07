@@ -2,10 +2,6 @@ import { createOpenAI } from '@ai-sdk/openai';
 import type {
   KnowledgeProviderConfig,
   KnowledgeRetrievalResult,
-  MemoryEntry,
-  MemoryService,
-  SearchMemoryRequest,
-  SearchMemoryResponse,
   Session,
 } from '@kuralle-agents/core';
 import { embed } from 'ai';
@@ -246,49 +242,6 @@ export class HackerRepository {
       [userId],
     );
     return result.rows.map((row) => ({ sessionId: String(row.session_id), report: row.report, updatedAt: new Date(row.updated_at).toISOString() }));
-  }
-}
-
-export class HackerMemoryService implements MemoryService {
-  constructor(private readonly repository: HackerRepository) {}
-
-  async addSessionToMemory(session: Session): Promise<void> {
-    await this.repository.upsertSessionReport(session);
-  }
-
-  async searchMemory(request: SearchMemoryRequest): Promise<SearchMemoryResponse> {
-    const profile = await this.repository.getProfile(request.userId);
-    const matches = await this.repository.searchMemories(request.userId, request.query, request.limit ?? 8);
-    const profileContent = [
-      profile.name ? `Name: ${profile.name}.` : '',
-      profile.email ? `Email on profile: ${profile.email}.` : '',
-      Object.keys(profile.preferences).length > 0 ? `Profile preferences: ${JSON.stringify(profile.preferences)}.` : '',
-    ].filter(Boolean).join(' ');
-    const memories: MemoryEntry[] = [];
-    if (profileContent) memories.push({
-      id: `${request.userId}:profile`,
-      sessionId: 'profile',
-      userId: request.userId,
-      content: profileContent,
-      author: 'profile',
-      createdAt: new Date(profile.lastSeenAt),
-      score: 1,
-    });
-    memories.push(...matches.map((memory, index) => ({
-      id: `${request.userId}:${memory.memoryType}`,
-      sessionId: 'agentic-memory',
-      userId: request.userId,
-      content: `${memory.memoryType}: ${memory.content}`,
-      author: 'memory',
-      createdAt: new Date(memory.updatedAt),
-      score: memory.score || 1 / (index + 2),
-    })));
-    return { memories };
-  }
-
-  async deleteMemories(userId: string): Promise<void> {
-    const memories = await this.repository.listMemories(userId);
-    await Promise.all(memories.map((memory) => this.repository.forget(userId, memory.memoryType)));
   }
 }
 

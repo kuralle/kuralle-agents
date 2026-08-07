@@ -2,8 +2,6 @@ export { PostgresSessionStore } from './PostgresSessionStore.js';
 export type { PostgresStoreOptions } from './PostgresSessionStore.js';
 export { PostgresTraceStore } from './PostgresTraceStore.js';
 export type { PostgresTraceStoreOptions } from './PostgresTraceStore.js';
-export { PostgresMemoryService } from './PostgresMemoryService.js';
-export type { PostgresMemoryStoreOptions } from './PostgresMemoryService.js';
 export { PostgresPersistentMemoryStore } from './PostgresPersistentMemoryStore.js';
 export type { PostgresPersistentMemoryStoreOptions } from './PostgresPersistentMemoryStore.js';
 export { PostgresExtractedValueStore } from './PostgresExtractedValueStore.js';

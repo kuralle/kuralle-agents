@@ -18,7 +18,7 @@ Three backend implementations — sessions, long-term memory, and pgvector simil
 
 - **`PostgresSessionStore`** — `SessionStore` implementation for durable session persistence.
 - **`PostgresTraceStore`** — independent native trace persistence and read API.
-- **`PostgresMemoryService`** — `MemoryService` implementation for cross-session long-term memory.
+- **`PostgresExtractedValueStore`** — durable store for extractor output (cross-session memory).
 - **`PostgresPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`PgVectorStore`** — `VectorStoreCore` implementation using pgvector for similarity search.
 - **`PostgresDeploymentStore`** — immutable agent versions, releases, and sticky thread pins.
@@ -89,19 +89,34 @@ Spans live in the separate `kuralle_trace_spans` table. Set `tableName` to overr
 
 ## Long-term memory
 
-```ts
-import { PostgresMemoryService } from '@kuralle-agents/postgres-store';
+Cross-session memory is configured on the **agent**, not the runtime. Extractors
+decide what is worth keeping; `preload` puts the relevant parts back into the next
+session's prompt.
 
-const memoryService = new PostgresMemoryService({ client: pool });
+```ts
+import { defineAgent, createRuntime, factsExtractor } from '@kuralle-agents/core';
+import { PostgresExtractedValueStore } from '@kuralle-agents/postgres-store';
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'Help the customer.',
+  memory: {
+    preload: { enabled: true, tokenBudget: 500 },
+    extract: [factsExtractor()],
+  },
+});
 
 const runtime = createRuntime({
   agents: [agent],
   defaultAgentId: 'support',
-  memoryService,
-  preloadMemory: true,
-  memoryIngestion: 'onEnd',
+  extractedValueStore: new PostgresExtractedValueStore({ client: pool }),
 });
 ```
+
+Pass a `userId` on every run — `runtime.run({ input, sessionId, userId })`. Memory is
+owner-scoped, and a session without a `userId` gets no user-scoped memory at all rather
+than sharing a pooled one.
 
 ## Working memory blocks
 

@@ -1,5 +1,4 @@
 import type { Session } from '../types/index.js';
-import type { MemoryService } from '../memory/MemoryService.js';
 import type { KnowledgeProvider } from '../runtime/KnowledgeProvider.js';
 import type { EscalationReason } from '../escalation/types.js';
 
@@ -13,7 +12,6 @@ export interface RefineInput {
   readonly session: Session;
   readonly userMessage: string;
   readonly knowledgeProvider: KnowledgeProvider | undefined;
-  readonly memoryService: MemoryService | undefined;
   readonly abortSignal?: AbortSignal;
 }
 

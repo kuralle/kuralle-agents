@@ -6,7 +6,6 @@ import {
   createEmbeddingFunction,
   createKnowledgeConfig,
   getPool,
-  HackerMemoryService,
   HackerRepository,
   migrateDatabase,
 } from './database';
@@ -33,6 +32,5 @@ async function initializeRuntime() {
     sessionStore: new PostgresSessionStore({ client: pool }),
     traceStore: new PostgresTraceStore({ client: pool, retentionMs: 30 * 24 * 60 * 60 * 1000 }),
     knowledge: createKnowledgeConfig(repository, createEmbeddingFunction()),
-    memoryService: new HackerMemoryService(repository),
   });
 }

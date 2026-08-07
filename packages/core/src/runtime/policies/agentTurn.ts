@@ -132,7 +132,6 @@ async function runRefinementPolicies(
       session: ctx.session,
       userMessage: current,
       knowledgeProvider: undefined,
-      memoryService: undefined,
       abortSignal: ctx.abortSignal,
     });
 

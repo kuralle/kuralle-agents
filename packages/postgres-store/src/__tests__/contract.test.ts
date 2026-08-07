@@ -3,8 +3,7 @@
  *
  * Exercises the helper `runSessionStoreContract` (from core) against the
  * Postgres adapter using an in-memory mock PostgresClient that emulates
- * the statements the adapter issues. The same mock pattern is already
- * used by PostgresMemoryService.test.js.
+ * the statements the adapter issues.
  *
  * PgVectorStore's contract wiring (runVectorStoreContract) requires a real
  * pgvector instance — Testcontainers wiring is deferred to a Phase-3

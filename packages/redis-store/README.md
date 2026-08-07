@@ -18,7 +18,7 @@ Three backend implementations — sessions, long-term memory, and vector search 
 
 - **`RedisSessionStore`** — `SessionStore` implementation for durable session persistence.
 - **`RedisTraceStore`** — independent native trace persistence and read API.
-- **`RedisMemoryService`** — `MemoryService` implementation for cross-session long-term memory.
+- **`RedisExtractedValueStore`** — durable store for extractor output (cross-session memory).
 - **`RedisPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`RedisVectorStore`** — `VectorStoreCore` implementation for vector similarity search.
 - **`fromUpstash` / `fromNodeRedis` / `fromIORedis`** — client adapters.
@@ -93,21 +93,36 @@ const sessionStore = new RedisSessionStore({ client: myClient, prefix: 'kuralle'
 
 ## Long-term memory
 
+Cross-session memory is configured on the **agent**, not the runtime. Extractors
+decide what is worth keeping; `preload` puts the relevant parts back into the next
+session's prompt.
+
 ```ts
-import { createRuntime, InMemoryMemoryService } from '@kuralle-agents/core';
-import { RedisMemoryService, fromUpstash } from '@kuralle-agents/redis-store';
+import { defineAgent, createRuntime, factsExtractor } from '@kuralle-agents/core';
+import { RedisExtractedValueStore, fromUpstash } from '@kuralle-agents/redis-store';
 
 const redis = fromUpstash(Redis.fromEnv());
-const memoryService = new RedisMemoryService({ client: redis });
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'Help the customer.',
+  memory: {
+    preload: { enabled: true, tokenBudget: 500 },
+    extract: [factsExtractor()],
+  },
+});
 
 const runtime = createRuntime({
   agents: [agent],
   defaultAgentId: 'support',
-  memoryService,
-  preloadMemory: true,
-  memoryIngestion: 'onEnd',
+  extractedValueStore: new RedisExtractedValueStore({ client: redis }),
 });
 ```
+
+Pass a `userId` on every run — `runtime.run({ input, sessionId, userId })`. Memory is
+owner-scoped, and a session without a `userId` gets no user-scoped memory at all rather
+than sharing a pooled one.
 
 ## Working memory blocks
 
