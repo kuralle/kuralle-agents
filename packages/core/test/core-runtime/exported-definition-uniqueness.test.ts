@@ -16,16 +16,6 @@ interface AllowlistedDuplicate extends DuplicateDefinition {
 }
 
 const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
-  ChannelPolicy: {
-    kind: 'export',
-    files: ['packages/core/src/channels/types.ts', 'packages/engagement/src/policy.ts'],
-    reason: 'Core and engagement expose distinct channel policy contracts; unification is out of scope.',
-  },
-  DeferReason: {
-    kind: 'export',
-    files: ['packages/engagement/src/strategist.ts', 'packages/messaging/src/types/outbound.ts'],
-    reason: 'Engagement and messaging use distinct defer-reason contracts; unification is out of scope.',
-  },
   HandoffInputData: {
     kind: 'export',
     files: ['packages/core/src/types/processors.ts', 'packages/core/src/runtime/handoffFilters.ts'],
@@ -41,16 +31,6 @@ const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
     files: ['packages/core/src/types/processors.ts', 'packages/core/src/runtime/handoffFilters.ts'],
     reason: 'The processor contract and runtime filter surface still duplicate this public name; separate cleanup is out of scope.',
   },
-  KnowledgeChunk: {
-    kind: 'export',
-    files: ['packages/core/src/types/knowledge.ts', 'packages/rag/src/types.ts'],
-    reason: 'Core and RAG expose separate knowledge contracts with this shared name; unification is out of scope.',
-  },
-  PersonaConfig: {
-    kind: 'export',
-    files: ['packages/core/src/persona/types.ts', 'packages/messaging-meta/src/messenger/types.ts'],
-    reason: 'Core persona and Messenger metadata expose distinct configuration contracts; unification is out of scope.',
-  },
   PromptSection: {
     kind: 'export',
     files: ['packages/core/src/capabilities/index.ts', 'packages/core/src/prompts/types.ts'],
@@ -60,11 +40,6 @@ const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
     kind: 'export',
     files: ['packages/core/src/types/run-context.ts', 'packages/core/src/types/session.ts'],
     reason: 'Execution and session context contracts still share this public name; separate cleanup is out of scope.',
-  },
-  SqlExecutor: {
-    kind: 'export',
-    files: ['packages/cf-agent/src/types.ts', 'packages/rag/src/sql.ts'],
-    reason: 'Cloudflare and RAG define separate SQL adapter contracts; unification is out of scope.',
   },
   Tool: {
     kind: 'export',
@@ -83,16 +58,6 @@ const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
     kind: 'export',
     files: ['packages/core/src/runtime/Runtime.ts', 'packages/core/src/types/telemetry.ts'],
     reason: 'Runtime and telemetry expose distinct tracing configuration contracts; unification is out of scope.',
-  },
-  TurnResult: {
-    kind: 'export',
-    files: ['packages/core/src/types/channel.ts', 'packages/messaging/src/inbound/types.ts'],
-    reason: 'Core and messaging expose distinct turn-result contracts; unification is out of scope.',
-  },
-  ownershipGate: {
-    kind: 'export',
-    files: ['packages/engagement/src/ownership.ts', 'packages/messaging/src/inbound/pipeline.ts'],
-    reason: 'Engagement and messaging expose separate ownership middleware; unification is out of scope.',
   },
 };
 
@@ -120,6 +85,34 @@ function publicEntryPoints(files: string[]): string[] {
   return files.filter((filePath) => /\/src\/(?:[^/]+\/)*index\.tsx?$/.test(filePath));
 }
 
+/**
+ * The package a path belongs to — `packages/<name>/...` → `<name>`.
+ *
+ * Detection is keyed on the package of the **entry point**, not of the
+ * declaration, and that is the whole point of the scoping (see the header).
+ * A name is only ambiguous if two definitions are reachable from one package's
+ * public surface. Two packages using the same word for different contracts is
+ * normal and unreachable by accident: a consumer writes
+ * `from '@kuralle-agents/rag'` and gets exactly rag's.
+ *
+ * Keying on the entry point also covers the re-export case without a special
+ * branch: if package A re-exports B's symbol into A's index while A also
+ * defines its own, both declarations land in A's bucket — even though one of
+ * them lives under `packages/b/src/` — so A's surface is reported as ambiguous.
+ * No package does this today; the guard catches the first one that tries.
+ *
+ * That only works because of the `paths` mapping on the program options below.
+ * Without it the specifier does not resolve, the aliased symbol has no
+ * declarations, and this case is invisible — which is what the guard did before
+ * the mapping was added, and it passed a planted re-export silently. The two
+ * changes are one mechanism; do not remove the mapping and leave this comment.
+ */
+function packageOf(filePath: string): string {
+  const rel = relative(packagesRoot, filePath);
+  const [pkg] = rel.split('/');
+  return pkg ?? '';
+}
+
 function duplicateDefinitions(): Map<string, DuplicateDefinition> {
   const files = readdirSync(packagesRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -138,19 +131,44 @@ function duplicateDefinitions(): Map<string, DuplicateDefinition> {
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     skipLibCheck: true,
     target: ts.ScriptTarget.Latest,
+    // Resolve workspace specifiers to each package's `src`, not its published
+    // `dist`. Without this, `@kuralle-agents/rag` does not resolve at all here
+    // (verified: `ts.resolveModuleName` returns undefined), so a package
+    // re-exporting another's symbol into its own index produced a symbol with
+    // no declarations and the guard saw nothing. Mapping to `src` also keeps
+    // the reported paths in the same shape as every other entry, and means the
+    // guard does not depend on anything having been built.
+    baseUrl: repositoryRoot,
+    paths: { '@kuralle-agents/*': ['packages/*/src/index.ts'] },
   });
   const checker = program.getTypeChecker();
-  const publicNames = new Set<string>();
-  const definitions = new Map<string, Set<string>>();
+  // Both maps are keyed per package, so a name is only compared against other
+  // definitions reachable from the SAME package's public surface.
+  const publicNames = new Map<string, Set<string>>();
+  const definitions = new Map<string, Map<string, Set<string>>>();
+
+  const bucket = <T>(map: Map<string, Map<string, T>>, pkg: string): Map<string, T> => {
+    let inner = map.get(pkg);
+    if (!inner) {
+      inner = new Map();
+      map.set(pkg, inner);
+    }
+    return inner;
+  };
 
   for (const entryPoint of publicEntryPoints(files)) {
     const sourceFile = program.getSourceFile(entryPoint);
     if (!sourceFile) throw new Error(`Missing source file for ${entryPoint}`);
     const module = checker.getSymbolAtLocation(sourceFile);
     if (!module) throw new Error(`Module symbol not found for ${entryPoint}`);
+    const pkg = packageOf(entryPoint);
+
+    const pkgNames = publicNames.get(pkg) ?? new Set<string>();
+    publicNames.set(pkg, pkgNames);
+    const pkgDefinitions = bucket(definitions, pkg);
 
     for (const exported of checker.getExportsOfModule(module)) {
-      publicNames.add(exported.name);
+      pkgNames.add(exported.name);
       const symbol = exported.flags & ts.SymbolFlags.Alias
         ? checker.getAliasedSymbol(exported)
         : exported;
@@ -159,33 +177,47 @@ function duplicateDefinitions(): Map<string, DuplicateDefinition> {
         const filePath = declaration.getSourceFile().fileName;
         if (!filePath.startsWith(`${packagesRoot}/`) || !filePath.includes('/src/')) continue;
         const name = exported.name;
-        const paths = definitions.get(name) ?? new Set<string>();
+        const paths = pkgDefinitions.get(name) ?? new Set<string>();
         paths.add(relative(repositoryRoot, filePath));
-        definitions.set(name, paths);
+        pkgDefinitions.set(name, paths);
       }
     }
   }
 
   const duplicates = new Map<string, DuplicateDefinition>();
-  for (const [name, paths] of definitions) {
-    if (paths.size > 1) {
-      duplicates.set(name, { kind: 'export', files: [...paths].sort() });
+  // Merged across packages when reporting, because KNOWN_DUPLICATES is keyed by
+  // bare name. Two packages each having their own internal duplicate of the same
+  // name would collapse into one entry listing all the files — honest, if
+  // cramped. It does not occur today; the `files` list disambiguates if it does.
+  const record = (name: string, kind: DuplicateDefinition['kind'], paths: Iterable<string>) => {
+    const existing = duplicates.get(name);
+    const files = new Set(existing?.files ?? []);
+    for (const p of paths) files.add(p);
+    duplicates.set(name, { kind: existing?.kind ?? kind, files: [...files].sort() });
+  };
+
+  for (const pkgDefinitions of definitions.values()) {
+    for (const [name, paths] of pkgDefinitions) {
+      if (paths.size > 1) record(name, 'export', paths);
     }
   }
 
-  const moduleStems = new Map<string, Set<string>>();
-  for (const [name, paths] of definitions) {
-    if (!publicNames.has(name)) continue;
-    for (const filePath of paths) {
-      const stem = basename(filePath).replace(/\.tsx?$/, '');
-      const stemPaths = moduleStems.get(stem) ?? new Set<string>();
-      stemPaths.add(filePath);
-      moduleStems.set(stem, stemPaths);
+  for (const [pkg, pkgDefinitions] of definitions) {
+    const pkgNames = publicNames.get(pkg) ?? new Set<string>();
+    const moduleStems = new Map<string, Set<string>>();
+    for (const [name, paths] of pkgDefinitions) {
+      if (!pkgNames.has(name)) continue;
+      for (const filePath of paths) {
+        const stem = basename(filePath).replace(/\.tsx?$/, '');
+        const stemPaths = moduleStems.get(stem) ?? new Set<string>();
+        stemPaths.add(filePath);
+        moduleStems.set(stem, stemPaths);
+      }
     }
-  }
-  for (const [stem, paths] of moduleStems) {
-    if (paths.size > 1 && publicNames.has(stem) && !duplicates.has(stem)) {
-      duplicates.set(stem, { kind: 'module-stem', files: [...paths].sort() });
+    for (const [stem, paths] of moduleStems) {
+      if (paths.size > 1 && pkgNames.has(stem) && !duplicates.has(stem)) {
+        record(stem, 'module-stem', paths);
+      }
     }
   }
 
