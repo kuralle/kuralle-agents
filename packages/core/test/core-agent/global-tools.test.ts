@@ -10,7 +10,7 @@ import type { RunContext } from '../../src/types/run-context.js';
 
 const stub = {} as import('ai').LanguageModel;
 
-describe('agent globalTools are executable (ADR 0001)', () => {
+describe('agent globalTools are executable', () => {
   it('a model call to a global tool actually runs its executor', async () => {
     const spy = { count: 0 };
     const faq = defineTool({

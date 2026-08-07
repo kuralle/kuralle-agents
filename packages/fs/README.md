@@ -43,7 +43,7 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
 | `write` | Write file (throws `EROFS` when `readOnly`) |
 | `edit` | Find/replace within a file |
 
-Tools return structured data (`{ op, ok, ... }`), not conversational text.
+Tools return structured data (`{ op, ok,... }`), not conversational text.
 
 ## Out-of-band access
 
@@ -74,7 +74,7 @@ const agent = defineAgent({
 });
 ```
 
-Writable workspaces are not auto-exposed in `globalTools` (ADR 0006); register the tool explicitly when `readOnly: false`.
+Writable workspaces are not auto-exposed in `globalTools`; register the tool explicitly when `readOnly: false`.
 
 Mark a mount read-only with a `readOnly: true` property on the backend instance (e.g. `KnowledgeFs`). `CompositeFileSystem.readOnly` is `true` only when every mount is read-only.
 
@@ -132,7 +132,7 @@ const localMarkdown = nodeFileSystem('/data/content-workspace');
 import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
 import { Database } from 'bun:sqlite';
 const db = new Database('/data/agent.db');
-const backend: SqlBackend = { query: (s, ...p) => db.query(s).all(...p) as never, run: (s, ...p) => { db.query(s).run(...p); } };
+const backend: SqlBackend = { query: (s,...p) => db.query(s).all(...p) as never, run: (s,...p) => { db.query(s).run(...p); } };
 const fs = sqlFileSystem(backend);
 
 // Serverless / edge (Vercel) — hosted SQLite (Turso / libSQL) over a
@@ -146,7 +146,7 @@ const fs2 = sqlFileSystem(libsqlHttpBackend({ url: env.TURSO_DATABASE_URL, authT
 const agent = defineAgent({ id: 'a', model, workspace: fs, skills: fsSkillStore(fs) });
 ```
 
-`SqlFileSystem` is a proven drop-in for `InMemoryFs` (same behavior + error codes, verified by a shared conformance suite) and is verified on real Cloudflare workerd over a Durable Object's `ctx.storage.sql`. Large files (≥ `inlineThreshold`, default 1.5MB) spill to the `BlobStore` (R2); everything else stores inline. See `examples/persistent-workspace.ts` and ADR-0013.
+`SqlFileSystem` is a proven drop-in for `InMemoryFs` (same behavior + error codes, verified by a shared conformance suite) and is verified on real Cloudflare workerd over a Durable Object's `ctx.storage.sql`. Large files (≥ `inlineThreshold`, default 1.5MB) spill to the `BlobStore` (R2); everything else stores inline. See `examples/persistent-workspace.ts` and an earlier decision.
 
 **No storage is enforced or bundled by default.** A workspace is opt-in (agents have none unless you set `workspace`), and the backend is entirely yours: in-memory, on-disk SQLite, DO SQLite, D1, hosted libSQL, or any object satisfying the two-method `SqlBackend`. Turso is one option, not a requirement — `@kuralle-agents/fs` has **no** `@libsql/client` dependency (the fetch-only `libsqlHttpBackend` needs only `fetch`).
 
@@ -161,7 +161,7 @@ const fs = okfBundleToFs({
   '/index.md': '# Sales\n* [Orders](/tables/orders.md)',
   '/tables/orders.md': '---\ntype: BigQuery Table\ntitle: Orders\n---\n# Schema\n...',
 });
-const concepts = await listOkfConcepts(fs); // [{ id, type, title, links, ... }]
+const concepts = await listOkfConcepts(fs); // [{ id, type, title, links,... }]
 const agent = defineAgent({ id: 'analyst', model, workspace: fs, tools: { workspace: createFsTool({ fs }) } });
 ```
 
@@ -182,7 +182,7 @@ const agent = defineAgent({ id: 'coder', model, workspace: { fs, shell, readOnly
 
 The `bash` tool is registered into the **executor** surface only — a shell is never auto-exposed to the model; opt in per node or via `agent.tools`. Portability note: `virtualShell` pulls `just-bash` and is **not** on the root export (its `turndown` transitive is not workerd-clean); the root `@kuralle-agents/fs` stays Workers-clean, and the Cloudflare-edge shell is `cloudflareShell` (a Sandbox Durable Object), not `virtualShell`.
 
-fs and shell tools are **non-replayed** (`replay: false`): they always execute fresh rather than return a stale durable-journal result — at-least-once, always-fresh (see ADR-0012).
+fs and shell tools are **non-replayed** (`replay: false`): they always execute fresh rather than return a stale durable-journal result — at-least-once, always-fresh.
 
 ## API
 

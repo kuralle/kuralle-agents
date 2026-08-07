@@ -1,7 +1,7 @@
 # Claim Verification Results — teardown + voice-framework gaps
 
 **Date:** 2026-07-11 · **Status:** Ready for review
-**Verifies:** [`docs/kuralle-core-teardown.md`](./kuralle-core-teardown.md) (F1–F9, H1–H3, C2) and
+**Verifies:** the durability audit (F1–F9, H1–H3, C2) and
 [`docs/agentic-voice-framework-gaps.md`](./agentic-voice-framework-gaps.md) (G1–G18).
 **Method:** every load-bearing claim was re-checked with a **runnable, deterministic pass/fail loop** —
 either a live-provider trace or a source-structure assertion — never by re-reading the doc.
@@ -70,7 +70,7 @@ the next turn. That mechanism is confirmed.
 # baseline (fake-model, unit): 22 pass
 cd packages/core && bun test test/audit-validation
 
-# live behavioral (needs OPENAI_API_KEY in .env): 6/6 CONFIRMED
+# live behavioral (needs OPENAI_API_KEY in.env): 6/6 CONFIRMED
 KURALLE_EXAMPLE_PROVIDER=openai OPENAI_MODEL=gpt-4.1-mini \
   bun test/audit-validation/live/verify-live-claims.ts
 

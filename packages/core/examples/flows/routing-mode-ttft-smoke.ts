@@ -150,7 +150,7 @@ async function measureKeep(label: string): Promise<number[]> {
 }
 
 async function main() {
-  console.log(`Model: openai:${modelName}  ·  derived routing (ADR 0007)`);
+  console.log(`Model: openai:${modelName}  ·  derived routing`);
   console.log('Legacy baseline (66798db): keep-turn TTFT median ~2874ms with structured selector');
 
   const derived = await measureKeep('derived routing (host-control tools + guard)');

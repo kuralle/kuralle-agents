@@ -329,7 +329,7 @@ const dispatchDone = reply({
 
 const confirmDispatch = reply({
   id: 'confirm_dispatch',
-  // `base`: keep ADR 0001 lookups (unit threshold, vendor list) available while the
+  // `base`: keep an earlier decision lookups (unit threshold, vendor list) available while the
   // model requests approval, but do not re-union agent.tools (notify_resident, etc.).
   toolScope: 'base',
   tools: buildToolSet({ dispatch_vendor_with_approval }),

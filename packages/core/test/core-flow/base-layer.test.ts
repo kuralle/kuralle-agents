@@ -45,7 +45,7 @@ function captureStream(captured: Record<string, unknown>[]) {
   });
 }
 
-describe('agent base layer (ADR 0001)', () => {
+describe('agent base layer', () => {
   it('composes base instructions + exposes global tools in a speaking turn', async () => {
     const captured: Record<string, unknown>[] = [];
     captureStream(captured);

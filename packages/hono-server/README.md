@@ -59,16 +59,16 @@ export function Chat() {
                     <button key={o.value} onClick={() => sendMessage({ text: o.value })}>
                       {o.label}
                     </button>
-                  ))}
+))}
                 </div>
-              );
+);
             }
             return null;
           })}
         </div>
-      ))}
+))}
     </div>
-  );
+);
 }
 ```
 
@@ -164,4 +164,4 @@ Applies to raw JSON-SSE (`?format=raw`) and WebSocket paths. The native `UIMessa
 
 - [`@kuralle-agents/core`](https://www.npmjs.com/package/@kuralle-agents/core) — runtime, `harnessToUIMessageStream`, `KuralleUIMessage`.
 - [`@kuralle-agents/cf-agent`](https://www.npmjs.com/package/@kuralle-agents/cf-agent) — Cloudflare Workers variant.
-- `docs/adr/0005-ai-sdk-native-uimessage-default.md` — decision record and `data-kuralle-*` mapping table.
+- its decision record — decision record and `data-kuralle-*` mapping table.

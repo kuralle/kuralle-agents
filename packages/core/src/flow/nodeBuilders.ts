@@ -24,7 +24,7 @@ export function buildNodePrompt(node: ReplyNode, state: FlowState): string {
 }
 
 /**
- * Compose the agent base layer (ADR 0001) into a stable system-message array.
+ * Compose the agent base layer into a stable system-message array.
  * Returned as `SystemModelMessage[]` so a cache breakpoint can annotate the
  * last message — a single string cannot carry per-message providerOptions.
  */

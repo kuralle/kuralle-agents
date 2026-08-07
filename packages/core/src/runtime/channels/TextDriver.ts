@@ -213,7 +213,7 @@ export { addTurnUsage, languageModelId } from './turnUsage.js';
 
 export { buildNodePrompt };
 
-/** Compose the ADR-0001 base layer for any custom driver's structured decide path. */
+/** Compose the base layer for any custom driver's structured decide path. */
 export function buildDecideSystem(node: DecideNode, ctx: RunContext) {
   const state = currentFlowState(ctx.runState);
   return composeSystem(

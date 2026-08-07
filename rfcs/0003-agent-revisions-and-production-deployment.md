@@ -1,10 +1,10 @@
 # RFC 0003 — Agent revisions and production deployment
 
-**Status:** Accepted for implementation · **Date:** 2026-08-01  
+**Status:** Accepted for implementation · **Date:** 2026-08-01
 **Supersedes:** RFC-0001 and its engineering plan where they define artifact, mutability, and
-Cloudflare deployment semantics  
-**Amends:** ADR-0016 §B; skills remain content, but production content is published as an immutable
-Agent Revision rather than read from a mutable authoring source  
+Cloudflare deployment semantics
+**Amends:** an earlier decision §B; skills remain content, but production content is published as an immutable
+Agent Revision rather than read from a mutable authoring source
 **Research:** [`docs/research/file-agents-deployment/`](../docs/research/file-agents-deployment/README.md)
 
 ## 1. Decision

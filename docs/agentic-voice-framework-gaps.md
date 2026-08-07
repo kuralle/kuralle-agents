@@ -1,6 +1,6 @@
 # Agentic Voice AI Framework — Gaps to Close (agent layer)
 
-**Date:** 2026-07-11 · **Scope:** `packages/core/src` **agent substrate only** — the speech/transcription/audio-latency layers are deliberately excluded (voice is wrapped on top of Kuralle agents, so the agent core is what must hold). **Companion:** `docs/kuralle-core-teardown.md` (F1–F9); this doc reuses its `file:line` discipline and cross-references its findings where they overlap.
+**Date:** 2026-07-11 · **Scope:** `packages/core/src` **agent substrate only** — the speech/transcription/audio-latency layers are deliberately excluded (voice is wrapped on top of Kuralle agents, so the agent core is what must hold). **Companion:** the durability audit (F1–F9); this doc reuses its `file:line` discipline and cross-references its findings where they overlap.
 
 **Method:** adversarial code-review against an external rubric — the six "Solution Framework" components of an agentic voice AI framework, plus its worked "insurance renewal" scenario. Every load-bearing claim is `file:line`-verified first-hand and corroborated by five parallel subsystem audits (orchestration, persistent context, mid-call tools, degradation/handoff, self-correction). Docs and comments were not trusted.
 
@@ -31,7 +31,7 @@ Kuralle's agent core **clears the bar a "chatbot-with-voice" fails** — it has 
 
 **Root cause, named (one sentence):** three of the six components are graded down by the *same class of defect* — a capability that is **defined but not wired** (`retrievalCache`, `handoffFilters.inputFilter`), **gated behind a default-off experimental flag** (`outOfBandControl` → pivot recognition), or **delegated wholly to the LLM re-reading raw history** (goal tracking, self-correction) rather than being a structural mechanism. The fixes below are mostly *wiring and scoping*, not new subsystems.
 
-### §0.1 Corrections after cross-checking `docs/kuralle-core-teardown.md`
+### §0.1 Corrections after cross-checking the durability audit
 
 The first cut of this doc **over-graded Components 1 and 5** and **overstated context retention in Component 2**. Handoffs are the mechanism both orchestration and human-escalation rest on, and the teardown (§5–§6) shows a *single* handoff is more broken than "depth-2, one-way" implied:
 
@@ -91,7 +91,7 @@ Storage is genuinely durable: the whole `Session` blob (messages, `workingMemory
 
 ### Component 3 — Real tool use mid-conversation
 
-Mid-*flow* tool use genuinely works: `globalTools` are model-visible in every speaking node (ADR 0001; `channels/TextDriver.ts:127`) and correctly excluded from silent extraction, and a tool result is folded into the same turn via the `maxSteps` re-invoke loop (`TextDriver.ts:110-162`). The gap is durability across turns.
+Mid-*flow* tool use genuinely works: `globalTools` are model-visible in every speaking node and correctly excluded from silent extraction, and a tool result is folded into the same turn via the `maxSteps` re-invoke loop (`TextDriver.ts:110-162`). The gap is durability across turns.
 
 | # | Gap | Severity | Evidence | Failure it causes |
 |---|-----|----------|----------|-------------------|
@@ -103,7 +103,7 @@ This gap is fully documented in the teardown (F6, with a reproducing harness at 
 
 ### Component 4 — Parallelize tool calls (agent slice of latency management)
 
-Streaming partials is real (the `text-start`/`text-delta`/`text-end` lifecycle, ADR 0004). The specific "parallelize tool calls" requirement is not met at the agent layer.
+Streaming partials is real (the `text-start`/`text-delta`/`text-end` lifecycle). The specific "parallelize tool calls" requirement is not met at the agent layer.
 
 | # | Gap | Severity | Evidence | Failure it causes |
 |---|-----|----------|----------|-------------------|
@@ -194,4 +194,4 @@ The gaps are not independent; close them in this order so each lands on a stable
 
 **One-line framing for the roadmap:** the components fail on *wiring* (`retrievalCache`, `inputFilter`, tool-results-to-history) or *scoping* (`runId`, `__flowPark`, `activeFlow`-on-handoff) far more than on missing subsystems — so the distance from "clears the chatbot-with-voice bar" to "passes the agentic-voice rubric on its own worked example" is **Tier 0 + G8**, then the goal/thread layer. None of it is voice.
 
-**Cross-references to `docs/kuralle-core-teardown.md`:** durability G8 = F6/F4/H1/H3 §2 & §9.1; handoff chimera G16 + mid-flow crash G17 + dropped summary G12 + ping-pong G4 = §6 & §9.3; free-conversation history loss G18 + lossy `reset_with_summary`/degraded-fabrication G7 = §5; `outOfBandControl` default-off + context-blind classifier G2 = §4.2/§4.7; one-shot completed flows (F9) + `maxTurns` bricking (F7) = §4.8/§8; inert confidence gate G10 = §4.6; repair-pattern bar (3/16) = §8. **Positioning:** this doc grades the agent layer against an external *voice-framework* rubric; the teardown grades the same code against its own determinism/durability doctrine. Where they overlap they agree — and the teardown is the system of record for the durability and concurrency keystones.
+**Cross-references to the durability audit:** durability G8 = F6/F4/H1/H3 §2 & §9.1; handoff chimera G16 + mid-flow crash G17 + dropped summary G12 + ping-pong G4 = §6 & §9.3; free-conversation history loss G18 + lossy `reset_with_summary`/degraded-fabrication G7 = §5; `outOfBandControl` default-off + context-blind classifier G2 = §4.2/§4.7; one-shot completed flows (F9) + `maxTurns` bricking (F7) = §4.8/§8; inert confidence gate G10 = §4.6; repair-pattern bar (3/16) = §8. **Positioning:** this doc grades the agent layer against an external *voice-framework* rubric; the teardown grades the same code against its own determinism/durability doctrine. Where they overlap they agree — and the teardown is the system of record for the durability and concurrency keystones.

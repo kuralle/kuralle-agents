@@ -113,7 +113,7 @@ function pharmacyDriver(overrides?: {
   return {
     async runAgentTurn(resolved) {
       // Host free-conversation turn: no answer so the injected guard routes
-      // into the flow (derived routing — ADR 0007).
+      // into the flow (derived routing).
       if (resolved.node.id.endsWith('__host')) {
         return { text: '', toolResults: [] };
       }

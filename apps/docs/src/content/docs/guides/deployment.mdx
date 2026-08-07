@@ -187,7 +187,7 @@ import type { KuralleUIMessage } from '@kuralle-agents/core';
 const { messages } = useChat<KuralleUIMessage>({ api: '/api/chat/sse' });
 ```
 
-Kuralle flow/safety/interactive events arrive as `data-kuralle-*` parts — read persistent parts from `message.parts`, transient telemetry from `useChat({ onData })`. See ADR 0005 for the full mapping table.
+Kuralle flow/safety/interactive events arrive as `data-kuralle-*` parts — read persistent parts from `message.parts`, transient telemetry from `useChat({ onData })`. See an earlier decision for the full mapping table.
 
 ### Proxies and buffering
 

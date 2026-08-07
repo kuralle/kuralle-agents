@@ -22,7 +22,7 @@ const handle = runtime.run({ input, sessionId });
 return handle.toUIMessageStreamResponse({ sessionId });
 ```
 
-Kuralle orchestration events map to typed `data-kuralle-*` parts (see `docs/adr/0005-ai-sdk-native-uimessage-default.md`). Import `KuralleUIMessage` for compile-time-safe `message.parts`.
+Kuralle orchestration events map to typed `data-kuralle-*` parts (see its decision record). Import `KuralleUIMessage` for compile-time-safe `message.parts`.
 
 With `@kuralle-agents/hono-server`, `POST /api/chat/sse` defaults to this native wire. Append `?format=raw` for legacy `StreamPart` JSON-SSE.
 

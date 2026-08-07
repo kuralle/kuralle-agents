@@ -190,7 +190,7 @@ class AnalyticsTraceSink implements TraceSink {
   constructor(
     private readonly client: AnalyticsClient,
     private readonly workspaceId: string,
-  ) {}
+) {}
 
   async write(span: AgentSpan): Promise<void> {
     const { sessionId, agentId = 'unknown' } = span.attributes;
@@ -370,7 +370,7 @@ Unified bump across the graph (0.8.5 → 0.9.0). Contains **breaking** `@kuralle
 
 ## 0.8.5 — Agentic harness completion (escalation, wake, memory lifecycle, guardrails, commerce, simulation)
 
-Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes below ship in this same release). **Not breaking** — every surface is additive. Closes the six gaps from the industry-baseline evaluation; most wire dormant seams the v2 recon flagged as "shipped but silent". See `docs/adr/0010-agentic-harness-completion.md` and `docs/adr/0011-commerce-package.md`.
+Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes below ship in this same release). **Not breaking** — every surface is additive. Closes the six gaps from the industry-baseline evaluation; most wire dormant seams the v2 recon flagged as "shipped but silent". See its decision record and its decision record.
 
 **Escalation/handoff loop** (`@kuralle-agents/core` + `@kuralle-agents/engagement`):
 - `HarnessConfig.escalation { handler, summarize?, model?, recentMessageCount? }` — every escalation path (validator `escalate`, host control, terminal handoff, flow `escalate()`) builds an `EscalationRequest` (state snapshot + recent messages + optional LLM handoff brief) and invokes the handler; outcome recorded on `session.metadata.lastEscalation` and emitted as an `escalation` stream part. Flow escalations notify at the `__escalate` pause; a one-shot latch prevents double-fire after resume.
@@ -402,7 +402,7 @@ Unified bump across the graph (published 0.7.2 → 0.8.5; the 0.8.0 changes belo
 
 ## 0.8.0 — Multimodal intake + Cloudflare durable HITL (BREAKING)
 
-Unified minor bump across the graph (0.7.2 → 0.8.0). **Breaking type change**: the runtime accepts multimodal user input instead of only `string`. See `docs/adr/0009-multimodal-intake.md`.
+Unified minor bump across the graph (0.7.2 → 0.8.0). **Breaking type change**: the runtime accepts multimodal user input instead of only `string`. See its decision record.
 
 **Cloudflare (`@kuralle-agents/cf-agent`):**
 - **Upgraded to `agents@^0.15` + `@cloudflare/ai-chat@^0.8.4`** (was `agents@0.11.5` + `ai-chat@0.1.x`, a peer mismatch that crashed the chat path with `this.mcp.ensureJsonSchema is not a function`). `KuralleAgent` needed no API changes.
@@ -419,7 +419,7 @@ Unified minor bump across the graph (0.7.2 → 0.8.0). **Breaking type change**:
 - `ChannelPolicy.resolveInbound(m)` and `@kuralle-agents/messaging`'s `InboundResolverPlugin` now return `{ input: UserInputContent; selection? }`. Custom resolver/policy implementations must widen their return type.
 
 **What's new:**
-- **Multimodal threads straight to the model.** `openRun` builds `{ role: 'user', content }` from `UserInputContent` with no translation — Kuralle is AI-SDK-native (ADR 0005), so we adopt the AI SDK's own content type rather than inventing a media type.
+- **Multimodal threads straight to the model.** `openRun` builds `{ role: 'user', content }` from `UserInputContent` with no translation — Kuralle is AI-SDK-native, so we adopt the AI SDK's own content type rather than inventing a media type.
 - **Web ingress** (`createKuralleChatRouter`): UIMessage `parts` → content — text → `TextPart`, `{type:'file', url, mediaType}` → `FilePart{ data: url }` (the ai-chatbot upload shape). Text-only input collapses back to a plain string (byte-identical text flows).
 - **Messaging ingress**: `createMessagingRouter` runs the new `attachInboundMedia(message, input, platform)` after the resolver chain — it downloads inbound media via `platform.downloadMedia(id)` (or passes a hosted `url` through), base64-encodes it, and attaches a `FilePart` + caption `TextPart`. Channel-agnostic; works with or without the engagement policy layer.
 - **Voice notes**: `HarnessConfig.transcriptionModel?: TranscriptionModel` (AI SDK). When set, inbound audio parts are transcribed to text before the turn (so voice works on text-only models); when unset, audio passes through to audio-capable models (e.g. Gemini). `data:`/`http(s)` audio sources are normalized for `transcribe`.
@@ -428,8 +428,6 @@ Unified minor bump across the graph (0.7.2 → 0.8.0). **Breaking type change**:
 **Durability invariant:** `FilePart.data` flowing through the runtime must be JSON-serializable (base64 string / data URL / https URL), never a raw `Buffer` — `RunState.messages`, `session.messages`, and the pending-input buffer are all persisted through the `SessionStore`.
 
 **Not multimodal:** the legacy `/api/flow/*` string-only endpoints (`flowManager.process(input: string)`) degrade media to its text projection — a capability limit of that older subsystem, not the runtime path.
-
-See `docs/adr/0009-multimodal-intake.md`.
 
 ## 0.7.2 — Wire provider prompt caching (was shipped-but-dead)
 
@@ -442,7 +440,7 @@ Unified patch bump across the graph (0.7.1 → 0.7.2). `runtime/promptCache.ts` 
   - Other providers → untouched (no-op).
 - The helpers (`applyPromptCache`, `applyAnthropicCacheControl`, `buildOpenAIResponsesProviderOptions`, `isAnthropicLanguageModel`, `isOpenAIResponsesModel`) are now **exported from `@kuralle-agents/core`** so custom drivers can opt in.
 
-Prompt assembly was already cache-friendly (static instructions first, volatile RAG/memory appended last), so this is a pure wiring fix. No API change, not breaking. Note: the separate Layer-2 *retrieval* cache is still unwired (see ADR 0008) — a distinct follow-up.
+Prompt assembly was already cache-friendly (static instructions first, volatile RAG/memory appended last), so this is a pure wiring fix. No API change, not breaking. Note: the separate Layer-2 *retrieval* cache is still unwired — a distinct follow-up.
 
 **Validated live** (`packages/e2e-tests/prompt-cache-validation.md`):
 - **OpenAI** — cache HIT confirmed through the shipped helper: turn 1 `cacheReadTokens=0`, turns 2–4 `=10240` (~99% of the prompt cached → ~half the input cost on repeat turns).
@@ -452,7 +450,7 @@ Prompt assembly was already cache-friendly (static instructions first, volatile 
 
 ## 0.7.1 — On-demand retrieval (declared grounding contract)
 
-Unified patch bump across the graph (0.7.0 → 0.7.1). No API removed, no type change, not breaking; the existing `knowledge.autoRetrieve` boolean now declares **who invokes retrieval** — the runtime or the model. See `docs/adr/0008-declared-grounding-contract.md`.
+Unified patch bump across the graph (0.7.0 → 0.7.1). No API removed, no type change, not breaking; the existing `knowledge.autoRetrieve` boolean now declares **who invokes retrieval** — the runtime or the model. See its decision record.
 
 **What's new:**
 - **`knowledge.autoRetrieve: false` now means on-demand, not off.** Previously `false` left knowledge inert (declared, nothing wired). It now skips pre-injection **and** wires a core `knowledge_search` global tool, so the model retrieves only when it answers — routing/dispatch turns pay **zero** retrieval tax (grounding becomes model-discretion). `true` (default) is unchanged: pre-inject before every answering turn.
@@ -462,11 +460,9 @@ Unified patch bump across the graph (0.7.0 → 0.7.1). No API removed, no type c
 - Agents that set `knowledge.autoRetrieve: false` previously got no retrieval at all; they now expose `knowledge_search` to the model. Drop `knowledge` entirely to disable retrieval.
 - **Unchanged:** `knowledge.autoRetrieve: true`/omitted (guaranteed pre-injection); node-level `grounding.knowledge.autoRetrieve: false` (per-node opt-out).
 
-See `docs/adr/0008-declared-grounding-contract.md`.
-
 ## 0.7.0 — Derived host routing (BREAKING)
 
-Unified minor bump across the graph (0.6.1 → 0.7.0). **Breaking**: removes the public routing-mode surface. Routing behavior is now derived from **(agent shape × driver output capability)** — see `docs/adr/0007-derived-host-routing.md`.
+Unified minor bump across the graph (0.6.1 → 0.7.0). **Breaking**: removes the public routing-mode surface. Routing behavior is now derived from **(agent shape × driver output capability)** — see its decision record.
 
 **Removed (breaking):**
 - `routing.mode`, `routing.always`, `routing.default` from `RoutingPolicy` — there is no routing-mode enum.
@@ -476,15 +472,13 @@ Unified minor bump across the graph (0.6.1 → 0.7.0). **Breaking**: removes the
 **What's new:**
 - **Derived routing** — answering agents (`instructions`/`flows`/`tools`/…) fold `enter_flow` + `transfer_to_agent` control tools into the speaking turn; routes/agents-only agents with no answering surface become **silent pure dispatchers**. A keep turn pays **zero** routing cost (the per-turn `generateObject` selector is gone — keep-turn TTFT ~2.9s → ~0.9s in the A/B smoke).
 - **Lazy host-control guard** — a forgot-to-route net that classifies **only** when an answering turn ends with no control tool and no substantive text. Answered + main-control turns make zero classifier calls; the guard has a single owner (the host loop) and is evaluated at most once per turn. Emits `host-guard` telemetry.
-- **`routing.dispatch?: 'strict'`** — optional compliance override (no user-facing dispatch text) for controlled-TTS / text channels. Strictness otherwise derives from the driver's output capability (native-realtime stays advisory, consistent with ADR-0004).
+- **`routing.dispatch?: 'strict'`** — optional compliance override (no user-facing dispatch text) for controlled-TTS / text channels. Strictness otherwise derives from the driver's output capability (native-realtime stays advisory, consistent with an earlier decision).
 - **`routing.model`** — still selects the control-reasoning model for the guard / pure-dispatcher classifier.
 
 **Migration:**
 - Remove `routing.mode` (`'tools'`/`'structured'`/`'llm'`), `routing.always`, `routing.default` — populate `flows`/`routes`/`agents`/`instructions` and the runtime derives behavior. Model a fallback as a normal semantic route/child agent, not `routing.default`.
 - A routes-only triage agent now derives as a **silent pure dispatcher** (no fallback prose) — add `instructions` if it must speak before routing.
 - Internal: `HostControlContext.guard` removed (drivers no longer own the guard). No consumer action unless you extended a `ChannelDriver`.
-
-See `docs/adr/0007-derived-host-routing.md`.
 
 ## 0.6.1 — zod 4
 
@@ -505,7 +499,7 @@ Unified minor bump across the graph (0.5.0 → 0.6.0). One breaking change (the 
 
 **Migration:**
 - `effectTools: { myTool }` → `tools: { myTool }`
-- Remove paired `tools: buildToolSet({ ... })` on the agent when it duplicated executors — flow nodes still use `buildToolSet` for model-visible schema.
+- Remove paired `tools: buildToolSet({... })` on the agent when it duplicated executors — flow nodes still use `buildToolSet` for model-visible schema.
 - Raw AI SDK `tool({ execute })` on the agent → `tools: { name: wrapAiSdkTool('name', aiTool) }`
 
 **What's new:**
@@ -520,8 +514,6 @@ Unified minor bump across the graph (0.5.0 → 0.6.0). One breaking change (the 
 **Working memory:** `AgentConfig.memory.workingMemory` — durable USER/MEMORY blocks loaded into the prompt + maintained by the model via the auto-registered `memory_block` tool (Mastra-style directive injected automatically). Stores: `InMemory`, `File` (`~/.kuralle/memories`), `Postgres`, `Redis`/Upstash, and CF-native `SqlPersistentMemoryStore` (DO SQLite). Composite: `RoutedPersistentMemoryStore` (by scope) + `TieredPersistentMemoryStore` (read-through cache). See the new **Memory** guide.
 
 **Cloudflare:** every new primitive ships day-1 Workers support (`workerd` parity tests; cf-agent auto-wires DO-SQLite working memory, zero config).
-
-See `docs/adr/0006-fs-reframe-and-working-memory.md`.
 
 ## 0.5.0 — AI-SDK-native by default (BREAKING: web stream output)
 
@@ -540,8 +532,6 @@ Unified minor bump across the graph (0.4.1 → 0.5.0). **Breaking wire-format ch
 - **`createKuralleChatRouter`** — `POST /api/chat/sse` defaults to native `UIMessageStream`; accepts `useChat`-shaped `{ messages: UIMessage[] }` inbound.
 
 **Unchanged:** `HarnessStreamPart`, `toResponseStream('sse'|'ndjson')`, cascaded voice, messaging, WebSocket widget (still `HarnessStreamPart` JSON).
-
-See `docs/adr/0005-ai-sdk-native-uimessage-default.md`.
 
 ## 0.4.1 — Streaming follow-up fixes (patch)
 
@@ -570,9 +560,7 @@ Unified minor bump across the graph (0.3.20 -> 0.4.0). **Breaking event-protocol
 - **Streaming-by-default.** Replies stream incrementally up to the smallest guardrail boundary each attached gate permits — `token` (no gate), `sentence` (per-utterance gate), `turn` (whole-answer grounding gate). An ungated reply now emits multiple `text-delta`s with the first before turn-end (was: one buffered delta at turn-end).
 - **Shared `speakGated` emission path** for text + native-realtime voice; `SentenceAggregator` + `resolveStreamMode` + a `streamGranularity?: 'sentence'|'turn'` field on output processors / validation policies (default `turn`, safe).
 - **Cascaded LiveKit TTFT** drops to first-token latency (`aria_runtime_ttft` fires on the first delta).
-- **Native realtime gate is advisory (REQ-9):** the provider speaks audio before any gate runs, so a whole-answer gate on native realtime emits a `safety-*` event + correction post-hoc but cannot un-speak audio. Preventive only on text/cascaded. See ADR 0004.
-
-See `docs/adr/0004-streaming-by-default.md`. Downstream consumers (e.g. external Studio `SSEChatTransport`) migrate `part.text` -> `part.payload.delta`.
+- **Native realtime gate is advisory (REQ-9):** the provider speaks audio before any gate runs, so a whole-answer gate on native realtime emits a `safety-*` event + correction post-hoc but cannot un-speak audio. Preventive only on text/cascaded. See an earlier decision.
 
 > Known (non-shipping): `bun run typecheck:all` reports pre-existing drift in 4 test/example tsconfigs (unrelated to streaming; not in published tarballs, which build from `src`). Tracked as a follow-up; the published packages build clean.
 
@@ -665,7 +653,7 @@ W1/W9/H1/parking/turn-lock green.
 ## 0.3.14 — H1: out-of-band control evaluator for flow reply nodes (default OFF)
 
 Patch across the graph (0.3.13 -> 0.3.14). The W2 keystone, scoped to flow reply
-nodes (ADR 0003 Revision 1, kimi-k2.6-reviewed). Behind a default-OFF flag
+nodes. Behind a default-OFF flag
 `agent.experimental.outOfBandControl`. When ON: a flow reply node's model-visible
 tool dict EXCLUDES flow-transition control tools (handoff/transfer_to_agent/final/
 escalate/recover — still registered in the executor, just not offered to the
@@ -728,7 +716,7 @@ to cascaded voice. core 422/422, engagement 107/107, hono 52/52.
 ## 0.3.10 — W3 per-node context scoping
 
 Patch across the graph (0.3.9 -> 0.3.10). Third chunk of the conversational-stability
-program (ADR 0002). Grounding was assembled once per turn, agent-wide, for reply
+program. Grounding was assembled once per turn, agent-wide, for reply
 nodes only — every node retrieved with the same KB scope and the same query
 (`latestUserMessage`), even when the node's job had nothing to do with the user's
 last words. W3 makes grounding node-scoped on reply nodes (the ElevenLabs per-node
@@ -745,7 +733,7 @@ baseline-equality test). core 422/422.
 ## 0.3.9 — W9 deterministic mutation/confirm gate
 
 Patch across the graph (0.3.8 -> 0.3.9). Second chunk of the conversational-stability
-program (ADR 0002). A confirm-before-mutate step was a `decide` node whose choice
+program. A confirm-before-mutate step was a `decide` node whose choice
 was classified by the LLM — an off-script reply or a bare value could be
 mis-classified as "confirm" and fire the mutation without an explicit human yes.
 New `confirmGate()` node builder (a `DecideNode` with a `confirmGate` config — no
@@ -760,7 +748,7 @@ mutation (locked by test via `hostLoop` reset + `__completedFlows`). core 415/41
 ## 0.3.8 — W1 runtime recovery boundary (errors degrade, never abort)
 
 Patch across the graph (0.3.7 -> 0.3.8). First chunk of the conversational-stability
-program (ADR 0002). A tool throw, a ToolValidationError (bad args), or a
+program. A tool throw, a ToolValidationError (bad args), or a
 maxOscillations cap no longer aborts the session: errors degrade in-turn (safe
 message + non-fatal `error` event) and route to an `escalate` node or a graceful
 `error_degraded` end. New `executeModelToolCall` boundary (TextDriver+VoiceDriver),
@@ -774,7 +762,7 @@ registered in the tool executor, so a model call to a global tool failed. Now
 registered alongside `tools`; visibility remains gated (not exposed during
 non-speaking collect extraction). Regression test `test/core-agent/global-tools.test.ts`.
 
-## 0.3.6 — Agent base layer: base instructions + global tools in every node (ADR 0001)
+## 0.3.6 — Agent base layer: base instructions + global tools in every node
 
 Patch across the package graph (`0.3.5 → 0.3.6`).
 
@@ -790,7 +778,7 @@ Patch across the package graph (`0.3.5 → 0.3.6`).
   model-visible in every **speaking** turn (e.g. a returns/FAQ KB lookup callable
   mid-flow). Safety invariant: NOT all `tools` (mutating tools stay
   flow-gated), and NOT exposed during non-speaking collect extraction.
-- Implemented for TextDriver and VoiceDriver. ADR `docs/adr/0001`. core 383/383.
+- Implemented for TextDriver and VoiceDriver. ADR its decision record. core 383/383.
 
 **Behavior change:** node prompts now also carry the agent persona/safety. Apps
 that relied on nodes NOT seeing `agent.instructions` should move that text out.
@@ -981,7 +969,7 @@ first-class persona, and the audit log.
   output (e.g. streaming-timing or token-budget tests, low-latency
   voice paths), opt out explicitly:
   ```ts
-  createRuntime({ ..., safety: { outputModerators: [] } });
+  createRuntime({..., safety: { outputModerators: [] } });
   ```
   The two default moderators run in parallel under a 150 ms deadline
   per moderator. `RegexPiiModerator` redacts (`rewrite` path) — it

@@ -439,7 +439,7 @@ export class Runtime {
       // a knowledge-less runtime leaves it undefined.
       runCtx.retrievalCache = knowledgeProvider?.createSessionCache();
 
-      // Agent base layer (ADR 0001): composed into every node turn by the drivers.
+      // Agent base layer: composed into every node turn by the drivers.
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = openingSurface.globalTools;
       runCtx.agentTools = opened.agent.tools ?? {};

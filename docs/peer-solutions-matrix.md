@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-11 · **Status:** Ready for review
 **Companion to:** [`docs/claim-verification-results.md`](./claim-verification-results.md) (the 19/19 CONFIRMED verification),
-[`docs/kuralle-core-teardown.md`](./kuralle-core-teardown.md), [`docs/agentic-voice-framework-gaps.md`](./agentic-voice-framework-gaps.md).
+the durability audit, [`docs/agentic-voice-framework-gaps.md`](./agentic-voice-framework-gaps.md).
 **Question answered:** for each of the **13 structural findings** that verification CONFIRMED, how do the leading
 agentic frameworks, coding agents, and durable-execution harnesses solve the same underlying problem — and what
 should Kuralle steal?

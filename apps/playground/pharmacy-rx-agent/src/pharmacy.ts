@@ -79,7 +79,7 @@ function emitText(emit: (part: StreamPart) => void, text: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Global tools (model-visible + durable in the answering turn — ADR 0001).
+// Global tools (model-visible + durable in the answering turn).
 // These mutate the persisted cart in run state.
 // ---------------------------------------------------------------------------
 
@@ -508,7 +508,7 @@ export function buildPharmacyAgent(deps: PharmacyAgentDeps): AgentConfig {
       check_inventory: checkInventoryTool,
       view_cart: viewCartTool,
     },
-    // Mutating tools stay out of globalTools (ADR 0001 allow-list rule).
+    // Mutating tools stay out of globalTools.
     tools: {
       add_to_cart: addToCartTool,
       set_item_quantity: setItemQuantityTool,

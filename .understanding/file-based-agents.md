@@ -116,7 +116,7 @@ resolved via `globalThis.AI_SDK_DEFAULT_PROVIDER ?? gateway` (`dist/index.mjs:87
 That is the exact call `workerd` cannot make. File-based discovery must therefore produce a
 *generated module with static imports*, not a runtime directory walk, for anything code-shaped.
 
-**(c) ADR-0012 already names these frameworks as the bar.** Its context section justifies the
+**(c) an earlier decision already names these frameworks as the bar.** Its context section justifies the
 Shell/FS-skills work against "what flue (`SessionEnv = FileSystem & Shell`, skills as `SKILL.md`
 folders) and Pi/Mastra actually provide". File-based agents are the next item on that same list,
 not a new direction.
@@ -126,7 +126,7 @@ not a new direction.
 ## 3. The consequence: kuralle has a capability the references don't
 
 Flue, Mastra and Eve all collapse to one plane — everything is resolved at build. Kuralle has a
-**portable `FileSystem` that works inside a Durable Object** (`SqlFs` over DO SQLite, ADR-0013)
+**portable `FileSystem` that works inside a Durable Object** (`SqlFs` over DO SQLite)
 and a skill store that already reads from it at runtime.
 
 So kuralle can split the problem where the references cannot:

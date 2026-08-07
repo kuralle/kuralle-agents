@@ -219,7 +219,7 @@ function writeHarnessPart(
       // Client-channel exhaustiveness guard. Internal-channel parts are
       // deliberately unmapped here — they never reach a UI client. But a new
       // `client` variant added without a case above would be silently dropped
-      // on the ADR-0005 default output path, so pin the residual to internal:
+      // on the default output path, so pin the residual to internal:
       // adding a client variant without a case fails this assignment.
       const _internalOnly: StreamPartBase<'internal'> = part;
       void _internalOnly;

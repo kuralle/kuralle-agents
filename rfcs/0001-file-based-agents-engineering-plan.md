@@ -74,7 +74,7 @@ TTY renderer for `chat` (`chat.tsx:116`).
 **OpenAI-only** and `process.exit(2)`s without `OPENAI_API_KEY`. RFC §4.4 argues a string model
 "just works" through the AI SDK gateway — true of the *type*, false of *this code path*. A
 file-based agent whose `agent.md` says `model: anthropic/claude-sonnet-4` and which is run via
-`kuralle chat --agent ./agents/support` will not reach the gateway. Fixing that is part of chunk 9,
+`kuralle chat --agent./agents/support` will not reach the gateway. Fixing that is part of chunk 9,
 not an assumption chunk 9 gets to make.
 
 **Confirmed as claimed:** there is no config file, project manifest, or agent-directory notion
@@ -171,7 +171,7 @@ What the substrate actually provides (`packages/fs/package.json` export map, ver
 | Export | Contents | Workers-clean |
 |---|---|---|
 | `.` | fs primitives, `InMemoryFs`, `CompositeFileSystem`, `sqlFileSystem`, `r2BlobStore`, OKF | ✅ yes |
-| `./shell` | `virtualShell()` over `just-bash` | ❌ **no** — pulls `turndown` (ADR-0012 §B) |
+| `./shell` | `virtualShell()` over `just-bash` | ❌ **no** — pulls `turndown` |
 | `./node` | `nodeSqlFileSystem`, `nodeShell` | ❌ Node-only |
 | `./cloudflare` | `cloudflareShell` (Sandbox DO wrapper) | ✅ CF-only |
 
@@ -368,7 +368,7 @@ lives inside the same `"use step"` as the model call that requested it
 — re-issuing the model call and re-executing whatever tools the *new* response asks for. Their docs
 put that on the tool author.
 
-Kuralle's durable executor with an effect log and idempotency key — plus ADR-0012's `replay: false`
+Kuralle's durable executor with an effect log and idempotency key — plus `replay: false`
 making fs/shell honestly at-least-once — is **strictly stronger at the tool boundary**. Do not
 regress toward Eve here.
 
@@ -517,7 +517,7 @@ async function walkAgentDir(dir: string, diags: Diagnostic[]): Promise<Discovere
   if (!(await isFile(join(dir, 'agent.md')))) return null;   // the sole marker
 
   const entries = (await readdir(dir, { withFileTypes: true }))
-    .sort((a, b) => a.name.localeCompare(b.name));           // deterministic codegen
+.sort((a, b) => a.name.localeCompare(b.name));           // deterministic codegen
 
   for (const e of entries) {
     // lstat, never follow: a symlinked module could point anywhere on the build machine
@@ -654,14 +654,14 @@ export function assembleAgentConfig(parts: AgentParts): AgentConfig {
       : (md.instructions ?? ts.instructions);
 
   return {
-    ...md, ...ts,
+...md,...ts,
     id: parts.id,
     instructions,
     // narrower scope wins, and only when it actually declares the key
     model: md.model ?? ts.model ?? parts.defaults?.model,
-    ...(parts.tools ? { tools: { ...parts.tools, ...ts.tools } } : {}),
-    ...(parts.flows ? { flows: parts.flows } : {}),
-    ...(parts.agents ? { agents: parts.agents } : {}),
+...(parts.tools ? { tools: {...parts.tools,...ts.tools } } : {}),
+...(parts.flows ? { flows: parts.flows } : {}),
+...(parts.agents ? { agents: parts.agents } : {}),
   };
 }
 ```
@@ -785,7 +785,7 @@ export function fsAgentProse(
           `[prose] ${root}/agent.md frontmatter changed since the last build. ` +
           `Configuration is compiled, not runtime-loaded — run \`kuralle build\` and redeploy. ` +
           `Only the instruction body may change at runtime.`,
-        );
+);
       }
       cached = { hash: frontmatterHash, body };
       return body;
@@ -836,7 +836,7 @@ Chunk 0 blocks 4, 5, 7-equivalents and 8. Chunks 3-6 parallelise once 0-2 land.
 
 | # | Check | Gate |
 |---|---|---|
-| **V0** | `parseAgentMd`: `limits: { maxTurns: 12 }` yields the **number 12**; `outOfBandControl: true` yields a **boolean**; an unknown key **fails**; a changed frontmatter byte changes the hash | `bun test ./packages/build/test` |
+| **V0** | `parseAgentMd`: `limits: { maxTurns: 12 }` yields the **number 12**; `outOfBandControl: true` yields a **boolean**; an unknown key **fails**; a changed frontmatter byte changes the hash | `bun test./packages/build/test` |
 | **V0b** | Regression: the RFC §4.3 example frontmatter round-trips to a correct `Partial<AgentConfig>` — the case the shipped flat parser gets wrong | `bun test` |
 | V6 | `({env}) => …` store and tool resolve on both targets; **no module-scope `env` read appears in generated code** (assert on emitted text) | `bun test` + workerd |
 | **V9b** | A project declaring a channel **fails** `build --target cloudflare` with `CF_CHANNELS_UNSUPPORTED` | `bun test` |

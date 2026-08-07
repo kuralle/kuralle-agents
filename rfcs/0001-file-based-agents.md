@@ -1,7 +1,7 @@
 # RFC 0001 — File-based agents: project layer, agent layer, and deployment
 
 **Status:** Superseded in part by [RFC-0003](0003-agent-revisions-and-production-deployment.md) · **Date:** 2026-07-25 · **Author:** supervisor session
-**Depends on:** ADR-0012 (workspace/shell/FS-skills), ADR-0013 (persistent FileSystem backends)
+**Depends on:** an earlier decision (workspace/shell/FS-skills))
 **Evidence:** [`.understanding/file-based-agents.md`](../.understanding/file-based-agents.md)
 **Out of scope:** voice (deleted), channels (future RFC), evals (planned RFC 0004)
 
@@ -23,7 +23,7 @@ supplies the agents glob, the target, the default model that agents fall back to
 agent id. Everything else in the tree is discovered relative to it.
 
 One capability is unique to kuralle and shapes the format throughout. Because `@kuralle-agents/fs`
-provides a `FileSystem` that works *inside* a Durable Object (ADR-0013), the **prose** half of an
+provides a `FileSystem` that works *inside* a Durable Object, the **prose** half of an
 agent — instructions, skills, knowledge — can be read at runtime rather than compiled in. A deployed
 agent's prompt can change without a redeploy. Flue, Mastra and Eve cannot do this.
 
@@ -146,7 +146,7 @@ export default ({ env }) => new RedisSessionStore({ url: env.REDIS_URL });
 
 ```ts
 // agents/support/tools/kb.ts — same rule
-export default defineTool({ ... });
+export default defineTool({... });
 export default ({ env }) => createCagTool({ apiKey: env.CAG_KEY });
 ```
 
@@ -162,7 +162,7 @@ agents/
     agent.md                    ← REQUIRED. YAML frontmatter = config; body = instructions
     agent.ts                    ← optional. defineAgentPart({...}) for what YAML can't hold
     tools/*.ts                  ← default export = tool;      filename = tool name
-    global-tools/*.ts           ← → globalTools (ADR-0001 base layer — read-only allow-list)
+    global-tools/*.ts           ← → globalTools
     flows/*.ts                  ← default export = defineFlow(...)
     routes.ts                   ← → routes + routing            (triage agents)
     retrieval.ts                ← → AgentConfig.knowledge       (vector retrieval)
@@ -176,7 +176,7 @@ agents/
 
 A directory is an agent **iff** it contains `agent.md`. One marker, no precedence rule needed.
 
-`policies.ts` is the single agent-level composition point, following ADR-0015. It returns the three
+`policies.ts` is the single agent-level composition point, following an earlier decision. It returns the three
 distinct phase contracts together; the runtime keeps their fixed order:
 
 ```
@@ -454,8 +454,8 @@ No new runtime machinery: `KuralleAgent.getAgents()` already returns `HarnessCon
 
 `kuralle build` then import `<out>/runtime.ts` — directly, or into `@kuralle-agents/hono-server`.
 `agentLoader.ts` gains a fourth shape: when `--agent` points at a **directory**, build in memory and
-run. So `kuralle chat --agent ./agents/support` needs no build artifact on disk, and
-`--agent ./file.ts` and `--agent ./dir/` stay the same command.
+run. So `kuralle chat --agent./agents/support` needs no build artifact on disk, and
+`--agent./file.ts` and `--agent./dir/` stay the same command.
 
 ### 6.2 Cloudflare Workers / Durable Objects
 
@@ -488,7 +488,7 @@ kuralle build --target cloudflare && wrangler deploy
 The agent's `FileSystem` is `SqlFileSystem` over the DO's SQLite. Writing `/agents/support/agent.md`
 into it — via the `workspace` tool, an admin route, or a deploy hook — changes the prompt on the next
 turn. Skills work identically because `fsSkillStore` already reads `/skills/<name>/SKILL.md` from any
-backend. No new persistence layer; ADR-0013 shipped it.
+backend. No new persistence layer; an earlier decision shipped it.
 
 The governance cost is real and stated: with `prose: runtime` the live prompt is no longer in git.
 It is off by default, per-agent, and its writes go through the already-journalled workspace tool.
@@ -499,15 +499,15 @@ It is off by default, per-agent, and its writes go through the already-journalle
 
 | # | Check | Gate |
 |---|---|---|
-| V1 | `kuralle.config.ts` resolution: missing file, bad glob, absent `defaultAgentId` with >1 agent — each a distinct fatal error | `bun test ./packages/build/test` |
-| V2 | Singleton discovery: default-export required; a named-export `store.ts` is ignored, not adopted | `bun test ./packages/build/test` |
-| V3 | `assembleHarnessConfig` / `assembleAgentConfig`: every §4.5 row, each conflict throwing | `bun test ./packages/core/test` |
-| V4 | `discoverAgents`: marker rule, sorted order, symlinks skipped, test files skipped, subagent depth cap | `bun test ./packages/build/test` |
-| V5 | Identity: duplicate, folded collision (`issue-triage` vs `IssueTriage`), invalid pattern — three distinct fatal errors | `bun test ./packages/build/test` |
+| V1 | `kuralle.config.ts` resolution: missing file, bad glob, absent `defaultAgentId` with >1 agent — each a distinct fatal error | `bun test./packages/build/test` |
+| V2 | Singleton discovery: default-export required; a named-export `store.ts` is ignored, not adopted | `bun test./packages/build/test` |
+| V3 | `assembleHarnessConfig` / `assembleAgentConfig`: every §4.5 row, each conflict throwing | `bun test./packages/core/test` |
+| V4 | `discoverAgents`: marker rule, sorted order, symlinks skipped, test files skipped, subagent depth cap | `bun test./packages/build/test` |
+| V5 | Identity: duplicate, folded collision (`issue-triage` vs `IssueTriage`), invalid pattern — three distinct fatal errors | `bun test./packages/build/test` |
 | V6 | **Lazy contract**: a `({env}) => …` store and tool resolve on both targets; module-scope `env` access never appears in generated code | `bun test` + workerd |
-| V7 | One-file project (`kuralle.config.ts` + `agent.md`, string model) builds and answers a live turn | `kuralle chat --agent ./examples/file-agents/minimal` |
+| V7 | One-file project (`kuralle.config.ts` + `agent.md`, string model) builds and answers a live turn | `kuralle chat --agent./examples/file-agents/minimal` |
 | V8 | Full project (singletons + tools + flows + routes + skills + subagent) builds; generated config deep-equals a hand-written equivalent | `bun test` |
-| V9 | Cloudflare build emits worker + classes; **workerd** integration test runs a turn and persists to DO SQLite | `bun test ./packages/cf-agent/test` (vitest-pool-workers) |
+| V9 | Cloudflare build emits worker + classes; **workerd** integration test runs a turn and persists to DO SQLite | `bun test./packages/cf-agent/test` (vitest-pool-workers) |
 | V10 | Missing migration entry → exit 1 with the JSON to append; missing `nodejs_compat` → exit 1 | build-smoke script |
 | V11 | `prose: runtime`: writing a new `agent.md` into the FS changes the next turn's prompt, no rebuild | `bun test` + live CF probe |
 | V12 | Live deploy: `wrangler deploy` of the generated worker answers over HTTP and survives a DO eviction | manual, recorded on the task |

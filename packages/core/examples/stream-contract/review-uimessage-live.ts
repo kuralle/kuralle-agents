@@ -1,5 +1,5 @@
 /**
- * Live AI SDK UIMessage path — req #5. The ADR-0005 default output is
+ * Live AI SDK UIMessage path — req #5. an earlier decision default output is
  * `toUIMessageStreamResponse()` which maps the envelope through
  * `harnessToUIMessageStream`. Verify a real run yields a valid SSE body a
  * useChat client could render (text-start/delta/end + finish metadata).

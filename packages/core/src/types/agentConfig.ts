@@ -56,7 +56,7 @@ export interface AgentConfig {
   /** Durable, model-callable effect tools (exactly-once on replay). Wrap raw AI SDK tools with wrapAiSdkTool(). */
   tools?: Record<string, AnyTool>;
   /** Safe, always-available tools made model-visible in EVERY speaking node turn
-   *  (the agent "base layer", ADR 0001) — e.g. a returns/FAQ knowledge-base
+   *  (the agent "base layer") — e.g. a returns/FAQ knowledge-base
    *  lookup the user might ask for mid-flow. This is an explicit allow-list:
    *  NEVER put consequential/mutating tools here (they must stay flow-gated), and
    *  they are not exposed during non-speaking collect extraction. */
@@ -81,7 +81,7 @@ export interface AgentConfig {
    */
   policy?: Policy;
   experimental?: {
-    /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator (ADR 0003 H1).
+    /** Flow reply nodes: silo flow-transition control tools + deterministic evaluator.
      *  Default ON when the agent declares `flows`; OFF for answering-only agents. Override explicitly to opt out. */
     outOfBandControl?: boolean;
   };

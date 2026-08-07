@@ -72,7 +72,7 @@ export interface RunContext {
   model: LanguageModel;
   /** Control-path model (routing, decide, extraction) at temperature 0. */
   controlModel: LanguageModel;
-  /** When true, flow reply nodes use the out-of-band control evaluator (ADR 0003 H1). */
+  /** When true, flow reply nodes use the out-of-band control evaluator. */
   outOfBandControl: boolean;
   refinementPolicies: RefinementCapability[];
   validationPolicies: ValidationCapability[];
@@ -101,7 +101,7 @@ export interface RunContext {
    * configured knowledge provider + embedder.
    */
   retrievalCache?: RetrievalCacheAdapter;
-  /** Agent base layer (ADR 0001), set when entering a flow. `baseInstructions`
+  /** Agent base layer, set when entering a flow. `baseInstructions`
    *  is composed as a prefix into every node turn's system prompt (persona /
    *  safety / grounding floor); `globalTools` are safe tools made model-visible
    *  in every speaking turn. */

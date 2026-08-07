@@ -85,7 +85,7 @@ Kuralle has **three** parallel mechanisms for the same job:
 Three mechanisms means three places to look and three orderings to reason about. DeepAgents answers
 "what runs between the user's message and the model call?" with one ordered list.
 
-**Resolved by ADR-0015** (`docs/adr/0015-turn-composition.md`): keep the three distinct, with one
+**Resolved by an earlier decision** (its decision record): keep the three distinct, with one
 *fixed* pipeline order — input processors → refinement → gather + execute → output processors →
 validation. The DeepAgents single stack was rejected deliberately: its stages are homogeneous
 middleware, whereas ours differ in authority over durable state and output release, so a
@@ -165,4 +165,4 @@ Recording these so the reshape doesn't regress them:
 | 3 | Never bridge shapes with a cast; name both sides and quarantine the adapter | convention → CONTRIBUTING |
 | 4 | `seq` + replay cursors on the stream | new RFC — real gap, own scope |
 | 5 | Provenance (`from` / `namespace`) on the envelope | new RFC — needed by RFC 0001 subagents |
-| 6 | ~~Decide whether capabilities/processors/hooks stay three mechanisms~~ — ADR-0015 | fixed phases + one agent `policies.ts` |
+| 6 | ~~Decide whether capabilities/processors/hooks stay three mechanisms~~ — an earlier decision | fixed phases + one agent `policies.ts` |
