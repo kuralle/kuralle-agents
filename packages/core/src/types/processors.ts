@@ -53,29 +53,9 @@ export interface OutputProcessor {
   }) => Promise<OutputProcessorResult> | OutputProcessorResult;
 }
 
-export interface HandoffInputData {
-  messages: ModelMessage[];
-  workingMemory: Record<string, unknown>;
-  sourceAgentId: string;
-  targetAgentId: string;
-  reason?: string;
-}
 
-export interface HandoffInputResult {
-  messages: ModelMessage[];
-  workingMemory: Record<string, unknown>;
-}
 
-export type HandoffInputFilter = (
-  data: HandoffInputData,
-) => Promise<HandoffInputResult> | HandoffInputResult;
 
-export interface AgentRoute {
-  agentId: string;
-  description: string;
-  condition?: RouteCondition;
-  inputFilter?: HandoffInputFilter;
-}
 
 export type RouteCondition = (
   input: string,

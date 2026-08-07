@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type {
   Capability,
   CapabilityAction,
-  PromptSection,
+  CapabilityPromptSection,
   ToolDeclaration,
 } from '../capabilities/index.js';
 import { assertSafeSkillResourcePath } from './assertSafeSkillResourcePath.js';
@@ -69,7 +69,7 @@ export class SkillsCapability implements Capability {
     ];
   }
 
-  getPromptSections(): PromptSection[] {
+  getPromptSections(): CapabilityPromptSection[] {
     // The prompt lists the FROZEN baseline only — what was wired at startup. Skills added
     // or withdrawn mid-session never appear here (that would rewrite the cached prompt);
     // they are announced in the transcript. See `skillCatalog.ts`.

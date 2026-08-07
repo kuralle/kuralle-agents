@@ -57,7 +57,7 @@ export type {
 export { SessionWorkingMemory } from './runtime/WorkingMemory.js';
 
 export type {
-  Tool,
+  AiSdkTool,
   ToolSet,
   ToolDefinition,
   ToolWithFiller,
@@ -104,7 +104,7 @@ export type {
   PersonaVoice,
 } from './persona/index.js';
 
-export type { SessionTrace, TraceStreamEvent } from './types/telemetry.js';
+export type { SessionTrace } from './types/telemetry.js';
 
 export { createPromptInjectionGuard } from './processors/builtin/promptInjectionGuard.js';
 export type { PromptInjectionGuardOptions } from './processors/builtin/promptInjectionGuard.js';
@@ -313,7 +313,7 @@ export type {
   ExtractionToolResponseEnvelope,
   FlowReconfigureTransition,
   ToolDeclaration,
-  PromptSection as CapabilityPromptSection,
+  CapabilityPromptSection,
   GeminiFunctionDeclaration,
   ExtractionCapabilityConfig,
   RetrieveProvider,
@@ -429,8 +429,6 @@ export {
   ToolApprovalDeniedError,
   ToolTimeoutError,
 } from './tools/effect/index.js';
-export type { Tool as EffectTool } from './types/effectTool.js';
-export type { AgentRoute } from './types/processors.js';
 // `AgentConfig.limits` is public API, so its type has to be reachable — without this an app
 // setting `limits: { maxSteps: 25 }` cannot name the type it is passing.
 export type { Guardrails, Limits } from './types/guardrails.js';
@@ -530,9 +528,6 @@ export {
   type OtelTraceSinkOptions,
 } from './tracing/index.js';
 export { TraceRecorder, runOnce, type TraceRecorderOptions } from './runtime/TraceRecorder.js';
-export { TracingService } from './services/TracingService.js';
-export { InMemoryMetricsService } from './services/MetricsService.js';
-export type { MetricsService } from './services/MetricsService.js';
 export { harnessToUIMessageStream } from './ai-sdk/uiMessageStream.js';
 export type {
   KuralleMetadata,

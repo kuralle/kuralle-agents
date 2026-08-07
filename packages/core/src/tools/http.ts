@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { createTool } from './Tool.js';
-import type { Tool, ToolExecutionOptions } from './Tool.js';
+import type { AiSdkTool, ToolExecutionOptions } from './Tool.js';
 import type {
   HttpToolConfig,
   HttpParam,
@@ -21,7 +21,7 @@ import { getUserFriendlyError } from './errorMessages.js';
  * Create a tool that makes HTTP requests based on config.
  * The tool will substitute path params, build query/body, and execute the request.
  */
-export function createHttpTool(config: HttpToolConfig): Tool<unknown, HttpToolResult> {
+export function createHttpTool(config: HttpToolConfig): AiSdkTool<unknown, HttpToolResult> {
   const {
     description,
     method,

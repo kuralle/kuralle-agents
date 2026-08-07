@@ -1,5 +1,5 @@
 import type { ZodTypeAny } from 'zod';
-import type { Capability, ToolDeclaration, PromptSection, CapabilityAction } from './index.js';
+import type { Capability, ToolDeclaration, CapabilityPromptSection, CapabilityAction } from './index.js';
 import { mergeExtractionData, computeMissingFields, toExtractionSubmissionSchema } from '../flows/extraction.js';
 import type {
   ExtractionPassParams,
@@ -55,7 +55,7 @@ export class ExtractionCapability implements Capability, ExtractionStrategy {
     ];
   }
 
-  getPromptSections(): PromptSection[] {
+  getPromptSections(): CapabilityPromptSection[] {
     const missing = this.getMissingFields();
     if (missing.length === 0) return [];
 

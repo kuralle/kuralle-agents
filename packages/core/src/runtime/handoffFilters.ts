@@ -4,10 +4,11 @@
  * These filters are composable: chain them with composeFilters() to apply
  * multiple transformations in sequence.
  */
+import type { ModelMessage } from 'ai';
 
 export interface HandoffInputData {
   /** The full message history at the point of handoff. */
-  messages: Array<Record<string, unknown>>;
+  messages: ModelMessage[];
 
   /** The workingMemory state at the point of handoff. */
   workingMemory: Record<string, unknown>;
@@ -24,7 +25,7 @@ export interface HandoffInputData {
 
 export interface HandoffInputResult {
   /** The filtered message history to pass to the target agent. */
-  messages: Array<Record<string, unknown>>;
+  messages: ModelMessage[];
 
   /** The filtered workingMemory to pass to the target agent. */
   workingMemory: Record<string, unknown>;

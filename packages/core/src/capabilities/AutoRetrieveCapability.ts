@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Capability, ToolDeclaration, PromptSection, CapabilityAction } from './index.js';
+import type { Capability, ToolDeclaration, CapabilityPromptSection, CapabilityAction } from './index.js';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ export class AutoRetrieveCapability implements Capability {
     ];
   }
 
-  getPromptSections(): PromptSection[] {
+  getPromptSections(): CapabilityPromptSection[] {
     return [];
   }
 

@@ -619,7 +619,7 @@ export class Runtime {
                 targetAgentId: handoffTarget,
                 reason: loopResult.reason,
               });
-              runCtx.runState.messages = filtered.messages as ModelMessage[];
+              runCtx.runState.messages = filtered.messages;
               runCtx.session.workingMemory = filtered.workingMemory;
             }
 

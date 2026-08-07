@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FileSystem } from '../types/filesystem.js';
 import { defineTool, type AnyTool } from '../types/effectTool.js';
-import type { PromptSection } from '../capabilities/index.js';
+import type { CapabilityPromptSection } from '../capabilities/index.js';
 import {
   collectRegisteredNames,
   prepareSkillStore,
@@ -17,7 +17,7 @@ import type { SkillLike, SkillMeta } from '../types/skills.js';
 export interface WiredAgentSkills {
   capability: SkillsCapability;
   tools: Record<string, AnyTool>;
-  promptSections: PromptSection[];
+  promptSections: CapabilityPromptSection[];
   contentHash: string;
   metas: SkillMeta[];
   /** Live catalog `load_skill` resolves against; mutated by the runtime add/remove API. */

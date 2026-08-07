@@ -1,4 +1,4 @@
-export type { Tool, ToolSet, ToolDefinition, ToolWithFiller } from './Tool.js';
+export type { AiSdkTool, ToolSet, ToolDefinition, ToolWithFiller } from './Tool.js';
 export { createTool, createToolWithFiller } from './Tool.js';
 export { createHandoffTool, isHandoffResult } from './handoff.js';
 export type { HandoffResult } from './handoff.js';

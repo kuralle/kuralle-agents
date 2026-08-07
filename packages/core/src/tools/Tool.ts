@@ -8,7 +8,16 @@ import {
 } from 'ai';
 import type { ZodTypeAny, z } from 'zod';
 
-export type Tool<TInput = unknown, TResult = unknown> = AiTool<TInput, TResult>;
+/**
+ * The AI SDK's own tool type, re-exported under a name that says so.
+ *
+ * It was called `Tool`, which collided with the framework's own effect-tool
+ * contract in `types/effectTool.ts` — and because the root index exported this
+ * one explicitly while the other arrived through `export type *`, this one won.
+ * So `import { Tool } from '@kuralle-agents/core'` handed you the AI SDK's type,
+ * not Kuralle's, and the framework's primary noun shipped as `EffectTool`.
+ */
+export type AiSdkTool<TInput = unknown, TResult = unknown> = AiTool<TInput, TResult>;
 export type ToolSet = AiToolSet;
 
 export interface ToolExecutionContext {
@@ -65,7 +74,7 @@ type SchemaToolWithFiller<TSchema extends ZodTypeAny, TResult = unknown> =
 
 export function createTool<TSchema extends ZodTypeAny, TResult = unknown>(
   definition: SchemaToolDefinition<TSchema, TResult>,
-): Tool<z.infer<TSchema>, TResult> & ToolDefinition<z.infer<TSchema>, TResult> {
+): AiSdkTool<z.infer<TSchema>, TResult> & ToolDefinition<z.infer<TSchema>, TResult> {
   const { description, inputSchema, execute } = definition;
   // AI SDK tool() overload resolution fails when INPUT/OUTPUT are deferred wrapper generics.
   // @ts-expect-error — config is structurally valid; failure is a TypeScript artifact only.
@@ -75,11 +84,11 @@ export function createTool<TSchema extends ZodTypeAny, TResult = unknown>(
 
 export function createToolWithFiller<TSchema extends ZodTypeAny, TResult = unknown>(
   definition: SchemaToolWithFiller<TSchema, TResult>,
-): Tool<z.infer<TSchema>, TResult> & ToolWithFiller<z.infer<TSchema>, TResult> {
+): AiSdkTool<z.infer<TSchema>, TResult> & ToolWithFiller<z.infer<TSchema>, TResult> {
   const { description, inputSchema, execute } = definition;
   // @ts-expect-error — same deferred-generic limitation as createTool (see above).
   const t = aiTool({ description, inputSchema: zodSchema(inputSchema), execute });
-  const extended = Object.assign(t, definition) as Tool<z.infer<TSchema>, TResult> &
+  const extended = Object.assign(t, definition) as AiSdkTool<z.infer<TSchema>, TResult> &
     ToolWithFiller<z.infer<TSchema>, TResult>;
   const interim = definition.interim ?? definition.filler;
   const interimAfterMs = definition.interimAfterMs ?? definition.estimatedDurationMs;

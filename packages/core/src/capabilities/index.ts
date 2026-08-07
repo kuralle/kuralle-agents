@@ -31,7 +31,7 @@ const SECTION_ORDER: Record<string, number> = {
   policy: 6,
 };
 
-export interface PromptSection {
+export interface CapabilityPromptSection {
   /**
    * Semantic role that determines ordering in the final prompt.
    * Built-in roles: 'role' > 'task' > 'state' > 'context' > 'extraction' > 'routing' > 'policy'.
@@ -89,7 +89,7 @@ export interface Capability {
   getTools(): ToolDeclaration[];
 
   /** What does this capability contribute to the system prompt? */
-  getPromptSections(): PromptSection[];
+  getPromptSections(): CapabilityPromptSection[];
 
   /**
    * A tool was called and executed. Does this capability handle the result?
@@ -202,7 +202,7 @@ export class CapabilityHost {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function assemblePromptSections(basePrompt: string | undefined, sections: PromptSection[]): string {
+function assemblePromptSections(basePrompt: string | undefined, sections: CapabilityPromptSection[]): string {
   const parts: string[] = [];
 
   if (basePrompt) {

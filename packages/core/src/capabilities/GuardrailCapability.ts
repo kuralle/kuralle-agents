@@ -1,4 +1,4 @@
-import type { Capability, ToolDeclaration, PromptSection, CapabilityAction } from './index.js';
+import type { Capability, ToolDeclaration, CapabilityPromptSection, CapabilityAction } from './index.js';
 
 // ─── GuardrailCapability ─────────────────────────────────────────────────────
 
@@ -18,7 +18,7 @@ export class GuardrailCapability implements Capability {
     return [];
   }
 
-  getPromptSections(): PromptSection[] {
+  getPromptSections(): CapabilityPromptSection[] {
     return this.policies
       .filter(p => p.trim().length > 0)
       .map(policy => ({ role: 'policy', content: policy }));

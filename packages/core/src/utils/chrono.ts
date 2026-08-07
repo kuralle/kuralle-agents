@@ -1,7 +1,7 @@
 import * as chrono from 'chrono-node';
 import { createTool } from '../tools/Tool.js';
 import { z } from 'zod';
-import type { Tool } from '../tools/Tool.js';
+import type { AiSdkTool } from '../tools/Tool.js';
 
 export interface DateParserOptions {
   referenceDate?: Date;
@@ -41,7 +41,7 @@ type DateParserOutput =
     }
   | { success: false; error: string; text: string };
 
-export function createDateParser(options: DateParserOptions = {}): Tool<DateParserInput, DateParserOutput> {
+export function createDateParser(options: DateParserOptions = {}): AiSdkTool<DateParserInput, DateParserOutput> {
   return createTool<typeof dateParserInputSchema, DateParserOutput>({
     description: 'Parse natural language dates into structured Date objects.',
     inputSchema: dateParserInputSchema,
@@ -157,4 +157,4 @@ export const commonDateExpressions = [
   'Friday afternoon',
 ] as const;
 
-export const dateParser: Tool<DateParserInput, DateParserOutput> = createDateParser({ forwardDate: true });
+export const dateParser: AiSdkTool<DateParserInput, DateParserOutput> = createDateParser({ forwardDate: true });

@@ -15,38 +15,20 @@ interface AllowlistedDuplicate extends DuplicateDefinition {
   reason: string;
 }
 
-const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {
-  HandoffInputData: {
-    kind: 'export',
-    files: ['packages/core/src/types/processors.ts', 'packages/core/src/runtime/handoffFilters.ts'],
-    reason: 'The processor contract and runtime filter surface still duplicate this public name; separate cleanup is out of scope.',
-  },
-  HandoffInputFilter: {
-    kind: 'export',
-    files: ['packages/core/src/types/processors.ts', 'packages/core/src/runtime/handoffFilters.ts'],
-    reason: 'The processor contract and runtime filter surface still duplicate this public name; separate cleanup is out of scope.',
-  },
-  HandoffInputResult: {
-    kind: 'export',
-    files: ['packages/core/src/types/processors.ts', 'packages/core/src/runtime/handoffFilters.ts'],
-    reason: 'The processor contract and runtime filter surface still duplicate this public name; separate cleanup is out of scope.',
-  },
-  PromptSection: {
-    kind: 'export',
-    files: ['packages/core/src/capabilities/index.ts', 'packages/core/src/prompts/types.ts'],
-    reason: 'Capability and prompt-builder surfaces still expose different section contracts; separate cleanup is out of scope.',
-  },
-  Tool: {
-    kind: 'export',
-    files: ['packages/core/src/tools/Tool.ts', 'packages/core/src/types/effectTool.ts'],
-    reason: 'The legacy tool and effect-tool contracts remain separate public surfaces; unification is out of scope.',
-  },
-  TracingConfig: {
-    kind: 'export',
-    files: ['packages/core/src/runtime/Runtime.ts', 'packages/core/src/types/telemetry.ts'],
-    reason: 'Runtime and telemetry expose distinct tracing configuration contracts; unification is out of scope.',
-  },
-};
+/**
+ * **Empty, and worth keeping empty.**
+ *
+ * Every entry that used to sit here has been resolved rather than excused — most
+ * of them by deleting code that was exported and reachable by nobody, which is
+ * what a duplicate name usually turns out to be pointing at.
+ *
+ * The check is bidirectional, so this list cannot rot in either direction: a new
+ * duplicate fails immediately, and an entry that no longer describes a real
+ * duplicate fails too. Adding an entry is therefore a deliberate act with a
+ * stated reason, not a way to quiet the suite — if you are reaching for one,
+ * first check whether one of the two definitions has any caller at all.
+ */
+const KNOWN_DUPLICATES: Record<string, AllowlistedDuplicate> = {};
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

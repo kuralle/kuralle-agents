@@ -1,15 +1,6 @@
 export type { ChoiceOption, ResolvedSelection } from './selection.js';
 export type {
   TurnUsage,
-  TraceStreamEvent,
-  TracingConfig,
-  Span,
-  SpanEvent,
-  MetricsConfig,
-  ObservabilityMetrics,
-  Metrics,
-  SessionTelemetry,
-  SessionEndMetadata,
   SessionTrace,
 } from './telemetry.js';
 export type {
@@ -20,10 +11,6 @@ export type {
   OutputProcessorResult,
   InputProcessor,
   OutputProcessor,
-  HandoffInputData,
-  HandoffInputResult,
-  HandoffInputFilter,
-  AgentRoute,
   RouteCondition,
   AgentCapabilityDescriptor,
 } from './processors.js';
