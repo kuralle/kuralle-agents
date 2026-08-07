@@ -17,8 +17,12 @@ type Row = {
 function createFakePostgresClient() {
   const rows = new Map<string, Row>();
 
-  const rowKey = (scope: string, owner: string, key: string) =>
-    `${scope}:${owner}:${key}`;
+  // A real Postgres WHERE clause compares scope/owner/key as three separate
+  // bind params — never flattened into one string — so this fake must index
+  // the same way. `JSON.stringify` of the triple is injective (each element
+  // is quoted/escaped independently), unlike a `:`-joined string, which is
+  // exactly the flattening bug this task fixes in the real backends.
+  const rowKey = (scope: string, owner: string, key: string) => JSON.stringify([scope, owner, key]);
 
   return {
     rows,

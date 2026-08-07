@@ -2,6 +2,7 @@ import type { AgentConfig } from '../../types/agentConfig.js';
 import type { MemoryService, RunContext } from '../../types/run-context.js';
 import type { ExtractedValueStore } from '../../memory/extract/store.js';
 import { preloadMemoryContext } from '../../memory/preloadMemory.js';
+import { isValidOwner } from '../../memory/blocks/ownerKey.js';
 
 const warnedSessions = new Set<string>();
 
@@ -49,6 +50,13 @@ export function buildMemoryService(
     preload: async (ctx, scope) => {
       if (!ctx.session.userId) {
         warnMissingUserId(ctx.session.id);
+        return undefined;
+      }
+      // Symmetry with the write side. `runExtractors` refuses to write a row for
+      // an owner outside the allow-list, so reading one would only ever surface
+      // rows written before this guard existed — under a key we have since
+      // stopped considering addressable. Refuse both directions or neither.
+      if (!isValidOwner(ctx.session.userId)) {
         return undefined;
       }
       const userInput = scope?.query ?? latestUserMessage(ctx);

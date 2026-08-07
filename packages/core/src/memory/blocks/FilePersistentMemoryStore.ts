@@ -34,6 +34,7 @@ import type {
   MemoryBlockScope,
 } from './types.js';
 import { registerNodeDefaultWorkingMemoryStore } from '../../runtime/grounding/defaultStoreRegistry.js';
+import { encodeFileSegment, decodeFileSegment } from './ownerKey.js';
 
 export interface FilePersistentMemoryStoreOptions {
   /** Root directory. Defaults to `KURALLE_MEMORY_DIR` or `~/.kuralle/memories`. */
@@ -50,19 +51,17 @@ export class FilePersistentMemoryStore implements PersistentMemoryStore {
       path.join(os.homedir(), '.kuralle', 'memories');
   }
 
-  private safe(part: string): string {
-    // Path-traversal guard: strip any '..', '/', '\\', and null bytes
-    // from owner/key inputs. Owner ids may be email-like (contains @),
-    // key may be PascalCase — both fine.
-    return part.replace(/[\\/]+|\.\.+|\0/g, '_');
-  }
-
   private pathFor(scope: MemoryBlockScope, owner: string, key: string): string {
-    return path.join(this.rootDir, this.safe(scope), this.safe(owner), `${this.safe(key)}.md`);
+    return path.join(
+      this.rootDir,
+      encodeFileSegment(scope),
+      encodeFileSegment(owner),
+      `${encodeFileSegment(key)}.md`,
+    );
   }
 
   private dirFor(scope: MemoryBlockScope, owner: string): string {
-    return path.join(this.rootDir, this.safe(scope), this.safe(owner));
+    return path.join(this.rootDir, encodeFileSegment(scope), encodeFileSegment(owner));
   }
 
   async loadBlock(
@@ -125,7 +124,19 @@ export class FilePersistentMemoryStore implements PersistentMemoryStore {
       const entries = await fs.readdir(dir);
       return entries
         .filter((name) => name.endsWith('.md'))
-        .map((name) => name.slice(0, -3))
+        // Inverts encodeFileSegment — a listed key comes back as the key that
+        // was saved, not the encoded filename. Lenient: a hand-edited or legacy
+        // file with a bare '%' is returned verbatim rather than throwing and
+        // taking the whole listing with it.
+        .map((name) => decodeFileSegment(name.slice(0, -3)))
+        // Deduplicate: leniency lets two distinct files decode to one key — a
+        // hand-written `50%.md` beside the store's own `50%25.md` both yield
+        // '50%'. `loadBlock` can only ever reach the encoded one, so listing the
+        // key twice would advertise a second block that does not exist.
+        // A hand-written file whose name is not valid encoding stays listed but
+        // is not loadable through this API; that is the cost of reading files
+        // the store did not write, and it is preferable to hiding them.
+        .filter((key, index, all) => all.indexOf(key) === index)
         .sort();
     } catch (err: unknown) {
       if (isNodeError(err) && err.code === 'ENOENT') return [];

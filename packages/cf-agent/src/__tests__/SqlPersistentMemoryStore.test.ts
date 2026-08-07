@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import {
+  runPersistentMemoryDurabilityContract,
+  runPersistentMemoryStoreContract,
+} from '@kuralle-agents/core/memory/testing';
 import type { SqlExecutor } from '../types.js';
 import { SqlPersistentMemoryStore } from '../SqlPersistentMemoryStore.js';
 
@@ -15,8 +19,12 @@ function createFakeSqlExecutor(): SqlExecutor {
   const rows = new Map<string, Row>();
   let tableReady = false;
 
-  const rowKey = (scope: string, owner: string, key: string) =>
-    `${scope}:${owner}:${key}`;
+  // A real SQLite `WHERE scope = ? AND owner = ? AND key = ?` compares three
+  // separate bound params — never flattened into one string — so this fake
+  // must index the same way. `JSON.stringify` of the triple is injective,
+  // unlike a `:`-joined string, which is exactly the flattening bug this
+  // task fixes in the string-keyed backends.
+  const rowKey = (scope: string, owner: string, key: string) => JSON.stringify([scope, owner, key]);
 
   return ((strings: TemplateStringsArray, ...values: unknown[]) => {
     const query = strings.join('?').trim();
@@ -95,4 +103,14 @@ describe('SqlPersistentMemoryStore', () => {
     const loaded = await storeB.loadBlock('agent', 'bot-1', 'MEMORY');
     expect(loaded?.content).toBe('durable in do');
   });
+});
+
+runPersistentMemoryStoreContract(async () => new SqlPersistentMemoryStore(createFakeSqlExecutor()));
+
+runPersistentMemoryDurabilityContract(async () => {
+  const sql = createFakeSqlExecutor();
+  return {
+    storeA: new SqlPersistentMemoryStore(sql),
+    storeB: new SqlPersistentMemoryStore(sql),
+  };
 });

@@ -3,6 +3,7 @@ import type { LanguageModel, ModelMessage } from 'ai';
 import { applyPromptCache } from '../../runtime/promptCache.js';
 import { instrumentedGenerateObject } from '../../runtime/channels/instrumentModelCall.js';
 import { resolveWorkingMemoryOwner } from '../../runtime/grounding/workingMemory.js';
+import { isValidOwner } from '../blocks/ownerKey.js';
 import type { StreamPart } from '../../types/stream.js';
 import { resolveExtractor } from './defineExtractor.js';
 import type { ExtractedValueStore } from './store.js';
@@ -122,6 +123,21 @@ async function prepareRunnableExtractors(
       failures.push({
         slug: resolved.slug,
         error: `[Kuralle] extractor "${resolved.name}": no resolvable owner for scope "${resolved.scope}"`,
+      });
+      continue;
+    }
+    // The same allow-list working memory enforces. Without this the two memory
+    // subsystems disagree about the same session: `wireWorkingMemory` withholds
+    // its blocks for a malformed owner while extraction happily writes a facts
+    // row for it, so the agent "remembers" a customer it has explicitly refused
+    // to store notes about. Found by a live multi-tenant run — no unit test
+    // crossed both subsystems for one owner, so neither side looked wrong alone.
+    if (!isValidOwner(owner)) {
+      failures.push({
+        slug: resolved.slug,
+        error:
+          `[Kuralle] extractor "${resolved.name}": owner ${JSON.stringify(owner)} contains ` +
+          'characters outside [A-Za-z0-9._@+:~|-]; nothing was extracted for this session.',
       });
       continue;
     }

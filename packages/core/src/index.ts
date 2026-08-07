@@ -180,6 +180,17 @@ export {
   buildMemoryBlockTool,
   DEFAULT_BLOCK_CHAR_LIMIT,
   DEFAULT_AUTO_LOAD_BLOCKS,
+  InvalidOwnerError,
+  InvalidBlockKeyError,
+  assertValidOwner,
+  assertValidBlockKey,
+  isValidOwner,
+  isValidBlockKey,
+  withOwnerValidation,
+  encodeSegment,
+  encodeRedisSegment,
+  encodeFileSegment,
+  decodeFileSegment,
 } from './memory/index.js';
 export type {
   RoutedPersistentMemoryStoreConfig,

@@ -1,4 +1,4 @@
-import { describe } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import {
   runPersistentMemoryDurabilityContract,
   runPersistentMemoryStoreContract,
@@ -81,4 +81,51 @@ runPersistentMemoryDurabilityContract(async () => {
 
 describe('RedisPersistentMemoryStore fake client', () => {
   // contract + durability registered above
+});
+
+/**
+ * Key stability, pinned as literals on purpose.
+ *
+ * An adversarial review found that encoding every allow-listed character —
+ * '@', ':', '|', '+', '~' — silently orphaned existing blocks: an upgrading
+ * deployment could no longer find any email-shaped or tenant-prefixed owner's
+ * working memory, with no error and no warning. Redis only needs ':' escaped,
+ * because ':' is the separator this store composes on; the rest are inert
+ * inside a Redis key and must pass through untouched.
+ *
+ * These are golden strings rather than a round-trip assertion deliberately.
+ * A round trip stays green no matter how much the encoder widens — it is the
+ * *stability* of the byte sequence that protects existing data, so that is
+ * what gets asserted.
+ */
+describe('Redis working-memory key stability', () => {
+  const store = new RedisPersistentMemoryStore({
+    client: createMockRedisClient().client as never,
+    prefix: 'kuralle',
+  });
+  const keyOf = (owner: string, key = 'USER') =>
+    (store as unknown as { blockKey(s: string, o: string, k: string): string }).blockKey(
+      'user',
+      owner,
+      key,
+    );
+
+  it('leaves every allow-listed character except ":" untouched', () => {
+    expect(keyOf('maya@example.com')).toBe('kuralle:wm:user:maya@example.com:USER');
+    expect(keyOf('google-oauth2|123')).toBe('kuralle:wm:user:google-oauth2|123:USER');
+    expect(keyOf('user+tag')).toBe('kuralle:wm:user:user+tag:USER');
+    expect(keyOf('user~1')).toBe('kuralle:wm:user:user~1:USER');
+    expect(keyOf('a.b_c-d')).toBe('kuralle:wm:user:a.b_c-d:USER');
+  });
+
+  it('escapes ":" — the one character that would rearrange the key', () => {
+    expect(keyOf('tenant:user')).toBe('kuralle:wm:user:tenant%3Auser:USER');
+    // and therefore the rearrangement is no longer expressible
+    expect(keyOf('a', 'b:K')).not.toBe(keyOf('a:b', 'K'));
+  });
+
+  it('escapes "%" so the encoding stays injective', () => {
+    expect(keyOf('100%')).toBe('kuralle:wm:user:100%25:USER');
+    expect(keyOf('100%25')).not.toBe(keyOf('100%'));
+  });
 });

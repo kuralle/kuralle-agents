@@ -3,6 +3,7 @@ import type {
   PersistentMemoryBlock,
   PersistentMemoryStore,
 } from '@kuralle-agents/core';
+import { encodeRedisSegment } from '@kuralle-agents/core';
 import type { RedisClientLike } from './RedisSessionStore.js';
 import {
   addMembers,
@@ -25,12 +26,21 @@ export class RedisPersistentMemoryStore implements PersistentMemoryStore {
     this.prefix = options.prefix ?? 'kuralle';
   }
 
+  // Each segment is percent-encoded before joining on ':' — unescaped,
+  // `(owner: 'a:b', key: 'K')` and `(owner: 'a', key: 'b:K')` composed to the
+  // same Redis key. Encoding the segments (not just the raw owner/key) means
+  // the literal ':' separators this composer inserts are the only ones left
+  // in the string, so no rearrangement across them is possible.
   private blockKey(scope: MemoryBlockScope, owner: string, key: string): string {
-    return `${this.prefix}:wm:${scope}:${owner}:${key}`;
+    return `${this.prefix}:wm:${encodeRedisSegment(scope)}:${encodeRedisSegment(owner)}:${encodeRedisSegment(key)}`;
   }
 
+  // A distinct namespace segment, not a `:__index` suffix inside the block
+  // keyspace — `__index` is already in the encode-safe charset and encodes to
+  // itself, so appending it there let a block literally named `__index`
+  // overwrite this owner's index set.
   private indexKey(scope: MemoryBlockScope, owner: string): string {
-    return `${this.prefix}:wm:${scope}:${owner}:__index`;
+    return `${this.prefix}:wm-index:${encodeRedisSegment(scope)}:${encodeRedisSegment(owner)}`;
   }
 
   async loadBlock(

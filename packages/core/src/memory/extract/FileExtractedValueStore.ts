@@ -24,7 +24,7 @@ export interface FileExtractedValueStoreOptions {
 }
 
 /** Percent-encode anything outside a conservative filesystem-safe set. Injective. */
-function encodeSegment(part: string): string {
+export function encodeSegment(part: string): string {
   let out = '';
   for (const byte of new TextEncoder().encode(part)) {
     const ch = String.fromCharCode(byte);

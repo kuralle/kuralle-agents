@@ -34,6 +34,19 @@ export {
 export { TieredPersistentMemoryStore } from './blocks/TieredPersistentMemoryStore.js';
 export { scanMemoryWrite, type SafetyScanResult } from './blocks/safetyScanner.js';
 export { buildMemoryBlockTool, type MemoryBlockToolOptions } from './blocks/memoryBlockTool.js';
+export {
+  InvalidOwnerError,
+  InvalidBlockKeyError,
+  assertValidOwner,
+  assertValidBlockKey,
+  isValidOwner,
+  isValidBlockKey,
+  withOwnerValidation,
+  encodeSegment,
+  encodeRedisSegment,
+  encodeFileSegment,
+  decodeFileSegment,
+} from './blocks/ownerKey.js';
 
 // ── Memory extractors ───────────────────────────────────────────────
 export type {

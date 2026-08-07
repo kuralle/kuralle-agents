@@ -9,6 +9,11 @@ import {
   type MemoryBlockScope,
   type PersistentMemoryStore,
 } from '../../memory/blocks/types.js';
+import {
+  isValidBlockKey,
+  isValidOwner,
+  withOwnerValidation,
+} from '../../memory/blocks/ownerKey.js';
 import { wrapAiSdkTool } from '../../tools/effect/wrapAiSdkTool.js';
 import { getNodeDefaultWorkingMemoryStore } from './defaultStoreRegistry.js';
 // Same warning the preload/ingest path uses, so a missing userId reports once
@@ -26,19 +31,30 @@ export interface WiredWorkingMemory {
   memoryBlockTool: AnyTool;
 }
 
+/**
+ * The one place a working-memory store is obtained, and therefore the one place
+ * layer 1 belongs. Every store handed out here validates its owner and block key
+ * before touching a backend.
+ *
+ * It is wrapped here rather than inside each backend class deliberately: a
+ * backend constructed directly stays as permissive as it always was (its own
+ * layers 2/3 make it collision-safe regardless), while everything that goes
+ * through the framework — `wireWorkingMemory`, the `memory_block` tool, and any
+ * consumer calling this exported function — gets the reject-and-throw guarantee.
+ */
 export function resolveWorkingMemoryStore(
   config: WorkingMemoryConfig,
   harnessDefault?: PersistentMemoryStore,
 ): PersistentMemoryStore {
   if (config.store) {
-    return config.store;
+    return withOwnerValidation(config.store);
   }
   if (harnessDefault) {
-    return harnessDefault;
+    return withOwnerValidation(harnessDefault);
   }
   const factory = getNodeDefaultWorkingMemoryStore();
   if (factory) {
-    return factory();
+    return withOwnerValidation(factory());
   }
   throw new Error(
     '[Kuralle] agent.memory.workingMemory requires a store. Pass workingMemory.store, ' +
@@ -132,6 +148,42 @@ export function formatWorkingMemorySection(
   return lines.join('\n').trim();
 }
 
+const CHARSET_HINT = '[A-Za-z0-9._@+:~|-]';
+
+const warnedInvalidKeySessions = new Set<string>();
+const warnedInvalidOwnerSessions = new Set<string>();
+
+function warnInvalidBlockKeys(sessionId: string, keys: string[]): void {
+  if (warnedInvalidKeySessions.has(sessionId)) {
+    return;
+  }
+  warnedInvalidKeySessions.add(sessionId);
+  console.warn(
+    `[Kuralle] working-memory block key(s) ${JSON.stringify(keys)} contain characters ` +
+      `outside ${CHARSET_HINT} and were withheld from this session. Rename them in ` +
+      'agent.memory.workingMemory.autoLoad.',
+  );
+}
+
+function warnInvalidOwner(sessionId: string, owners: string[]): void {
+  if (warnedInvalidOwnerSessions.has(sessionId)) {
+    return;
+  }
+  warnedInvalidOwnerSessions.add(sessionId);
+  console.warn(
+    `[Kuralle] working-memory owner(s) ${JSON.stringify(owners)} contain characters outside ` +
+      `${CHARSET_HINT}. Those blocks were withheld from this session rather than stored ` +
+      'under a key that could collide with another owner. The userId is present but ' +
+      'unusable — sanitise it upstream, do not pass raw path- or separator-bearing ids.',
+  );
+}
+
+/** Test seam: the warn-once caches are process-global by design. */
+export function resetWorkingMemoryWarningsForTests(): void {
+  warnedInvalidKeySessions.clear();
+  warnedInvalidOwnerSessions.clear();
+}
+
 export async function wireWorkingMemory(
   agent: AgentConfig,
   session: Session,
@@ -142,18 +194,50 @@ export async function wireWorkingMemory(
     return undefined;
   }
 
+  // Already owner-validating — `resolveWorkingMemoryStore` wraps every store it
+  // hands out, so `loadWorkingMemoryBlocks` below and the `memory_block` tool
+  // both get the guarantee without a second wrap here.
   const store = resolveWorkingMemoryStore(config, harnessDefaultStore);
   const declared = config.autoLoad ?? DEFAULT_AUTO_LOAD_BLOCKS;
   const charLimit = config.defaultCharLimit ?? DEFAULT_BLOCK_CHAR_LIMIT;
-  const resolveOwner = (scope: MemoryBlockScope) =>
-    resolveWorkingMemoryOwner(scope, agent.id, session.userId);
+  const resolveOwner = (scope: MemoryBlockScope) => {
+    const owner = resolveWorkingMemoryOwner(scope, agent.id, session.userId);
+    // An owner outside the allow-list is unusable, not merely awkward: it is
+    // the shape a bug produces. Treat it exactly as an unresolvable owner —
+    // withhold the surface — rather than throwing through the middle of a turn.
+    return owner !== undefined && isValidOwner(owner) ? owner : undefined;
+  };
 
   // A block whose owner cannot be resolved is not this session's to read or
   // write. Drop it from the surface entirely rather than serving it under a
   // placeholder owner shared with every other anonymous session.
-  const autoLoad = declared.filter((spec) => resolveOwner(spec.scope) !== undefined);
-  if (autoLoad.length < declared.length) {
-    warnMissingUserId(session.id);
+  //
+  // The two reasons get different warnings on purpose. "No userId" and "the
+  // userId you sent is malformed" have opposite fixes, and reporting the second
+  // as the first sends an operator looking for a value that is already there.
+  const addressable = declared.filter((spec) => resolveOwner(spec.scope) !== undefined);
+  if (addressable.length < declared.length) {
+    const rawOwners = declared
+      .filter((spec) => resolveOwner(spec.scope) === undefined)
+      .map((spec) => resolveWorkingMemoryOwner(spec.scope, agent.id, session.userId));
+    if (rawOwners.some((owner) => owner === undefined)) {
+      warnMissingUserId(session.id);
+    }
+    const malformed = rawOwners.filter((owner): owner is string => owner !== undefined);
+    if (malformed.length > 0) {
+      warnInvalidOwner(session.id, malformed);
+    }
+  }
+
+  // A declared key outside the allow-list would reach a store that rejects it,
+  // turning every write to that block into a thrown error mid-turn. Drop it at
+  // wiring time and say so once, so the fault names its own cause.
+  const autoLoad = addressable.filter((spec) => isValidBlockKey(spec.key));
+  if (autoLoad.length < addressable.length) {
+    warnInvalidBlockKeys(
+      session.id,
+      addressable.filter((spec) => !isValidBlockKey(spec.key)).map((spec) => spec.key),
+    );
   }
   if (autoLoad.length === 0) {
     // Nothing addressable: no prompt section, and no tool to write with.
