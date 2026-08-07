@@ -9,7 +9,7 @@ Every `runtime.run()` follows one path:
 ```
 openRun  → load session, RunState, effect log; replay recorded effects
 hostLoop → route → runFlow → free converse → handoff loop
-closeRun → persist RunState, memory ingest, emit done
+closeRun → persist RunState, run extractors if the trigger fires, emit done
 ```
 
 `runtime.run()` returns a **`TurnHandle`**: await for `TurnResult`, iterate `.events`, pipe `toUIMessageStreamResponse()` for web (`useChat`, no bridge), or `toResponseStream('sse')` for raw `StreamPart` JSON-SSE.

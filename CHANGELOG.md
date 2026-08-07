@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased — memory isolation, an explicit memory search, and zero duplicate exported names (BREAKING under 0.x)
+
+Three strands: closing a cross-user leak in the memory stores, giving memory a read path the agent can actually call, and resolving every duplicate exported name in `core`. Breaking changes ship under **0.x rules**, where a minor may break.
+
+The recurring finding across all three is worth stating up front, because it shaped what got built: **a surprising amount of the public surface was exported, documented, and connected to nothing.** The V1 `MemoryService`, `HarnessConfig.memoryService`, `StopConditions`, `TracingService`, `AgentRoute` — five separate cases, each looking live from the outside. Three of the duplicate names turned out to be pointing at one of them rather than at a naming problem.
+
+### Breaking
+
+- **A session with no `userId` gets no user-scoped memory.** It previously fell back to a shared `'anonymous'` owner, which pooled every userless session's memory together — one visitor's `USER` block loaded into the next visitor's prompt. Reachable on `chatRouter` and the OpenAI-compat endpoint, neither of which requires a `userId`. It now fails closed with a warning.
+- **`userId` must match `^[A-Za-z0-9._@+:~|-]+$`.** That accepts what real identity providers issue — `maya@example.com`, `google-oauth2|123`, `tenant:acme` — and rejects path and glob characters. An id outside it is refused rather than sanitised, because sanitising two ids into one string is how two users end up sharing a row.
+- **`memory_block` can only address blocks the agent declares.** `block` is now a `z.enum` over `workingMemory.autoLoad`, and the free-text `scope` input is gone. Ad-hoc blocks were never readable in a later session anyway — the model could create one and never find it again.
+- **`memory.ingest` is removed**; fact memory is an extractor: `extract: [factsExtractor()]`. `HarnessConfig.memoryService` is removed — it was declared and read nowhere, so it silently dropped whatever you passed.
+- **The V1 `MemoryService` is removed** with its four implementations, plus `MemoryEntry`, `MemoryIngestionOptions` and `extractMemories`. Nothing in the runtime ever called it; `runRefinementPolicies` passed `memoryService: undefined` unconditionally.
+- **`Tool` now means Kuralle's tool.** It did not. The root index exported the AI SDK's type explicitly while the framework's own effect-tool contract arrived through `export type *`, so the explicit one won — `import { Tool }` handed you the AI SDK's, and Kuralle's shipped as `EffectTool`. The AI SDK alias is now `AiSdkTool`, `Tool` is the effect contract, and `EffectTool` is removed.
+- **`StopConditions` and `EnforcementRules` are removed.** `maxSteps()`, `tokenBudget()`, `timeout()` and the rest had zero call sites and there was no config field to register one — `HarnessConfig.stopConditions`, which `GUARDRAILS.md` documented as "enabled by default", never existed. Use `limits` on the agent, which is what always ran.
+- **Also removed, each with no caller:** `AgentRoute`, `TracingService`, `InMemoryMetricsService`, `MetricsService`, the legacy `RunContext` export, `foundation`'s `ToolExecutor`/`ExecutableTool`, and the telemetry types (`TracingConfig`, `Span`, `SpanEvent`, `MetricsConfig`, `ObservabilityMetrics`, `Metrics`, `TraceStreamEvent`, `SessionTelemetry`, `SessionEndMetadata`). Live tracing — `HarnessConfig.tracing`, `TraceStore`, `AgentSpan` — is untouched.
+
+### Two users could share a memory row
+
+Three of the five `PersistentMemoryStore` backends mapped distinct owners onto one storage key. `InMemory` and `Redis` composed `${scope}:${owner}:${key}` unescaped, so `(owner: 'a:b', key: 'K')` and `(owner: 'a', key: 'b:K')` were the same row. `File`'s `safe()` collapsed `/`, `\` and `..` to a single `_`, so `alice/bob` and `alice_bob` were one file — a path-traversal guard being used as a key derivation. `listBlocks` was worse than a collision: owner `a` could enumerate owner `a:b`'s **block names**.
+
+The fix is three layers, and the shape came from reading what LangGraph and `deepagents` actually do rather than from first principles:
+
+1. **Validate and reject at the boundary.** An encoder makes every malformed owner legal — the `?? 'anonymous'` bug above would have acquired a tidy valid row under one, and failed loudly under a validator.
+2. **Stop flattening where the medium does not force it.** Postgres and DO SQLite were never affected because they keep a real `PRIMARY KEY (scope, owner, key)`. `InMemory` is now a nested `Map` for the same reason.
+3. **Encode only where a single string is unavoidable, per medium.** Redis escapes `:` alone; the filesystem additionally escapes `|` and `:`. An earlier revision escaped `@` too and would have silently orphaned every email-shaped owner's memory on upgrade — escaping more than the medium requires is not free.
+
+Windows device names (`NUL`, `COM1`) now escape, and `listBlocks` no longer throws `URIError` on a hand-seeded file containing a bare `%`. **Known limitation:** case-insensitive filesystems still fold `Alice` and `alice`; closing that costs the human-editable filenames the store deliberately offers, so it is documented on `encodeFileSegment` and filed rather than decided.
+
+### Memory you can ask
+
+`defineExtractor` shipped as public API and was **write-only**. `preloadMemoryContext` loads exactly one hardcoded slug, so any custom extractor was persisted every turn and read by nothing — the `memory-concierge` example shipped a `dietaryProfile` extractor whose value nothing could reach.
+
+`search_memory` is the model-callable read path over the same store, which is the split every comparable framework converged on — Letta's `archival_memory_search`, langmem's and Zep's `create_search_memory_tool`. Automatic recall stays facts-only; the tool reaches every declared extractor. `slug` is a `z.enum` over your `extract` list, so an undeclared slug is not rejected at runtime — it cannot be expressed, which is what lets `ExtractedValueStore` keep having no `list()`.
+
+`lexicalScore` is now shared by both paths so they rank identically. **It is not a pure extraction:** it gained a 6-character shared-prefix fallback so `allergic` reaches a field named `allergies`, which substring matching never bridges. Because `preloadMemoryContext` uses `score > 0` as a membership filter, that widens what automatic recall injects — nothing that was injected before stops being, but existing agents will see a different, generally more relevant selection.
+
+### Packaging
+
+Five packages declared `core` as both a `dependency` and a `peerDependency` — one says "I install my own copy", the other "the host supplies it so we share one". Resolved per package: `cli` keeps a plain dependency because it ships a `bin` and nobody hosts an executable; the four libraries move to peer + dev. Verified against real tarballs with `workspace:*` rewritten the way `pnpm publish` does: one copy of core, clean `tsc`, and forcing a second copy reproduces `Types have separate declarations of a private property 'config'.`
+
+### Added
+
+- **`ExtractedValueStore` backends** for Postgres, Redis and Durable Object SQLite, behind a shared conformance suite.
+- **An extraction trigger policy.** Extraction defaults to `{ tokens: 2000 }` of un-extracted history and is non-blocking, so an ordinary turn costs nothing.
+- **`kuralle send --user`** — the CLI never passed a `userId`, so user-scoped memory was entirely inert from it.
+- **Guards that cannot rot:** no workspace package may declare an internal package as both a dependency and a peer; and `KNOWN_DUPLICATES` is now `{}`, with the duplicate-export check scoped per package and catching cross-package re-exports.
+
+### Fixed elsewhere
+
+Both store READMEs and the usage skill's memory reference told consumers to import classes this release deletes — and to pass `memoryService`, `preloadMemory` and `memoryIngestion` to `createRuntime`, which `HarnessConfig` has never accepted. All three are rewritten against the real surface, as is `GUARDRAILS.md`.
+
 ## 0.20.0 — skills second pass, bounded tool execution, and three streaming-turn fixes (BREAKING under 0.x)
 
 Three strands land together: a second pass on the skill system, hardening of how tools actually execute, and three ways a streamed turn could fail a user without failing loudly. The whole package family moves 0.19.x → 0.20.0 in lockstep.

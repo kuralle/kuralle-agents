@@ -22,7 +22,7 @@ This skill is for internal developers extending the Kuralle framework. Keep chan
 Runtime.run(opts) → TurnHandle
   openRun     load Session + RunState + effect log, replay
   hostLoop    route → runFlow → free converse → handoff loop
-  closeRun    persist, memory ingest, outcome
+  closeRun    persist, run extractors if the trigger fires, outcome
 
 runFlow       imperative loop over FlowNode handlers
   reply/collect → ChannelDriver.runAgentTurn

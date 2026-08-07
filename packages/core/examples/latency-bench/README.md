@@ -51,7 +51,8 @@ TTFA must be measured in the voice repo against a real audio stream.
 | `text-only` | TTFT / TTFS floor with nothing in the way |
 | `tools-parallel-12` | concurrency ceiling, result ordering, CAS contention |
 | `tool-huge-result` | transcript growth from an unbounded tool result |
-| `memory-ingest` | what the user waits for after the answer is written |
+| `memory-extraction` | extraction off the close path — what the user does NOT wait for |
+| `memory-extraction-blocking` | the same work with `blocking: true`, i.e. what they would wait for |
 | `finish-length` | whether an output-limit truncation is visible at all |
 
 ## What the baseline exposed
@@ -77,6 +78,11 @@ Captured on a clean tree at `5ed3de3` before any changes landed:
 - **`memory-ingest` turns take 3× as long.** 227.7ms against a 75ms floor,
   because post-turn ingest is awaited inside `closeRun` — and the `done` part
   waits with it, so the stream itself stays open for the extra 150ms.
+
+  Since fixed: extraction is trigger-gated and non-blocking by default, and the
+  scenario is now `memory-extraction` (with `memory-extraction-blocking` kept to
+  measure what the old behaviour cost). The name above is the one it had at
+  `5ed3de3`; this section is a record of that run, not of the current harness.
 
 - **`finish-length` reports a clean turn.** An output-limit truncation produces
   no signal anywhere: `abnormal_finish_observed: false`, and `ttfs_ms` is `null`
