@@ -8,7 +8,7 @@ import { Aside } from '@astrojs/starlight/components';
 Kuralle agents have two complementary memory axes:
 
 - **Working memory** — small, durable, human-readable **blocks** (e.g. a `USER` profile) that the agent maintains with a tool and that are injected into the system prompt every turn. Persists across sessions. This is the right tool for "remember this caller's name / preferences / account".
-- **Semantic recall** — cross-session facts extracted via `memory.extract` (e.g. `factsExtractor()`) and preloaded with `memory.preload`. Best for "remember durable facts about this user across sessions".
+- **Semantic recall** — cross-session facts extracted via `memory.extract` (e.g. `factsExtractor()`), read two ways: `memory.preload` injects the `facts` slug automatically every turn, and a `search_memory` tool lets the model query any declared extractor on demand. Best for "remember durable facts about this user across sessions".
 
 This guide focuses on **working memory**.
 
@@ -167,3 +167,39 @@ const agent = defineAgent({
 ```
 
 Working memory and extracted facts are independent — use both: working memory for the always-in-context profile, extracted facts for LLM-merged cross-session recall keyed by `userId`.
+
+### Searching extracted memory on demand
+
+`memory.preload` only ever loads the `facts` slug. Declare more extractors and their values
+are written every turn but never reach the prompt unless the agent asks for them:
+
+```typescript
+import { defineAgent, factsExtractor, defineExtractor } from '@kuralle-agents/core';
+import { z } from 'zod';
+
+const dietaryProfile = defineExtractor({
+  name: 'Dietary Profile',
+  scope: 'user',
+  instructions: 'Allergies and dietary restrictions this person stated about themselves.',
+  schema: z.object({ allergies: z.array(z.string()), avoids: z.array(z.string()) }),
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  memory: {
+    preload: { enabled: true, tokenBudget: 500 },
+    extract: [factsExtractor(), dietaryProfile],
+  },
+});
+```
+
+Declaring `memory.extract` automatically registers a `search_memory` tool the model can call
+mid-turn — Letta's core/archival split: `preload` is core memory (always in context),
+`search_memory` is archival (queried on demand). Its `slug` argument is a `z.enum` built from
+your `extract` list, the same pattern `memory_block`'s `block` argument uses, so an undeclared
+extractor cannot be expressed, let alone read. Matching is literal, and a query that matches
+nothing returns `{ results: [] }` — no fallback to showing everything, unlike `preload`.
+
+No extra config is needed; the tool is withheld under the same conditions the rest of
+user-scoped memory withholds under (no `userId` on the run).

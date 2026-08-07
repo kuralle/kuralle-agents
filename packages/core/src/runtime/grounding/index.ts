@@ -18,6 +18,7 @@ export {
   type LoadedWorkingMemoryBlock,
   type WiredWorkingMemory,
 } from './workingMemory.js';
+export { wireSearchMemory } from './searchMemory.js';
 export { runGatherPhase, type GatherResult, type GatherScope } from './gather.js';
 export { resolveNodeGatherScope } from './nodeScope.js';
 export {

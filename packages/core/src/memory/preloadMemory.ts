@@ -1,6 +1,7 @@
 import type { Session } from '../types/index.js';
 import type { ExtractedValueStore } from './extract/store.js';
 import { FACTS_EXTRACTOR_SLUG } from './extract/builtin/factsExtractor.js';
+import { lexicalScore } from './lexicalScore.js';
 
 /**
  * Token estimation function. Matches the estimator used in ContextManager.ts:
@@ -9,22 +10,6 @@ import { FACTS_EXTRACTOR_SLUG } from './extract/builtin/factsExtractor.js';
 function estimateTokenCount(text: string): number {
   if (!text) return 0;
   return Math.ceil(text.length / 4);
-}
-
-const QUERY_TOKEN_MIN_LENGTH = 4;
-
-function lexicalScore(query: string, fact: string): number {
-  const factLower = fact.toLowerCase();
-  const tokens = query
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length >= QUERY_TOKEN_MIN_LENGTH);
-  if (tokens.length === 0) return 0;
-  let hits = 0;
-  for (const token of tokens) {
-    if (factLower.includes(token)) hits += 1;
-  }
-  return hits / tokens.length;
 }
 
 /**

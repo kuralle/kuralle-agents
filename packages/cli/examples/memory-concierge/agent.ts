@@ -13,13 +13,22 @@
  * is the point: an in-memory store would make this demo pass inside one process
  * and fail the moment it matters.
  *
+ * `dietaryProfile` below is the extractor `preload` never reads (preload only
+ * ever loads the `facts` slug) — a THIRD command shows the model reaching for
+ * it explicitly through `search_memory`, the only path that value has:
+ *
+ *   kuralle send --agent packages/cli/examples/memory-concierge/agent.ts \
+ *     --user mithushan --session s3 "Am I allergic to anything?"
+ *
  * What it demonstrates, all from this chain:
  *
  *   memory.extract           two extractors, one merged model call
  *   factsExtractor()         the built-in, replacing the old ingest service
  *   onExtracted              an interceptor that shapes a value before storage
  *   FileExtractedValueStore  durable across processes
- *   memory.preload           the read half — prior facts into the system prompt
+ *   memory.preload           the automatic read half — prior facts into the prompt
+ *   search_memory            the explicit read half — a model-initiated query
+ *                            over every declared extractor, `facts` included
  *   workingMemory.autoLoad   declares the blocks `memory_block` may address
  *   parallelSafe predicate   one tool, parallel for reads and serial for writes
  *   maxToolResultTokens      the transcript-boundary cap

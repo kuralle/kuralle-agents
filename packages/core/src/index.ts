@@ -171,6 +171,7 @@ export {
   TieredPersistentMemoryStore,
   scanMemoryWrite,
   buildMemoryBlockTool,
+  buildSearchMemoryTool,
   DEFAULT_BLOCK_CHAR_LIMIT,
   DEFAULT_AUTO_LOAD_BLOCKS,
   InvalidOwnerError,
@@ -228,6 +229,7 @@ export {
   formatWorkingMemorySection,
   resolveWorkingMemoryStore,
 } from './runtime/grounding/workingMemory.js';
+export { wireSearchMemory } from './runtime/grounding/searchMemory.js';
 export {
   resolveAgentWorkspace,
   resolveAgentWorkspaceForSession,

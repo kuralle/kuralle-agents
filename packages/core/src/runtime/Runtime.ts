@@ -324,6 +324,7 @@ export class Runtime {
         configTools: this.config.tools,
         knowledgeProvider,
         defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+        extractedValueStore: this.extractedValueStore,
         resolvedSkillCache: readResolvedSkillsCache(opened.runState.state, opened.agent.id),
       });
       if (openingSurface.skillContentHash) {
@@ -628,6 +629,7 @@ export class Runtime {
               configTools: this.config.tools,
               knowledgeProvider,
               defaultWorkingMemoryStore: this.config.defaultWorkingMemoryStore,
+              extractedValueStore: this.extractedValueStore,
               resolvedSkillCache: readResolvedSkillsCache(runCtx.runState.state, target.id),
             });
             if (targetSurface.skillContentHash) {

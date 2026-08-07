@@ -86,3 +86,7 @@ export {
   type FactsExtractorOptions,
   type FactsValue,
 } from './extract/builtin/factsExtractor.js';
+export {
+  buildSearchMemoryTool,
+  type SearchMemoryToolOptions,
+} from './extract/searchMemoryTool.js';

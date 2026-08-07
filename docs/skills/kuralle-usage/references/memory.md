@@ -3,17 +3,23 @@
 A session holds one conversation. Memory carries what matters about a **user** across all
 of their sessions.
 
-Kuralle has two read paths, and they answer different questions:
+Kuralle has three read paths, and they answer different questions:
 
-| | automatic recall | working-memory blocks |
-| --- | --- | --- |
-| what it is | extracted values scored against the user's message and injected into the prompt | durable named notes the agent maintains itself |
-| who writes it | extractors, after a turn | the model, via the `memory_block` tool |
-| who reads it | the runtime, every turn | injected into the prompt; the tool can re-read |
-| shape | typed, per extractor (`facts`, your own) | free markdown, per block (`USER`, `MEMORY`) |
+| | automatic recall | `search_memory` | working-memory blocks |
+| --- | --- | --- | --- |
+| what it is | extracted values scored against the user's message and injected into the prompt | a tool the model calls to query extracted values on demand | durable named notes the agent maintains itself |
+| who writes it | extractors, after a turn | extractors, after a turn (same store as automatic recall) | the model, via the `memory_block` tool |
+| who reads it | the runtime, every turn | the model, when it decides to ask | injected into the prompt; the tool can re-read |
+| shape | typed, per extractor (`facts`, your own) | typed, any declared extractor | free markdown, per block (`USER`, `MEMORY`) |
+| on no match | returns everything unscored (continuity over a false negative) | returns an empty list (an explicit question deserves an honest "not found") | n/a |
 
-Both are configured on the **agent**, under `memory`. Neither is configured on
-`createRuntime` — the runtime only supplies the stores.
+Automatic recall and `search_memory` are two read paths over the *same*
+`ExtractedValueStore` — the Letta-style core/archival split. Automatic recall
+only ever loads the `facts` slug; any other extractor you declare (e.g. a
+`dietaryProfile`) is written every turn and never reaches the prompt unless
+the model explicitly searches for it. All three are configured on the
+**agent**, under `memory`. None is configured on `createRuntime` — the
+runtime only supplies the stores.
 
 ## Setup
 
@@ -89,6 +95,36 @@ memory: { extract: [factsExtractor(), dietaryProfile] }
 ```
 
 Every extractor on an agent runs in **one merged structured call**, not one call each.
+
+## Searching memory explicitly
+
+`dietaryProfile` above is never preloaded — automatic recall only ever reads the `facts`
+slug. Declaring `extract` automatically gives the model a `search_memory` tool that can
+query any declared extractor, including `facts`:
+
+```
+search_memory({ query: "shellfish allergy" })
+search_memory({ query: "shellfish allergy", slug: "dietary-profile" })
+```
+
+`slug` is a `z.enum` built from your `extract` list — the model can address exactly the
+extractors you declared and nothing else; an undeclared slug is not rejected at runtime,
+it cannot be expressed. Omit `slug` to search every declared extractor at once.
+
+The tool returns data, not prose:
+
+```ts
+{ results: [{ slug: 'dietary-profile', entry: 'allergies: shellfish', score: 0.5 }] }
+```
+
+Matching is literal (substring, with basic plural/derivational bridging — "allergic" finds
+"allergies") — not semantic. A query that matches nothing returns `{ results: [] }`, on
+purpose: an explicit question deserves an honest "not found" over ten unrelated facts,
+unlike automatic recall's fall back to showing everything.
+
+No extra setup is needed beyond declaring `extract` — the tool is wired automatically and
+withheld under the same conditions user-scoped memory always withholds under: no `userId`
+on the run, or (new) no declared extractor being addressable in this session at all.
 
 ## When extraction runs
 
