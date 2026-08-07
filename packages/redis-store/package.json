@@ -17,15 +17,13 @@
       "default": "./dist/index.js"
     }
   },
-  "dependencies": {
-    "@kuralle-agents/core": "workspace:*"
-  },
   "peerDependencies": {
     "@kuralle-agents/core": "0.x",
     "@kuralle-agents/rag": "0.x"
   },
   "devDependencies": {
     "@ai-sdk/openai": "^3.0.0",
+    "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/rag": "workspace:*",
     "@types/node": "^20.11.0",
     "ai": "^6.0.0",
