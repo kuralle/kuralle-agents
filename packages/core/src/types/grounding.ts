@@ -1,5 +1,5 @@
 import type { MemoryBlockScope, PersistentMemoryConfig } from '../memory/blocks/types.js';
-import type { Extractor } from '../memory/extract/types.js';
+import type { AnyExtractor } from '../memory/extract/types.js';
 
 export interface AgentKnowledge {
   /** Whether the runtime retrieves automatically. Default: `true`.
@@ -45,9 +45,8 @@ export interface AgentMemory {
   /** When and how `memory.extract` runs relative to turn completion. */
   extraction?: ExtractionConfig;
   /** Named, typed things to learn from a conversation.
-   *  `Extractor<never>`, not `Extractor<unknown>` — the array holds extractors with
-   *  different `T`s and `T` appears contravariantly (in `onExtracted`'s parameter), so the
-   *  common supertype is the one whose parameter accepts least: `never`. `unknown` would be
-   *  backwards, and `any` merely silences the check while failing the repo's lint rule. */
-  extract?: Extractor<never>[];
+   *  Heterogeneous — each entry may have a different payload type `T`. `Extractor<T>` is
+   *  invariant in `T` (covariant in `schema`, contravariant in `onExtracted`), so no
+   *  concrete `X` makes `Extractor<X>[]` accept every extractor; see `AnyExtractor`. */
+  extract?: AnyExtractor[];
 }

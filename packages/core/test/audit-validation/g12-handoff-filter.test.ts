@@ -66,12 +66,12 @@ function hasToolRoleOrCall(messages: ModelMessage[]): boolean {
 describe('G12: handoff inputFilter', () => {
   it('removeToolHistory strips tool-role and tool-only assistant messages', () => {
     const result = removeToolHistory({
-      messages: seededToolHistory as Array<Record<string, unknown>>,
+      messages: seededToolHistory,
       workingMemory: {},
       sourceAgentId: 'A',
       targetAgentId: 'B',
     });
-    expect(hasToolRoleOrCall(result.messages as ModelMessage[])).toBe(false);
+    expect(hasToolRoleOrCall(result.messages)).toBe(false);
     expect(result.messages).toHaveLength(1);
     expect(result.messages[0]?.role).toBe('user');
   });

@@ -17,15 +17,13 @@ import { tool } from 'ai';
 import { lexicalScore } from '../lexicalScore.js';
 import type { MemoryBlockScope } from '../blocks/types.js';
 import type { ExtractedValueStore } from './store.js';
-import type { ResolvedExtractor } from './types.js';
+import type { AnyResolvedExtractor } from './types.js';
 
 export interface SearchMemoryToolOptions {
   store: ExtractedValueStore;
   /** The extractors this agent declares. The model can search these and nothing else.
-   *  `ResolvedExtractor<never>`, not `<unknown>` — same reasoning as `AgentMemory.extract`:
-   *  a heterogeneous list holding different extractors' `T`s needs the type whose
-   *  contravariant `onExtracted` parameter accepts least, which is `never`. */
-  extractors: ResolvedExtractor<never>[];
+   *  Heterogeneous — see `AnyResolvedExtractor`. */
+  extractors: AnyResolvedExtractor[];
   /** Owner for a scope, or undefined when this session has none.
    *  There is deliberately no placeholder — see `resolveWorkingMemoryOwner`. */
   resolveOwner: (scope: MemoryBlockScope) => string | undefined;
@@ -97,7 +95,7 @@ function buildInputSchema(slugs: [string, ...string[]]) {
 }
 
 /** One line per declared extractor, in its own words — the vocabulary a query is most likely to match. */
-function describeExtractors(extractors: readonly ResolvedExtractor<never>[]): string {
+function describeExtractors(extractors: readonly AnyResolvedExtractor[]): string {
   return extractors.map((e) => `- ${e.slug} (${e.name}): ${e.instructions}`).join('\n');
 }
 
@@ -114,7 +112,7 @@ export function buildSearchMemoryTool(options: SearchMemoryToolOptions) {
 
   // One entry per slug. `validateExtractorList` already rejects a duplicate
   // slug at agent-config time, so this map is never lossy in practice.
-  const bySlug = new Map<string, ResolvedExtractor<never>>();
+  const bySlug = new Map<string, AnyResolvedExtractor>();
   for (const extractor of options.extractors) {
     bySlug.set(extractor.slug, extractor);
   }

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { DEFAULT_BLOCK_CHAR_LIMIT } from '../../blocks/types.js';
 import { scanMemoryWrite } from '../../blocks/safetyScanner.js';
 import { defineExtractor } from '../defineExtractor.js';
-import type { Extractor } from '../types.js';
+import type { AnyExtractor } from '../types.js';
 
 export const FACTS_EXTRACTOR_SLUG = 'facts';
 
@@ -30,7 +30,7 @@ function mergeInstructions(maxFacts: number): string {
 }
 
 /** Built-in cross-session fact memory — LLM merge via `includePrevious`, shaped in `onExtracted`. */
-export function factsExtractor(options: FactsExtractorOptions = {}): Extractor<never> {
+export function factsExtractor(options: FactsExtractorOptions = {}): AnyExtractor {
   const maxFacts = options.maxFacts ?? 25;
   const charLimit = options.charLimit ?? DEFAULT_BLOCK_CHAR_LIMIT;
 
@@ -54,5 +54,5 @@ export function factsExtractor(options: FactsExtractorOptions = {}): Extractor<n
 
       return { facts };
     },
-  }) as unknown as Extractor<never>;
+  });
 }

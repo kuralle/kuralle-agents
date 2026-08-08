@@ -15,7 +15,7 @@ export async function runPlaygroundConversation(opts: {
 	prompts: string[];
 	model: LanguageModel;
 	knowledge?: KnowledgeProviderConfig;
-	tools?: Record<string, import('@kuralle-agents/core').EffectTool>;
+	tools?: Record<string, import('@kuralle-agents/core').AnyTool>;
 }): Promise<{ sessionId: string; transcript: string[] }> {
 	const runtime = createRuntime({
 		agents: opts.agents,

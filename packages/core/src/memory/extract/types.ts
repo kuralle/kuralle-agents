@@ -39,3 +39,21 @@ export interface ResolvedExtractor<T = unknown> extends Omit<Extractor<T>, 'inst
   instructions: string;
   schema: ZodType<T>;
 }
+
+/**
+ * An `Extractor` with its payload type erased.
+ *
+ * `Extractor<T>` is invariant in `T`: `T` occurs covariantly in `schema`
+ * (`ZodType<T>`) and contravariantly in `onExtracted`'s parameter. No concrete `X`
+ * makes `Extractor<X>` a supertype of every `Extractor<T>`, so a heterogeneous array
+ * cannot be typed as `Extractor<X>[]` for any `X` — `Extractor<never>[]` was an
+ * attempt at this and does not compile. TypeScript has no existential types; an
+ * explicit, named erasure is the honest encoding, and confining it to this one alias
+ * keeps every consumer's own types intact.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyExtractor = Extractor<any>;
+
+/** Resolved form of {@link AnyExtractor} — same erasure via structural pick from the alias. */
+export type AnyResolvedExtractor = Omit<AnyExtractor, 'instructions' | 'schema'> &
+  Pick<ResolvedExtractor, 'instructions' | 'schema'>;

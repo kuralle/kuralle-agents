@@ -1,6 +1,6 @@
 import { ZodType } from 'zod';
 import type { MemoryBlockScope } from '../blocks/types.js';
-import type { Extractor, ExtractorRuntimeContext, ResolvedExtractor } from './types.js';
+import type { AnyExtractor, Extractor, ExtractorRuntimeContext, ResolvedExtractor } from './types.js';
 
 /** Slugs reserved by other memory subsystems — an extractor may not claim one. */
 
@@ -46,8 +46,8 @@ export function slugifyExtractorName(name: string): string {
 }
 
 /** Rejects duplicate slugs, naming both extractors that collided. */
-export function validateExtractorList(extractors: readonly Extractor<never>[]): Extractor<never>[] {
-  const bySlug = new Map<string, Extractor<never>[]>();
+export function validateExtractorList(extractors: readonly AnyExtractor[]): AnyExtractor[] {
+  const bySlug = new Map<string, AnyExtractor[]>();
   for (const extractor of extractors) {
     const group = bySlug.get(extractor.slug);
     if (group) {
@@ -65,7 +65,7 @@ export function validateExtractorList(extractors: readonly Extractor<never>[]): 
       );
     }
   }
-  return extractors as Extractor<never>[];
+  return [...extractors];
 }
 
 export interface DefineExtractorConfig<T> {

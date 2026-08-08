@@ -2,7 +2,7 @@ import type { AgentConfig } from '../../types/agentConfig.js';
 import type { Session } from '../../types/session.js';
 import type { AnyTool } from '../../types/effectTool.js';
 import type { ExtractedValueStore } from '../../memory/extract/store.js';
-import type { ExtractorRuntimeContext, ResolvedExtractor } from '../../memory/extract/types.js';
+import type { AnyResolvedExtractor, ExtractorRuntimeContext } from '../../memory/extract/types.js';
 import type { MemoryBlockScope } from '../../memory/blocks/types.js';
 import { resolveExtractor } from '../../memory/extract/defineExtractor.js';
 import { buildSearchMemoryTool } from '../../memory/extract/searchMemoryTool.js';
@@ -64,7 +64,7 @@ export async function wireSearchMemory(
     userId: session.userId,
   };
 
-  const resolved: ResolvedExtractor<never>[] = [];
+  const resolved: AnyResolvedExtractor[] = [];
   for (const extractor of addressable) {
     try {
       resolved.push(await resolveExtractor(extractor, ctx));
