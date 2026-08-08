@@ -1,10 +1,12 @@
 import type { FileSystem } from '@kuralle-agents/core';
+import { fsSkillStore, type SkillStoreLike } from '@kuralle-agents/core';
 import { normalizePath, resolvePath } from '@kuralle-agents/fs';
 import { emptySkillStore } from './empty-skill-store.js';
 import { validateManifestJson } from './manifest.js';
-import type { LoadPluginResult } from './types.js';
+import type { Diagnostic, LoadPluginResult } from './types.js';
 
 const MANIFEST_FILE = 'plugin.json';
+const SKILLS_DIR = 'skills';
 
 function isContained(root: string, target: string): boolean {
   const normalizedRoot = normalizePath(root);
@@ -13,6 +15,64 @@ function isContained(root: string, target: string): boolean {
     normalizedTarget === normalizedRoot ||
     normalizedTarget.startsWith(`${normalizedRoot}/`)
   );
+}
+
+function toPluginRelative(pluginRoot: string, absolutePath: string): string {
+  const normalizedRoot = normalizePath(pluginRoot);
+  const normalizedPath = normalizePath(absolutePath);
+  if (normalizedPath === normalizedRoot) {
+    return '.';
+  }
+  if (normalizedPath.startsWith(`${normalizedRoot}/`)) {
+    return normalizedPath.slice(normalizedRoot.length + 1);
+  }
+  return normalizedPath;
+}
+
+async function loadSkillsComponent(
+  fs: FileSystem,
+  pluginRoot: string,
+  diagnostics: Diagnostic[],
+): Promise<SkillStoreLike> {
+  const skillsPath = resolvePath(pluginRoot, SKILLS_DIR);
+
+  if (!(await fs.exists(skillsPath))) {
+    return emptySkillStore();
+  }
+
+  let stat;
+  try {
+    stat = await fs.stat(skillsPath);
+  } catch {
+    diagnostics.push({
+      section: '6.2',
+      rule: 'component-location-wrong-kind',
+      origin: SKILLS_DIR,
+      message: `${SKILLS_DIR} could not be read.`,
+    });
+    return emptySkillStore();
+  }
+
+  if (stat.type !== 'directory') {
+    diagnostics.push({
+      section: '6.2',
+      rule: 'component-location-wrong-kind',
+      origin: SKILLS_DIR,
+      message: `${SKILLS_DIR} is not a directory.`,
+    });
+    return emptySkillStore();
+  }
+
+  return fsSkillStore(fs, [skillsPath], {
+    onDiagnostic: (d) => {
+      diagnostics.push({
+        section: '7.1',
+        rule: 'skill-invalid',
+        origin: toPluginRelative(pluginRoot, d.skillPath),
+        message: d.message,
+      });
+    },
+  });
 }
 
 export async function loadAgentPlugin(
@@ -86,13 +146,17 @@ export async function loadAgentPlugin(
     return validation;
   }
 
+  const skillDiagnostics: Diagnostic[] = [];
+  const skills = await loadSkillsComponent(fs, normalizedRoot, skillDiagnostics);
+  await skills.list();
+
   return {
     ok: true,
     plugin: {
       manifest: validation.manifest,
-      skills: emptySkillStore(),
+      skills,
       mcpServers: [],
-      diagnostics: validation.diagnostics,
+      diagnostics: [...validation.diagnostics, ...skillDiagnostics],
     },
   };
 }

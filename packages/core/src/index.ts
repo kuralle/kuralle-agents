@@ -420,6 +420,8 @@ export type {
   SkillHandle,
   SkillFileHandle,
   SkillActivation,
+  SkillDiagnostic,
+  FsSkillStoreOptions,
 } from './skills/index.js';
 export {
   buildToolSet,

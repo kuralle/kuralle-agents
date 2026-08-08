@@ -6,6 +6,16 @@ import { sha256 } from './contentHash.js';
 
 const DEFAULT_ROOT = '/.agents/skills';
 
+export interface SkillDiagnostic {
+  folder: string;
+  skillPath: string;
+  message: string;
+}
+
+export interface FsSkillStoreOptions {
+  onDiagnostic?: (diagnostic: SkillDiagnostic) => void;
+}
+
 interface SkillLocation {
   root: string;
   folder: string;
@@ -16,13 +26,14 @@ interface SkillLocation {
 export function fsSkillStore(
   fs: FileSystem,
   orderedRoots: readonly string[] = [DEFAULT_ROOT],
+  opts?: FsSkillStoreOptions,
 ): SkillStoreLike {
   const roots = [...orderedRoots];
   let snapshot = new Map<string, SkillLocation>();
   let refresh: Promise<Map<string, SkillLocation>> | undefined;
 
   const discover = (): Promise<Map<string, SkillLocation>> => {
-    refresh ??= discoverSkills(fs, roots).then((next) => {
+    refresh ??= discoverSkills(fs, roots, opts?.onDiagnostic).then((next) => {
       snapshot = next;
       return next;
     }).finally(() => {
@@ -91,6 +102,7 @@ export function fsSkillStore(
 async function discoverSkills(
   fs: FileSystem,
   roots: readonly string[],
+  onDiagnostic?: (diagnostic: SkillDiagnostic) => void,
 ): Promise<Map<string, SkillLocation>> {
   const skills = new Map<string, SkillLocation>();
 
@@ -133,7 +145,11 @@ async function discoverSkills(
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[skills] Skipping invalid skill "${entry}": ${message}`);
+        if (onDiagnostic) {
+          onDiagnostic({ folder: entry, skillPath, message });
+        } else {
+          console.warn(`[skills] Skipping invalid skill "${entry}": ${message}`);
+        }
       }
     }
   }

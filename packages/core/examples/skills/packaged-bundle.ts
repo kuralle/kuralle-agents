@@ -43,7 +43,12 @@ const skillMd = [
   'description: Per-tier refund limits. Use when asked how much a customer can be refunded.',
   '---',
   '',
-  'Read `limits.json` for the current tier limits before answering.',
+  // Points at the tool, not at the file: `limits.json` is the *tool\'s* data source, read
+  // through `ctx.getSkill` inside `check_limit`. Telling the model to read it directly would
+  // let it answer from `read_skill_resource` alone and never exercise `ctx.getSkill` — which
+  // is exactly what this example exists to prove.
+  'Call `check_limit` for the tier in question and report the figure it returns.',
+  'Do not quote a limit from any other source.',
 ].join('\n');
 
 const packaged: PackagedSkill = brandPackagedSkill({

@@ -38,7 +38,11 @@ export {
 } from './resolvedSkillsState.js';
 export { InlineSkillStore } from './inlineSkillStore.js';
 export { CompositeSkillStore } from './compositeSkillStore.js';
-export { fsSkillStore } from './fsSkillStore.js';
+export {
+  fsSkillStore,
+  type SkillDiagnostic,
+  type FsSkillStoreOptions,
+} from './fsSkillStore.js';
 export { packagedSkillStore } from './packagedSkillStore.js';
 export {
   createSkillHandle,
