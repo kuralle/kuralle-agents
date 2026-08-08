@@ -1,0 +1,1 @@
+{"ok":false,"rejection":{"section":"5.5","rule":"name-charset"},"diagnostics":[{"section":"5.5","rule":"name-charset","origin":"plugin.json"}]}

@@ -1,0 +1,1 @@
+{"ok":false,"rejection":{"section":"5.2","rule":"unsupported-schema-version"},"diagnostics":[{"section":"5.2","rule":"unsupported-schema-version","origin":"plugin.json"}]}

@@ -1,0 +1,1 @@
+{"ok":true,"mcpServers":["valid-local"],"diagnostics":[{"section":"9.2","rule":"env-reserved-name","origin":"mcp.json"}]}

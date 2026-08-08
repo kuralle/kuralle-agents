@@ -1,0 +1,1 @@
+{"ok":false,"rejection":{"section":"5.3","rule":"required-field-missing"},"diagnostics":[{"section":"5.3","rule":"required-field-missing","origin":"plugin.json"}]}

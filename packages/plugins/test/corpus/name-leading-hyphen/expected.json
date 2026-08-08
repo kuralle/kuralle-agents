@@ -1,0 +1,1 @@
+{"ok":false,"rejection":{"section":"5.5","rule":"name-boundary"},"diagnostics":[{"section":"5.5","rule":"name-boundary","origin":"plugin.json"}]}
