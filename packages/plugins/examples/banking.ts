@@ -18,7 +18,6 @@ import type { LanguageModel } from 'ai';
 import {
   createRuntime,
   defineAgent,
-  readOnlyPolicy,
   type Policy,
   type SkillStoreLike,
   type TurnHandle,
@@ -59,11 +58,34 @@ function resolveLiveModel(): LanguageModel {
   throw new Error('No provider API key found — set XAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or OPENAI_API_KEY');
 }
 
+/**
+ * One predicate, used by BOTH the ask policy and the deny policy.
+ *
+ * These were previously matched differently — the ask policy accepted any
+ * `*__transfer_funds` while the deny policy matched only the exact literal
+ * `meridian__transfer_funds`. That asymmetry means a differently-qualified transfer
+ * tool would be *asked about* but not *denied*, i.e. the permissive path was the
+ * broader one. Deriving both from this function is what stops them drifting again.
+ */
+function isTransferTool(toolName: string): boolean {
+  return toolName === TRANSFER_TOOL || toolName.endsWith('__transfer_funds');
+}
+
 function transferAskPolicy(): Policy {
   return {
     decide: (req) =>
-      req.toolName === TRANSFER_TOOL || req.toolName.endsWith('__transfer_funds')
+      isTransferTool(req.toolName)
         ? { kind: 'ask', title: 'Approve Meridian Bank transfer?' }
+        : { kind: 'allow' },
+  };
+}
+
+/** The read-only counterpart, matching exactly the same tools the ask policy gates. */
+function transferDenyPolicy(): Policy {
+  return {
+    decide: (req) =>
+      isTransferTool(req.toolName)
+        ? { kind: 'deny', reason: `${req.toolName} is not available to a read-only agent.` }
         : { kind: 'allow' },
   };
 }
@@ -134,7 +156,7 @@ async function runReadOnlyDenial(
       'You are a Meridian Bank assistant. When asked to transfer funds, call transfer_funds immediately with the ids and amount given.',
     tools: remoteTools,
     skills: pluginSkills,
-    policy: readOnlyPolicy([TRANSFER_TOOL]),
+    policy: transferDenyPolicy(),
   });
   const runtime = createRuntime({
     agents: [agent],
@@ -151,14 +173,28 @@ async function runReadOnlyDenial(
     }),
   );
 
-  if (server.calls().length !== callsBefore) {
+  // What must not reach the server is a *transfer*. The read-only agent still holds the
+  // read tools, and Policy allows them — so the model legitimately calls find_payee or
+  // get_balance first on some runs to resolve the payee before attempting the transfer.
+  //
+  // Asserting on the total call count instead of the transfer count treated that correct,
+  // allowed behaviour as a policy leak. It failed roughly one run in fifteen and looked
+  // exactly like an intermittent REQ-10 breach, which is the most alarming thing it could
+  // have resembled and cost a long hunt. Deny is deterministic — see
+  // packages/mcp/test/policy-parallel-deny.test.ts, which pins it under parallel dispatch.
+  const leakedTransfers = server
+    .calls()
+    .slice(callsBefore)
+    .filter((call) => call.tool.endsWith('transfer_funds'));
+
+  if (leakedTransfers.length > 0) {
     fail(
-      `assertion 4: read-only policy — server.calls() must stay empty (got ${server.calls().length - callsBefore} new call(s): ${JSON.stringify(server.calls().slice(callsBefore))})`,
+      `assertion 4: read-only policy — no transfer may reach the server (got ${leakedTransfers.length}: ${JSON.stringify(leakedTransfers)}; model tool calls this turn: ${trace.toolCalls.join(' → ') || '(none)'})`,
       failures,
     );
   }
 
-  const attemptedTransfer = trace.toolCalls.includes(TRANSFER_TOOL);
+  const attemptedTransfer = trace.toolCalls.some(isTransferTool);
   if (!attemptedTransfer) {
     fail('assertion 4: model never attempted meridian__transfer_funds under read-only policy', failures);
   }
