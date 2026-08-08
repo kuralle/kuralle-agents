@@ -1,10 +1,8 @@
 import type { Session } from '@kuralle-agents/core';
 import type { Diagnostic } from '@kuralle-agents/plugins';
+import type { McpConnectionStore, PersistedServer } from './connection-store.js';
 
-/** Reserved for task 10 (Durable Object hibernation persistence). */
-export interface McpConnectionStore {
-  // Implemented by @kuralle-agents/mcp task 10.
-}
+export type { McpConnectionStore, PersistedServer };
 
 export interface McpOptions {
   allowedHosts?: readonly string[] | ((server: string, ctx: { session: Session }) => readonly string[]);

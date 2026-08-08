@@ -1,4 +1,10 @@
 {
+  "name": "kuralle-mcp-tests",
+  "main": "vitest/mcp-do-worker.ts",
   "compatibility_date": "2026-03-10",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "MCP_DO", "class_name": "McpHibernationDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["McpHibernationDO"] }]
 }

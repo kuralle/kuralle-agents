@@ -21,8 +21,10 @@ import { resolveAllowedHosts } from './ssrf.js';
 import { mcpToolName } from './tool-name.js';
 import type {
   ConnectedMcpServer,
+  McpConnectionStore,
   McpOptions,
   McpToolsCapabilities,
+  PersistedServer,
 } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -83,9 +85,94 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isRemoteConfig(
+  config: McpServerConfig,
+): config is Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }> {
+  return config.type === 'streamable-http' || config.type === 'sse';
+}
+
+function toPersistedServer(
+  config: Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }>,
+): PersistedServer {
+  return {
+    id: config.name,
+    name: config.name,
+    type: config.type,
+    url: config.url,
+  };
+}
+
+async function persistRemoteServer(
+  store: McpConnectionStore,
+  config: Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }>,
+): Promise<void> {
+  await store.save(toPersistedServer(config));
+}
+
 interface LiveServer {
   connection: ConnectedMcpServer;
   disabledForTurn: boolean;
+}
+
+/**
+ * Reconnect live MCP servers from a persisted store seed. Uses the caller-supplied
+ * configs for auth, headers and fetch — only the serialisable subset was stored.
+ * Per-server failure isolation applies; one dead server emits a diagnostic and does
+ * not take its siblings down.
+ */
+export async function rebuildMcpToolsFromStorage(
+  servers: readonly McpServerConfig[],
+  opts: McpOptions & { storage: McpConnectionStore },
+  capabilities: McpToolsCapabilities,
+  connectStdio?: (
+    config: Extract<McpServerConfig, { type: 'stdio' }>,
+  ) => Promise<
+    | { server: ConnectedMcpServer }
+    | { diagnostic: Diagnostic }
+  >,
+): Promise<Record<string, AnyTool>> {
+  // No fallback to `servers` when the store is empty. A wake with nothing persisted
+  // rebuilds nothing, and the caller uses `mcpTools` for a cold start — the two are
+  // different situations and collapsing them costs the only property this function
+  // has worth testing: with a fallback, a completely broken store still yields a
+  // working tool map, so nothing here would ever be exercised.
+  const persisted = await opts.storage.list();
+  const configByName = new Map(servers.map((config) => [config.name, config]));
+  const toConnect: McpServerConfig[] = [];
+
+  for (const row of persisted) {
+    const config = configByName.get(row.name);
+    if (!config) {
+      emitDiagnostic(opts, {
+        section: '7.2.2',
+        rule: 'connection-failure',
+        origin: row.name,
+        message: `Persisted MCP server "${row.name}" has no matching config on wake; supply the server definition again.`,
+      });
+      continue;
+    }
+    if (!isRemoteConfig(config)) {
+      emitDiagnostic(opts, {
+        section: '7.2.2',
+        rule: 'unsupported-transport',
+        origin: row.name,
+        message: `Persisted MCP server "${row.name}" is remote but the supplied config is not a remote transport.`,
+      });
+      continue;
+    }
+    if (config.type !== row.type || config.url !== row.url) {
+      emitDiagnostic(opts, {
+        section: '7.2.2',
+        rule: 'connection-failure',
+        origin: row.name,
+        message: `Persisted MCP server "${row.name}" does not match the supplied config (type or url differ).`,
+      });
+      continue;
+    }
+    toConnect.push(config);
+  }
+
+  return mcpToolsImpl(toConnect, opts, capabilities, connectStdio);
 }
 
 export async function mcpToolsImpl(
@@ -136,6 +223,10 @@ export async function mcpToolsImpl(
     if ('diagnostic' in connected) {
       emitDiagnostic(opts, connected.diagnostic);
       continue;
+    }
+
+    if (opts?.storage && isRemoteConfig(config)) {
+      await persistRemoteServer(opts.storage, config);
     }
 
     liveByServer.set(config.name, {

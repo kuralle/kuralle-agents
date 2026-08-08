@@ -8,7 +8,12 @@
 // platform baseline rather than adding a requirement — but it is a real edge, so it is stated
 // here rather than left for a deployment to discover.
 
-export { mcpTools } from './mcp-tools.js';
+export { mcpTools, rebuildMcpToolsFromStorage } from './mcp-tools.js';
+export {
+  createMemoryMcpConnectionStore,
+  createSqliteMcpConnectionStore,
+} from './connection-store.js';
+export type { McpSqlStorage } from './connection-store.js';
 export { composeMcpSystemPrompt } from './compose-prompt.js';
 export {
   estimateTokens,
@@ -18,6 +23,7 @@ export {
 export type {
   McpOptions,
   McpConnectionStore,
+  PersistedServer,
   Diagnostic,
   McpServerConfig,
 } from './types.js';
