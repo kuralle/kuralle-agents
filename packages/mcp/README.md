@@ -77,6 +77,19 @@ interface McpOptions {
 
 `tools` is a discovery filter and accepts either `allow` or `block`, never both. `auth` runs at execute time, never at parse time, and its result never reaches persisted run state.
 
+## Errors
+
+MCP separates two failure kinds, and so does this client.
+
+- A **protocol error** (unknown tool, malformed request) rejects the call.
+- A **tool execution error** — a result with `isError: true` — also rejects, carrying the
+  server's own message, prefixed `MCP tool error:`.
+
+The second case matters more than it looks. Those messages are written for the model to
+correct against: *"Invalid departure date: must be in the future."* Returning that text as
+an ordinary value would tell the model the call succeeded and record a success in the
+durable journal, so a replay would skip a call that never worked.
+
 ## Security posture
 
 - **`Policy` is the only approval gate.** Every MCP tool call passes through `Policy.decide`. A `deny` prevents execution and the server receives nothing.

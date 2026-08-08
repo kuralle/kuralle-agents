@@ -38,6 +38,7 @@ export function bankingTools(): ExampleTool[] {
   return [
     {
       name: 'get_balance',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       description:
         'Return the current balance for a Meridian Bank account. Use account ids like chk-001 or sav-001.',
       inputSchema: z.object({
@@ -61,6 +62,7 @@ export function bankingTools(): ExampleTool[] {
     },
     {
       name: 'list_transactions',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       description:
         'List recent ledger entries for a Meridian Bank account. Returns newest entries first.',
       inputSchema: z.object({
@@ -83,6 +85,7 @@ export function bankingTools(): ExampleTool[] {
     },
     {
       name: 'find_payee',
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       description:
         'Search saved payees at Meridian Bank by partial name. Returns matching payee ids for transfers.',
       inputSchema: z.object({
@@ -99,6 +102,7 @@ export function bankingTools(): ExampleTool[] {
     },
     {
       name: 'transfer_funds',
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
       description:
         'Move money between Meridian Bank accounts or to a saved payee. Destructive — debits the source immediately.',
       inputSchema: z.object({
@@ -133,6 +137,7 @@ export function bankingTools(): ExampleTool[] {
     },
     {
       name: 'cancel_transfer',
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
       description:
         'Cancel a pending Meridian Bank transfer before it settles. Only pending transfers can be cancelled.',
       inputSchema: z.object({

@@ -55,11 +55,33 @@ function createGuardedFetch(
   };
 }
 
+function textOf(
+  content: Array<{ type: string; text?: string; [key: string]: unknown }> | undefined,
+): string {
+  return (content ?? [])
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text as string)
+    .join('\n')
+    .trim();
+}
+
 function extractToolContent(result: {
   content?: Array<{ type: string; text?: string; [key: string]: unknown }>;
   structuredContent?: unknown;
   isError?: boolean;
 }): unknown {
+  // `isError: true` is a tool *execution* error — a failed call whose text the model is
+  // meant to read and correct against ("date must be in the future"). Returning that text
+  // as an ordinary value told the model the call succeeded, and recorded a success in the
+  // durable journal, so a replay would skip a call that never worked. Throw instead, and
+  // carry the server's message: the spec asks clients to surface these precisely so the
+  // model can self-correct rather than repeat the same call.
+  if (result.isError) {
+    const message = textOf(result.content);
+    throw new Error(
+      message ? `MCP tool error: ${message}` : 'MCP tool returned an error result',
+    );
+  }
   if (result.structuredContent !== undefined) {
     return result.structuredContent;
   }
@@ -74,9 +96,6 @@ function extractToolContent(result: {
       return texts.join('\n');
     }
     return result.content;
-  }
-  if (result.isError) {
-    throw new Error('MCP tool returned an error result');
   }
   return null;
 }

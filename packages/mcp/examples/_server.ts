@@ -10,6 +10,23 @@ export interface ExampleTool {
   name: string;
   description: string;
   inputSchema?: z.ZodTypeAny;
+  /**
+   * MCP tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
+   * `openWorldHint`). The specification asks servers to provide them, so this example
+   * server does.
+   *
+   * They are advisory metadata for display, never an authorization input. The spec is
+   * explicit that a client MUST treat annotations as untrusted, and a malicious server can
+   * mark `transfer_funds` read-only. Approval in Kuralle is `Policy` and only `Policy` —
+   * see `test/annotations-untrusted.test.ts`, which proves a destructive tool self-declared
+   * as read-only is still denied.
+   */
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
   handler: (args: Record<string, unknown>) => unknown | Promise<unknown>;
 }
 
@@ -108,6 +125,7 @@ export async function startExampleMcpServer(
         {
           description: tool.description,
           inputSchema: tool.inputSchema ?? z.object({}),
+          ...(tool.annotations ? { annotations: tool.annotations } : {}),
         },
         async (args) => {
           if (options.record) {
