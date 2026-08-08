@@ -2,7 +2,8 @@ import { describe, expect, it } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadPlugin, type Diagnostic } from '../src/index.js';
+import { loadAgentPlugin, type Diagnostic } from '../src/index.js';
+import { loadFixtureIntoMemoryFs } from './fixture-fs.js';
 
 interface ExpectedCase {
   ok: boolean;
@@ -48,24 +49,35 @@ describe('Agent Plugins conformance corpus', () => {
         readFileSync(join(caseDir, 'expected.json'), 'utf8'),
       ) as ExpectedCase;
       const pluginRoot = join(caseDir, 'plugin');
+      const { fs, root } = await loadFixtureIntoMemoryFs(pluginRoot);
 
-      const result = await loadPlugin(pluginRoot);
+      const result = await loadAgentPlugin(fs, root);
 
       expect(result.ok).toBe(expected.ok);
 
-      if (expected.rejection !== undefined) {
-        expect(result.rejection).toEqual(expected.rejection);
+      if (!result.ok) {
+        expect(expected.rejection).toBeDefined();
+        expect(result.rejection.section).toBe(expected.rejection!.section);
+        expect(result.rejection.rule).toBe(expected.rejection!.rule);
+        compareDiagnostics([...result.diagnostics], expected.diagnostics);
+        return;
       }
 
       if (expected.skills !== undefined) {
-        compareExactSet(result.skills, expected.skills);
+        const skillNames = (await result.plugin.skills.list()).map(
+          (skill) => skill.name,
+        );
+        compareExactSet(skillNames, expected.skills);
       }
 
       if (expected.mcpServers !== undefined) {
-        compareExactSet(result.mcpServers, expected.mcpServers);
+        const serverNames = result.plugin.mcpServers.map(
+          (server) => server.name,
+        );
+        compareExactSet(serverNames, expected.mcpServers);
       }
 
-      compareDiagnostics(result.diagnostics, expected.diagnostics);
+      compareDiagnostics([...result.plugin.diagnostics], expected.diagnostics);
     });
   }
 });

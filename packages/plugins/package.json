@@ -18,6 +18,10 @@
       "default": "./dist/index.js"
     }
   },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/fs": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^22.5.0",
     "bun-types": "^1.3.0",
