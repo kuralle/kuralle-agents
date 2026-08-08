@@ -1,3 +1,6 @@
+// Reimplemented from `vercel/eve`, packages/eve/src/runtime/framework-tools/connection-search-dynamic.ts (Apache-2.0).
+// Reimplemented from the described design, not copied; changes were made.
+
 /**
  * MCP tool schema disclosure budget (REQ-16).
  *

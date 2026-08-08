@@ -1,0 +1,17 @@
+Project: agentplugins/agent-plugins-spec (specification prose)
+SPDX-License-Identifier: CC-BY-4.0
+Copyright (c) Agent Plugins Specification Contributors
+
+Creative Commons Attribution 4.0 International (CC-BY-4.0)
+
+The full legal text of this license is not vendored verbatim in this file.
+It is incorporated by reference from the official deed:
+
+  https://creativecommons.org/licenses/by/4.0/legalcode
+
+License name: Creative Commons Attribution 4.0 International
+License version: 4.0
+
+Normative specification prose from agentplugins/agent-plugins-spec is used
+under CC-BY-4.0. Code and JSON schemas from the same project are covered
+separately under Apache-2.0 (see licenses/apache-2.0-agent-plugins-spec.txt).

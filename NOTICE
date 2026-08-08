@@ -1,0 +1,16 @@
+Kuralle Agents
+Copyright 2026 Kuralle Contributors
+
+This product includes software whose designs were reimplemented from the
+following Apache-2.0-licensed projects. The implementations are original work;
+changes were made and no upstream source was copied verbatim.
+
+  mastra-ai/mastra — MCP client namespacing, per-server failure isolation,
+    allowedHosts policy, stdio environment validation, and security warnings.
+
+  vercel/eve — deferred MCP tool-schema disclosure above a token budget.
+
+  agentplugins/agent-plugins-spec — plugin and MCP JSON schemas; normative
+    specification prose is attributed under CC-BY-4.0 separately.
+
+See THIRD_PARTY_LICENSES.md and licenses/ for full licence texts.

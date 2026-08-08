@@ -1,3 +1,6 @@
+// Reimplemented from `mastra`, packages/mcp/src/client/configuration.ts (Apache-2.0).
+// Reimplemented from the described design, not copied; changes were made.
+
 /** Double-underscore join: server names may contain a single underscore. */
 export function mcpToolName(serverName: string, toolName: string): string {
   return `${serverName}__${toolName}`;

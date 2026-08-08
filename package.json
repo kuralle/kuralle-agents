@@ -21,7 +21,7 @@
     "build:packages": "bash scripts/build-packages.sh",
     "build:apps": "bun run --filter './apps/*/*' build",
     "typecheck": "bash scripts/typecheck-all.sh",
-    "typecheck:all": "bash scripts/typecheck-tsconfigs.sh && bash scripts/typecheck-playground.sh && bash scripts/check-no-raw-tool-execute.sh && bun run lint",
+    "typecheck:all": "bash scripts/typecheck-tsconfigs.sh && bash scripts/typecheck-playground.sh && bash scripts/check-no-raw-tool-execute.sh && bash scripts/check-provenance.sh && bun run lint",
     "knip": "knip",
     "knip:fix": "knip --fix --allow-remove-files",
     "typecheck:playground": "bash scripts/typecheck-playground.sh",

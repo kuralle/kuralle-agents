@@ -1,3 +1,6 @@
+// Reimplemented from `mastra`, packages/mcp/src/client/configuration.ts (Apache-2.0).
+// Reimplemented from the described design, not copied; changes were made.
+
 import {
   defineTool,
   type AnyTool,

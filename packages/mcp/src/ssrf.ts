@@ -1,3 +1,6 @@
+// Reimplemented from `mastra`, packages/mcp/src/client/client.ts (Apache-2.0).
+// Reimplemented from the described design, not copied; changes were made.
+
 import type { Diagnostic } from '@kuralle-agents/plugins';
 import type { Session } from '@kuralle-agents/core';
 import type { McpOptions } from './types.js';
