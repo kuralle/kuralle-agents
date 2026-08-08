@@ -1,7 +1,7 @@
 ---
 type: worker
 probe: command -v cursor-agent
-command: cursor-agent -p --force --trust --model composer-2.5 --sandbox disabled --approve-mcps --workspace {repo_path} --output-format text < {prompt_file}
+command: cursor-agent -p --force --trust --model composer-2.5-fast --sandbox disabled --approve-mcps --workspace {repo_path} --output-format text < {prompt_file}
 ---
 
 # cursor
@@ -9,12 +9,16 @@ command: cursor-agent -p --force --trust --model composer-2.5 --sandbox disabled
 Alternative implementation worker. stdin IS the prompt — do not add
 `< /dev/null`.
 
-**Model: `composer-2.5`, locked.** Never dispatch Cursor on any other model, and
-never use `--model auto`. Pinned here so every dispatch uses the same one and it
-does not drift with whatever was last selected interactively. Change it in this
+**Model: `composer-2.5-fast`, locked.** Never dispatch Cursor on any other model,
+and never use `--model auto`. Pinned here so every dispatch uses the same one and
+it does not drift with whatever was last selected interactively. Change it in this
 file, not in a brief — a model chosen per dispatch is a model nobody can audit
 afterwards, and `auto` re-picks per turn, so a weak result cannot be told apart
 from a weak draw.
+
+`cursor-agent models` does **not** list the `-fast` variant of Composer, but it is
+accepted and dispatches on it succeed. Do not "correct" this line back to
+`composer-2.5` on the strength of that listing — verify by dispatching.
 
 **A different model is a routing decision, not a Cursor flag.** When a task wants
 another model, dispatch the worker built for it rather than re-pointing Cursor:
