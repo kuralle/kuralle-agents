@@ -37,6 +37,24 @@ function emitDiagnostic(
   opts?.onDiagnostic?.(diagnostic);
 }
 
+function assertToolsFilterExclusive(filter: McpOptions['tools'] | undefined): void {
+  if (!filter) {
+    return;
+  }
+  const allow = 'allow' in filter ? filter.allow : undefined;
+  const block = 'block' in filter ? filter.block : undefined;
+  if (allow !== undefined && block !== undefined) {
+    throw new Error(
+      `MCP tools filter: set either "allow" or "block", not both (got allow=${JSON.stringify(allow)} and block=${JSON.stringify(block)})`,
+    );
+  }
+}
+
+/**
+ * Discovery-time filter: which remote tools are projected into the agent tool map.
+ * Call-time authorization is Policy.decide in the runtime executor — a filtered-out
+ * tool is invisible to the model; a Policy denial is visible and refused with a reason.
+ */
 function toolAllowed(
   localToolName: string,
   filter: McpOptions['tools'],
@@ -73,6 +91,7 @@ export async function mcpToolsImpl(
     | { diagnostic: Diagnostic }
   >,
 ): Promise<Record<string, AnyTool>> {
+  assertToolsFilterExclusive(opts?.tools);
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const sessionForConnect: Session = {
     id: 'mcp-connect',
