@@ -1,0 +1,162 @@
+---
+title: Agent Plugins
+description: Load third-party Agent Plugins — plugin.json, skills/, and optional mcp.json — with partial failure isolation.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+An **Agent Plugin** is a directory with a fixed layout: a `plugin.json` manifest at the root, a
+`skills/` tree of [agentskills.io](https://agentskills.io) folders, and an optional `mcp.json` that
+declares MCP servers to connect. Kuralle loads the bundle with `loadAgentPlugin(fs, root)` and returns
+a **discriminated result** — never throws — so callers can wire skills and MCP independently of
+whatever failed inside the bundle.
+
+```bash
+npm install @kuralle-agents/plugins @kuralle-agents/fs
+```
+
+## Layout
+
+```
+my-plugin/
+├── plugin.json          # required manifest
+├── skills/              # optional — SKILL.md folders
+│   └── returns-policy/
+│       └── SKILL.md
+└── mcp.json             # optional — MCP server declarations
+```
+
+| File | Role |
+|------|------|
+| `plugin.json` | Identity and metadata (`name`, `$schema`, optional `version`, `license`, …). Validated against the [Agent Plugins schema](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json). |
+| `skills/` | Top-level skill directories only — nested `SKILL.md` files inside a skill folder are bundled resources, not separate skills. Wired into `AgentConfig.skills` via the returned `SkillStoreLike`. |
+| `mcp.json` | Declares `mcpServers` (stdio, `streamable-http`, or `sse`). Parsed only when the file exists; a missing file is **not** an error. See the [MCP guide](/guides/mcp/). |
+
+## Quick start
+
+Mirror a plugin directory onto any `FileSystem` (disk, in-memory, Durable-Object SQLite) and load it:
+
+```typescript
+import { loadAgentPlugin } from '@kuralle-agents/plugins';
+import { InMemoryFs } from '@kuralle-agents/fs';
+
+const fs = new InMemoryFs({
+  '/plugins/acme/plugin.json': JSON.stringify({
+    $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
+    name: 'acme',
+    version: '1.0.0',
+  }),
+  '/plugins/acme/skills/returns-policy/SKILL.md':
+    '---\nname: returns-policy\ndescription: Handle returns.\n---\n\n# Returns\n30-day window.',
+});
+
+const result = await loadAgentPlugin(fs, '/plugins/acme');
+
+if (!result.ok) {
+  console.error(result.rejection.message);
+  return;
+}
+
+const { manifest, skills, mcpServers, diagnostics } = result.plugin;
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  workspace: fs,
+  skills, // SkillStoreLike — progressive disclosure handled by the runtime
+  // mcpServers → pass to mcpTools() — see /guides/mcp
+});
+```
+
+`loadAgentPlugin` always resolves paths under `root`. Manifest or MCP paths that escape the plugin
+root are rejected.
+
+## Four failure widths
+
+The loader applies **different blast radii** depending on what broke. That is why loading returns
+`{ ok: true, plugin } | { ok: false, rejection, diagnostics }` instead of throwing.
+
+| What failed | Outcome | Skills | MCP servers |
+|-------------|---------|--------|-------------|
+| Bad **`plugin.json`** (missing, unreadable, schema violation) | **Reject the whole plugin** (`ok: false`) | not loaded | not loaded |
+| Bad **`mcp.json`** (malformed, schema violation, unsafe config) | **Disable MCP for this plugin** — skills still load | loaded | `[]` + diagnostics |
+| Bad **skill folder** (invalid frontmatter, name mismatch) | **Skip that skill** — rest of `skills/` still loads | partial | unchanged |
+| Bad **server entry** in `mcp.json` (unknown transport, SSRF, secret in env) | **Skip that server** — siblings still load | unchanged | partial + diagnostics |
+
+Diagnostics carry `{ section, rule, origin, message }` so you can log or surface them without
+guessing which layer failed. A missing `mcp.json` or `skills/` directory produces **no**
+diagnostics — those components are optional by spec (§6.2).
+
+<Aside type="note" title="Missing components are not errors">
+A plugin that ships skills but no `mcp.json` — like the vendored
+[`remotion-dev/codex-plugin`](https://github.com/remotion-dev/codex-plugin) fixture in this repo —
+loads with `mcpServers: []` and `diagnostics: []`. Warning about a missing MCP file would be
+non-conformant.
+</Aside>
+
+## Worked example — partial skill failure
+
+Given a plugin with one valid skill and one malformed `SKILL.md`:
+
+```
+plugin/
+├── plugin.json
+└── skills/
+    ├── good-skill/SKILL.md      # valid
+    └── bad-skill/SKILL.md       # invalid frontmatter
+```
+
+`loadAgentPlugin` returns `ok: true` with one skill (`good-skill`) and a diagnostic on
+`skills/bad-skill/SKILL.md` (`section: "7.1"`, `rule: "skill-invalid"`). The agent still gets the
+good skill; the bad folder is skipped.
+
+Given a malformed `mcp.json` instead, skills still load, `mcpServers` is `[]`, and a diagnostic
+marks `mcp.json` invalid — MCP is disabled for that plugin, not the whole bundle.
+
+## `LoadPluginResult`
+
+```typescript
+type LoadPluginResult =
+  | { ok: true; plugin: LoadedPlugin }
+  | { ok: false; rejection: Rejection; diagnostics: readonly Diagnostic[] };
+
+interface LoadedPlugin {
+  manifest: PluginManifest;
+  skills: SkillStoreLike;
+  mcpServers: readonly McpServerConfig[];
+  diagnostics: readonly Diagnostic[];
+}
+```
+
+On success, check `diagnostics` even when `ok === true` — partial failures surface there. On
+rejection, `rejection` names the manifest rule that failed; `diagnostics` repeats the same facts for
+uniform logging.
+
+## MCP and platform limits
+
+Plugin MCP entries may declare `stdio` servers (`command`, `args`, `env`, `cwd`). **`stdio` cannot
+run on Cloudflare Workers** — there is no subprocess in workerd. Remote transports
+(`streamable-http`, `sse`) work on Workers and Durable Objects; `stdio` is available on Node and Bun
+via the `@kuralle-agents/mcp/node` subpath. That is a platform limit, not a missing install.
+
+See the [MCP guide](/guides/mcp/) for connecting servers, SSRF guards, disclosure budgets, and
+wiring tools into an agent.
+
+## Live example
+
+The repo vendors a verbatim copy of `remotion-dev/codex-plugin` and proves offline loading:
+
+```bash
+bun packages/plugins/examples/third-party-plugin.ts
+```
+
+It asserts manifest metadata, exactly twelve skills, non-empty descriptions, a substantive
+`loadBody('remotion-best-practices')`, zero MCP servers, and zero diagnostics — the sharp case for
+a skills-only published plugin.
+
+## Related
+
+- [Skills](/guides/skills/) — progressive disclosure for the `skills/` component
+- [MCP](/guides/mcp/) — connecting and governing plugin-declared MCP servers
+- [Workspace](/guides/workspace/) — mount plugins on a workspace filesystem
+- [Tool Policy](/guides/policy/) — approval gate for MCP tool calls (not plugin loading)

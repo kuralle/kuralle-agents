@@ -82,6 +82,11 @@ spec — the same format Claude, Mastra, and flue use). `fsSkillStore` discovers
 `AgentConfig.skills` with zero extra wiring — progressive disclosure (metadata in the prompt, body
 loaded on demand) is handled for you. See the [Skills guide](/guides/skills/) for the disclosure model.
 
+Third-party [Agent Plugins](/guides/plugins/) ship the same `skills/` layout inside a fixed bundle
+(`plugin.json` + optional [MCP](/guides/mcp/) servers). Load with `loadAgentPlugin` instead of
+pointing `fsSkillStore` at individual paths when you want manifest validation and partial-failure
+isolation across skills and MCP.
+
 ```typescript
 import { defineAgent } from '@kuralle-agents/core';
 import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';

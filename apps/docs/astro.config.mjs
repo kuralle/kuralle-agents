@@ -133,6 +133,8 @@ const sidebar = [
       { label: 'Memory', link: '/guides/memory' },
       { label: 'Knowledge & Retrieval', link: '/guides/knowledge' },
       { label: 'Skills', link: '/guides/skills' },
+      { label: 'Agent Plugins', link: '/guides/plugins' },
+      { label: 'MCP', link: '/guides/mcp' },
       { label: 'Workspace (Filesystem & Shell)', link: '/guides/workspace' },
       { label: 'Multimodal Input', link: '/guides/multimodal' },
     ],

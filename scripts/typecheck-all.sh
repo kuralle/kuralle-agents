@@ -38,6 +38,10 @@ echo "== build examples =="
 run "build/examples" "packages/build/tsconfig.examples.json"
 
 echo ""
+echo "== plugins examples =="
+run "plugins/examples" "packages/plugins/tsconfig.examples.json"
+
+echo ""
 echo "== example apps =="
 run "marketing-team" "apps/examples/marketing-team/tsconfig.json"
 

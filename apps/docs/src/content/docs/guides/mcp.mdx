@@ -1,0 +1,192 @@
+---
+title: MCP
+description: Connect Model Context Protocol servers from Agent Plugins — remote transports on Workers, stdio on Node, Policy-gated execution, and schema disclosure budgets.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**MCP** (Model Context Protocol) lets an agent call tools hosted on external servers. Agent Plugins
+declare servers in `mcp.json`; Kuralle connects them with `mcpTools(servers, opts)` and projects
+remote tools into the agent's tool map as durable `defineTool` entries qualified as
+`serverName__toolName`.
+
+```bash
+npm install @kuralle-agents/mcp @kuralle-agents/plugins
+```
+
+<Aside type="note" title="stdio is not on the root export">
+The workerd-clean root export (`@kuralle-agents/mcp`) supports **`streamable-http`** and **`sse`**
+only. **`stdio`** lives on `@kuralle-agents/mcp/node`, which registers a subprocess connector on
+import. Import that subpath on Node or Bun when you need local stdio servers.
+</Aside>
+
+## Quick start
+
+After loading a plugin (see [Agent Plugins](/guides/plugins/)), pass its `mcpServers` to
+`mcpTools`:
+
+```typescript
+import { loadAgentPlugin } from '@kuralle-agents/plugins';
+import { mcpTools } from '@kuralle-agents/mcp';
+
+const result = await loadAgentPlugin(fs, '/plugins/acme');
+if (!result.ok) throw new Error(result.rejection.message);
+
+const remoteTools = await mcpTools(result.plugin.mcpServers, {
+  allowedHosts: ['127.0.0.1', 'api.example.com'],
+  onDiagnostic: (d) => console.warn(d.message),
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  tools: { ...localTools, ...remoteTools },
+});
+```
+
+Each MCP tool executes through the runtime effect log (`replay: true`). Connection failures for one
+server emit a diagnostic and skip that server — siblings still connect.
+
+## Runtime matrix
+
+| Transport | Cloudflare Workers / DO | Node / Bun (root `@kuralle-agents/mcp`) | Node / Bun (`@kuralle-agents/mcp/node`) |
+|-----------|-------------------------|----------------------------------------|------------------------------------------|
+| `streamable-http` | yes | yes | yes |
+| `sse` | yes | yes | yes |
+| `stdio` | **no** — no subprocess in workerd | skipped (diagnostic) | yes |
+
+On the root export, a `stdio` config produces **no tools** and a diagnostic with
+`rule: "unsupported-transport"` naming Workers/workerd and pointing to `@kuralle-agents/mcp/node`.
+That is intentional: keeping stdio off the root preserves Cloudflare portability.
+
+Prove the matrix live:
+
+```bash
+bun packages/mcp/examples/runtime-matrix.ts
+```
+
+## `mcpTools(servers, opts?)`
+
+```typescript
+function mcpTools(
+  servers: readonly McpServerConfig[],
+  opts?: McpOptions,
+): Promise<Record<string, AnyTool>>;
+```
+
+`McpServerConfig` (from `@kuralle-agents/plugins`) is a discriminated union:
+
+| `type` | Fields |
+|--------|--------|
+| `stdio` | `name`, `command`, optional `args`, `env`, `cwd` |
+| `streamable-http` | `name`, `url`, optional `headers` |
+| `sse` | `name`, `url`, optional `headers` |
+
+### `McpOptions`
+
+| Option | Purpose |
+|--------|---------|
+| `allowedHosts?` | SSRF guard for remote URLs — see below |
+| `auth?` | `(server, { session }) => Promise<{ token }>` — merged as `Authorization: Bearer …` per call |
+| `tools?` | Discovery-time `{ allow: string[] }` or `{ block: string[] }` — hide tools from the model (mutually exclusive) |
+| `disclosure?` | Schema disclosure budget — see below |
+| `timeoutMs?` | Per-connection timeout (default 60_000 ms) |
+| `storage?` | Persist remote server metadata for hibernation wake (`rebuildMcpToolsFromStorage`) |
+| `onDiagnostic?` | `(Diagnostic) => void` — connection, auth, and transport failures |
+| `fetch?` | Test hook: custom `fetch` for HTTP transports |
+
+Qualified tool names use a double underscore: `payments__create_invoice` (server `payments`, remote
+tool `create_invoice`).
+
+## Policy is the approval gate
+
+<Aside type="caution" title="Never trust MCP tool annotations">
+A malicious MCP server can advertise a destructive tool as read-only. Kuralle does **not** map MCP
+`annotations` (read-only hints, destructive flags) into [`Policy`](/guides/policy/) decisions.
+**`Policy.decide` is the only approval gate** for whether a projected MCP tool may run.
+</Aside>
+
+Discovery filters (`tools.allow` / `tools.block`) control **visibility** — tools filtered out never
+reach the model. **`Policy`** controls **authorization** — a visible tool the policy denies returns
+`toolDeniedResult` with your `reason`, and `execute` never runs.
+
+Wire a restrictive policy on agents that call untrusted plugin servers:
+
+```typescript
+import { readOnlyPolicy } from '@kuralle-agents/core';
+
+createRuntime({
+  agents: [agent],
+  policy: readOnlyPolicy(['write_file', 'payments__charge_card']),
+});
+```
+
+## `allowedHosts` — SSRF guard
+
+Plugin-supplied URLs are untrusted input. Without a guard, a server entry could point at an internal
+metadata endpoint. Set `allowedHosts` to the hostnames you expect:
+
+```typescript
+await mcpTools(servers, {
+  allowedHosts: ['127.0.0.1', 'mcp.example.com'],
+});
+```
+
+- **`undefined`** — no hostname check (appropriate only for fully trusted configs).
+- **`string[]`** — remote URL hostname must match an entry (case-insensitive).
+- **`(server, { session }) => string[]`** — per-server, per-session allowlist.
+
+A blocked host emits a diagnostic (`rule: "connection-failure"`) and skips that server.
+
+## Disclosure budget
+
+Large MCP servers can flood the prompt with tool input schemas. Kuralle applies a **per-server**
+disclosure budget before projecting schemas into the tool map and system prompt surface.
+
+| Constant / field | Default | Meaning |
+|------------------|---------|---------|
+| `DEFAULT_DISCLOSURE_BUDGET_TOKENS` | `20_000` | ≈10% of a 200k context window |
+| `disclosure.budget` | `20_000` or `'auto'` | Token budget per server (4 chars ≈ 1 token) |
+| `disclosure.alwaysLoad` | `[]` | Server names that always inline full schemas |
+
+For each connected server, Kuralle estimates the token cost of inlining every tool's description +
+JSON Schema. If the estimate is **over budget**, schemas are **deferred**: tools still appear, but
+their input schema collapses to a stub and descriptions gain
+*"Full input schema available via mcp__describe_tool."*
+
+When any server defers, Kuralle registers **`mcp__describe_tool`** — call it with the qualified
+tool name to fetch the full JSON Schema before invoking the deferred tool.
+
+```typescript
+await mcpTools(servers, {
+  disclosure: {
+    budget: 20_000,
+    alwaysLoad: ['trusted-small-server'],
+  },
+});
+```
+
+`composeMcpSystemPrompt(tools, opts)` builds the MCP-related system prompt fragment: inlined schemas
+only for servers under budget; deferred schemas omitted. Use it when assembling custom system
+prompts alongside the auto-registered tools.
+
+## Server `instructions` are never forwarded
+
+The MCP protocol lets servers advertise free-text `instructions`. Kuralle **discards** them — they
+are never appended to the system prompt. Third-party prose reaching the system prompt verbatim is a
+**prompt-injection seam**; tool descriptions and schemas (subject to the disclosure budget) are the
+only server-originated text that enters the model context.
+
+## Hibernation and reconnect
+
+Pass `storage: createSqliteMcpConnectionStore(...)` (or `createMemoryMcpConnectionStore` in tests)
+to persist serialisable remote server metadata across Durable Object hibernation. On wake, call
+`rebuildMcpToolsFromStorage(servers, { ...opts, storage })` with the same server configs for auth,
+headers, and `fetch` — only the URL/type/name subset was stored.
+
+## Related
+
+- [Agent Plugins](/guides/plugins/) — `mcp.json` layout and four failure widths
+- [Tool Policy](/guides/policy/) — govern MCP tool execution
+- [Skills](/guides/skills/) — plugin `skills/` use the same progressive disclosure model
+- [Durable Execution](/guides/durable-execution/) — MCP tools replay through the effect log

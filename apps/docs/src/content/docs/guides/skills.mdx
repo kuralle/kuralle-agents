@@ -72,6 +72,7 @@ entries win** on a name collision.
 | Packaged directory | `packageSkillsDirectory(dir)` output, passed as `[[pkg, pkg2]]` | A `SKILL.md` folder baked into the deployable bundle — no filesystem or sandbox needed at runtime. |
 | Filesystem path | a `string`, e.g. `'/.agents/skills/support'` | `SKILL.md` folders on the agent's `workspace`, hot-updatable without a redeploy. |
 | Resolver | `async ({ session, agentId }) => SkillLike[]` | Per-tenant or per-principal skill sets, resolved once per session. |
+| Agent Plugin | `loadAgentPlugin(fs, root)` → `SkillStoreLike` | Third-party bundles with `plugin.json` + `skills/` (+ optional `mcp.json`). See [Agent Plugins](/guides/plugins/). |
 
 You can mix them:
 

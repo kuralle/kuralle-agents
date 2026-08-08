@@ -32,6 +32,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
     "test": "bun test ./test/",
+    "typecheck:examples": "tsc --noEmit -p tsconfig.examples.json",
     "prepublishOnly": "npm run build"
   },
   "publishConfig": {
