@@ -1,5 +1,5 @@
 import { createRuntime, defineAgent } from '@kuralle-agents/core';
-import { CompositeFileSystem, InMemoryFs, createFsTool } from '@kuralle-agents/fs';
+import { CompositeFileSystem, InMemoryFs } from '@kuralle-agents/fs';
 
 async function loadEnv(): Promise<void> {
   try {
@@ -46,14 +46,17 @@ async function main() {
     },
   });
 
-  const workspaceTool = createFsTool({ fs: workspaceFs, readOnly: false });
   const agent = defineAgent({
     id: 'composite-workspace',
     model: live.model,
     instructions:
       'You have a read-only /docs mount and a writable /scratch mount via one workspace tool. Use workspace cat/read on /docs and workspace write on /scratch — never invent file contents.',
-    workspace: { fs: workspaceFs, readOnly: false },
-    globalTools: { workspace: workspaceTool },
+    // `readOnly: false` alone only unlocks writes for trusted tool/action code via
+    // `ctx.fs` — the model still gets a read-only `workspace` tool. `modelWritable: true`
+    // is what lets the model itself write, which this smoke asserts. Supplying your own
+    // writable tool via `globalTools.workspace` does NOT work: the runtime registers the
+    // workspace tool under that exact name and overwrites the entry.
+    workspace: { fs: workspaceFs, readOnly: false, modelWritable: true },
     limits: { maxSteps: 8 },
   });
 
@@ -77,7 +80,21 @@ async function main() {
   }
   await handle;
 
-  const summary = await workspaceFs.readFile('/scratch/summary.md');
+  // Read the write back through a named failure. Without `modelWritable: true` the model
+  // gets a read-only workspace tool, so the write is refused, the model still reports
+  // success, and nothing surfaces until this line throws a bare ENOENT with a stack into
+  // in-memory-fs. Naming the cause here is the difference between a five-minute fix and
+  // an hour of reading the wrong file.
+  let summary: string;
+  try {
+    summary = await workspaceFs.readFile('/scratch/summary.md');
+  } catch {
+    throw new Error(
+      '/scratch/summary.md was never written. The model called the workspace tool and ' +
+        'reported success, so the tool it received was read-only: check that the agent ' +
+        `sets \`workspace.modelWritable: true\`. Tool calls seen: ${toolCalls.join(', ') || '(none)'}`,
+    );
+  }
   const handbook = await workspaceFs.readFile('/docs/handbook.md');
 
   console.log('model:', live.label);
