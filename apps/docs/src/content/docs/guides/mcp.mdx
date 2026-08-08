@@ -170,6 +170,29 @@ await mcpTools(servers, {
 only for servers under budget; deferred schemas omitted. Use it when assembling custom system
 prompts alongside the auto-registered tools.
 
+`estimateTokens(text)` is exported so you can measure a prompt yourself. It is a deliberate
+four-characters-per-token approximation, not a tokenizer. A tokenizer would add a dependency to the
+workerd-clean root export, and the threshold it feeds is an order-of-magnitude decision.
+
+<Aside type="caution" title="Deferral costs some call accuracy">
+A deferred tool carries a permissive `{ type: 'object' }` schema. The model therefore has **no
+argument contract** until it calls `mcp__describe_tool`, and it must copy the argument shape from
+that result into its next call.
+
+Measured on a live example, same prompt and model, changing only the budget:
+
+| Schema mode | Malformed tool call |
+|-------------|---------------------|
+| Deferred | **2 of 5 runs** |
+| Inline | **0 of 5 runs** |
+
+A malformed call looks like a tool name with the argument folded into it. The call does not
+resolve and the model retries.
+
+Deferral still beats not fitting in the context window at all. But for a small server where
+accuracy or latency matters, put it in `alwaysLoad` rather than relying on the threshold.
+</Aside>
+
 ## Server `instructions` are never forwarded
 
 The MCP protocol lets servers advertise free-text `instructions`. Kuralle **discards** them — they
@@ -179,10 +202,67 @@ only server-originated text that enters the model context.
 
 ## Hibernation and reconnect
 
-Pass `storage: createSqliteMcpConnectionStore(...)` (or `createMemoryMcpConnectionStore` in tests)
-to persist serialisable remote server metadata across Durable Object hibernation. On wake, call
-`rebuildMcpToolsFromStorage(servers, { ...opts, storage })` with the same server configs for auth,
-headers, and `fetch` — only the URL/type/name subset was stored.
+A Durable Object hibernates, so a live MCP connection cannot survive in memory. Persist a seed and
+rebuild it on wake.
+
+```typescript
+import {
+  createSqliteMcpConnectionStore,
+  mcpTools,
+  rebuildMcpToolsFromStorage,
+} from '@kuralle-agents/mcp';
+
+const store = createSqliteMcpConnectionStore(ctx.storage.sql);
+
+// Cold start.
+const tools = await mcpTools(servers, { storage: store, allowedHosts });
+
+// After a wake, before the first tool call.
+const rebuilt = await rebuildMcpToolsFromStorage(
+  servers,
+  { storage: store, allowedHosts },
+  { stdio: false },
+);
+```
+
+Use `createMemoryMcpConnectionStore()` on Node and Bun, and in tests.
+
+### What persists, and what never does
+
+A `PersistedServer` row holds exactly four fields:
+
+| Field | Example |
+|-------|---------|
+| `id` | `"docs"` |
+| `name` | `"docs"` |
+| `type` | `"streamable-http"` |
+| `url` | `"https://mcp.example.com/mcp"` |
+
+No function, socket, `fetch` override, auth resolver, token, or configured header is ever written.
+The store is a one-wake capability seed, not a config source.
+
+Configured `headers` stay out **on purpose**, even though they arrive legitimately through
+`mcp.json`. A plugin file may carry a plaintext secret, and copying that into durable storage would
+widen its blast radius from process memory to a database. You supply the config again on wake; the
+store records only *which* servers were connected.
+
+`createSqliteMcpConnectionStore` takes any object matching `McpSqlStorage`, a structural shape that
+a real Durable Object `ctx.storage.sql` satisfies:
+
+```typescript
+interface McpSqlStorage {
+  exec(query: string, ...bindings: unknown[]): Iterable<Record<string, unknown>>;
+}
+```
+
+<Aside type="note" title="A wake is not a cold start">
+`rebuildMcpToolsFromStorage` does **not** fall back to the `servers` you pass when the store is
+empty. A wake rebuilds what was persisted; a cold start is `mcpTools`. Collapsing the two would mean
+a completely broken store still produced a working tool map, which makes the persistence path
+impossible to test.
+</Aside>
+
+Only remote transports persist. A `stdio` server never reaches a Worker, so it never produces a row.
 
 ## Related
 
