@@ -34,7 +34,7 @@ export function stdioRequiresNodeDiagnostic(serverName: string): Diagnostic {
     section: '7.2.2',
     rule: 'unsupported-transport',
     origin: serverName,
-    message: `stdio MCP server "${serverName}" requires the @kuralle-agents/mcp/node subpath.`,
+    message: `stdio MCP server "${serverName}" cannot run on Cloudflare Workers or workerd (this runtime has no subprocess); on Node or Bun use @kuralle-agents/mcp/node.`,
   };
 }
 
