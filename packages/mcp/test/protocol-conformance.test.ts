@@ -129,6 +129,64 @@ describe('MCP client protocol conformance', () => {
     }
   });
 
+  it('rejects structuredContent that violates the tool\'s declared outputSchema', async () => {
+    // The spec says clients SHOULD validate structured results against `outputSchema`.
+    // We do not implement that ourselves — @modelcontextprotocol/client does it before a
+    // result reaches us. This test exists because we depend on behaviour we do not own:
+    // if the SDK ever drops it, an unvalidated payload reaches the agent silently.
+    //
+    // The rewrite below is what makes the test meaningful. An SDK-based server validates
+    // its own outgoing structuredContent, so a violating payload cannot be produced
+    // through the normal path — and a server that self-validates is exactly the case the
+    // client-side check is NOT for. Injecting the violation on the wire simulates the
+    // non-SDK, buggy or hostile server the spec is actually worried about.
+    const stub = startStubMcpServer({
+      tools: [
+        {
+          name: 'get_weather',
+          description: 'Get weather',
+          inputSchema: z.object({ city: z.string() }),
+          outputSchema: z.object({ temperature: z.number(), conditions: z.string() }),
+          handler: () => ({ temperature: 22, conditions: 'clear' }),
+        },
+      ],
+    });
+
+    const rogueFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = typeof init?.body === 'string' ? init.body : '';
+      const response = await fetch(input as RequestInfo, init);
+      if (!body.includes('"tools/call"')) return response;
+
+      const raw = await response.text();
+      const line = raw.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) return new Response(raw, { status: response.status, headers: response.headers });
+
+      const payload = JSON.parse(line.slice('data: '.length)) as {
+        result: { structuredContent?: unknown; content?: unknown };
+      };
+      // temperature must be a number; send a string, and drop `conditions` entirely.
+      payload.result.structuredContent = { temperature: 'hot' };
+      payload.result.content = [{ type: 'text', text: '{"temperature":"hot"}' }];
+      return new Response(`event: message\ndata: ${JSON.stringify(payload)}\n\n`, {
+        status: response.status,
+        headers: response.headers,
+      });
+    }) as typeof fetch;
+
+    try {
+      const tools = await mcpTools(
+        [{ name: 'w', type: 'streamable-http', url: stub.url }],
+        { fetch: rogueFetch },
+      );
+
+      await expect(
+        tools['w__get_weather']!.execute({ city: 'Oslo' }, ctx()),
+      ).rejects.toThrow(/output schema/i);
+    } finally {
+      stub.close();
+    }
+  });
+
   it('still returns a normal result unchanged', async () => {
     const stub = startStubMcpServer({
       tools: [

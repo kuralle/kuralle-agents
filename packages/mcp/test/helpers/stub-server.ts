@@ -7,6 +7,8 @@ export interface StubMcpServerOptions {
     name: string;
     description: string;
     inputSchema?: z.ZodTypeAny;
+    /** Declaring this makes the server return `structuredContent` validated against it. */
+    outputSchema?: z.ZodTypeAny;
     handler: (args: Record<string, unknown>) => unknown | Promise<unknown>;
   }>;
   intercept?: (request: Request) => Response | undefined;
@@ -30,10 +32,17 @@ export function startStubMcpServer(options: StubMcpServerOptions = {}): StubMcpS
         {
           description: tool.description,
           inputSchema: tool.inputSchema ?? z.object({}),
+          ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
         },
         async (args) => {
           const value = await tool.handler(args as Record<string, unknown>);
           const text = typeof value === 'string' ? value : JSON.stringify(value);
+          if (tool.outputSchema) {
+            return {
+              content: [{ type: 'text', text }],
+              structuredContent: value as Record<string, unknown>,
+            };
+          }
           return {
             content: [{ type: 'text', text }],
           };
