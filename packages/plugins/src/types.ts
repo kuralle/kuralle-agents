@@ -32,10 +32,27 @@ export interface PluginManifest {
   extensions?: Record<string, Record<string, unknown>>;
 }
 
-/** Placeholder until task 5 defines the full MCP server config shape. */
-export interface McpServerConfig {
-  name: string;
-}
+export type McpServerConfig =
+  | {
+      name: string;
+      type: 'stdio';
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+      cwd?: string;
+    }
+  | {
+      name: string;
+      type: 'streamable-http';
+      url: string;
+      headers?: Record<string, string>;
+    }
+  | {
+      name: string;
+      type: 'sse';
+      url: string;
+      headers?: Record<string, string>;
+    };
 
 export interface LoadedPlugin {
   manifest: PluginManifest;

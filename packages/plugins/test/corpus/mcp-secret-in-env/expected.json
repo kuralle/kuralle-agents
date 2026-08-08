@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "mcpServers": ["firecrawl"],
+  "diagnostics": [
+    {
+      "section": "9.2",
+      "rule": "secret-in-env",
+      "origin": "mcp.json"
+    }
+  ]
+}

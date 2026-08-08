@@ -3,7 +3,12 @@ import { fsSkillStore, type SkillStoreLike } from '@kuralle-agents/core';
 import { normalizePath, resolvePath } from '@kuralle-agents/fs';
 import { emptySkillStore } from './empty-skill-store.js';
 import { validateManifestJson } from './manifest.js';
-import type { Diagnostic, LoadPluginResult } from './types.js';
+import {
+  defaultPluginDataRoot,
+  loadMcpConfig,
+  MCP_CONFIG_FILE,
+} from './mcp.js';
+import type { Diagnostic, LoadPluginResult, McpServerConfig } from './types.js';
 
 const MANIFEST_FILE = 'plugin.json';
 const SKILLS_DIR = 'skills';
@@ -150,13 +155,42 @@ export async function loadAgentPlugin(
   const skills = await loadSkillsComponent(fs, normalizedRoot, skillDiagnostics);
   await skills.list();
 
+  const componentDiagnostics: Diagnostic[] = [...skillDiagnostics];
+  let mcpServers: McpServerConfig[] = [];
+
+  const mcpPath = resolvePath(normalizedRoot, MCP_CONFIG_FILE);
+  if (await fs.exists(mcpPath)) {
+    try {
+      const mcpText = await fs.readFile(mcpPath);
+      const pluginDataRoot = defaultPluginDataRoot(
+        normalizedRoot,
+        validation.manifest.name,
+      );
+      const mcpResult = loadMcpConfig(
+        mcpText,
+        validation.manifest.$schema,
+        normalizedRoot,
+        pluginDataRoot,
+      );
+      mcpServers = [...mcpResult.mcpServers];
+      componentDiagnostics.push(...mcpResult.diagnostics);
+    } catch {
+      componentDiagnostics.push({
+        section: '7.2.2',
+        rule: 'mcp-config-invalid',
+        origin: MCP_CONFIG_FILE,
+        message: 'mcp.json could not be read.',
+      });
+    }
+  }
+
   return {
     ok: true,
     plugin: {
       manifest: validation.manifest,
       skills,
-      mcpServers: [],
-      diagnostics: [...validation.diagnostics, ...skillDiagnostics],
+      mcpServers,
+      diagnostics: [...validation.diagnostics, ...componentDiagnostics],
     },
   };
 }
