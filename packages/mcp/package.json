@@ -1,0 +1,52 @@
+{
+  "name": "@kuralle-agents/mcp",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kuralle/kuralle-agents.git",
+    "directory": "packages/mcp"
+  },
+  "version": "0.20.0",
+  "description": "MCP client for Kuralle agent plugins",
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "default": "./dist/node/index.js"
+    }
+  },
+  "dependencies": {
+    "@kuralle-agents/core": "workspace:*",
+    "@kuralle-agents/plugins": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0"
+  },
+  "devDependencies": {
+    "@kuralle-agents/fs": "workspace:*",
+    "@modelcontextprotocol/server": "2.0.0",
+    "@types/node": "^22.5.0",
+    "bun-types": "^1.3.0",
+    "typescript": "^5.3.0",
+    "zod": "^4.0.0"
+  },
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test ./test/",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}

@@ -802,6 +802,23 @@
         "@lancedb/lancedb": ">=0.13.0",
       },
     },
+    "packages/mcp": {
+      "name": "@kuralle-agents/mcp",
+      "version": "0.20.0",
+      "dependencies": {
+        "@kuralle-agents/core": "workspace:*",
+        "@kuralle-agents/plugins": "workspace:*",
+        "@modelcontextprotocol/client": "2.0.0",
+      },
+      "devDependencies": {
+        "@kuralle-agents/fs": "workspace:*",
+        "@modelcontextprotocol/server": "2.0.0",
+        "@types/node": "^22.5.0",
+        "bun-types": "^1.3.0",
+        "typescript": "^5.3.0",
+        "zod": "^4.0.0",
+      },
+    },
     "packages/messaging": {
       "name": "@kuralle-agents/messaging",
       "version": "0.20.0",
@@ -1482,6 +1499,8 @@
     "@kuralle-agents/http-client": ["@kuralle-agents/http-client@workspace:packages/http-client"],
 
     "@kuralle-agents/lancedb-store": ["@kuralle-agents/lancedb-store@workspace:packages/lancedb-store"],
+
+    "@kuralle-agents/mcp": ["@kuralle-agents/mcp@workspace:packages/mcp"],
 
     "@kuralle-agents/messaging": ["@kuralle-agents/messaging@workspace:packages/messaging"],
 
@@ -3934,6 +3953,10 @@
     "@kuralle-agents/hono-server/@ai-sdk/openai": ["@ai-sdk/openai@3.0.90", "", { "dependencies": { "@ai-sdk/provider": "3.0.14", "@ai-sdk/provider-utils": "4.0.41" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-GIucFshCN7JZwTDur25PsnLEMRUFfAKuLaA9TP9fzGxPC2Zxzl94tvat93ZdZLURkKOrDukU0E4fj73tKDWjTA=="],
 
     "@kuralle-agents/http-client/@types/node": ["@types/node@22.19.17", "", { "dependencies": { "undici-types": "6.21.0" } }, "sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q=="],
+
+    "@kuralle-agents/mcp/@types/node": ["@types/node@22.19.17", "", { "dependencies": { "undici-types": "6.21.0" } }, "sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q=="],
+
+    "@kuralle-agents/mcp/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "22.19.17" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
     "@kuralle-agents/messaging/@types/node": ["@types/node@22.19.17", "", { "dependencies": { "undici-types": "6.21.0" } }, "sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q=="],
 
