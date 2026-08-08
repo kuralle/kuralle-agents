@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/deployment",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Canonical agent revisions, releases, and thread pins for Kuralle deployments",
   "license": "Apache-2.0",
   "repository": {
