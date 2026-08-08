@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "meridian-bank",
+  "version": "1.0.0",
+  "description": "Meridian Bank customer banking — transfer limits, fraud holds, and MCP account tools for fictional Meridian Bank accounts.",
+  "author": {
+    "name": "Meridian Bank Demo",
+    "url": "https://example.invalid/meridian-bank"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "banking",
+    "transfers",
+    "fraud",
+    "meridian"
+  ]
+}

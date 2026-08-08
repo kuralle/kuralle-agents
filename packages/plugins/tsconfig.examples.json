@@ -1,10 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "..",
     "noEmit": true,
     "declaration": false,
     "types": ["node"]
   },
-  "include": ["examples/**/*", "test/fixture-fs.ts"]
+  "include": [
+    "examples/**/*",
+    "test/fixture-fs.ts",
+    "../mcp/examples/_server.ts",
+    "../mcp/examples/banking-tools.ts"
+  ]
 }
