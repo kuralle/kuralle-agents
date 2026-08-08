@@ -8,25 +8,21 @@
  *   set -a; . ./.env; set +a
  *   bun packages/plugins/examples/fashion-store.ts
  *
- * KNOWN FLAKE — this example fails about 2 runs in 5, and the cause is the product,
- * not the assertions. Do not "fix" it by loosening assertion 4.
+ * On deferral and why assertion 4 is worth keeping strict.
  *
- * A deferred tool carries a permissive `{ type: 'object' }` passthrough schema, so the
- * model receives no argument contract at generation time. It must copy the argument
- * shape out of an `mcp__describe_tool` result into its next call. It does that
- * imperfectly: on some runs it emits a malformed tool name with the argument folded
- * into it, for example `loom__get_shipping_estimate with postalPrefix is 941`. The call
- * then does not resolve, the model retries, and assertion 4 correctly reports failure.
+ * This example once failed about 2 runs in 5. A deferred tool carried a permissive
+ * `{ type: 'object' }` schema, so the model got no argument contract at generation time
+ * and had to copy the shape out of an `mcp__describe_tool` result. It did that badly,
+ * emitting malformed calls such as `loom__get_shipping_estimate with postalPrefix is 941`.
  *
- * Measured on this example, same prompt and model, only the budget changed:
- *   deferred (budget 1_000)   malformed tool name in 2 of 5 runs
+ * Measured here, same prompt and model, only the budget changed:
+ *   deferred, bare schema     malformed tool name in 2 of 5 runs
  *   inline   (budget 50_000)  malformed tool name in 0 of 5 runs
  *
- * So deferral raises the malformed-call rate. The likely remedy is to keep parameter
- * NAMES in the deferred schema and defer only descriptions and constraints, which holds
- * most of the token saving and restores an argument contract. That is a change to
- * `packages/mcp/src/disclosure.ts`, tracked separately. Until it lands, this example
- * documents the real behaviour of threshold disclosure rather than a flattering version.
+ * A deferred tool now keeps its parameter names, types and `required`, and defers only
+ * the descriptions and constraints. That holds most of the token saving and restores the
+ * contract: 5 of 5 runs pass. Do not loosen assertion 4 — it is the check that caught
+ * this, and it is the one that will catch the next regression in deferral.
  */
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

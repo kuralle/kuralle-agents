@@ -24,20 +24,20 @@ import { minimalToolContext } from './helpers/tool-context.js';
  * the round-trip half.
  */
 
-/** Appears only inside a tool's full input schema — never in its name or description. */
-const SCHEMA_MARKER = 'zzz_schema_only_marker_property';
+/** Appears only in a property description, never in a property name. */
+const SCHEMA_MARKER = 'zzz_schema_only_marker_in_description';
 
 function fatInputSchema(): z.ZodTypeAny {
   const longDescription =
-    'A parameter whose description is deliberately verbose so that the serialized ' +
+    `${SCHEMA_MARKER}. A parameter whose description is deliberately verbose so that the serialized ` +
     'JSON Schema for this tool costs a realistic number of tokens rather than a ' +
     'toy number. Real MCP servers ship descriptions of about this length.';
 
-  // Only the marker is required, so the end-to-end case can call a deferred tool with
+  // Only the marker field is required, so the end-to-end case can call a deferred tool with
   // the single argument it retrieved. The optional siblings still carry their long
   // descriptions into the serialized JSON Schema, which is what makes the tool "fat".
   return z.object({
-    [SCHEMA_MARKER]: z.string().describe(longDescription),
+    marker_field: z.string().describe(longDescription),
     alpha: z.string().describe(longDescription).optional(),
     beta: z.string().describe(longDescription).optional(),
     gamma: z.string().describe(longDescription).optional(),
@@ -52,7 +52,7 @@ function fatTools(count: number) {
     description: `Tool number ${index}.`,
     inputSchema: fatInputSchema(),
     handler: (args: Record<string, unknown>) =>
-      `called tool_${index} with ${String(args[SCHEMA_MARKER] ?? '')}`,
+      `called tool_${index} with ${String(args.marker_field ?? '')}`,
   }));
 }
 
@@ -158,7 +158,7 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
       expect(JSON.stringify(described)).toContain(SCHEMA_MARKER);
 
       const result = await tools['broad__tool_7']!.execute(
-        { [SCHEMA_MARKER]: 'payload' },
+        { marker_field: 'payload' },
         ctx,
       );
       expect(result).toBe('called tool_7 with payload');

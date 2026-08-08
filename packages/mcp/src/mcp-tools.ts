@@ -14,6 +14,7 @@ import { authFailureDiagnostic, authStatusFromError } from './headers.js';
 import {
   createDescribeTool,
   deferredInputSchema,
+  resolveDisclosureMode,
   deferredToolDescription,
   MCP_DESCRIBE_TOOL,
   resolveDisclosureBudget,
@@ -263,12 +264,13 @@ export async function mcpToolsImpl(
     const projected = listed.filter((remoteTool) =>
       toolAllowed(mcpToolName(serverName, remoteTool.name), opts?.tools),
     );
-    const inlineSchemas = shouldInlineServerSchemas(
+    const disclosureMode = resolveDisclosureMode(
       serverName,
       projected,
       budget,
       alwaysLoad,
     );
+    const inlineSchemas = disclosureMode === 'inline';
     if (!inlineSchemas) {
       anyDeferred = true;
     }
@@ -288,7 +290,9 @@ export async function mcpToolsImpl(
         : deferredToolDescription(serverDescription);
       const inputSchema = inlineSchemas
         ? remoteMcpInputSchema(fullInputSchema)
-        : deferredInputSchema();
+        // `bare` drops the parameter names too. Only reached when names alone would blow
+        // the budget, which is what keeps REQ-16 true for any tool count.
+        : deferredInputSchema(disclosureMode === 'names' ? fullInputSchema : undefined);
 
       tools[qualified] = defineTool({
         name: qualified,

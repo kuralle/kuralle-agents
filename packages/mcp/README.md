@@ -102,7 +102,13 @@ Every tool keeps its real `${server}__${tool}` name in both cases, so `Policy` s
 
 The default budget is `20_000` tokens, about 10% of a 200k context window. `estimateTokens` is a deliberate four-characters-per-token approximation, not a tokenizer, because the threshold is an order-of-magnitude decision and the root export must stay dependency-free.
 
-> **Known limitation.** A deferred tool carries a permissive `{ type: 'object' }` schema, so the model has no argument contract until it calls `mcp__describe_tool`. Measured on a live example, a deferred tool produced a malformed call in 2 of 5 runs where the same tool inline produced 0 of 5. Prefer `alwaysLoad` for a small, latency-sensitive or accuracy-sensitive server until the deferred schema keeps parameter names.
+A deferred tool sheds schema **prose**, not the argument **contract**. It keeps parameter names, their scalar types and `required`, and drops descriptions, enums, formats and nested bodies. `mcp__describe_tool` still returns the full schema.
+
+That split is load-bearing. An earlier version replaced the whole schema with `{ type: 'object' }`; with no parameter names at generation time the model produced a malformed call in **2 of 5** live runs, against **0 of 5** once names were kept.
+
+On a server so large that even names blow the budget, names are dropped too and the bare object schema is used. That holds the budget at any tool count — the same budget applied twice, not a setting.
+
+One floor applies to both tiers: the **catalog** of every tool name and description is always in the prompt, because that is what the model routes on. The budget governs schema bulk on top of the catalog, not the catalog itself.
 
 ## Hibernation on Durable Objects
 

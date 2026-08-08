@@ -174,23 +174,34 @@ prompts alongside the auto-registered tools.
 four-characters-per-token approximation, not a tokenizer. A tokenizer would add a dependency to the
 workerd-clean root export, and the threshold it feeds is an order-of-magnitude decision.
 
-<Aside type="caution" title="Deferral costs some call accuracy">
-A deferred tool carries a permissive `{ type: 'object' }` schema. The model therefore has **no
-argument contract** until it calls `mcp__describe_tool`, and it must copy the argument shape from
-that result into its next call.
+### What a deferred tool keeps
 
-Measured on a live example, same prompt and model, changing only the budget:
+Deferral sheds schema **prose**, not the argument **contract**. A deferred tool keeps its
+parameter names, their scalar types, and `required`. It drops descriptions, enums, formats,
+patterns, defaults, and the bodies of nested objects. `mcp__describe_tool` still returns the
+full schema.
 
-| Schema mode | Malformed tool call |
-|-------------|---------------------|
-| Deferred | **2 of 5 runs** |
-| Inline | **0 of 5 runs** |
+That split is not cosmetic. An earlier version replaced the whole schema with
+`{ type: 'object' }`, and the model — left with no parameter names at generation time — had to
+copy them out of a `describe_tool` result. It did that badly:
 
-A malformed call looks like a tool name with the argument folded into it. The call does not
-resolve and the model retries.
+| Deferred schema | Malformed tool call |
+|-----------------|---------------------|
+| Bare `{ type: 'object' }` | **2 of 5 runs** |
+| Names, types and `required` | **0 of 5 runs** |
 
-Deferral still beats not fitting in the context window at all. But for a small server where
-accuracy or latency matters, put it in `alwaysLoad` rather than relying on the threshold.
+A malformed call looks like a tool name with the argument folded into it. Names and types are a
+small fraction of schema tokens; descriptions are the bulk. So the cheap half stays.
+
+<Aside type="note" title="Two tiers, and a floor">
+On a server large enough that even parameter names blow the budget, Kuralle drops those too and
+falls back to the bare object schema. That keeps the budget promise at any tool count. It is the
+same budget applied twice, not a setting you choose.
+
+There is a floor underneath both tiers. The **catalog** — every tool's name and description — is
+always in the prompt, because that is what the model routes on. A 200-tool server therefore has
+an irreducible prompt cost that no schema policy goes below. The budget governs the schema bulk
+on top of the catalog, not the catalog itself.
 </Aside>
 
 ## Server `instructions` are never forwarded

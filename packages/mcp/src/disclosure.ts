@@ -32,10 +32,14 @@ export const DEFAULT_DISCLOSURE_BUDGET_TOKENS = 20_000;
 /** Name of the retrieval tool registered only when at least one server defers. */
 export const MCP_DESCRIBE_TOOL = 'mcp__describe_tool';
 
-const DEFERRED_SCHEMA: Record<string, unknown> = { type: 'object' };
+const BARE_OBJECT_SCHEMA: Record<string, unknown> = { type: 'object' };
 
 const DEFERRED_DESCRIPTION_SUFFIX =
   ' Full input schema available via mcp__describe_tool.';
+
+export function isDeferredMcpToolDescription(description: string): boolean {
+  return description.endsWith(DEFERRED_DESCRIPTION_SUFFIX);
+}
 
 export function resolveDisclosureBudget(
   disclosure: McpOptions['disclosure'] | undefined,
@@ -63,10 +67,44 @@ export function serializeToolDefsForBudget(
     const schema =
       remoteTool.inputSchema && typeof remoteTool.inputSchema === 'object'
         ? remoteTool.inputSchema
-        : DEFERRED_SCHEMA;
+        : BARE_OBJECT_SCHEMA;
     parts.push(JSON.stringify(schema));
   }
   return parts.join('\n');
+}
+
+/**
+ * How much of a server's schemas reach the model.
+ *
+ * `inline` full schemas · `names` parameter names, types and `required`, prose deferred ·
+ * `bare` `{ type: 'object' }` only.
+ *
+ * Not a mode flag: the caller never picks one. It is the same budget applied twice, because
+ * two things are true at once. Parameter names are what keep the model calling a deferred
+ * tool correctly — without them it malformed 2 calls in 5. But names still scale with tool
+ * count, so on a large enough server even names blow the budget, and REQ-16 promises the
+ * prompt stays under budget *however many tools a server publishes*. `bare` is what keeps
+ * that promise unconditionally; `names` is what we use whenever it fits, which is the
+ * overwhelmingly common case.
+ */
+export type DisclosureMode = 'inline' | 'names' | 'bare';
+
+export function resolveDisclosureMode(
+  serverName: string,
+  remoteTools: readonly RemoteToolListing[],
+  budget: number,
+  alwaysLoad: readonly string[] | undefined,
+): DisclosureMode {
+  if (alwaysLoad?.includes(serverName)) {
+    return 'inline';
+  }
+  if (estimateTokens(serializeToolDefsForBudget(remoteTools)) <= budget) {
+    return 'inline';
+  }
+  const withNames = remoteTools
+    .map((tool) => JSON.stringify(buildDeferredSchema(tool.inputSchema)))
+    .join('\n');
+  return estimateTokens(withNames) <= budget ? 'names' : 'bare';
 }
 
 export function shouldInlineServerSchemas(
@@ -75,14 +113,61 @@ export function shouldInlineServerSchemas(
   budget: number,
   alwaysLoad: readonly string[] | undefined,
 ): boolean {
-  if (alwaysLoad?.includes(serverName)) {
-    return true;
-  }
-  return estimateTokens(serializeToolDefsForBudget(remoteTools)) <= budget;
+  return resolveDisclosureMode(serverName, remoteTools, budget, alwaysLoad) === 'inline';
 }
 
-export function deferredInputSchema(): ReturnType<typeof remoteMcpInputSchema> {
-  return remoteMcpInputSchema(DEFERRED_SCHEMA);
+function scalarTypeOf(spec: unknown): string {
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+    return 'string';
+  }
+  const type = (spec as { type?: unknown }).type;
+  if (typeof type === 'string') {
+    return type;
+  }
+  if (Array.isArray(type) && type.length > 0 && typeof type[0] === 'string') {
+    return type[0];
+  }
+  return 'string';
+}
+
+/** Strips schema prose while keeping parameter names, scalar types, and `required`. */
+export function buildDeferredSchema(
+  fullSchema: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (
+    !fullSchema ||
+    typeof fullSchema !== 'object' ||
+    Array.isArray(fullSchema) ||
+    fullSchema.type !== 'object' ||
+    !fullSchema.properties ||
+    typeof fullSchema.properties !== 'object' ||
+    Array.isArray(fullSchema.properties)
+  ) {
+    return BARE_OBJECT_SCHEMA;
+  }
+
+  const props: Record<string, unknown> = {};
+  for (const [name, spec] of Object.entries(fullSchema.properties)) {
+    props[name] = { type: scalarTypeOf(spec) };
+  }
+
+  const out: Record<string, unknown> = {
+    type: 'object',
+    properties: props,
+  };
+
+  const required = fullSchema.required;
+  if (Array.isArray(required) && required.length > 0) {
+    out.required = required;
+  }
+
+  return out;
+}
+
+export function deferredInputSchema(
+  fullSchema: Record<string, unknown> | undefined,
+): ReturnType<typeof remoteMcpInputSchema> {
+  return remoteMcpInputSchema(buildDeferredSchema(fullSchema));
 }
 
 export function deferredToolDescription(serverDescription: string): string {
