@@ -8,6 +8,14 @@ import type { Diagnostic, McpServerConfig } from '@kuralle-agents/plugins';
 import { withAuthContext } from './auth-context.js';
 import { connectMcpServer } from './connect.js';
 import { authFailureDiagnostic, authStatusFromError } from './headers.js';
+import {
+  createDescribeTool,
+  deferredInputSchema,
+  deferredToolDescription,
+  MCP_DESCRIBE_TOOL,
+  resolveDisclosureBudget,
+  shouldInlineServerSchemas,
+} from './disclosure.js';
 import { remoteMcpInputSchema } from './schema.js';
 import { resolveAllowedHosts } from './ssrf.js';
 import { mcpToolName } from './tool-name.js';
@@ -138,6 +146,10 @@ export async function mcpToolsImpl(
   }
 
   const tools: Record<string, AnyTool> = {};
+  const budget = resolveDisclosureBudget(opts?.disclosure);
+  const alwaysLoad = opts?.disclosure?.alwaysLoad;
+  const schemaByQualifiedName = new Map<string, Record<string, unknown>>();
+  let anyDeferred = false;
 
   for (const [serverName, live] of liveByServer) {
     let listed;
@@ -154,14 +166,35 @@ export async function mcpToolsImpl(
       continue;
     }
 
-    for (const remoteTool of listed) {
-      const qualified = mcpToolName(serverName, remoteTool.name);
-      if (!toolAllowed(qualified, opts?.tools)) {
-        continue;
-      }
+    const projected = listed.filter((remoteTool) =>
+      toolAllowed(mcpToolName(serverName, remoteTool.name), opts?.tools),
+    );
+    const inlineSchemas = shouldInlineServerSchemas(
+      serverName,
+      projected,
+      budget,
+      alwaysLoad,
+    );
+    if (!inlineSchemas) {
+      anyDeferred = true;
+    }
 
-      const description = remoteTool.description ?? remoteTool.name;
-      const inputSchema = remoteMcpInputSchema(remoteTool.inputSchema);
+    for (const remoteTool of projected) {
+      const qualified = mcpToolName(serverName, remoteTool.name);
+      const serverDescription = remoteTool.description ?? remoteTool.name;
+      const fullInputSchema =
+        remoteTool.inputSchema && typeof remoteTool.inputSchema === 'object'
+          ? remoteTool.inputSchema
+          : { type: 'object', properties: {} };
+
+      schemaByQualifiedName.set(qualified, fullInputSchema);
+
+      const description = inlineSchemas
+        ? serverDescription
+        : deferredToolDescription(serverDescription);
+      const inputSchema = inlineSchemas
+        ? remoteMcpInputSchema(fullInputSchema)
+        : deferredInputSchema();
 
       tools[qualified] = defineTool({
         name: qualified,
@@ -209,6 +242,10 @@ export async function mcpToolsImpl(
         },
       });
     }
+  }
+
+  if (anyDeferred) {
+    tools[MCP_DESCRIBE_TOOL] = createDescribeTool(schemaByQualifiedName);
   }
 
   // Connections stay open for the lifetime of the returned tool map; callers that

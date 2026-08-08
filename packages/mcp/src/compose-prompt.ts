@@ -20,8 +20,10 @@ function inputSchemaJson(tool: AnyTool): string | null {
 }
 
 /**
- * MCP-related system prompt surface. Task 8 adds disclosure budget behaviour via
- * `opts.disclosure`; this function never includes server-advertised instructions.
+ * MCP-related system prompt surface. Tool input schemas appear inline when their
+ * server is under the disclosure budget (or in `alwaysLoad`); deferred schemas
+ * are omitted and fetched via `mcp__describe_tool`. Never includes server-advertised
+ * instructions.
  */
 export function composeMcpSystemPrompt(
   tools: Record<string, AnyTool>,

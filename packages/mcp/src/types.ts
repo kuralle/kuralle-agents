@@ -10,7 +10,7 @@ export interface McpOptions {
   allowedHosts?: readonly string[] | ((server: string, ctx: { session: Session }) => readonly string[]);
   auth?: (server: string, ctx: { session: Session }) => Promise<{ token: string }>;
   tools?: { allow?: readonly string[] } | { block?: readonly string[] };
-  /** Implemented by task 8 (tool schema disclosure budget). */
+  /** Per-server tool schema disclosure budget; defers full input schemas above budget. */
   disclosure?: { budget?: number | 'auto'; alwaysLoad?: readonly string[] };
   timeoutMs?: number;
   /** Implemented by task 10 (connection hibernation). */

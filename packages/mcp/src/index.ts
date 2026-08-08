@@ -10,6 +10,11 @@
 
 export { mcpTools } from './mcp-tools.js';
 export { composeMcpSystemPrompt } from './compose-prompt.js';
+export {
+  estimateTokens,
+  DEFAULT_DISCLOSURE_BUDGET_TOKENS,
+  MCP_DESCRIBE_TOOL,
+} from './disclosure.js';
 export type {
   McpOptions,
   McpConnectionStore,
