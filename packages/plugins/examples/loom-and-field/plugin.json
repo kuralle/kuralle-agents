@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "loom-and-field",
+  "version": "1.0.0",
+  "description": "Loom & Field fashion retail — sizing guides, returns policy, and MCP catalogue tools for the fictional Loom & Field brand.",
+  "author": {
+    "name": "Loom & Field Demo",
+    "url": "https://example.invalid/loom-and-field"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "fashion",
+    "retail",
+    "sizing",
+    "returns",
+    "loom-and-field"
+  ]
+}

@@ -10,6 +10,7 @@
     "examples/**/*",
     "test/fixture-fs.ts",
     "../mcp/examples/_server.ts",
-    "../mcp/examples/banking-tools.ts"
+    "../mcp/examples/banking-tools.ts",
+    "../mcp/examples/fashion-tools.ts"
   ]
 }
