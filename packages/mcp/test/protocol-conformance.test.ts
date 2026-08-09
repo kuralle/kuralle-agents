@@ -74,7 +74,7 @@ describe('MCP client protocol conformance', () => {
     const cursorSeen: string[] = [];
 
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'srv', type: 'streamable-http', url: stub.url }],
         { fetch: paginatingFetch(2, cursorSeen) },
       );
@@ -113,7 +113,7 @@ describe('MCP client protocol conformance', () => {
     });
 
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         { name: 'travel', type: 'streamable-http', url: stub.url },
       ]);
 
@@ -174,7 +174,7 @@ describe('MCP client protocol conformance', () => {
     }) as typeof fetch;
 
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'w', type: 'streamable-http', url: stub.url }],
         { fetch: rogueFetch },
       );
@@ -199,7 +199,7 @@ describe('MCP client protocol conformance', () => {
       ],
     });
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         { name: 'srv', type: 'streamable-http', url: stub.url },
       ]);
       expect(await tools['srv__echo']!.execute({ message: 'fine' }, ctx())).toBe('fine');

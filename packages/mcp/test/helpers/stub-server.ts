@@ -63,7 +63,15 @@ export function startStubMcpServer(options: StubMcpServerOptions = {}): StubMcpS
           return intercepted;
         }
       }
-      return handler.fetch(request);
+      try {
+        return await handler.fetch(request);
+      } catch {
+        // A request can still arrive after the handler shuts down — an aborted call sends
+        // `notifications/cancelled`, which races teardown. A real server answers with a
+        // status; throwing here becomes an unhandled rejection attributed to whichever
+        // test runs next, which is how one abort test failed a later, unrelated one.
+        return new Response('MCP stub server is shut down', { status: 503 });
+      }
     },
   });
 

@@ -50,7 +50,7 @@ async function connectDeferred(toolCount: number) {
   const stub = startStubMcpServer({
     tools: Array.from({ length: toolCount }, (_, i) => fatTool(i)),
   });
-  const tools = await mcpTools(
+  const { tools, close } = await mcpTools(
     [{ name: 'srv', type: 'streamable-http', url: stub.url }],
     { disclosure: { budget: BUDGET } },
   );
@@ -117,7 +117,7 @@ describe('deferred MCP tool schema keeps the argument contract', () => {
   it('still inlines the full prose for a server under budget', async () => {
     const stub = startStubMcpServer({ tools: [fatTool(0)] });
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'small', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: BUDGET } },
       );
@@ -133,7 +133,7 @@ describe('deferred MCP tool schema keeps the argument contract', () => {
       tools: Array.from({ length: 200 }, (_, i) => fatTool(i)),
     });
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'srv', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: TINY_BUDGET } },
       );
@@ -148,13 +148,14 @@ describe('deferred MCP tool schema keeps the argument contract', () => {
       // description is always in the prompt — that is what the model routes on — so a
       // 200-tool server has an irreducible cost no schema policy goes below. What the
       // budget governs is the schema bulk on top of it.
-      const withNames = await mcpTools(
+      const { tools: withNames, close: closeWithNames } = await mcpTools(
         [{ name: 'srv2', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: BUDGET } },
       );
       expect(estimateTokens(bare)).toBeLessThan(
         estimateTokens(composeMcpSystemPrompt(withNames)),
       );
+      await closeWithNames();
 
       // The tools are still callable, and describe_tool still serves the full schema.
       expect(tools['srv__tool_0']).toBeDefined();
@@ -172,7 +173,7 @@ describe('deferred MCP tool schema keeps the argument contract', () => {
       })),
     });
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'bare', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: BUDGET } },
       );

@@ -12,22 +12,23 @@ import { withAuthContext } from './auth-context.js';
 import { connectMcpServer } from './connect.js';
 import { authFailureDiagnostic, authStatusFromError } from './headers.js';
 import {
+  catalogTokens,
   createDescribeTool,
   deferredInputSchema,
   resolveDisclosureMode,
   deferredToolDescription,
   MCP_DESCRIBE_TOOL,
   resolveDisclosureBudget,
-  shouldInlineServerSchemas,
 } from './disclosure.js';
 import { remoteMcpInputSchema } from './schema.js';
 import { resolveAllowedHosts } from './ssrf.js';
-import { mcpToolName } from './tool-name.js';
+import { mcpToolName, rawMcpToolName } from './tool-name.js';
 import type {
   ConnectedMcpServer,
   McpConnectionStore,
   McpOptions,
   McpToolsCapabilities,
+  McpToolset,
   PersistedServer,
 } from './types.js';
 
@@ -35,6 +36,7 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 
 type StdioConnector = (
   config: Extract<McpServerConfig, { type: 'stdio' }>,
+  opts: { timeoutMs: number },
 ) => Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }>;
 
 let stdioConnector: StdioConnector | undefined;
@@ -60,6 +62,31 @@ function assertToolsFilterExclusive(filter: McpOptions['tools'] | undefined): vo
   if (allow !== undefined && block !== undefined) {
     throw new Error(
       `MCP tools filter: set either "allow" or "block", not both (got allow=${JSON.stringify(allow)} and block=${JSON.stringify(block)})`,
+    );
+  }
+}
+
+/**
+ * `auth` and the resolver form of `allowedHosts` both receive a session, and `auth` fixes
+ * a credential onto a connection that outlives the call. A toolset built from either is
+ * therefore scoped to one session, and building it without one is a wiring error rather
+ * than something to paper over with a placeholder.
+ */
+function assertSessionScopedOptions(opts: McpOptions | undefined): void {
+  if (opts?.session) {
+    return;
+  }
+  if (opts?.auth) {
+    throw new Error(
+      'MCP options: `auth` resolves a credential per session and is applied before the ' +
+        'MCP handshake, so the toolset belongs to one session. Pass `session`, and build ' +
+        'one toolset per session.',
+    );
+  }
+  if (typeof opts?.allowedHosts === 'function') {
+    throw new Error(
+      'MCP options: the `allowedHosts` resolver receives the session, so it needs one. ' +
+        'Pass `session`, or supply a static host list.',
     );
   }
 }
@@ -113,9 +140,22 @@ async function persistRemoteServer(
   await store.save(toPersistedServer(config));
 }
 
+/** Resolves the connect-time bearer, so `initialize` and `tools/list` are authenticated. */
+async function resolveConnectHeaders(
+  serverName: string,
+  opts: McpOptions | undefined,
+): Promise<Record<string, string>> {
+  if (!opts?.auth || !opts.session) {
+    return {};
+  }
+  const { token } = await opts.auth(serverName, { session: opts.session });
+  return { Authorization: `Bearer ${token}` };
+}
+
 interface LiveServer {
   connection: ConnectedMcpServer;
-  disabledForTurn: boolean;
+  /** Set by an auth failure for the rest of the turn, and by `close()` permanently. */
+  unavailable: boolean;
 }
 
 /**
@@ -128,13 +168,8 @@ export async function rebuildMcpToolsFromStorage(
   servers: readonly McpServerConfig[],
   opts: McpOptions & { storage: McpConnectionStore },
   capabilities: McpToolsCapabilities,
-  connectStdio?: (
-    config: Extract<McpServerConfig, { type: 'stdio' }>,
-  ) => Promise<
-    | { server: ConnectedMcpServer }
-    | { diagnostic: Diagnostic }
-  >,
-): Promise<Record<string, AnyTool>> {
+  connectStdio?: StdioConnector,
+): Promise<McpToolset> {
   // No fallback to `servers` when the store is empty. A wake with nothing persisted
   // rebuilds nothing, and the caller uses `mcpTools` for a cold start — the two are
   // different situations and collapsing them costs the only property this function
@@ -183,43 +218,56 @@ export async function mcpToolsImpl(
   servers: readonly McpServerConfig[],
   opts: McpOptions | undefined,
   capabilities: McpToolsCapabilities,
-  connectStdio?: (
-    config: Extract<McpServerConfig, { type: 'stdio' }>,
-  ) => Promise<
-    | { server: ConnectedMcpServer }
-    | { diagnostic: Diagnostic }
-  >,
-): Promise<Record<string, AnyTool>> {
+  connectStdio?: StdioConnector,
+): Promise<McpToolset> {
   assertToolsFilterExclusive(opts?.tools);
+  assertSessionScopedOptions(opts);
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const sessionForConnect: Session = {
-    id: 'mcp-connect',
-    conversationId: 'mcp-connect',
-    channelId: 'api',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    messages: [],
-    workingMemory: {},
-    currentAgent: 'mcp',
-    agentStates: {},
-    handoffHistory: [],
-  };
 
   const liveByServer = new Map<string, LiveServer>();
   const closers: Array<() => Promise<void>> = [];
+  let closed = false;
+
+  const close = async (): Promise<void> => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    for (const live of liveByServer.values()) {
+      live.unavailable = true;
+    }
+    // Every connection gets a close attempt; one that throws must not strand the rest.
+    await Promise.all(closers.map((closeOne) => closeOne().catch(() => undefined)));
+  };
 
   for (const config of servers) {
     const allowedHosts = resolveAllowedHosts(
       config.name,
       opts?.allowedHosts,
-      sessionForConnect,
+      opts?.session,
     );
+
+    let connectHeaders: Record<string, string>;
+    try {
+      connectHeaders = await resolveConnectHeaders(config.name, opts);
+    } catch (error) {
+      emitDiagnostic(opts, {
+        section: '7.2.2',
+        rule: 'connection-failure',
+        origin: config.name,
+        message: `Resolving credentials for MCP server "${config.name}" failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+      continue;
+    }
 
     const connected = await connectMcpServer(config, {
       timeoutMs,
       fetch: opts?.fetch,
       allowedHosts,
-      session: sessionForConnect,
+      connectHeaders,
+      onDiagnostic: (d) => emitDiagnostic(opts, d),
       stdio: capabilities.stdio,
       connectStdio,
     });
@@ -235,110 +283,35 @@ export async function mcpToolsImpl(
 
     liveByServer.set(config.name, {
       connection: connected.server,
-      disabledForTurn: false,
+      unavailable: false,
     });
     closers.push(connected.server.close);
   }
 
   const tools: Record<string, AnyTool> = {};
-  const budget = resolveDisclosureBudget(opts?.disclosure);
-  const alwaysLoad = opts?.disclosure?.alwaysLoad;
   const schemaByQualifiedName = new Map<string, Record<string, unknown>>();
+  const disclosure = {
+    budget: resolveDisclosureBudget(opts?.disclosure),
+    alwaysLoad: opts?.disclosure?.alwaysLoad,
+  };
   let anyDeferred = false;
 
   for (const [serverName, live] of liveByServer) {
-    let listed;
-    try {
-      listed = await live.connection.listTools();
-    } catch (error) {
-      emitDiagnostic(
-        opts,
-        authFailureDiagnostic(
-          serverName,
-          authStatusFromError(error) ?? 401,
-        ),
-      );
-      continue;
-    }
-
-    const projected = listed.filter((remoteTool) =>
-      toolAllowed(mcpToolName(serverName, remoteTool.name), opts?.tools),
-    );
-    const disclosureMode = resolveDisclosureMode(
+    const projection = await projectServerTools({
       serverName,
-      projected,
-      budget,
-      alwaysLoad,
-    );
-    const inlineSchemas = disclosureMode === 'inline';
-    if (!inlineSchemas) {
+      live,
+      opts,
+      disclosure,
+      taken: tools,
+    });
+    if (projection.deferred) {
       anyDeferred = true;
     }
-
-    for (const remoteTool of projected) {
-      const qualified = mcpToolName(serverName, remoteTool.name);
-      const serverDescription = remoteTool.description ?? remoteTool.name;
-      const fullInputSchema =
-        remoteTool.inputSchema && typeof remoteTool.inputSchema === 'object'
-          ? remoteTool.inputSchema
-          : { type: 'object', properties: {} };
-
-      schemaByQualifiedName.set(qualified, fullInputSchema);
-
-      const description = inlineSchemas
-        ? serverDescription
-        : deferredToolDescription(serverDescription);
-      const inputSchema = inlineSchemas
-        ? remoteMcpInputSchema(fullInputSchema)
-        // `bare` drops the parameter names too. Only reached when names alone would blow
-        // the budget, which is what keeps REQ-16 true for any tool count.
-        : deferredInputSchema(disclosureMode === 'names' ? fullInputSchema : undefined);
-
-      tools[qualified] = defineTool({
-        name: qualified,
-        description,
-        input: inputSchema,
-        replay: true,
-        execute: async (args, ctx?: ToolContext) => {
-          const session = ctx?.session;
-          if (!session) {
-            throw new Error(`MCP tool "${qualified}" requires a session context.`);
-          }
-
-          const liveServer = liveByServer.get(serverName);
-          if (!liveServer || liveServer.disabledForTurn) {
-            throw new Error(`MCP server "${serverName}" is unavailable for this turn.`);
-          }
-
-          const generated: Record<string, string> = {};
-          if (opts?.auth) {
-            const { token } = await opts.auth(serverName, { session });
-            generated.Authorization = `Bearer ${token}`;
-          }
-
-          const callArgs = isPlainObject(args) ? args : { value: args };
-
-          try {
-            return await withAuthContext(generated, () =>
-              liveServer.connection.callTool(remoteTool.name, callArgs),
-            );
-          } catch (error) {
-            const authStatus = authStatusFromError(error);
-            if (
-              authStatus ||
-              (error !== null &&
-                typeof error === 'object' &&
-                (error as { mcpAuthFailure?: boolean }).mcpAuthFailure)
-            ) {
-              const status = authStatus ?? 401;
-              liveServer.disabledForTurn = true;
-              emitDiagnostic(opts, authFailureDiagnostic(serverName, status));
-              throw new Error(authFailureDiagnostic(serverName, status).message);
-            }
-            throw error;
-          }
-        },
-      });
+    for (const [qualified, tool] of Object.entries(projection.tools)) {
+      tools[qualified] = tool;
+    }
+    for (const [qualified, schema] of projection.schemas) {
+      schemaByQualifiedName.set(qualified, schema);
     }
   }
 
@@ -346,17 +319,181 @@ export async function mcpToolsImpl(
     tools[MCP_DESCRIBE_TOOL] = createDescribeTool(schemaByQualifiedName);
   }
 
-  // Connections stay open for the lifetime of the returned tool map; callers that
-  // need eager teardown can drop references and rely on GC, or task 10's storage.
-  void closers;
+  return { tools, close };
+}
 
-  return tools;
+interface ServerProjection {
+  tools: Record<string, AnyTool>;
+  schemas: Map<string, Record<string, unknown>>;
+  deferred: boolean;
+}
+
+/**
+ * Project one connected server's remote tools into agent tools.
+ *
+ * Separated from the connect loop because the two do unrelated work on unrelated failure
+ * boundaries: a connect failure drops a server, a projection failure drops a tool.
+ *
+ * `taken` is the tool map accumulated from earlier servers. Two servers can publish names
+ * that collide only after sanitizing, so the guard has to see across servers, not just
+ * within one.
+ */
+async function projectServerTools(args: {
+  serverName: string;
+  live: LiveServer;
+  opts: McpOptions | undefined;
+  disclosure: { budget: number; alwaysLoad: readonly string[] | undefined };
+  taken: Readonly<Record<string, AnyTool>>;
+}): Promise<ServerProjection> {
+  const { serverName, live, opts, disclosure, taken } = args;
+  const tools: Record<string, AnyTool> = {};
+  const schemas = new Map<string, Record<string, unknown>>();
+
+  let listed;
+  try {
+    listed = await live.connection.listTools();
+  } catch (error) {
+    emitDiagnostic(
+      opts,
+      authFailureDiagnostic(serverName, authStatusFromError(error) ?? 401),
+    );
+    return { tools, schemas, deferred: false };
+  }
+
+  const projected = listed.filter((remoteTool) =>
+    toolAllowed(mcpToolName(serverName, remoteTool.name), opts?.tools),
+  );
+  const disclosureMode = resolveDisclosureMode(
+    serverName,
+    projected,
+    disclosure.budget,
+    disclosure.alwaysLoad,
+  );
+  const inlineSchemas = disclosureMode === 'inline';
+
+  reportCatalogFloor(serverName, projected, disclosureMode, disclosure.budget, opts);
+
+  for (const remoteTool of projected) {
+    const qualified = mcpToolName(serverName, remoteTool.name);
+
+    if (taken[qualified] || tools[qualified]) {
+      emitDiagnostic(opts, {
+        section: '7.2.2',
+        rule: 'server-entry-invalid',
+        origin: serverName,
+        message: `MCP tool "${rawMcpToolName(serverName, remoteTool.name)}" projects to "${qualified}", which is already taken; the tool is skipped.`,
+      });
+      continue;
+    }
+
+    const serverDescription = remoteTool.description ?? remoteTool.name;
+    const fullInputSchema =
+      remoteTool.inputSchema && typeof remoteTool.inputSchema === 'object'
+        ? remoteTool.inputSchema
+        : { type: 'object', properties: {} };
+
+    schemas.set(qualified, fullInputSchema);
+
+    tools[qualified] = defineTool({
+      name: qualified,
+      description: inlineSchemas
+        ? serverDescription
+        : deferredToolDescription(serverDescription),
+      input: inlineSchemas
+        ? remoteMcpInputSchema(fullInputSchema)
+        // `bare` drops the parameter names too. Only reached when names alone would blow
+        // the budget, which is what keeps schema bulk bounded at any tool count.
+        : deferredInputSchema(disclosureMode === 'names' ? fullInputSchema : undefined),
+      replay: true,
+      execute: (rawArgs, ctx?: ToolContext) =>
+        callRemoteTool({ serverName, live, opts, qualified, remoteName: remoteTool.name }, rawArgs, ctx),
+    });
+  }
+
+  return { tools, schemas, deferred: !inlineSchemas };
+}
+
+/**
+ * The catalog — every tool's name and description — is what the model routes on, so no
+ * disclosure tier drops it. That makes it a floor the budget cannot reach. Say so when the
+ * floor is itself over budget, instead of letting an operator believe the budget bounded a
+ * prompt it could not.
+ */
+function reportCatalogFloor(
+  serverName: string,
+  projected: ReadonlyArray<{ name: string; description?: string }>,
+  disclosureMode: string,
+  budget: number,
+  opts: McpOptions | undefined,
+): void {
+  if (disclosureMode !== 'bare') {
+    return;
+  }
+  const floor = catalogTokens(projected);
+  if (floor <= budget) {
+    return;
+  }
+  emitDiagnostic(opts, {
+    section: '7.2.2',
+    rule: 'disclosure-budget-exceeded',
+    origin: serverName,
+    message:
+      `MCP server "${serverName}" publishes ${projected.length} tools whose names and ` +
+      `descriptions alone cost about ${floor} tokens, over the ${budget}-token disclosure ` +
+      'budget. Every schema is already deferred; the remaining cost is the catalog the ' +
+      'model routes on. Narrow the server with the `tools` filter to go below budget.',
+  });
+}
+
+async function callRemoteTool(
+  binding: {
+    serverName: string;
+    live: LiveServer;
+    opts: McpOptions | undefined;
+    qualified: string;
+    remoteName: string;
+  },
+  rawArgs: unknown,
+  ctx?: ToolContext,
+): Promise<unknown> {
+  const { serverName, live, opts, qualified, remoteName } = binding;
+  const session = ctx?.session;
+  if (!session) {
+    throw new Error(`MCP tool "${qualified}" requires a session context.`);
+  }
+  if (live.unavailable) {
+    throw new Error(`MCP server "${serverName}" is unavailable.`);
+  }
+
+  // Re-resolved per call so a token rotated mid-session takes effect without a reconnect.
+  // It layers over the connect-time credential, which got the handshake through.
+  const generated: Record<string, string> = {};
+  if (opts?.auth) {
+    const { token } = await opts.auth(serverName, { session });
+    generated.Authorization = `Bearer ${token}`;
+  }
+
+  const callArgs = isPlainObject(rawArgs) ? rawArgs : { value: rawArgs };
+
+  try {
+    return await withAuthContext(generated, () =>
+      live.connection.callTool(remoteName, callArgs, { signal: ctx?.abortSignal }),
+    );
+  } catch (error) {
+    const authStatus = authStatusFromError(error);
+    if (authStatus === null) {
+      throw error;
+    }
+    live.unavailable = true;
+    emitDiagnostic(opts, authFailureDiagnostic(serverName, authStatus));
+    throw new Error(authFailureDiagnostic(serverName, authStatus).message);
+  }
 }
 
 export function mcpTools(
   servers: readonly McpServerConfig[],
   opts?: McpOptions,
-): Promise<Record<string, AnyTool>> {
+): Promise<McpToolset> {
   const stdioEnabled = stdioConnector !== undefined;
   return mcpToolsImpl(
     servers,

@@ -42,7 +42,7 @@ function toolset(remoteCalls: { writes: number; reads: number }) {
 
 async function connect(remoteCalls: { writes: number; reads: number }) {
   const stub = startStubMcpServer({ tools: toolset(remoteCalls) });
-  const tools = await mcpTools([
+  const { tools, close } = await mcpTools([
     { name: 'stub', type: 'streamable-http', url: stub.url },
   ]);
   return { stub, tools };

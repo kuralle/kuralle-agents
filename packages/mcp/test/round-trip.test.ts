@@ -9,7 +9,7 @@ describe('MCP round-trip', () => {
     const stub = startStubMcpServer({ tools: [defaultEchoTool()] });
 
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         {
           name: 'stub',
           type: 'streamable-http',

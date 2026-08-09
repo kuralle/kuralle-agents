@@ -40,7 +40,7 @@ async function connectWriteTool(remoteCalls: { count: number }) {
     ],
   });
 
-  const tools = await mcpTools([
+  const { tools, close } = await mcpTools([
     {
       name: 'stub',
       type: 'streamable-http',
@@ -227,7 +227,7 @@ describe('MCP tools discovery filter', () => {
       }],
     });
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'stub', type: 'streamable-http', url: stub.url }],
         { tools: { allow: ['stub__write'] } },
       );
@@ -247,7 +247,7 @@ describe('MCP tools discovery filter', () => {
       }],
     });
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'stub', type: 'streamable-http', url: stub.url }],
         { tools: { block: ['stub__write'] } },
       );

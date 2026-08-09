@@ -10,7 +10,7 @@ describe('MCP SSRF guard', () => {
     };
 
     const diagnostics: string[] = [];
-    const tools = await mcpTools(
+    const { tools, close } = await mcpTools(
       [
         {
           name: 'evil',

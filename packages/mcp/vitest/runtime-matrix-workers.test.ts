@@ -40,7 +40,7 @@ function inWorkerMcpFetch(): typeof fetch {
 
 describe('MCP runtime matrix on workerd (REQ-13)', () => {
   it('connects a streamable-http server and round-trips a tool call inside workerd', async () => {
-    const tools = await mcpTools(
+    const { tools, close } = await mcpTools(
       [{ name: 'stub', type: 'streamable-http', url: 'https://stub.invalid/mcp' }],
       {
         fetch: inWorkerMcpFetch(),
@@ -57,12 +57,13 @@ describe('MCP runtime matrix on workerd (REQ-13)', () => {
     );
 
     expect(result).toBe('hello-workerd');
+    await close();
   });
 
   it('rejects a stdio config on workerd with an error naming the transport AND the runtime', async () => {
     const diagnostics: Diagnostic[] = [];
 
-    const tools = await mcpTools(
+    const { tools, close } = await mcpTools(
       [{ name: 'local', type: 'stdio', command: 'some-server' }],
       { onDiagnostic: (d) => diagnostics.push(d) },
     );
@@ -84,6 +85,7 @@ describe('MCP runtime matrix on workerd (REQ-13)', () => {
     expect(message).toMatch(/workers|workerd|cloudflare/i);
     // Names the remediation.
     expect(message).toContain('@kuralle-agents/mcp/node');
+    await close();
   });
 
   it('does not reach a stdio subprocess module from the root export', async () => {

@@ -32,7 +32,7 @@ import { mcpTools } from '@kuralle-agents/mcp';
 const result = await loadAgentPlugin(fs, '/plugins/acme');
 if (!result.ok) throw new Error(result.rejection.message);
 
-const remoteTools = await mcpTools(result.plugin.mcpServers, {
+const { tools: remoteTools, close } = await mcpTools(result.plugin.mcpServers, {
   allowedHosts: ['127.0.0.1', 'api.example.com'],
   onDiagnostic: (d) => console.warn(d.message),
 });
@@ -42,10 +42,14 @@ const agent = defineAgent({
   model,
   tools: { ...localTools, ...remoteTools },
 });
+
+// When the session ends. The connections stay open until this runs.
+await close();
 ```
 
 Each MCP tool executes through the runtime effect log (`replay: true`). Connection failures for one
-server emit a diagnostic and skip that server — siblings still connect.
+server emit a diagnostic and skip that server — siblings still connect. The turn's `AbortSignal`
+reaches `tools/call`, so cancelling a turn cancels the outstanding request to the server.
 
 ## Runtime matrix
 
@@ -71,7 +75,12 @@ bun packages/mcp/examples/runtime-matrix.ts
 function mcpTools(
   servers: readonly McpServerConfig[],
   opts?: McpOptions,
-): Promise<Record<string, AnyTool>>;
+): Promise<McpToolset>;
+
+interface McpToolset {
+  readonly tools: Record<string, AnyTool>;
+  close(): Promise<void>;
+}
 ```
 
 `McpServerConfig` (from `@kuralle-agents/plugins`) is a discriminated union:
@@ -87,7 +96,8 @@ function mcpTools(
 | Option | Purpose |
 |--------|---------|
 | `allowedHosts?` | SSRF guard for remote URLs — see below |
-| `auth?` | `(server, { session }) => Promise<{ token }>` — merged as `Authorization: Bearer …` per call |
+| `auth?` | `(server, { session }) => Promise<{ token }>` — resolved **before** the handshake and again per call; requires `session` |
+| `session?` | The session a toolset belongs to. Required with `auth`, or with a resolver `allowedHosts` |
 | `tools?` | Discovery-time `{ allow: string[] }` or `{ block: string[] }` — hide tools from the model (mutually exclusive) |
 | `disclosure?` | Schema disclosure budget — see below |
 | `timeoutMs?` | Per-connection timeout (default 60_000 ms) |
@@ -97,6 +107,23 @@ function mcpTools(
 
 Qualified tool names use a double underscore: `payments__create_invoice` (server `payments`, remote
 tool `create_invoice`).
+
+MCP barely constrains what a server may publish as a tool name; model providers require
+`^[a-zA-Z0-9_-]{1,64}$` and reject the whole request otherwise. A name that would be rejected is
+rewritten — illegal characters to `_`, clamped to 64, with a short deterministic hash of the
+original appended so two remote tools cannot collide. Legal names pass through verbatim, so
+`Policy` rules keep matching what you wrote.
+
+### Sessions and credentials
+
+`auth` is resolved before `initialize`, so the bearer covers the handshake and `tools/list` — which
+is what an OAuth-protected server demands, since it rejects the handshake long before a tool call
+exists. Fixing the credential onto the connection means **a toolset built with `auth` belongs to one
+session**: pass `session`, build one toolset per session, and `close()` it when the session ends.
+Supplying `auth` with no `session` throws at wiring time.
+
+A server with static `headers` (or none) needs no session, and one process-wide toolset is right
+for it.
 
 ## Policy is the approval gate
 
@@ -156,6 +183,12 @@ their input schema collapses to a stub and descriptions gain
 
 When any server defers, Kuralle registers **`mcp__describe_tool`** — call it with the qualified
 tool name to fetch the full JSON Schema before invoking the deferred tool.
+
+The budget governs **schema bulk only**. Under it sits a floor no tier drops: every tool's name and
+description, which is what the model routes on. A server broad enough for that catalog alone to
+exceed the budget is over budget with nothing left to shed, and Kuralle emits a
+`disclosure-budget-exceeded` diagnostic naming the count, the measured floor, and the `tools` filter
+as the way down — rather than trimming descriptions and destroying routing to make a number fit.
 
 ```typescript
 await mcpTools(servers, {
@@ -226,15 +259,18 @@ import {
 const store = createSqliteMcpConnectionStore(ctx.storage.sql);
 
 // Cold start.
-const tools = await mcpTools(servers, { storage: store, allowedHosts });
+const toolset = await mcpTools(servers, { storage: store, allowedHosts, session });
 
 // After a wake, before the first tool call.
 const rebuilt = await rebuildMcpToolsFromStorage(
   servers,
-  { storage: store, allowedHosts },
+  { storage: store, allowedHosts, session },
   { stdio: false },
 );
 ```
+
+A Durable Object is itself the session boundary, so a session-scoped toolset lands here naturally:
+one DO, one session, one set of connections rebuilt on each wake.
 
 Use `createMemoryMcpConnectionStore()` on Node and Bun, and in tests.
 

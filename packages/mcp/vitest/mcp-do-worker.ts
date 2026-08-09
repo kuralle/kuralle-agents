@@ -7,6 +7,7 @@ import {
   rebuildMcpToolsFromStorage,
 } from '../src/index.js';
 import type { AnyTool } from '@kuralle-agents/core';
+import type { McpToolset } from '../src/index.js';
 
 const SENTINEL_BEARER = 'SENTINEL_BEARER_MUST_NOT_PERSIST';
 const SENTINEL_HEADER = 'SENTINEL_HEADER_MUST_NOT_PERSIST';
@@ -42,21 +43,28 @@ function inWorkerMcpFetch(): typeof fetch {
     handler.fetch(new Request(input as RequestInfo, init))) as typeof fetch;
 }
 
+/**
+ * A Durable Object *is* the session boundary, so the session-scoped toolset lands here
+ * naturally: one DO, one session, one set of connections rebuilt on each wake.
+ */
+const DO_SESSION = { id: 's', conversationId: 'c' } as never;
+
 function mcpOpts(storage: ReturnType<typeof createSqliteMcpConnectionStore>) {
   return {
     storage,
     fetch: inWorkerMcpFetch(),
     allowedHosts: ['stub.invalid'],
+    session: DO_SESSION,
     auth: async () => ({ token: SENTINEL_BEARER }),
   };
 }
 
 function toolSessionContext() {
-  return { session: { id: 's', conversationId: 'c' } } as never;
+  return { session: DO_SESSION } as never;
 }
 
 export class McpHibernationDO extends DurableObject {
-  private tools: Record<string, AnyTool> | null = null;
+  private toolset: McpToolset | null = null;
   private readonly store: ReturnType<typeof createSqliteMcpConnectionStore>;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -65,21 +73,22 @@ export class McpHibernationDO extends DurableObject {
   }
 
   private async ensureTools(): Promise<Record<string, AnyTool>> {
-    if (this.tools) {
-      return this.tools;
+    if (this.toolset) {
+      return this.toolset.tools;
     }
-    this.tools = await rebuildMcpToolsFromStorage(SERVER_CONFIGS, mcpOpts(this.store), {
+    this.toolset = await rebuildMcpToolsFromStorage(SERVER_CONFIGS, mcpOpts(this.store), {
       stdio: false,
     });
-    return this.tools;
+    return this.toolset.tools;
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
     if (url.pathname === '/connect') {
-      this.tools = await mcpTools(SERVER_CONFIGS, mcpOpts(this.store));
-      return Response.json({ tools: Object.keys(this.tools) });
+      await this.toolset?.close();
+      this.toolset = await mcpTools(SERVER_CONFIGS, mcpOpts(this.store));
+      return Response.json({ tools: Object.keys(this.toolset.tools) });
     }
 
     if (url.pathname === '/call') {

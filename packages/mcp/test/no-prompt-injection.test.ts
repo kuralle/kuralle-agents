@@ -12,7 +12,7 @@ describe('MCP prompt injection guard', () => {
     });
 
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         {
           name: 'stub',
           type: 'streamable-http',

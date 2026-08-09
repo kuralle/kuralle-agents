@@ -96,7 +96,7 @@ export async function runtimeMatrixCheck(opts: {
   streamableHttpUrl: string;
   fetch?: typeof fetch;
 }): Promise<void> {
-  const tools = await mcpTools(
+  const { tools, close } = await mcpTools(
     [{ name: 'stub', type: 'streamable-http', url: opts.streamableHttpUrl }],
     opts.fetch ? { fetch: opts.fetch } : undefined,
   );
@@ -115,7 +115,7 @@ export async function runtimeMatrixCheck(opts: {
   }
 
   const diagnostics: Diagnostic[] = [];
-  const stdioTools = await mcpTools(
+  const { tools: stdioTools, close: closeStdio } = await mcpTools(
     [{ name: 'local', type: 'stdio', command: 'some-server' }],
     { onDiagnostic: (d) => diagnostics.push(d) },
   );
@@ -142,6 +142,10 @@ export async function runtimeMatrixCheck(opts: {
   if (!message.includes('@kuralle-agents/mcp/node')) {
     throw new Error(`Diagnostic must name remediation: ${message}`);
   }
+
+  // A toolset holds live connections until it is closed.
+  await close();
+  await closeStdio();
 }
 
 async function waitForStubReady(stub: { url: string }): Promise<void> {
