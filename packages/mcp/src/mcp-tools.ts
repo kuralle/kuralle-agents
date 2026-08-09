@@ -22,7 +22,7 @@ import {
 } from './disclosure.js';
 import { remoteMcpInputSchema } from './schema.js';
 import { resolveAllowedHosts } from './ssrf.js';
-import { mcpToolName, rawMcpToolName } from './tool-name.js';
+import { fnv1a32, mcpToolName, rawMcpToolName } from './tool-name.js';
 import type {
   ConnectedMcpServer,
   McpConnectionStore,
@@ -153,6 +153,45 @@ async function resolveConnectHeaders(
   return { Authorization: `Bearer ${token}` };
 }
 
+/**
+ * The name a server's tools are projected under.
+ *
+ * Almost always the plugin-authored name, verbatim — that is what keeps `Policy` rules and
+ * durable journal entries readable. Only when two configs in one call share a name does
+ * disambiguation kick in, and then **both** are suffixed rather than the first winning.
+ * Letting the first keep the bare name would make every projected name depend on the order
+ * the caller happened to load plugins in, and a `Policy` rule written against `local__x`
+ * would silently start matching a different server.
+ *
+ * The suffix hashes the server's identity — its URL, or its command line — so it is stable
+ * across processes and independent of load order.
+ */
+function resolveProjectedNames(
+  servers: readonly McpServerConfig[],
+): { names: string[]; collisions: string[] } {
+  const counts = new Map<string, number>();
+  for (const config of servers) {
+    counts.set(config.name, (counts.get(config.name) ?? 0) + 1);
+  }
+
+  const collisions = [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([name]) => name);
+
+  const names = servers.map((config) => {
+    if ((counts.get(config.name) ?? 0) < 2) {
+      return config.name;
+    }
+    const identity =
+      config.type === 'stdio'
+        ? [config.command, ...(config.args ?? [])].join(' ')
+        : config.url;
+    return `${config.name}_${fnv1a32(identity)}`;
+  });
+
+  return { names, collisions };
+}
+
 interface LiveServer {
   connection: ConnectedMcpServer;
   /** Set by an auth failure for the rest of the turn, and by `close()` permanently. */
@@ -241,7 +280,22 @@ export async function mcpToolsImpl(
     await Promise.all(closers.map((closeOne) => closeOne().catch(() => undefined)));
   };
 
-  for (const config of servers) {
+  const { names: projectedNames, collisions } = resolveProjectedNames(servers);
+  for (const name of collisions) {
+    emitDiagnostic(opts, {
+      section: '7.2.2',
+      rule: 'server-name-collision',
+      origin: name,
+      message:
+        `Two or more MCP servers in this toolset are named "${name}" — most likely from ` +
+        'different plugins, since a name is only unique within one mcp.json. Their tools ' +
+        'are projected under distinct suffixed names so neither is lost; rename one to ' +
+        'restore the plain name.',
+    });
+  }
+
+  for (const [index, config] of servers.entries()) {
+    const projectedName = projectedNames[index]!;
     const allowedHosts = resolveAllowedHosts(
       config.name,
       opts?.allowedHosts,
@@ -283,7 +337,7 @@ export async function mcpToolsImpl(
       await persistRemoteServer(opts.storage, config);
     }
 
-    liveByServer.set(config.name, {
+    liveByServer.set(projectedName, {
       connection: connected.server,
       unavailable: false,
     });

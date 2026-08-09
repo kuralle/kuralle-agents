@@ -21,7 +21,7 @@ export function rawMcpToolName(serverName: string, toolName: string): string {
  * to stay workerd-clean, and the name has to be stable across processes because `Policy`
  * rules and durable journal entries are written against it.
  */
-function fnv1a32(text: string): string {
+export function fnv1a32(text: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i += 1) {
     hash ^= text.charCodeAt(i);
