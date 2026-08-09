@@ -30,13 +30,14 @@ import type {
   McpToolsCapabilities,
   McpToolset,
   PersistedServer,
+  StdioConnectorOptions,
 } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 type StdioConnector = (
   config: Extract<McpServerConfig, { type: 'stdio' }>,
-  opts: { timeoutMs: number },
+  opts: StdioConnectorOptions,
 ) => Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }>;
 
 let stdioConnector: StdioConnector | undefined;
@@ -268,6 +269,7 @@ export async function mcpToolsImpl(
       allowedHosts,
       connectHeaders,
       onDiagnostic: (d) => emitDiagnostic(opts, d),
+      fs: opts?.fs,
       stdio: capabilities.stdio,
       connectStdio,
     });

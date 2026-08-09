@@ -227,10 +227,11 @@ export async function connectMcpServer(
     allowedHosts: readonly string[] | null;
     connectHeaders?: Record<string, string>;
     onDiagnostic?: (d: Diagnostic) => void;
+    fs?: unknown;
     stdio: boolean;
     connectStdio?: (
       config: Extract<McpServerConfig, { type: 'stdio' }>,
-      stdioOpts: { timeoutMs: number },
+      stdioOpts: { timeoutMs: number; fs?: unknown },
     ) => Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }>;
   },
 ): Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }> {
@@ -238,7 +239,7 @@ export async function connectMcpServer(
     if (!opts.stdio || !opts.connectStdio) {
       return { diagnostic: stdioRequiresNodeDiagnostic(config.name) };
     }
-    return opts.connectStdio(config, { timeoutMs: opts.timeoutMs });
+    return opts.connectStdio(config, { timeoutMs: opts.timeoutMs, fs: opts.fs });
   }
   return connectRemoteMcpServer(config, opts);
 }

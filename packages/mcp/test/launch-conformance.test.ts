@@ -44,6 +44,7 @@ beforeAll(async () => {
   }
 
   toolset = await mcpTools(loaded.plugin.mcpServers, {
+    fs,
     onDiagnostic: (d) => diagnostics.push(d.message),
   });
 
@@ -81,10 +82,21 @@ describe('Agent Plugins launch conformance', () => {
     const dataRoot = observed?.PLUGIN_DATA;
     expect(dataRoot).toBeTruthy();
 
+    // Assert the directory is already there. `Bun.write` creates missing parents, so
+    // writing first would have proved this test can create it, not that the client did.
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(dataRoot!)).toBe(true);
+
     const probe = `${dataRoot}/.write-probe`;
     await Bun.write(probe, 'ok');
     expect(await Bun.file(probe).text()).toBe('ok');
     await Bun.$`rm -f ${probe}`.quiet();
+  });
+
+  it('expands PLUGIN_DATA in args to a host path, not a virtual one', () => {
+    // The parser expands §9.2 placeholders against virtual roots; the launcher must rebase
+    // them. Missed first time round: env and cwd were mapped, args were not.
+    expect(observed?.argv?.[1]).toBe(observed?.PLUGIN_DATA);
   });
 
   it('starts the subprocess in the plugin root, not the host working directory', () => {

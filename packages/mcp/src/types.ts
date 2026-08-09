@@ -33,6 +33,11 @@ export interface McpOptions {
   timeoutMs?: number;
   storage?: McpConnectionStore;
   onDiagnostic?: (d: Diagnostic) => void;
+  /**
+   * The filesystem a plugin config was loaded from. Only a stdio server needs it, to map
+   * plugin-relative paths onto the host paths a subprocess is launched with.
+   */
+  fs?: unknown;
   /** @internal Test hook: custom fetch for all MCP HTTP transports. */
   fetch?: typeof fetch;
 }
@@ -57,6 +62,16 @@ export interface McpToolsCapabilities {
 
 export interface McpToolCallOptions {
   signal?: AbortSignal;
+}
+
+export interface StdioConnectorOptions {
+  timeoutMs: number;
+  /**
+   * The filesystem the plugin was loaded from. A stdio subprocess starts from a host path,
+   * but a plugin config carries paths relative to this filesystem's root, so the connector
+   * needs it to translate. Absent for a hand-written config, which carries host paths.
+   */
+  fs?: unknown;
 }
 
 export interface ConnectedMcpServer {

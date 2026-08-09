@@ -81,10 +81,16 @@ function resolveCwd(
   return normalizePath(expanded);
 }
 
+/**
+ * Returns the command as it should be launched: a bare token untouched for platform
+ * search (§7.2.1), or a plugin-relative path resolved against the plugin root. The
+ * resolved value used to be computed here and thrown away, which is why a bundled
+ * `./bin/server` never started.
+ */
 function validateCommand(
   command: string,
   pluginRoot: string,
-): Diagnostic | null {
+): { command: string } | Diagnostic {
   if (command.length === 0) {
     return diagnostic(
       '7.2.2',
@@ -96,7 +102,7 @@ function validateCommand(
   const hasPathSeparator = command.includes('/') || command.includes('\\');
 
   if (!hasPathSeparator) {
-    return null;
+    return { command };
   }
 
   if (!command.startsWith('./')) {
@@ -116,16 +122,17 @@ function validateCommand(
     );
   }
 
-  return null;
+  return { command: resolved };
 }
 
 function validateCwd(
   cwd: unknown,
   pluginRoot: string,
   pluginDataRoot: string,
-): Diagnostic | null {
+): { cwd: string } | Diagnostic {
   if (cwd === undefined) {
-    return null;
+    // §7.2.1: when omitted, the working directory is the plugin root.
+    return { cwd: normalizePath(pluginRoot) };
   }
 
   if (typeof cwd !== 'string' || cwd.length === 0) {
@@ -176,7 +183,7 @@ function validateCwd(
     );
   }
 
-  return null;
+  return { cwd: resolved };
 }
 
 function hasDuplicateHeaderNames(
@@ -337,14 +344,14 @@ function parseStdioServer(
     );
   }
 
-  const commandFailure = validateCommand(entry.command, pluginRoot);
-  if (commandFailure) {
-    return commandFailure;
+  const commandResult = validateCommand(entry.command, pluginRoot);
+  if ('section' in commandResult) {
+    return commandResult;
   }
 
-  const cwdFailure = validateCwd(entry.cwd, pluginRoot, pluginDataRoot);
-  if (cwdFailure) {
-    return cwdFailure;
+  const cwdResult = validateCwd(entry.cwd, pluginRoot, pluginDataRoot);
+  if ('section' in cwdResult) {
+    return cwdResult;
   }
 
   if (entry.args !== undefined) {
@@ -395,7 +402,10 @@ function parseStdioServer(
   const config: McpServerConfig = {
     name,
     type: 'stdio',
-    command: entry.command,
+    command: commandResult.command,
+    cwd: cwdResult.cwd,
+    pluginRoot: normalizePath(pluginRoot),
+    pluginDataRoot: normalizePath(pluginDataRoot),
   };
 
   if (entry.args !== undefined) {
@@ -406,14 +416,6 @@ function parseStdioServer(
 
   if (env !== undefined) {
     config.env = env;
-  }
-
-  if (entry.cwd !== undefined && typeof entry.cwd === 'string') {
-    config.cwd = expandPluginPlaceholders(
-      entry.cwd,
-      pluginRoot,
-      pluginDataRoot,
-    );
   }
 
   return config;
