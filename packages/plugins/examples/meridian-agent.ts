@@ -97,7 +97,9 @@ export async function buildRuntime(): Promise<Runtime> {
     console.warn(`[plugin] ${diagnostic.section} ${diagnostic.origin}: ${diagnostic.message}`);
   }
 
-  const remoteTools = await mcpTools(loaded.plugin.mcpServers, {
+  // The connection is intentionally held for the life of the process: this factory hands
+  // the CLI a Runtime, and the toolset must outlive every turn the CLI drives through it.
+  const { tools: remoteTools } = await mcpTools(loaded.plugin.mcpServers, {
     allowedHosts: ['127.0.0.1'],
   });
 

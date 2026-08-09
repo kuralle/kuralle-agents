@@ -118,3 +118,42 @@ export function createGlobMatcher(pattern: string): RegExp {
 export function sortPaths(paths: string[]): string[] {
   return [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
+
+/**
+ * Lexical containment: does `target` sit at or under `root`, by path string alone?
+ *
+ * Correct for a path that has not been created yet — an MCP `cwd` of `${PLUGIN_DATA}` is
+ * a declaration, and the directory only exists later. Use `containsResolvedPath` for a
+ * path you are about to read.
+ */
+export function containsPath(root: string, target: string): boolean {
+  const normalizedRoot = normalizePath(root);
+  const normalizedTarget = normalizePath(target);
+  return (
+    normalizedTarget === normalizedRoot ||
+    normalizedTarget.startsWith(`${normalizedRoot}/`)
+  );
+}
+
+/**
+ * Containment against the filesystem-resolved paths, with symlinks followed.
+ *
+ * A failure to resolve counts as "not contained", so a missing path and an escaping
+ * symlink give the same answer and no caller has to tell them apart to stay safe. That is
+ * also why this must not be used on a path the caller intends to create later.
+ */
+export async function containsResolvedPath(
+  fs: { realpath(path: string): Promise<string> },
+  root: string,
+  target: string,
+): Promise<boolean> {
+  let realRoot: string;
+  let realTarget: string;
+  try {
+    realRoot = await fs.realpath(root);
+    realTarget = await fs.realpath(target);
+  } catch {
+    return false;
+  }
+  return containsPath(realRoot, realTarget);
+}

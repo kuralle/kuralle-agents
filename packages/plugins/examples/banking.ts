@@ -27,7 +27,7 @@ import type { SessionStore } from '@kuralle-agents/core/session';
 import { SessionRunStore } from '../../core/dist/runtime/durable/SessionRunStore.js';
 import { sessionDerivedRunId } from '../../core/dist/runtime/openRun.js';
 import { NodeFileSystem } from '@kuralle-agents/fs/node/fs';
-import { mcpTools } from '@kuralle-agents/mcp';
+import { mcpTools, type McpToolset } from '@kuralle-agents/mcp';
 import { loadAgentPlugin } from '@kuralle-agents/plugins';
 import type { StreamPart } from '@kuralle-agents/core/types';
 import {
@@ -142,7 +142,7 @@ function fail(message: string, failures: string[]): void {
 
 async function runReadOnlyDenial(
   model: LanguageModel,
-  remoteTools: Awaited<ReturnType<typeof mcpTools>>,
+  remoteTools: McpToolset['tools'],
   pluginSkills: SkillStoreLike,
   server: ExampleServerHandle,
   failures: string[],
@@ -202,7 +202,7 @@ async function runReadOnlyDenial(
 
 async function runApprovalFlow(
   model: LanguageModel,
-  remoteTools: Awaited<ReturnType<typeof mcpTools>>,
+  remoteTools: McpToolset['tools'],
   pluginSkills: SkillStoreLike,
   server: ExampleServerHandle,
   sessionStore: SessionStore,
@@ -315,6 +315,7 @@ async function main(): Promise<void> {
   const failures: string[] = [];
   const model = resolveLiveModel();
   let server: ExampleServerHandle | undefined;
+  const closers: Array<() => Promise<void>> = [];
 
   try {
     server = await startExampleMcpServer({
@@ -336,9 +337,11 @@ async function main(): Promise<void> {
       );
     }
 
-    const remoteTools = await mcpTools(loaded.plugin.mcpServers, {
-      allowedHosts: ['127.0.0.1'],
-    });
+    const { tools: remoteTools, close: closeRemoteTools } = await mcpTools(
+      loaded.plugin.mcpServers,
+      { allowedHosts: ['127.0.0.1'] },
+    );
+    closers.push(closeRemoteTools);
     if (!remoteTools[TRANSFER_TOOL]) {
       fail(`missing ${TRANSFER_TOOL} in MCP tool map`, failures);
     }
@@ -366,6 +369,8 @@ async function main(): Promise<void> {
         'transfer ask/resume exactly-once, read-only deny with zero MCP calls.',
     );
   } finally {
+    // A toolset holds live MCP connections until it is closed.
+    for (const close of closers) await close();
     await server?.close();
   }
 }

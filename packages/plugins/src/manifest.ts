@@ -1,4 +1,5 @@
 import type { Diagnostic, PluginAuthor, PluginManifest, Rejection } from './types.js';
+import { diagnostic as makeDiagnostic, isPlainObject } from './diagnostics.js';
 
 const MANIFEST_ORIGIN = 'plugin.json';
 
@@ -39,16 +40,8 @@ export type ManifestValidationResult =
   | ManifestValidationSuccess
   | ManifestValidationFailure;
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function diagnostic(
-  section: string,
-  rule: string,
-  message: string,
-): Diagnostic {
-  return { section, rule, origin: MANIFEST_ORIGIN, message };
+function diagnostic(section: string, rule: string, message: string): Diagnostic {
+  return makeDiagnostic(section, rule, MANIFEST_ORIGIN, message);
 }
 
 function reject(

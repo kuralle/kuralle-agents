@@ -1,0 +1,1 @@
+{"ok":false,"rejection":{"section":"4.1","rule":"path-escapes-plugin-root"},"diagnostics":[{"section":"4.1","rule":"path-escapes-plugin-root","origin":"plugin.json"}]}

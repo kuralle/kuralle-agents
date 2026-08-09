@@ -42,6 +42,7 @@ import {
   estimateTokens,
   mcpTools,
   MCP_DESCRIBE_TOOL,
+  type McpToolset,
 } from '@kuralle-agents/mcp';
 import { loadAgentPlugin } from '@kuralle-agents/plugins';
 import type { StreamPart } from '@kuralle-agents/core/types';
@@ -138,7 +139,7 @@ function fail(message: string, failures: string[], trace?: TurnTrace): void {
 }
 
 function assertDisclosureBudget(
-  tools: Awaited<ReturnType<typeof mcpTools>>,
+  tools: McpToolset['tools'],
   failures: string[],
 ): void {
   const prompt = composeMcpSystemPrompt(tools);
@@ -163,7 +164,7 @@ function assertDisclosureBudget(
 
 async function runSizingAndDeferral(
   model: LanguageModel,
-  remoteTools: Awaited<ReturnType<typeof mcpTools>>,
+  remoteTools: McpToolset['tools'],
   pluginSkills: SkillStoreLike,
   failures: string[],
 ): Promise<void> {
@@ -241,7 +242,7 @@ async function runSizingAndDeferral(
 
 async function runFailOnIsolation(
   model: LanguageModel,
-  remoteTools: Awaited<ReturnType<typeof mcpTools>>,
+  remoteTools: McpToolset['tools'],
   failures: string[],
 ): Promise<void> {
   if (!remoteTools[STOCK_TOOL] || !remoteTools[CATEGORIES_TOOL]) {
@@ -295,6 +296,7 @@ async function main(): Promise<void> {
   const model = resolveLiveModel();
   let mainServer: ExampleServerHandle | undefined;
   let failOnServer: ExampleServerHandle | undefined;
+  const closers: Array<() => Promise<void>> = [];
 
   try {
     const fs = new NodeFileSystem(dirname(PLUGIN_DIR));
@@ -316,10 +318,11 @@ async function main(): Promise<void> {
       record: true,
     });
 
-    const remoteTools = await mcpTools(loaded.plugin.mcpServers, {
-      allowedHosts: ['127.0.0.1'],
-      disclosure: { budget: DISCLOSURE_BUDGET },
-    });
+    const { tools: remoteTools, close: closeRemoteTools } = await mcpTools(
+      loaded.plugin.mcpServers,
+      { allowedHosts: ['127.0.0.1'], disclosure: { budget: DISCLOSURE_BUDGET } },
+    );
+    closers.push(closeRemoteTools);
 
     assertDisclosureBudget(remoteTools, failures);
     await runSizingAndDeferral(model, remoteTools, loaded.plugin.skills, failures);
@@ -329,13 +332,14 @@ async function main(): Promise<void> {
       tools: fashionTools(),
       failOn: ['check_stock'],
     });
-    const failOnTools = await mcpTools(
+    const { tools: failOnTools, close: closeFailOnTools } = await mcpTools(
       [{ name: 'loom', type: 'streamable-http', url: failOnServer.url }],
       {
         allowedHosts: ['127.0.0.1'],
         disclosure: { budget: DISCLOSURE_BUDGET },
       },
     );
+    closers.push(closeFailOnTools);
     await runFailOnIsolation(model, failOnTools, failures);
 
     if (failures.length > 0) {
@@ -349,6 +353,8 @@ async function main(): Promise<void> {
         'describe-then-call, and failOn isolation.',
     );
   } finally {
+    // A toolset holds live MCP connections until it is closed.
+    for (const close of closers) await close();
     await mainServer?.close();
     await failOnServer?.close();
   }

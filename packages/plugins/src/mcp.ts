@@ -1,5 +1,6 @@
-import { dirname, normalizePath, resolvePath } from '@kuralle-agents/fs';
+import { containsPath, dirname, normalizePath, resolvePath } from '@kuralle-agents/fs';
 import type { Diagnostic, McpServerConfig } from './types.js';
+import { diagnostic as makeDiagnostic, isPlainObject } from './diagnostics.js';
 
 const MCP_FILE = 'mcp.json';
 const MCP_ORIGIN = 'mcp.json';
@@ -28,30 +29,13 @@ export interface LoadMcpResult {
   diagnostics: Diagnostic[];
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function diagnostic(
-  section: string,
-  rule: string,
-  message: string,
-): Diagnostic {
-  return { section, rule, origin: MCP_ORIGIN, message };
+function diagnostic(section: string, rule: string, message: string): Diagnostic {
+  return makeDiagnostic(section, rule, MCP_ORIGIN, message);
 }
 
 function extractSchemaVersion(schema: string): string | null {
   const match = AGENT_PLUGINS_VERSION_PATTERN.exec(schema);
   return match ? match[1] : null;
-}
-
-function isContained(root: string, target: string): boolean {
-  const normalizedRoot = normalizePath(root);
-  const normalizedTarget = normalizePath(target);
-  return (
-    normalizedTarget === normalizedRoot ||
-    normalizedTarget.startsWith(`${normalizedRoot}/`)
-  );
 }
 
 const PLACEHOLDER_PATTERN = /\$\{PLUGIN_(ROOT|DATA)\}/g;
@@ -124,7 +108,7 @@ function validateCommand(
   }
 
   const resolved = resolvePath(pluginRoot, command.slice(2));
-  if (!isContained(pluginRoot, resolved)) {
+  if (!containsPath(pluginRoot, resolved)) {
     return diagnostic(
       '4.1',
       'path-escapes-plugin-root',
@@ -184,7 +168,7 @@ function validateCwd(
       ? pluginDataRoot
       : null;
 
-  if (containmentRoot === null || !isContained(containmentRoot, resolved)) {
+  if (containmentRoot === null || !containsPath(containmentRoot, resolved)) {
     return diagnostic(
       '7.2.1',
       'path-escapes-plugin-root',
