@@ -28,7 +28,9 @@ const returnsPolicy = defineSkill({
   description:
     'Explains the 30-day return window, refund timelines, and exceptions. Use when the customer asks about returning, refunding, or exchanging an order.',
   allowedTools: ['lookup_order'],
-  body: [
+  // `body` was renamed to `instructions`. Passing the old key is silently dropped, so the
+  // skill reached the runtime with no body at all.
+  instructions: [
     '# Returns policy',
     '1. Confirm the order id, then run the `lookup_order` tool.',
     '2. If the order is fewer than 30 days old, it is returnable.',
@@ -76,9 +78,12 @@ export class SkillAgent extends KuralleAgent<Env> {
       const handle = runtime.run({ input: q, sessionId: 'skill-chat' });
       const toolCalls: string[] = [];
       let text = '';
+      // Every StreamPart is `{ type, channel, payload }` since 0.4.0. These reads used to
+      // be `event.delta` / `event.toolName`, which is what a smoke pinned at 0.6.1 never
+      // noticed had moved.
       for await (const event of handle.events) {
-        if (event.type === 'text-delta') text += event.delta;
-        if (event.type === 'tool-call') toolCalls.push(event.toolName);
+        if (event.type === 'text-delta') text += event.payload.delta;
+        if (event.type === 'tool-call') toolCalls.push(event.payload.toolName);
       }
       await handle;
       return Response.json({
