@@ -33,6 +33,34 @@ function diagnostic(section: string, rule: string, message: string): Diagnostic 
   return makeDiagnostic(section, rule, MCP_ORIGIN, message);
 }
 
+/**
+ * The one result convention in this file. Every validator either yields the value it
+ * derived or the diagnostic explaining why it could not — never a bare union the caller
+ * has to identify by sniffing for a `section` property, and never a value stripped of the
+ * reason it was rejected.
+ */
+type Parsed<T> = { ok: true; value: T } | { ok: false; diagnostic: Diagnostic };
+
+type Failure = { ok: false; diagnostic: Diagnostic };
+
+function ok<T>(value: T): Parsed<T> {
+  return { ok: true, value };
+}
+
+function fail(section: string, rule: string, message: string): Failure {
+  return { ok: false, diagnostic: diagnostic(section, rule, message) };
+}
+
+/** §7.2.2's catch-all for a malformed server entry — the most common rejection here. */
+function invalidEntry(message: string): Failure {
+  return fail('7.2.2', 'server-entry-invalid', message);
+}
+
+/** §7.2.2's catch-all for a malformed `mcp.json` as a whole, which disables MCP. */
+function invalidConfig(message: string): Failure {
+  return fail('7.2.2', 'mcp-config-invalid', message);
+}
+
 function extractSchemaVersion(schema: string): string | null {
   const match = AGENT_PLUGINS_VERSION_PATTERN.exec(schema);
   return match ? match[1] : null;
@@ -87,26 +115,19 @@ function resolveCwd(
  * resolved value used to be computed here and thrown away, which is why a bundled
  * `./bin/server` never started.
  */
-function validateCommand(
-  command: string,
-  pluginRoot: string,
-): { command: string } | Diagnostic {
+function validateCommand(command: string, pluginRoot: string): Parsed<string> {
   if (command.length === 0) {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
-      'stdio server "command" must be a non-empty string.',
-    );
+    return invalidEntry('stdio server "command" must be a non-empty string.');
   }
 
   const hasPathSeparator = command.includes('/') || command.includes('\\');
 
   if (!hasPathSeparator) {
-    return { command };
+    return ok(command);
   }
 
   if (!command.startsWith('./')) {
-    return diagnostic(
+    return fail(
       '4.1',
       'path-escapes-plugin-root',
       `stdio server command "${command}" is not a bare executable or plugin-relative path.`,
@@ -115,38 +136,32 @@ function validateCommand(
 
   const resolved = resolvePath(pluginRoot, command.slice(2));
   if (!containsPath(pluginRoot, resolved)) {
-    return diagnostic(
+    return fail(
       '4.1',
       'path-escapes-plugin-root',
       `stdio server command "${command}" resolves outside the plugin root.`,
     );
   }
 
-  return { command: resolved };
+  return ok(resolved);
 }
 
 function validateCwd(
   cwd: unknown,
   pluginRoot: string,
   pluginDataRoot: string,
-): { cwd: string } | Diagnostic {
+): Parsed<string> {
   if (cwd === undefined) {
     // §7.2.1: when omitted, the working directory is the plugin root.
-    return { cwd: normalizePath(pluginRoot) };
+    return ok(normalizePath(pluginRoot));
   }
 
   if (typeof cwd !== 'string' || cwd.length === 0) {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
-      'stdio server "cwd" must be a non-empty string.',
-    );
+    return invalidEntry('stdio server "cwd" must be a non-empty string.');
   }
 
   if (!CWD_PATTERN.test(cwd)) {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
+    return invalidEntry(
       `stdio server "cwd" value "${cwd}" is not a permitted form.`,
     );
   }
@@ -176,14 +191,14 @@ function validateCwd(
       : null;
 
   if (containmentRoot === null || !containsPath(containmentRoot, resolved)) {
-    return diagnostic(
+    return fail(
       '7.2.1',
       'path-escapes-plugin-root',
       `stdio server "cwd" value "${cwd}" resolves outside its permitted root.`,
     );
   }
 
-  return { cwd: resolved };
+  return ok(resolved);
 }
 
 function hasDuplicateHeaderNames(
@@ -217,48 +232,36 @@ function isLoopbackHost(hostname: string): boolean {
   return false;
 }
 
-function validateRemoteUrl(url: string): Diagnostic | null {
+/** Returns the reason the URL is unusable, or null when it satisfies §7.2.1. */
+function validateRemoteUrl(url: string): Failure | null {
+  const reject = (reason: string): Failure =>
+    fail(
+      '7.2.1',
+      'server-entry-invalid',
+      `Remote MCP server URL "${url}" ${reason}`,
+    );
+
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return diagnostic(
-      '7.2.1',
-      'server-entry-invalid',
-      `Remote MCP server URL "${url}" is not a valid absolute URL.`,
-    );
+    return reject('is not a valid absolute URL.');
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return diagnostic(
-      '7.2.1',
-      'server-entry-invalid',
-      `Remote MCP server URL "${url}" must use http or https.`,
-    );
+    return reject('must use http or https.');
   }
 
   if (parsed.username || parsed.password) {
-    return diagnostic(
-      '7.2.1',
-      'server-entry-invalid',
-      `Remote MCP server URL "${url}" must not contain user information.`,
-    );
+    return reject('must not contain user information.');
   }
 
   if (parsed.hash.length > 0) {
-    return diagnostic(
-      '7.2.1',
-      'server-entry-invalid',
-      `Remote MCP server URL "${url}" must not contain a fragment.`,
-    );
+    return reject('must not contain a fragment.');
   }
 
   if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
-    return diagnostic(
-      '7.2.1',
-      'server-entry-invalid',
-      `Remote MCP server URL "${url}" must use https for non-loopback hosts.`,
-    );
+    return reject('must use https for non-loopback hosts.');
   }
 
   return null;
@@ -271,31 +274,54 @@ function looksLikeSecret(key: string, value: string): boolean {
   return SECRET_VALUE_PREFIX_PATTERN.test(value);
 }
 
+/**
+ * An entry's `env`, expanded, plus the advisory diagnostics it earned. Warnings ride with
+ * the value because they are only reported when the entry survives — a rejected entry's
+ * `secret-in-env` note describes something that is not being launched.
+ */
+interface ValidatedEnv {
+  env: Record<string, string> | undefined;
+  warnings: Diagnostic[];
+}
+
 function validateEnv(
+  name: string,
   env: unknown,
   pluginRoot: string,
   pluginDataRoot: string,
-  diagnostics: Diagnostic[],
-): Record<string, string> | null | undefined {
+): Parsed<ValidatedEnv> {
   if (env === undefined) {
-    return undefined;
+    return ok({ env: undefined, warnings: [] });
   }
 
   if (!isPlainObject(env)) {
-    return null;
+    return invalidEntry(
+      `stdio MCP server "${name}" has an invalid "env" field.`,
+    );
+  }
+
+  // §9.2: the client always supplies these, and a plugin may never set them. Checked
+  // across every key before anything else, so a reserved name is reported as one whatever
+  // else is wrong with the object — the rule is normative, the shape complaint is not.
+  if ('PLUGIN_ROOT' in env || 'PLUGIN_DATA' in env) {
+    return fail(
+      '9.2',
+      'env-reserved-name',
+      `stdio MCP server "${name}" uses a reserved environment variable name.`,
+    );
   }
 
   const result: Record<string, string> = {};
+  const warnings: Diagnostic[] = [];
 
   for (const [key, value] of Object.entries(env)) {
-    if (key === 'PLUGIN_ROOT' || key === 'PLUGIN_DATA') {
-      return null;
-    }
     if (typeof value !== 'string') {
-      return null;
+      return invalidEntry(
+        `stdio MCP server "${name}" has an invalid "env" field.`,
+      );
     }
     if (looksLikeSecret(key, value)) {
-      diagnostics.push(
+      warnings.push(
         diagnostic(
           '9.2',
           'secret-in-env',
@@ -306,7 +332,7 @@ function validateEnv(
     result[key] = expandPluginPlaceholders(value, pluginRoot, pluginDataRoot);
   }
 
-  return result;
+  return ok({ env: result, warnings });
 }
 
 function hasUnknownFields(
@@ -321,89 +347,69 @@ function hasUnknownFields(
   return false;
 }
 
+/**
+ * A server entry that survived parsing, with any advisory diagnostics it earned. Warnings
+ * are carried rather than pushed into an out-param so that rejecting the entry discards
+ * them by construction instead of by the caller remembering to.
+ */
+interface ParsedServer {
+  config: McpServerConfig;
+  warnings: Diagnostic[];
+}
+
 function parseStdioServer(
   name: string,
   entry: Record<string, unknown>,
   pluginRoot: string,
   pluginDataRoot: string,
-  diagnostics: Diagnostic[],
-): McpServerConfig | Diagnostic {
+): Parsed<ParsedServer> {
   if (hasUnknownFields(entry, STDIO_FIELDS)) {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
+    return invalidEntry(
       `MCP server "${name}" contains unknown or cross-variant fields.`,
     );
   }
 
   if (typeof entry.command !== 'string') {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
+    return invalidEntry(
       `stdio MCP server "${name}" is missing a valid "command" field.`,
     );
   }
 
-  const commandResult = validateCommand(entry.command, pluginRoot);
-  if ('section' in commandResult) {
-    return commandResult;
+  const command = validateCommand(entry.command, pluginRoot);
+  if (!command.ok) {
+    return command;
   }
 
-  const cwdResult = validateCwd(entry.cwd, pluginRoot, pluginDataRoot);
-  if ('section' in cwdResult) {
-    return cwdResult;
+  const cwd = validateCwd(entry.cwd, pluginRoot, pluginDataRoot);
+  if (!cwd.ok) {
+    return cwd;
   }
 
   if (entry.args !== undefined) {
     if (!Array.isArray(entry.args)) {
-      return diagnostic(
-        '7.2.2',
-        'server-entry-invalid',
+      return invalidEntry(
         `stdio MCP server "${name}" has an invalid "args" field.`,
       );
     }
     for (const arg of entry.args) {
       if (typeof arg !== 'string') {
-        return diagnostic(
-          '7.2.2',
-          'server-entry-invalid',
+        return invalidEntry(
           `stdio MCP server "${name}" has a non-string "args" entry.`,
         );
       }
     }
   }
 
-  const envDiagnostics: Diagnostic[] = [];
-  const env = validateEnv(
-    entry.env,
-    pluginRoot,
-    pluginDataRoot,
-    envDiagnostics,
-  );
-  if (env === null) {
-    if (
-      isPlainObject(entry.env) &&
-      ('PLUGIN_ROOT' in entry.env || 'PLUGIN_DATA' in entry.env)
-    ) {
-      return diagnostic(
-        '9.2',
-        'env-reserved-name',
-        `stdio MCP server "${name}" uses a reserved environment variable name.`,
-      );
-    }
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
-      `stdio MCP server "${name}" has an invalid "env" field.`,
-    );
+  const env = validateEnv(name, entry.env, pluginRoot, pluginDataRoot);
+  if (!env.ok) {
+    return env;
   }
-  diagnostics.push(...envDiagnostics);
 
   const config: McpServerConfig = {
     name,
     type: 'stdio',
-    command: commandResult.command,
-    cwd: cwdResult.cwd,
+    command: command.value,
+    cwd: cwd.value,
     pluginRoot: normalizePath(pluginRoot),
     pluginDataRoot: normalizePath(pluginDataRoot),
   };
@@ -414,30 +420,26 @@ function parseStdioServer(
     );
   }
 
-  if (env !== undefined) {
-    config.env = env;
+  if (env.value.env !== undefined) {
+    config.env = env.value.env;
   }
 
-  return config;
+  return ok({ config, warnings: env.value.warnings });
 }
 
 function parseRemoteServer(
   name: string,
   entry: Record<string, unknown>,
   transport: 'streamable-http' | 'sse',
-): McpServerConfig | Diagnostic {
+): Parsed<ParsedServer> {
   if (hasUnknownFields(entry, REMOTE_FIELDS)) {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
+    return invalidEntry(
       `MCP server "${name}" contains unknown or cross-variant fields.`,
     );
   }
 
   if (typeof entry.url !== 'string' || entry.url.length === 0) {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
+    return invalidEntry(
       `${transport} MCP server "${name}" is missing a valid "url" field.`,
     );
   }
@@ -447,11 +449,15 @@ function parseRemoteServer(
     return urlFailure;
   }
 
+  const config: Extract<McpServerConfig, { url: string }> = {
+    name,
+    type: transport,
+    url: entry.url,
+  };
+
   if (entry.headers !== undefined) {
     if (!isPlainObject(entry.headers)) {
-      return diagnostic(
-        '7.2.2',
-        'server-entry-invalid',
+      return invalidEntry(
         `${transport} MCP server "${name}" has an invalid "headers" field.`,
       );
     }
@@ -459,9 +465,7 @@ function parseRemoteServer(
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(entry.headers)) {
       if (typeof value !== 'string') {
-        return diagnostic(
-          '7.2.2',
-          'server-entry-invalid',
+        return invalidEntry(
           `${transport} MCP server "${name}" has a non-string header value.`,
         );
       }
@@ -469,26 +473,15 @@ function parseRemoteServer(
     }
 
     if (hasDuplicateHeaderNames(headers)) {
-      return diagnostic(
-        '7.2.2',
-        'server-entry-invalid',
+      return invalidEntry(
         `${transport} MCP server "${name}" repeats a header name under different casing.`,
       );
     }
 
-    return {
-      name,
-      type: transport,
-      url: entry.url,
-      headers,
-    };
+    config.headers = headers;
   }
 
-  return {
-    name,
-    type: transport,
-    url: entry.url,
-  };
+  return ok({ config, warnings: [] });
 }
 
 function parseServerEntry(
@@ -496,91 +489,49 @@ function parseServerEntry(
   entry: unknown,
   pluginRoot: string,
   pluginDataRoot: string,
-  diagnostics: Diagnostic[],
-): McpServerConfig | Diagnostic {
+): Parsed<ParsedServer> {
   if (!isPlainObject(entry)) {
-    return diagnostic(
-      '7.2.2',
-      'server-entry-invalid',
-      `MCP server "${name}" must be an object.`,
-    );
+    return invalidEntry(`MCP server "${name}" must be an object.`);
   }
 
   const type = entry.type;
   if (type === 'stdio') {
-    return parseStdioServer(
-      name,
-      entry,
-      pluginRoot,
-      pluginDataRoot,
-      diagnostics,
-    );
+    return parseStdioServer(name, entry, pluginRoot, pluginDataRoot);
   }
 
   if (type === 'streamable-http' || type === 'sse') {
     return parseRemoteServer(name, entry, type);
   }
 
-  return diagnostic(
-    '7.2.2',
-    'server-entry-invalid',
+  return invalidEntry(
     `MCP server "${name}" declares an unsupported transport type.`,
   );
 }
 
-function disableMcp(
-  section: string,
-  rule: string,
-  message: string,
-): LoadMcpResult {
-  return {
-    mcpServers: [],
-    diagnostics: [diagnostic(section, rule, message)],
-  };
+/** §7.2.2 rule 2: a bad `mcp.json` disables MCP for the plugin, and nothing else. */
+function mcpDisabled(reason: Diagnostic): LoadMcpResult {
+  return { mcpServers: [], diagnostics: [reason] };
 }
-
-type TopLevelValidation =
-  | { ok: true; mcpServers: Record<string, unknown> }
-  | { ok: false; result: LoadMcpResult };
 
 function validateTopLevel(
   parsed: unknown,
   manifestSchema: string,
-): TopLevelValidation {
+): Parsed<Record<string, unknown>> {
   if (!isPlainObject(parsed)) {
-    return {
-      ok: false,
-      result: disableMcp(
-        '7.2.2',
-        'mcp-config-invalid',
-        'mcp.json must contain a top-level object.',
-      ),
-    };
+    return invalidConfig('mcp.json must contain a top-level object.');
   }
 
   const permitted = new Set(['$schema', 'mcpServers']);
   for (const key of Object.keys(parsed)) {
     if (!permitted.has(key)) {
-      return {
-        ok: false,
-        result: disableMcp(
-          '7.2.2',
-          'mcp-config-invalid',
-          `mcp.json contains unknown top-level field "${key}".`,
-        ),
-      };
+      return invalidConfig(
+        `mcp.json contains unknown top-level field "${key}".`,
+      );
     }
   }
 
   if (typeof parsed.$schema !== 'string' || parsed.$schema.length === 0) {
-    return {
-      ok: false,
-      result: disableMcp(
-        '7.2.2',
-        'mcp-config-invalid',
-        'mcp.json is missing required field "$schema".',
-      ),
-    };
+    return invalidConfig('mcp.json is missing required field "$schema".');
   }
 
   const mcpSchema = parsed.$schema;
@@ -594,49 +545,26 @@ function validateTopLevel(
     mcpVersion !== null &&
     manifestVersion !== mcpVersion
   ) {
-    return {
-      ok: false,
-      result: disableMcp(
-        '10.1',
-        'mcp-config-version-mismatch',
-        'mcp.json $schema version does not match plugin.json.',
-      ),
-    };
+    return fail(
+      '10.1',
+      'mcp-config-version-mismatch',
+      'mcp.json $schema version does not match plugin.json.',
+    );
   }
 
   if (mcpSchema !== SUPPORTED_MCP_SCHEMA) {
-    if (AGENT_PLUGINS_MCP_SCHEMA_PATTERN.test(mcpSchema)) {
-      return {
-        ok: false,
-        result: disableMcp(
-          '7.2.2',
-          'mcp-config-invalid',
-          `Unsupported Agent Plugins MCP schema version: ${mcpSchema}`,
-        ),
-      };
-    }
-    return {
-      ok: false,
-      result: disableMcp(
-        '7.2.2',
-        'mcp-config-invalid',
-        `Unrecognized mcp.json $schema identifier: ${mcpSchema}`,
-      ),
-    };
+    return invalidConfig(
+      AGENT_PLUGINS_MCP_SCHEMA_PATTERN.test(mcpSchema)
+        ? `Unsupported Agent Plugins MCP schema version: ${mcpSchema}`
+        : `Unrecognized mcp.json $schema identifier: ${mcpSchema}`,
+    );
   }
 
   if (!isPlainObject(parsed.mcpServers)) {
-    return {
-      ok: false,
-      result: disableMcp(
-        '7.2.2',
-        'mcp-config-invalid',
-        'mcp.json field "mcpServers" must be an object.',
-      ),
-    };
+    return invalidConfig('mcp.json field "mcpServers" must be an object.');
   }
 
-  return { ok: true, mcpServers: parsed.mcpServers };
+  return ok(parsed.mcpServers);
 }
 
 export function defaultPluginDataRoot(
@@ -656,39 +584,30 @@ export function loadMcpConfig(
   try {
     parsed = JSON.parse(text);
   } catch {
-    return disableMcp(
-      '7.2.2',
-      'mcp-config-invalid',
-      'mcp.json is not valid JSON.',
+    return mcpDisabled(
+      diagnostic('7.2.2', 'mcp-config-invalid', 'mcp.json is not valid JSON.'),
     );
   }
 
   const topLevel = validateTopLevel(parsed, manifestSchema);
   if (!topLevel.ok) {
-    return topLevel.result;
+    return mcpDisabled(topLevel.diagnostic);
   }
 
-  const mcpServersRaw = topLevel.mcpServers;
   const mcpServers: McpServerConfig[] = [];
   const diagnostics: Diagnostic[] = [];
 
-  for (const [name, entry] of Object.entries(mcpServersRaw)) {
-    const pendingDiagnostics: Diagnostic[] = [];
-    const result = parseServerEntry(
-      name,
-      entry,
-      pluginRoot,
-      pluginDataRoot,
-      pendingDiagnostics,
-    );
+  // §7.2.2: each entry loads or fails on its own; one bad entry never sinks the rest.
+  for (const [name, entry] of Object.entries(topLevel.value)) {
+    const result = parseServerEntry(name, entry, pluginRoot, pluginDataRoot);
 
-    if ('section' in result && 'rule' in result && 'origin' in result) {
-      diagnostics.push(result);
+    if (!result.ok) {
+      diagnostics.push(result.diagnostic);
       continue;
     }
 
-    diagnostics.push(...pendingDiagnostics);
-    mcpServers.push(result);
+    diagnostics.push(...result.value.warnings);
+    mcpServers.push(result.value.config);
   }
 
   return { mcpServers, diagnostics };
