@@ -21,11 +21,18 @@ interface McpHibernationEnv {
  * on purpose: a whitelist maintained next to the implementation drifts with it and stops
  * catching the field somebody adds later. Anything outside this set fails.
  */
-const ALLOWED_ROW_KEYS = ['id', 'name', 'type', 'url'] as const;
+const ALLOWED_ROW_KEYS = ['id', 'name', 'type', 'url', 'tools'] as const;
 
 /** Values the DO is told to use as a credential. Neither may reach storage. */
 const SENTINEL_BEARER = 'SENTINEL_BEARER_MUST_NOT_PERSIST';
 const SENTINEL_HEADER = 'SENTINEL_HEADER_MUST_NOT_PERSIST';
+
+interface WakeReport {
+  listCallsAtMapReady: number;
+  toolsAtMapReady: string[];
+  toolsAfterReconcile: string[];
+  listCallsAfterReconcile: number;
+}
 
 function stub() {
   const bindings = env as unknown as McpHibernationEnv;
@@ -73,10 +80,17 @@ describe('MCP connections survive DO hibernation (REQ-14)', () => {
       for (const key of Object.keys(row)) {
         expect(ALLOWED_ROW_KEYS).toContain(key as (typeof ALLOWED_ROW_KEYS)[number]);
       }
-      // No value may be a function or otherwise non-serialisable.
+      // No value may be a function or otherwise non-serialisable. `tools` is an array of
+      // plain catalogue entries, so it is walked rather than skipped.
       for (const value of Object.values(row)) {
         expect(typeof value).not.toBe('function');
         expect(value).not.toBeInstanceOf(Promise);
+        for (const nested of Array.isArray(value) ? value : []) {
+          for (const inner of Object.values(nested as Record<string, unknown>)) {
+            expect(typeof inner).not.toBe('function');
+            expect(inner).not.toBeInstanceOf(Promise);
+          }
+        }
       }
     }
 
@@ -85,6 +99,62 @@ describe('MCP connections survive DO hibernation (REQ-14)', () => {
     const serialized = JSON.stringify(rows);
     expect(serialized).not.toContain(SENTINEL_BEARER);
     expect(serialized).not.toContain(SENTINEL_HEADER);
+  });
+
+  it('wakes with a tool map and makes no tools/list round trip to get it', async () => {
+    const target = stub();
+    await json(target, '/catalog?legacy=on');
+    await json(target, '/connect');
+
+    await evictDurableObject(target);
+
+    const woken = await json<WakeReport>(target, '/wake');
+
+    // The count is the assertion. "Tools appeared" passes with or without the cache; only
+    // a zero here says the map came from storage rather than from the server.
+    expect(woken.listCallsAtMapReady).toBe(0);
+    expect(woken.toolsAtMapReady).toContain('stub__echo');
+    expect(woken.toolsAtMapReady).toContain('stub__legacy');
+
+    // Background reconciliation still happens — the cache is a head start, not a promise
+    // that the catalogue was never checked.
+    expect(woken.listCallsAfterReconcile).toBe(1);
+  });
+
+  it('converges on the server catalogue when the cached listing has gone stale', async () => {
+    const target = stub();
+    await json(target, '/catalog?legacy=on');
+    await json(target, '/connect');
+
+    // The server drops a tool while the Durable Object is asleep.
+    await json(target, '/catalog?legacy=off');
+    await evictDurableObject(target);
+
+    const woken = await json<WakeReport>(target, '/wake');
+
+    expect(woken.toolsAtMapReady).toContain('stub__legacy');
+    expect(woken.toolsAfterReconcile).not.toContain('stub__legacy');
+    expect(woken.toolsAfterReconcile).toContain('stub__echo');
+  });
+
+  it('refuses a withdrawn cached tool with a message the model can act on', async () => {
+    const target = stub();
+    await json(target, '/catalog?legacy=on');
+    await json(target, '/connect');
+
+    await json(target, '/catalog?legacy=off');
+    await evictDurableObject(target);
+
+    const { error } = await json<{ error: string | null }>(
+      target,
+      '/call-withdrawn',
+    );
+
+    // A turn that started before reconciliation still holds the tool. It must fail as a
+    // readable tool error, never as an unhandled rejection or a raw transport fault.
+    expect(error).toBeTruthy();
+    expect(error).toContain('stub__legacy');
+    expect(error).toContain('no longer published');
   });
 
   it('writes nothing credential-valued into raw storage either, not just into the row shape', async () => {

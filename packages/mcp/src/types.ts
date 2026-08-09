@@ -1,8 +1,12 @@
 import type { AnyTool, Session } from '@kuralle-agents/core';
 import type { Diagnostic } from '@kuralle-agents/plugins';
-import type { McpConnectionStore, PersistedServer } from './connection-store.js';
+import type {
+  McpConnectionStore,
+  PersistedServer,
+  PersistedTool,
+} from './connection-store.js';
 
-export type { McpConnectionStore, PersistedServer };
+export type { McpConnectionStore, PersistedServer, PersistedTool };
 
 export interface McpOptions {
   /**
@@ -52,6 +56,19 @@ export type { Diagnostic, McpServerConfig } from '@kuralle-agents/plugins';
  */
 export interface McpToolset {
   readonly tools: Record<string, AnyTool>;
+  /**
+   * Settles once every cached tool listing has been checked against its server.
+   *
+   * A wake that projected from a persisted listing served the tool map without a
+   * `tools/list` round trip, and then re-lists in the background. `tools` is mutated in
+   * place when a server's catalogue turns out to have changed, so the next turn sees the
+   * correction while the turn already in flight keeps the snapshot it started with.
+   *
+   * Already resolved when nothing was cached, so a caller never has to test for it. Await
+   * it only to observe the reconciled state deterministically — a test, or a caller that
+   * would rather pay the round trip than risk one stale turn.
+   */
+  readonly reconciled: Promise<void>;
   close(): Promise<void>;
 }
 

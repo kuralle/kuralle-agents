@@ -30,6 +30,7 @@ import type {
   McpToolsCapabilities,
   McpToolset,
   PersistedServer,
+  PersistedTool,
   StdioConnectorOptions,
 } from './types.js';
 
@@ -123,22 +124,39 @@ function isRemoteConfig(
   return config.type === 'streamable-http' || config.type === 'sse';
 }
 
-function toPersistedServer(
+/**
+ * Records the server *and* the catalogue it just published, so the next wake can build a
+ * tool map without a `tools/list` round trip. The listing is public metadata — the same
+ * text the model is shown — and the credential rule is untouched: `headers` and resolved
+ * bearers still never reach the store.
+ */
+async function persistRemoteServer(
+  store: McpConnectionStore,
   config: Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }>,
-): PersistedServer {
-  return {
+  tools: readonly PersistedTool[],
+): Promise<void> {
+  const row: PersistedServer = {
     id: config.name,
     name: config.name,
     type: config.type,
     url: config.url,
+    tools,
   };
+  await store.save(row);
 }
 
-async function persistRemoteServer(
-  store: McpConnectionStore,
-  config: Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }>,
-): Promise<void> {
-  await store.save(toPersistedServer(config));
+/**
+ * Compares two catalogues by what the model actually sees: each tool's name, description
+ * and input schema. Schema key order counts, so a server that reserialises the same schema
+ * differently reads as changed — which costs one re-projection and one write, and never a
+ * wrong tool map.
+ */
+function listingSignature(tools: readonly PersistedTool[]): string {
+  return JSON.stringify(
+    tools
+      .map((tool) => [tool.name, tool.description ?? '', tool.inputSchema ?? null])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+  );
 }
 
 /** Resolves the connect-time bearer, so `initialize` and `tools/list` are authenticated. */
@@ -192,10 +210,32 @@ function resolveProjectedNames(
   return { names, collisions };
 }
 
+/**
+ * One server to connect, with whatever a previous connection left behind.
+ *
+ * A seed rather than a bare config because a wake carries more than the caller's list: the
+ * catalogue the server published last time. Index-aligned arrays would have done the same
+ * job and silently mispair the day someone filters one of them.
+ */
+interface ServerSeed {
+  config: McpServerConfig;
+  /** Persisted `tools/list` result, when this call is a wake rather than a cold start. */
+  cachedTools?: readonly PersistedTool[];
+}
+
 interface LiveServer {
   connection: ConnectedMcpServer;
+  config: McpServerConfig;
   /** Set by an auth failure for the rest of the turn, and by `close()` permanently. */
   unavailable: boolean;
+  /** Present only when this server's tools were projected from a persisted listing. */
+  cachedTools?: readonly PersistedTool[];
+  /**
+   * Remote tool names the server is currently known to publish. Reconciliation narrows it,
+   * so a turn still holding a pre-reconciliation tool map calls a withdrawn tool and gets a
+   * sentence it can act on rather than whatever the transport happens to throw.
+   */
+  published: Set<string>;
 }
 
 /**
@@ -217,7 +257,7 @@ export async function rebuildMcpToolsFromStorage(
   // working tool map, so nothing here would ever be exercised.
   const persisted = await opts.storage.list();
   const configByName = new Map(servers.map((config) => [config.name, config]));
-  const toConnect: McpServerConfig[] = [];
+  const toConnect: ServerSeed[] = [];
 
   for (const row of persisted) {
     const config = configByName.get(row.name);
@@ -240,6 +280,8 @@ export async function rebuildMcpToolsFromStorage(
       continue;
     }
     if (config.type !== row.type || config.url !== row.url) {
+      // The cached listing dies with the row it belonged to: a different endpoint is a
+      // different catalogue, whatever the entry is still called.
       emitDiagnostic(opts, {
         section: '7.2.2',
         rule: 'connection-failure',
@@ -248,18 +290,22 @@ export async function rebuildMcpToolsFromStorage(
       });
       continue;
     }
-    toConnect.push(config);
+    toConnect.push({
+      config,
+      ...(row.tools && row.tools.length > 0 ? { cachedTools: row.tools } : {}),
+    });
   }
 
   return mcpToolsImpl(toConnect, opts, capabilities, connectStdio);
 }
 
 export async function mcpToolsImpl(
-  servers: readonly McpServerConfig[],
+  seeds: readonly ServerSeed[],
   opts: McpOptions | undefined,
   capabilities: McpToolsCapabilities,
   connectStdio?: StdioConnector,
 ): Promise<McpToolset> {
+  const servers = seeds.map((seed) => seed.config);
   assertToolsFilterExclusive(opts?.tools);
   assertSessionScopedOptions(opts);
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -333,49 +379,185 @@ export async function mcpToolsImpl(
       continue;
     }
 
-    if (opts?.storage && isRemoteConfig(config)) {
-      await persistRemoteServer(opts.storage, config);
-    }
-
+    const cachedTools = seeds[index]!.cachedTools;
     liveByServer.set(projectedName, {
       connection: connected.server,
+      config,
       unavailable: false,
+      ...(cachedTools ? { cachedTools } : {}),
+      published: new Set<string>(),
     });
     closers.push(connected.server.close);
   }
 
   const tools: Record<string, AnyTool> = {};
   const schemaByQualifiedName = new Map<string, Record<string, unknown>>();
+  const projectedByServer = new Map<string, Set<string>>();
   const disclosure = {
     budget: resolveDisclosureBudget(opts?.disclosure),
     alwaysLoad: opts?.disclosure?.alwaysLoad,
   };
   let anyDeferred = false;
 
-  for (const [serverName, live] of liveByServer) {
-    const projection = await projectServerTools({
+  /**
+   * Projects one server's catalogue into the shared tool map, replacing whatever that
+   * server contributed before.
+   *
+   * Its own previous keys are dropped *before* projecting, not after. Projecting first
+   * would show this server its own names in `taken` and skip every tool as a collision —
+   * and dropping afterwards would leave a withdrawn tool in the map forever. Reconciliation
+   * calls this a second time, so both orderings had to be got right once.
+   */
+  const projectInto = (
+    serverName: string,
+    live: LiveServer,
+    listing: ResolvedListing,
+  ): void => {
+    for (const qualified of projectedByServer.get(serverName) ?? []) {
+      delete tools[qualified];
+      schemaByQualifiedName.delete(qualified);
+    }
+
+    const projection = projectServerTools({
       serverName,
       live,
       opts,
       disclosure,
+      listing,
       taken: tools,
     });
-    if (projection.deferred) {
-      anyDeferred = true;
-    }
+
     for (const [qualified, tool] of Object.entries(projection.tools)) {
       tools[qualified] = tool;
     }
     for (const [qualified, schema] of projection.schemas) {
       schemaByQualifiedName.set(qualified, schema);
     }
+    projectedByServer.set(serverName, new Set(Object.keys(projection.tools)));
+
+    if (projection.deferred) {
+      anyDeferred = true;
+    }
+    // The describe tool closes over the schema map, so one instance stays correct as
+    // reconciliation rewrites entries beneath it.
+    if (anyDeferred && !tools[MCP_DESCRIBE_TOOL]) {
+      tools[MCP_DESCRIBE_TOOL] = createDescribeTool(schemaByQualifiedName);
+    }
+  };
+
+  const reconcilers: Array<() => Promise<void>> = [];
+
+  for (const [serverName, live] of liveByServer) {
+    const listing = await resolveListing(serverName, live, opts);
+    if (!listing) {
+      continue;
+    }
+
+    projectInto(serverName, live, listing);
+
+    if (listing.fromCache) {
+      // Cached listings are checked against the server after the map is already usable.
+      // Blocking here would restore the exact round trip the cache exists to remove.
+      reconcilers.push(() =>
+        reconcileServer({
+          serverName,
+          live,
+          opts,
+          project: projectInto,
+          isClosed: () => closed,
+        }),
+      );
+    } else if (opts?.storage && isRemoteConfig(live.config)) {
+      await persistRemoteServer(opts.storage, live.config, listing.tools);
+    }
   }
 
-  if (anyDeferred) {
-    tools[MCP_DESCRIBE_TOOL] = createDescribeTool(schemaByQualifiedName);
+  const reconciled = Promise.all(reconcilers.map((run) => run())).then(
+    () => undefined,
+  );
+
+  return { tools, reconciled, close };
+}
+
+interface ResolvedListing {
+  tools: readonly PersistedTool[];
+  fromCache: boolean;
+}
+
+/**
+ * The catalogue to project from: the persisted one when this is a wake, otherwise a live
+ * `tools/list`. A cached listing is the whole point of the persisted `tools` column — it is
+ * what lets a woken Durable Object hand the model a tool map without a round trip first.
+ */
+async function resolveListing(
+  serverName: string,
+  live: LiveServer,
+  opts: McpOptions | undefined,
+): Promise<ResolvedListing | null> {
+  if (live.cachedTools) {
+    return { tools: live.cachedTools, fromCache: true };
+  }
+  try {
+    return { tools: await live.connection.listTools(), fromCache: false };
+  } catch (error) {
+    emitDiagnostic(
+      opts,
+      authFailureDiagnostic(serverName, authStatusFromError(error) ?? 401),
+    );
+    return null;
+  }
+}
+
+/**
+ * Re-lists a server whose tools were projected from cache, and corrects the map if the
+ * catalogue moved. Never rejects: this runs detached from the caller's await, so a throw
+ * here would surface as an unhandled rejection rather than as anything actionable.
+ */
+async function reconcileServer(args: {
+  serverName: string;
+  live: LiveServer;
+  opts: McpOptions | undefined;
+  project: (
+    serverName: string,
+    live: LiveServer,
+    listing: ResolvedListing,
+  ) => void;
+  isClosed: () => boolean;
+}): Promise<void> {
+  const { serverName, live, opts, project, isClosed } = args;
+
+  let fresh: readonly PersistedTool[];
+  try {
+    fresh = await live.connection.listTools();
+  } catch (error) {
+    emitDiagnostic(opts, {
+      section: '7.2.2',
+      rule: 'connection-failure',
+      origin: serverName,
+      message:
+        `Could not re-list MCP server "${serverName}" after waking from its cached tool ` +
+        `listing, so the cached one stays in use: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+    });
+    return;
   }
 
-  return { tools, close };
+  if (isClosed()) {
+    return;
+  }
+
+  const changed =
+    listingSignature(fresh) !== listingSignature(live.cachedTools ?? []);
+  live.cachedTools = fresh;
+
+  if (changed) {
+    project(serverName, live, { tools: fresh, fromCache: false });
+  }
+
+  if (opts?.storage && isRemoteConfig(live.config)) {
+    await persistRemoteServer(opts.storage, live.config, fresh).catch(() => undefined);
+  }
 }
 
 interface ServerProjection {
@@ -394,27 +576,22 @@ interface ServerProjection {
  * that collide only after sanitizing, so the guard has to see across servers, not just
  * within one.
  */
-async function projectServerTools(args: {
+function projectServerTools(args: {
   serverName: string;
   live: LiveServer;
   opts: McpOptions | undefined;
   disclosure: { budget: number; alwaysLoad: readonly string[] | undefined };
+  listing: ResolvedListing;
   taken: Readonly<Record<string, AnyTool>>;
-}): Promise<ServerProjection> {
-  const { serverName, live, opts, disclosure, taken } = args;
+}): ServerProjection {
+  const { serverName, live, opts, disclosure, listing, taken } = args;
   const tools: Record<string, AnyTool> = {};
   const schemas = new Map<string, Record<string, unknown>>();
+  const listed = listing.tools;
 
-  let listed;
-  try {
-    listed = await live.connection.listTools();
-  } catch (error) {
-    emitDiagnostic(
-      opts,
-      authFailureDiagnostic(serverName, authStatusFromError(error) ?? 401),
-    );
-    return { tools, schemas, deferred: false };
-  }
+  // What the server publishes right now, so a call for anything else is refused with a
+  // sentence rather than whatever the transport reports for an unknown tool.
+  live.published = new Set(listed.map((remoteTool) => remoteTool.name));
 
   const projected = listed.filter((remoteTool) =>
     toolAllowed(mcpToolName(serverName, remoteTool.name), opts?.tools),
@@ -520,6 +697,16 @@ async function callRemoteTool(
   if (live.unavailable) {
     throw new Error(`MCP server "${serverName}" is unavailable.`);
   }
+  // A tool map built from a cached listing can outlive the catalogue it described: the
+  // turn already in flight keeps the snapshot it started with, and reconciliation may have
+  // found the tool withdrawn since. Say so plainly — the model reads this and picks
+  // another route, where a raw transport error would only tell it something broke.
+  if (!live.published.has(remoteName)) {
+    throw new Error(
+      `MCP tool "${qualified}" is no longer published by server "${serverName}". ` +
+        'Its catalogue changed since this tool list was built; use another tool.',
+    );
+  }
 
   // Re-resolved per call so a token rotated mid-session takes effect without a reconnect.
   // It layers over the connect-time credential, which got the handshake through.
@@ -551,8 +738,9 @@ export function mcpTools(
   opts?: McpOptions,
 ): Promise<McpToolset> {
   const stdioEnabled = stdioConnector !== undefined;
+  // A cold start has nothing cached by definition, so every seed lists for itself.
   return mcpToolsImpl(
-    servers,
+    servers.map((config) => ({ config })),
     opts,
     { stdio: stdioEnabled },
     stdioConnector,
