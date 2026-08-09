@@ -26,41 +26,56 @@ function toPluginRelative(pluginRoot: string, absolutePath: string): string {
   return normalizedPath;
 }
 
+interface SkillsComponent {
+  skills: SkillStoreLike;
+  diagnostics: Diagnostic[];
+}
+
+/**
+ * Loads the plugin's skills and reports what §7.1 requires reporting.
+ *
+ * `fsSkillStore` discovers lazily, inside `discover()`, so its `onDiagnostic` callback
+ * fires only once something asks for the list. Discovery therefore happens here, before
+ * the diagnostics are returned — the caller receives a settled pair and cannot read it too
+ * early. It used to be a bare `await skills.list()` in `loadAgentPlugin` with its result
+ * thrown away: load-bearing, invisible at the call site, and exactly the shape a later
+ * cleanup deletes as dead code, taking every invalid-skill diagnostic with it.
+ */
 async function loadSkillsComponent(
   fs: FileSystem,
   pluginRoot: string,
-  diagnostics: Diagnostic[],
-): Promise<SkillStoreLike> {
+): Promise<SkillsComponent> {
   const skillsPath = resolvePath(pluginRoot, SKILLS_DIR);
 
   if (!(await fs.exists(skillsPath))) {
-    return emptySkillStore();
+    return { skills: emptySkillStore(), diagnostics: [] };
   }
+
+  const locationFailure = (message: string): SkillsComponent => ({
+    skills: emptySkillStore(),
+    diagnostics: [
+      {
+        section: '6.2',
+        rule: 'component-location-wrong-kind',
+        origin: SKILLS_DIR,
+        message,
+      },
+    ],
+  });
 
   let stat;
   try {
     stat = await fs.stat(skillsPath);
   } catch {
-    diagnostics.push({
-      section: '6.2',
-      rule: 'component-location-wrong-kind',
-      origin: SKILLS_DIR,
-      message: `${SKILLS_DIR} could not be read.`,
-    });
-    return emptySkillStore();
+    return locationFailure(`${SKILLS_DIR} could not be read.`);
   }
 
   if (stat.type !== 'directory') {
-    diagnostics.push({
-      section: '6.2',
-      rule: 'component-location-wrong-kind',
-      origin: SKILLS_DIR,
-      message: `${SKILLS_DIR} is not a directory.`,
-    });
-    return emptySkillStore();
+    return locationFailure(`${SKILLS_DIR} is not a directory.`);
   }
 
-  return fsSkillStore(fs, [skillsPath], {
+  const diagnostics: Diagnostic[] = [];
+  const skills = fsSkillStore(fs, [skillsPath], {
     onDiagnostic: (d) => {
       diagnostics.push({
         section: '7.1',
@@ -70,6 +85,10 @@ async function loadSkillsComponent(
       });
     },
   });
+
+  await skills.list();
+
+  return { skills, diagnostics };
 }
 
 export async function loadAgentPlugin(
@@ -126,9 +145,10 @@ export async function loadAgentPlugin(
     return validation;
   }
 
-  const skillDiagnostics: Diagnostic[] = [];
-  const skills = await loadSkillsComponent(fs, normalizedRoot, skillDiagnostics);
-  await skills.list();
+  const { skills, diagnostics: skillDiagnostics } = await loadSkillsComponent(
+    fs,
+    normalizedRoot,
+  );
 
   const componentDiagnostics: Diagnostic[] = [...skillDiagnostics];
   let mcpServers: McpServerConfig[] = [];
