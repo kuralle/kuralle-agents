@@ -109,6 +109,8 @@ interface McpOptions {
 
 A projected name is `${server}__${tool}` and is used verbatim, which is what keeps `Policy` rules and transcripts readable.
 
+A server name is only unique inside one `mcp.json`, and Agent Plugins has no global registry, so two plugins both naming a server `local` is expected rather than exotic. When two servers in one call share a name, **both** get a suffix hashed from the server's identity (`local_a1b2c3d4__search`) and a `server-name-collision` diagnostic reports it. Neither is dropped. Suffixing both — rather than letting the first keep the plain name — is what stops a `Policy` rule silently repointing at a different backend when a plugin list is reordered.
+
 MCP puts almost no constraint on what a server may publish as a tool name; model providers require `^[a-zA-Z0-9_-]{1,64}$` and reject the whole request otherwise. A name that would be rejected — `search.docs`, a 90-character name, a non-ASCII one — is therefore rewritten: illegal characters become `_`, the name is clamped to 64, and a short deterministic hash of the original is appended so two remote tools cannot collide. The rewrite is stable across processes, because durable journal entries are written against it.
 
 ## Errors
@@ -184,9 +186,13 @@ const rebuilt = await rebuildMcpToolsFromStorage(
 
 A Durable Object is itself the session boundary, so the session-scoped toolset lands here naturally: one DO, one session, one set of connections rebuilt on each wake.
 
-Only an enumerated subset persists: `id`, `name`, `type`, `url`. No function, socket, header, or credential is ever written. Configured `headers` stay out on purpose — copying them into durable storage would widen a plaintext secret's blast radius from process memory to a database. You supply the config again on wake; the store records only *which* servers were connected.
+A wake makes **no `tools/list` call**. The row carries the catalogue the server published last time, so the tool map is projected from storage before the server is asked anything; the fresh listing is then checked in the background and the map corrected in place if it moved. `McpToolset.reconciled` settles when that check finishes — await it only if you would rather pay the round trip than risk one stale turn.
 
-`rebuildMcpToolsFromStorage` has no fallback to the supplied `servers` when the store is empty. A wake rebuilds what was persisted, and a cold start is `mcpTools`. They are different situations.
+Reconciliation does not block on purpose: awaiting the fresh listing before returning the map would restore the exact round trip the cache removes. The admitted cost is a window where the model can call a tool the server has withdrawn since, so each connection tracks what the server currently publishes and refuses anything else with a message the model can act on.
+
+Only an enumerated subset persists: `id`, `name`, `type`, `url`, `tools`. No function, socket, header, or credential is ever written. `tools` is public catalogue metadata — the same text the model is shown in its prompt — never what authenticates to the server. Configured `headers` stay out on purpose — copying them into durable storage would widen a plaintext secret's blast radius from process memory to a database. You supply the config again on wake; the store records only *which* servers were connected.
+
+`rebuildMcpToolsFromStorage` has no fallback to the supplied `servers` when the store is empty. A wake rebuilds what was persisted, and a cold start is `mcpTools`. They are different situations. A row whose `type` or `url` no longer matches the supplied config is refused outright — a different endpoint is a different catalogue, whatever the entry is still called.
 
 ## Related
 

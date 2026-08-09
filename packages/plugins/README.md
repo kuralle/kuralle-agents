@@ -100,6 +100,14 @@ So a conformant client loads a secret-bearing config, reports a diagnostic, and 
 
 Supply real credentials in code, through the `auth` resolver on `@kuralle-agents/mcp`.
 
+## `PLUGIN_ROOT` and `PLUGIN_DATA`
+
+`${PLUGIN_ROOT}` and `${PLUGIN_DATA}` expand inside a stdio entry's `args`, `env`, and `cwd`, and reach the subprocess as environment variables. Expansion is single-pass: text introduced by one substitution is never rescanned.
+
+`PLUGIN_DATA` is a **sibling** of the plugin directory, keyed by plugin name — a plugin at `/plugins/acme` gets `/plugins/data/acme`. Keeping it outside the plugin root means writing state never mutates the distributed bundle, so a plugin stays byte-identical to what was published. `@kuralle-agents/mcp/node` creates it and proves it writable before the subprocess starts.
+
+A `command` is either a bare token resolved through the platform search path, or a plugin-relative `./…` path resolved against the plugin root. `cwd` defaults to the plugin root when omitted.
+
 ## Platform limits
 
 `stdio` servers parse here on every runtime. They only **run** on Node and Bun, through `@kuralle-agents/mcp/node`. Cloudflare Workers have no subprocess, so a `stdio` server there fails with a named error rather than a module-resolution crash.

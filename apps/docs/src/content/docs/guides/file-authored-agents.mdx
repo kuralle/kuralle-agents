@@ -31,6 +31,21 @@ agent/
 References become a read-only mount, while the workspace seed is copied once into each thread's
 private workspace. Skill bodies and resources remain progressively loaded content.
 
+<Aside type="note" title="This is not an Agent Plugin">
+The `skills/` directory here looks identical to the one in an
+[Agent Plugin](/guides/plugins/), and the two are easy to confuse. This folder defines **the agent**
+— its instructions, model, and limits — and is compiled ahead of time into an immutable artifact you
+publish. A plugin defines a **capability bundle someone else published**, carries no model or
+policy, and is loaded at runtime by `loadAgentPlugin`.
+
+Because you author this folder, the compiler rejects a bad build outright. Because you do not author
+a plugin, a broken part of one is isolated rather than fatal. The
+[comparison table](/guides/plugins/#not-the-same-as-a-file-authored-agent) sets them side by side.
+
+The two compose: an agent authored here can load plugins at runtime, and both supply skills through
+the same `SkillStoreLike`.
+</Aside>
+
 <Aside type="caution">
   Do not put API keys or other credentials in the agent folder. The compiler rejects recognizable
   credentials, and the generated artifact must remain safe to store and distribute. Resolve secrets
@@ -101,3 +116,11 @@ Replace the example's in-memory deployment/session stores and process-local leas
 implementations before running multiple replicas. Keep schema changes in your application's existing
 migration workflow. See [Agent Definitions in Your Database](/guides/agent-definitions-database/)
 for Postgres, Prisma, Drizzle, Neon, and Cloudflare control-plane patterns.
+
+## Related
+
+- [Agent Plugins](/guides/plugins/) — third-party capability bundles this agent can load at runtime
+- [Skills](/guides/skills/) — how the `skills/` folder is progressively disclosed
+- [CLI](/guides/cli/) — `kuralle build`, `start`, and `chat`
+- [Deployment](/guides/deployment/) — artifacts, revisions, and thread pinning
+- [Agent Definitions in Your Database](/guides/agent-definitions-database/) — production control plane

@@ -79,9 +79,14 @@ function mcpTools(
 
 interface McpToolset {
   readonly tools: Record<string, AnyTool>;
+  readonly reconciled: Promise<void>;
   close(): Promise<void>;
 }
 ```
+
+`reconciled` settles once every cached tool listing has been checked against its server. It is
+already resolved unless this toolset was rebuilt from storage, so you never have to test for it —
+see [Hibernation and reconnect](#hibernation-and-reconnect).
 
 `McpServerConfig` (from `@kuralle-agents/plugins`) is a discriminated union:
 
@@ -113,6 +118,24 @@ MCP barely constrains what a server may publish as a tool name; model providers 
 rewritten — illegal characters to `_`, clamped to 64, with a short deterministic hash of the
 original appended so two remote tools cannot collide. Legal names pass through verbatim, so
 `Policy` rules keep matching what you wrote.
+
+### Two plugins, one server name
+
+A server name is only unique inside one `mcp.json`. Agent Plugins has no global registry — §5.5
+constrains a plugin name's character set, not its uniqueness — so two independently authored plugins
+both calling a server `local` is the expected case, not an edge one.
+
+When two servers in one `mcpTools` call share a name, **both** are projected under a suffixed name
+(`local_a1b2c3d4__search`) and a `server-name-collision` diagnostic names the clash. Neither server
+is dropped.
+
+Both are suffixed rather than the first keeping the plain name, because first-wins would make every
+projected name depend on the order you happened to load plugins in — reorder the list and a `Policy`
+rule written against `local__transfer` silently starts matching a different backend. The suffix
+hashes the server's identity (its URL, or its command line), so it is stable across processes and
+independent of load order.
+
+A name that does not collide is untouched. Rename one of the two servers to get the plain name back.
 
 ### Sessions and credentials
 
@@ -274,9 +297,39 @@ one DO, one session, one set of connections rebuilt on each wake.
 
 Use `createMemoryMcpConnectionStore()` on Node and Bun, and in tests.
 
+### A wake makes no `tools/list` call
+
+The row also carries the catalogue the server published last time, so a wake projects a tool map
+from storage **before** it asks the server anything. Without it, every wake paid connect →
+handshake → `tools/list` → project before the first token of the turn.
+
+The freshly listed catalogue is then checked in the background, and the tool map is corrected in
+place if it moved:
+
+```typescript
+const rebuilt = await rebuildMcpToolsFromStorage(servers, opts, { stdio: false });
+
+// Usable immediately — projected from the persisted listing, no round trip.
+agent.tools = rebuilt.tools;
+
+// Optional: wait for the catalogue to be re-checked against the server.
+await rebuilt.reconciled;
+```
+
+Reconciliation is deliberately **not** blocking. Awaiting the fresh listing before returning the map
+would restore the exact round trip the cache removes, so there would be no reason to have built it.
+
+The admitted cost is a window where the model can call a tool the server has withdrawn since. That
+case is handled rather than hoped about: each connection tracks what the server currently publishes,
+and a call for anything else fails with a message the model can act on — *"MCP tool
+`docs__search` is no longer published by server `docs`."* Because `tools` is corrected in place, a
+turn already in flight keeps the snapshot it started with, and the next turn sees the correction.
+
+Await `reconciled` when you would rather pay the round trip than risk one stale turn.
+
 ### What persists, and what never does
 
-A `PersistedServer` row holds exactly four fields:
+A `PersistedServer` row holds exactly five fields:
 
 | Field | Example |
 |-------|---------|
@@ -284,9 +337,22 @@ A `PersistedServer` row holds exactly four fields:
 | `name` | `"docs"` |
 | `type` | `"streamable-http"` |
 | `url` | `"https://mcp.example.com/mcp"` |
+| `tools` | `[{ name: "search", description: "…", inputSchema: { … } }]` |
 
 No function, socket, `fetch` override, auth resolver, token, or configured header is ever written.
 The store is a one-wake capability seed, not a config source.
+
+`tools` is public catalogue metadata — the same text the model is shown in its prompt — never what
+authenticates to the server. A stored listing that no longer parses is dropped rather than thrown:
+it is a cache, so losing it costs one `tools/list` on the next wake, where throwing would strand a
+Durable Object that could reconnect perfectly well.
+
+A cached listing dies with the row it belongs to. If the supplied config's `type` or `url` no longer
+matches what was persisted, the whole row is refused with a `connection-failure` diagnostic — a
+different endpoint is a different catalogue, whatever the entry is still called.
+
+A Durable Object created before the `tools` column existed is migrated on the next
+`createSqliteMcpConnectionStore` call; no manual step is needed.
 
 Configured `headers` stay out **on purpose**, even though they arrive legitimately through
 `mcp.json`. A plugin file may carry a plaintext secret, and copying that into durable storage would
