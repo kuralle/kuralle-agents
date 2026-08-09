@@ -67,8 +67,9 @@ routing, and durable tool execution. Monorepo on Bun workspaces, built on the Ve
 ```bash
 bun run build            # build all packages (topological)
 bun run test             # all unit tests
-bun run typecheck        # examples + templates typecheck
-bun run typecheck:all    # every framework tsconfig + lint (the full gate)
+bun run typecheck        # per-package examples/ trees
+bun run typecheck:apps   # every app under apps/examples + apps/playground
+bun run typecheck:all    # every framework tsconfig + apps + lint (the full gate)
 bun run clean            # clean all builds
 
 cd packages/<pkg> && npm run build   # build one package
@@ -118,7 +119,10 @@ E2E tests: see `packages/e2e-tests/README.md`.
   monorepo package dir. Run them from a neutral cwd.
 - **Model preference in examples** — `resolveTemplateModel` prefers **xAI → Google → OpenAI**
   by which provider key is present. To force OpenAI, clear `XAI_API_KEY` and the Google keys.
-- **Playground apps (`apps/playground/*`) are excluded from `typecheck:all`** and rot silently.
+- **An app with no `tsconfig.json` is invisible to the type gate.** `apps/examples/*` and
+  `apps/playground/*` are both swept by `typecheck:all` now, but a sweep only sees configs
+  that exist — `fs-demo-vercel` imported a package it never declared and nothing noticed
+  until it was given one. The sweep reports such apps as `UNSWEPT`; do not ignore that line.
 
 ## Key docs
 

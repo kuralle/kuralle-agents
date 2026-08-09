@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Aggregate type-check across the surfaces that are NOT covered by each
-# package's own `src/**` build: core examples.
+# package's own `src/**` build: the per-package `examples/` trees.
 # (Per-package src/ is type-checked by `bun run build`; this gate covers the
 # example code that imports those packages.)
 #
-# Playground apps under apps/playground/* are intentionally EXCLUDED — they are
-# R&D/demos, not a supported surface, and several carry their own unrelated
-# errors. Type-check an individual one on demand with:
-#   ./node_modules/.bin/tsc --noEmit -p apps/playground/<name>/tsconfig.json
+# Apps under apps/examples/* and apps/playground/* are swept by
+# scripts/typecheck-apps.sh, which `typecheck:all` runs. This file used to name
+# apps/examples/marketing-team explicitly while its eleven siblings went
+# unchecked, and to claim the playground was excluded — both stopped being true.
+# Run the app sweep directly with:
+#   bun run typecheck:apps
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -40,10 +42,6 @@ run "build/examples" "packages/build/tsconfig.examples.json"
 echo ""
 echo "== plugins examples =="
 run "plugins/examples" "packages/plugins/tsconfig.examples.json"
-
-echo ""
-echo "== example apps =="
-run "marketing-team" "apps/examples/marketing-team/tsconfig.json"
 
 echo ""
 [ "$fail" -eq 0 ] && echo "✓ typecheck: all green" || echo "✗ typecheck: failures above"
