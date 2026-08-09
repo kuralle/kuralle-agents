@@ -7,6 +7,7 @@ import { createConnectedServer } from '../connected-server.js';
 import type { ConnectedMcpServer, StdioConnectorOptions } from '../types.js';
 import { authFailureDiagnostic, authStatusFromError } from '../headers.js';
 import { registerStdioConnector } from '../mcp-tools.js';
+import { ensureWritableDataDirectory } from './plugin-data.js';
 import { composeSubprocessEnvironment } from './subprocess-env.js';
 
 const CLIENT_INFO = { name: 'kuralle-agents', version: '0.20.0' };
@@ -78,6 +79,16 @@ async function connectStdioServer(
   const command = config.command.startsWith('/')
     ? (toHostPath(opts.fs, config.command) as string)
     : config.command;
+
+  // §9.1: the client MUST create PLUGIN_DATA before launching, and make it writable.
+  // Done here rather than at load, because this is the only path that spawns — a Worker
+  // never reaches it, so nothing writes on a runtime that cannot use the directory.
+  if (pluginDataRoot !== undefined) {
+    const dataFailure = await ensureWritableDataDirectory(config.name, pluginDataRoot);
+    if (dataFailure) {
+      return { diagnostic: dataFailure };
+    }
+  }
 
   const roots = [
     { virtual: config.pluginDataRoot, host: pluginDataRoot },
