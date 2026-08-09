@@ -19,7 +19,13 @@ const PERMITTED_TOP_LEVEL = new Set([
   'extensions',
 ]);
 
-const AUTHOR_KEYS = new Set(['name', 'email', 'url']);
+const OPTIONAL_STRING_FIELDS = [
+  'version',
+  'description',
+  'homepage',
+  'repository',
+  'license',
+] as const;
 
 const AGENT_PLUGINS_SCHEMA_PATTERN =
   /^https:\/\/agent-plugins\.org\/schemas\/[^/]+\/plugin\.schema\.json$/;
@@ -56,7 +62,22 @@ function reject(
   };
 }
 
-function validateName(name: unknown): ManifestValidationFailure | null {
+/**
+ * A validator yields the narrowed value it proved, or the rejection explaining why it
+ * could not. Returning only the rejection is what forced a second pass to re-derive every
+ * field by casting — and a cast asserts a fact the compiler cannot check, which is exactly
+ * how `validateCommand` came to resolve a path and throw it away.
+ *
+ * The failure arm is `ManifestValidationFailure` itself, so any validator's rejection
+ * returns straight out of `validateManifestJson` with no rewrapping.
+ */
+type Validated<T> = { ok: true; value: T } | ManifestValidationFailure;
+
+function valid<T>(value: T): Validated<T> {
+  return { ok: true, value };
+}
+
+function validateName(name: unknown): Validated<string> {
   if (typeof name !== 'string' || name.length === 0) {
     return reject(
       '5.3',
@@ -97,12 +118,10 @@ function validateName(name: unknown): ManifestValidationFailure | null {
     );
   }
 
-  return null;
+  return valid(name);
 }
 
-function validateSchemaField(
-  schema: unknown,
-): ManifestValidationFailure | null {
+function validateSchemaField(schema: unknown): Validated<string> {
   if (typeof schema !== 'string' || schema.length === 0) {
     return reject(
       '5.3',
@@ -112,7 +131,7 @@ function validateSchemaField(
   }
 
   if (schema === SUPPORTED_SCHEMA) {
-    return null;
+    return valid(schema);
   }
 
   if (AGENT_PLUGINS_SCHEMA_PATTERN.test(schema)) {
@@ -130,9 +149,9 @@ function validateSchemaField(
   );
 }
 
-function validateAuthor(author: unknown): ManifestValidationFailure | null {
+function validateAuthor(author: unknown): Validated<PluginAuthor | undefined> {
   if (author === undefined) {
-    return null;
+    return valid(undefined);
   }
 
   if (!isPlainObject(author)) {
@@ -143,8 +162,10 @@ function validateAuthor(author: unknown): ManifestValidationFailure | null {
     );
   }
 
+  const result: PluginAuthor = {};
+
   for (const [key, value] of Object.entries(author)) {
-    if (!AUTHOR_KEYS.has(key)) {
+    if (key !== 'name' && key !== 'email' && key !== 'url') {
       return reject(
         '5.4',
         'author-unknown-field',
@@ -158,17 +179,21 @@ function validateAuthor(author: unknown): ManifestValidationFailure | null {
         `Author field "${key}" must be a string.`,
       );
     }
+    result[key] = value;
   }
 
-  return null;
+  // §5.4 makes all three author fields optional, so `{}` is a valid author object — it
+  // just names nobody. Reported as absent rather than as an empty object, so a consumer
+  // that tests `manifest.author` never has to re-test it for emptiness.
+  return valid(Object.keys(result).length > 0 ? result : undefined);
 }
 
 function validateOptionalStringField(
   field: string,
   value: unknown,
-): ManifestValidationFailure | null {
+): Validated<string | undefined> {
   if (value === undefined) {
-    return null;
+    return valid(undefined);
   }
   if (typeof value !== 'string') {
     return reject(
@@ -177,14 +202,12 @@ function validateOptionalStringField(
       `Field "${field}" must be a string.`,
     );
   }
-  return null;
+  return valid(value);
 }
 
-function validateKeywords(
-  keywords: unknown,
-): ManifestValidationFailure | null {
+function validateKeywords(keywords: unknown): Validated<string[] | undefined> {
   if (keywords === undefined) {
-    return null;
+    return valid(undefined);
   }
   if (!Array.isArray(keywords)) {
     return reject(
@@ -193,6 +216,7 @@ function validateKeywords(
       'Field "keywords" must be an array of strings.',
     );
   }
+  const result: string[] = [];
   for (const item of keywords) {
     if (typeof item !== 'string') {
       return reject(
@@ -201,43 +225,58 @@ function validateKeywords(
         'Field "keywords" must be an array of strings.',
       );
     }
+    result.push(item);
   }
-  return null;
+  return valid(result);
 }
 
-function buildAuthor(raw: Record<string, unknown>): PluginAuthor | undefined {
-  const author: PluginAuthor = {};
-  if (typeof raw.name === 'string') author.name = raw.name;
-  if (typeof raw.email === 'string') author.email = raw.email;
-  if (typeof raw.url === 'string') author.url = raw.url;
-  return Object.keys(author).length > 0 ? author : undefined;
-}
-
-function buildManifest(raw: Record<string, unknown>): PluginManifest {
-  const manifest: PluginManifest = {
-    $schema: raw.$schema as string,
-    name: raw.name as string,
-  };
-
-  if (typeof raw.version === 'string') manifest.version = raw.version;
-  if (typeof raw.description === 'string') manifest.description = raw.description;
-  if (isPlainObject(raw.author)) manifest.author = buildAuthor(raw.author);
-  if (typeof raw.homepage === 'string') manifest.homepage = raw.homepage;
-  if (typeof raw.repository === 'string') manifest.repository = raw.repository;
-  if (typeof raw.license === 'string') manifest.license = raw.license;
-  if (Array.isArray(raw.keywords)) {
-    manifest.keywords = raw.keywords.filter(
-      (item): item is string => typeof item === 'string',
-    );
-  }
-  if (isPlainObject(raw.extensions)) {
-    manifest.extensions = raw.extensions as Record<
-      string,
-      Record<string, unknown>
-    >;
+/**
+ * §8.1: `extensions` maps a client namespace to an object. §5.2 and §11.3 make a
+ * violation non-fatal, so this reports and drops rather than rejecting — a client
+ * namespace nobody here understands must never stop the plugin loading.
+ *
+ * Member values are checked rather than asserted. The old cast claimed every member was
+ * an object on no evidence, which would have handed a consumer a number typed as a record.
+ */
+function validateExtensions(value: unknown): {
+  extensions: Record<string, Record<string, unknown>> | undefined;
+  diagnostics: Diagnostic[];
+} {
+  if (value === undefined) {
+    return { extensions: undefined, diagnostics: [] };
   }
 
-  return manifest;
+  if (!isPlainObject(value)) {
+    return {
+      extensions: undefined,
+      diagnostics: [
+        diagnostic(
+          '8.1',
+          'extensions-not-an-object',
+          'The "extensions" field must be an object.',
+        ),
+      ],
+    };
+  }
+
+  const extensions: Record<string, Record<string, unknown>> = {};
+  const diagnostics: Diagnostic[] = [];
+
+  for (const [namespace, data] of Object.entries(value)) {
+    if (!isPlainObject(data)) {
+      diagnostics.push(
+        diagnostic(
+          '8.1',
+          'extensions-not-an-object',
+          `Extension namespace "${namespace}" must map to an object.`,
+        ),
+      );
+      continue;
+    }
+    extensions[namespace] = data;
+  }
+
+  return { extensions, diagnostics };
 }
 
 export function validateManifestJson(text: string): ManifestValidationResult {
@@ -277,53 +316,50 @@ export function validateManifestJson(text: string): ManifestValidationResult {
     raw[key] = value;
   }
 
-  if ('extensions' in raw && !isPlainObject(raw.extensions)) {
-    diagnostics.push(
-      diagnostic(
-        '8.1',
-        'extensions-not-an-object',
-        'The "extensions" field must be an object.',
-      ),
-    );
-    delete raw.extensions;
+  const schema = validateSchemaField(raw.$schema);
+  if (!schema.ok) {
+    return schema;
   }
 
-  const schemaFailure = validateSchemaField(raw.$schema);
-  if (schemaFailure) {
-    return schemaFailure;
+  const name = validateName(raw.name);
+  if (!name.ok) {
+    return name;
   }
 
-  const nameFailure = validateName(raw.name);
-  if (nameFailure) {
-    return nameFailure;
+  const author = validateAuthor(raw.author);
+  if (!author.ok) {
+    return author;
   }
 
-  const authorFailure = validateAuthor(raw.author);
-  if (authorFailure) {
-    return authorFailure;
-  }
+  const manifest: PluginManifest = { $schema: schema.value, name: name.value };
 
-  for (const field of [
-    'version',
-    'description',
-    'homepage',
-    'repository',
-    'license',
-  ] as const) {
-    const failure = validateOptionalStringField(field, raw[field]);
-    if (failure) {
-      return failure;
+  for (const field of OPTIONAL_STRING_FIELDS) {
+    const result = validateOptionalStringField(field, raw[field]);
+    if (!result.ok) {
+      return result;
+    }
+    if (result.value !== undefined) {
+      manifest[field] = result.value;
     }
   }
 
-  const keywordsFailure = validateKeywords(raw.keywords);
-  if (keywordsFailure) {
-    return keywordsFailure;
+  const keywords = validateKeywords(raw.keywords);
+  if (!keywords.ok) {
+    return keywords;
   }
 
-  return {
-    ok: true,
-    manifest: buildManifest(raw),
-    diagnostics,
-  };
+  if (author.value !== undefined) {
+    manifest.author = author.value;
+  }
+  if (keywords.value !== undefined) {
+    manifest.keywords = keywords.value;
+  }
+
+  const extensions = validateExtensions(raw.extensions);
+  diagnostics.push(...extensions.diagnostics);
+  if (extensions.extensions !== undefined) {
+    manifest.extensions = extensions.extensions;
+  }
+
+  return { ok: true, manifest, diagnostics };
 }
