@@ -15,11 +15,18 @@ bun install
 bun run chat
 ```
 
-Run the built-in AI SDK driver instead of Pi:
+## Drivers
 
-```bash
-bun run chat:default
-```
+This example runs on the **Pi driver** by default.
+
+| Driver | Command |
+| --- | --- |
+| Pi — the default | `bun run chat` |
+| Core's built-in AI SDK driver | `bun run chat:ai-sdk` |
+
+Both run the same agent. Set `KURALLE_DRIVER=pi` or `KURALLE_DRIVER=ai-sdk` to choose one
+directly. The switch lives in `src/production-runtime.ts`, in this example — nothing is shared with the
+other examples, so you can read the whole wiring in one folder.
 
 The TUI persists conversation state and traces under `runs/`. The content itself remains ordinary files under `workspace/`. Set `CONTENT_WORKSPACE_PATH` to point the agent at another caller-owned directory with the same layout.
 

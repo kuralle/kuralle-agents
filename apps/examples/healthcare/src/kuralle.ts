@@ -2,7 +2,7 @@
 import type { SessionStore, TraceStore } from '@kuralle-agents/core';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { createProductionRuntime } from '@kuralle-examples/shared/runtime';
+import { createProductionRuntime } from './production-runtime.js';
 import { buildHealthcareAgent } from './agent.js';
 import { HealthcareRepository } from './database.js';
 

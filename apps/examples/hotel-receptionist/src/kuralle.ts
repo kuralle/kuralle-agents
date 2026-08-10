@@ -1,6 +1,6 @@
 // This example defaults to Pi. Set KURALLE_DRIVER=ai-sdk to use the built-in AI SDK driver.
 import type { SessionStore, TraceStore } from '@kuralle-agents/core';
-import { createProductionRuntime } from '@kuralle-examples/shared/runtime';
+import { createProductionRuntime } from './production-runtime.js';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { buildHotelReceptionist } from './agent.js';

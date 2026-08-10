@@ -11,11 +11,18 @@ bun install
 bun run --filter @kuralle-examples/hotel-receptionist chat
 ```
 
-Pi is the default speaking and typed-flow driver. To use Core's built-in AI SDK driver instead:
+## Drivers
 
-```bash
-bun run --filter @kuralle-examples/hotel-receptionist chat:default
-```
+This example runs on the **Pi driver** by default.
+
+| Driver | Command |
+| --- | --- |
+| Pi — the default | `bun run --filter @kuralle-examples/hotel-receptionist chat` |
+| Core's built-in AI SDK driver | `bun run --filter @kuralle-examples/hotel-receptionist chat:ai-sdk` |
+
+Both run the same agent. Set `KURALLE_DRIVER=pi` or `KURALLE_DRIVER=ai-sdk` to choose one
+directly. The switch lives in `src/production-runtime.ts`, in this example — nothing is shared with the
+other examples, so you can read the whole wiring in one folder.
 
 The CLI stores resumable chat state and traces under `runs/`. The application database defaults to `data/hotel.sqlite`; override it with `HOTEL_DATABASE_PATH`.
 

@@ -1,6 +1,6 @@
 // This app defaults to Pi. Set KURALLE_DRIVER=ai-sdk to use the built-in AI SDK driver.
 import { PostgresSessionStore, PostgresTraceStore } from '@kuralle-agents/postgres-store';
-import { createProductionRuntime } from '@kuralle-examples/shared/runtime';
+import { createProductionRuntime } from './production-runtime';
 import { buildHackerAgent } from './agent';
 import {
   createEmbeddingFunction,
