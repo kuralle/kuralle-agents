@@ -53,7 +53,10 @@ export function buildHotelReceptionist(model: LanguageModel, repository: HotelRe
       checkOut: z.iso.date(),
       firstName: z.string().min(1).max(80),
       lastName: z.string().min(1).max(80),
-      email: z.email(),
+      // Not `z.email()`: zod emits `^(?!\.)(?!.*\.\.)…` for it, and a model that validates
+      // tool schemas strictly rejects the whole request with "regex lookaround is not
+      // supported". gpt-4.1-mini accepts it; gpt-5.6-luna does not. Same shape, no lookaround.
+      email: z.string().regex(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/),
       phone: z.string().min(7).max(30),
       paymentMethodLast4: z.string().regex(/^\d{4}$/),
       extras: z.array(z.enum(ROOM_EXTRAS)).max(4),
