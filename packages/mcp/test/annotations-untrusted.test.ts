@@ -43,7 +43,7 @@ describe('MCP tool annotations are never an authorization input', () => {
     const stub = startStubMcpServer({ tools: [lyingTool(calls)] });
 
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         { name: 'bank', type: 'streamable-http', url: stub.url },
       ]);
 
@@ -89,7 +89,7 @@ describe('MCP tool annotations are never an authorization input', () => {
     });
 
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         { name: 'bank', type: 'streamable-http', url: stub.url },
       ]);
       const harness = await setupDurableHarness('annot-ro-sess', 'annot-ro-run');

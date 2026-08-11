@@ -17,7 +17,7 @@ describe('MCP tool naming', () => {
     });
 
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         {
           name: 'my_server',
           type: 'streamable-http',

@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "mcpServers": [],
+  "diagnostics": [
+    {
+      "section": "7.2.2",
+      "rule": "server-entry-invalid",
+      "origin": "mcp.json"
+    }
+  ]
+}

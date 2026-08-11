@@ -12,9 +12,15 @@ import { startStubMcpServer } from './helpers/stub-server.js';
 import { minimalToolContext } from './helpers/tool-context.js';
 
 /**
- * REQ-16 — tool-definition size in the prompt stays under budget however many tools a
- * server publishes; a server under budget (or in `alwaysLoad`) is projected inline with
- * no extra round-trip.
+ * REQ-16 — the *schema* bulk a server contributes to the prompt stays under budget however
+ * many tools it publishes; a server under budget (or in `alwaysLoad`) is projected inline
+ * with no extra round-trip.
+ *
+ * The budget governs schema bulk and only that. Under it sits the catalog — every tool's
+ * name and description — which no disclosure tier drops, because it is what the model
+ * routes on. On a server broad enough for its catalog alone to exceed the budget there is
+ * nothing left to shed, and the client says so with a diagnostic instead of implying a
+ * bound it cannot hold. See `reports the catalog floor…` at the end of this file.
  *
  * Every assertion here is written to be non-gameable in two directions at once: a token
  * measurement (which a coarse estimator could in principle be tuned against) is always
@@ -67,7 +73,7 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
     const stub = startStubMcpServer({ tools: fatTools(200) });
 
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'broad', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: BUDGET } },
       );
@@ -96,7 +102,7 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
     const stub = startStubMcpServer({ tools: fatTools(200) });
 
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'broad', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: BUDGET, alwaysLoad: ['broad'] } },
       );
@@ -117,7 +123,7 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
     const stub = startStubMcpServer({ tools: fatTools(3) });
 
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'small', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: BUDGET } },
       );
@@ -143,7 +149,7 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
     const stub = startStubMcpServer({ tools: fatTools(200) });
 
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [{ name: 'broad', type: 'streamable-http', url: stub.url }],
         { disclosure: { budget: BUDGET } },
       );
@@ -171,7 +177,7 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
     const stub = startStubMcpServer({ tools: fatTools(200) });
 
     try {
-      const tools = await mcpTools([
+      const { tools, close } = await mcpTools([
         { name: 'broad', type: 'streamable-http', url: stub.url },
       ]);
 
@@ -201,7 +207,7 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
     });
 
     try {
-      const tools = await mcpTools(
+      const { tools, close } = await mcpTools(
         [
           { name: 'broad', type: 'streamable-http', url: broad.url },
           { name: 'small', type: 'streamable-http', url: small.url },
@@ -220,6 +226,69 @@ describe('MCP tool disclosure budget (REQ-16)', () => {
     } finally {
       broad.close();
       small.close();
+    }
+  });
+
+  it('reports the catalog floor when it alone exceeds the budget', async () => {
+    // Every schema is already deferred at this point, so the remaining cost is the tool
+    // names and descriptions the model routes on. Trimming those would buy the number back
+    // by destroying routing, so the client reports the overrun rather than hiding it — and
+    // rather than letting the README imply a bound that no tier can hold.
+    const verbose = Array.from({ length: 300 }, (_, index) => ({
+      name: `tool_${index}`,
+      description:
+        `Tool number ${index}. ` +
+        'A description of realistic length, because a broad catalogue is exactly where the ' +
+        'floor stops being negligible and starts being the whole cost of the server.',
+      inputSchema: fatInputSchema(),
+      handler: () => 'ok',
+    }));
+
+    const stub = startStubMcpServer({ tools: verbose });
+    const diagnostics: Array<{ rule: string; message: string }> = [];
+
+    const { tools, close } = await mcpTools(
+      [{ name: 'huge', type: 'streamable-http', url: stub.url }],
+      {
+        disclosure: { budget: 1_000 },
+        onDiagnostic: (d) => diagnostics.push({ rule: d.rule, message: d.message }),
+      },
+    );
+
+    try {
+      const overrun = diagnostics.filter((d) => d.rule === 'disclosure-budget-exceeded');
+      expect(overrun).toHaveLength(1);
+      // The message has to be actionable: what the floor is, and what the operator can do.
+      expect(overrun[0]!.message).toContain('300 tools');
+      expect(overrun[0]!.message).toContain('tools` filter');
+
+      // Reporting the overrun does not degrade the projection: the tools still work.
+      expect(tools['huge__tool_0']).toBeDefined();
+      expect(tools[MCP_DESCRIBE_TOOL]).toBeDefined();
+    } finally {
+      await close();
+      stub.close();
+    }
+  });
+
+  it('stays silent when deferral actually brings the server under budget', async () => {
+    // Discriminates the test above: same deferral path, terse catalogue, no diagnostic.
+    const stub = startStubMcpServer({ tools: fatTools(200) });
+    const diagnostics: string[] = [];
+
+    const { close } = await mcpTools(
+      [{ name: 'broad', type: 'streamable-http', url: stub.url }],
+      {
+        disclosure: { budget: BUDGET },
+        onDiagnostic: (d) => diagnostics.push(d.rule),
+      },
+    );
+
+    try {
+      expect(diagnostics).not.toContain('disclosure-budget-exceeded');
+    } finally {
+      await close();
+      stub.close();
     }
   });
 });

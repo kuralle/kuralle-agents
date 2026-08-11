@@ -5,15 +5,24 @@ import type { Diagnostic } from '@kuralle-agents/plugins';
 import type { Session } from '@kuralle-agents/core';
 import type { McpOptions } from './types.js';
 
+/**
+ * The resolver form receives the session. `mcpToolsImpl` refuses that form without one,
+ * so `session` is present wherever it is actually needed.
+ */
 export function resolveAllowedHosts(
   serverName: string,
   allowedHosts: McpOptions['allowedHosts'],
-  session: Session,
+  session: Session | undefined,
 ): readonly string[] | null {
   if (allowedHosts === undefined) {
     return null;
   }
   if (typeof allowedHosts === 'function') {
+    if (!session) {
+      throw new Error(
+        `MCP server "${serverName}": the allowedHosts resolver needs a session. Pass \`session\`.`,
+      );
+    }
     return allowedHosts(serverName, { session });
   }
   return allowedHosts;

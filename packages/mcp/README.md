@@ -12,11 +12,11 @@ This installs `@kuralle-agents/core`, `@kuralle-agents/plugins`, and `@modelcont
 
 ## What it does
 
-`mcpTools` connects a list of MCP servers and returns a tool map you attach to an agent. Each remote tool is projected under the name `${server}__${tool}`.
+`mcpTools` connects a list of MCP servers and returns an `McpToolset` — a tool map you attach to an agent, and the `close()` that ends the connections behind it. Each remote tool is projected under the name `${server}__${tool}`.
 
 **Key exports:**
 
-- **`mcpTools(servers, opts?)`** — connect servers and return `Record<string, AnyTool>`.
+- **`mcpTools(servers, opts?)`** — connect servers and return `McpToolset`.
 - **`rebuildMcpToolsFromStorage(servers, opts, capabilities)`** — reconnect on wake from a persisted seed.
 - **`createMemoryMcpConnectionStore` / `createSqliteMcpConnectionStore`** — connection stores for Node/Bun and for Durable Objects.
 - **`composeMcpSystemPrompt`** — the MCP part of the system prompt.
@@ -28,10 +28,11 @@ This installs `@kuralle-agents/core`, `@kuralle-agents/plugins`, and `@modelcont
 import { defineAgent } from '@kuralle-agents/core';
 import { mcpTools } from '@kuralle-agents/mcp';
 
-const tools = await mcpTools(
+const { tools, close } = await mcpTools(
   [{ name: 'docs', type: 'streamable-http', url: 'https://mcp.example.com/mcp' }],
   {
     allowedHosts: ['mcp.example.com'],
+    session,
     auth: async () => ({ token: process.env.DOCS_TOKEN! }),
   },
 );
@@ -46,6 +47,32 @@ const agent = defineAgent({
   },
 });
 ```
+
+Call `close()` when the session ends. The connections stay open until you do — dropping the reference does not close a socket or end an SSE stream.
+
+## Credentials and session scope
+
+`auth` runs **before** `initialize`, so the bearer covers the handshake and `tools/list`, not only `tools/call`. That is what an OAuth-protected server requires: it rejects the handshake, long before a tool call exists.
+
+Resolving the credential at connect time fixes it onto the connection, so **a toolset built with `auth` belongs to one session**. Pass `session`, build one toolset per session, and `close()` it when the session ends. Supplying `auth` without `session` throws at wiring time rather than silently authenticating every user as whoever connected first.
+
+```ts
+async function toolsetFor(session: Session) {
+  return mcpTools(servers, {
+    session,
+    allowedHosts: ['mcp.example.com'],
+    auth: async (_server, ctx) => ({ token: await tokenFor(ctx.session) }),
+  });
+}
+```
+
+A server that needs no dynamic credential — static `headers` from `mcp.json`, or none at all — needs no session, and one process-wide toolset is correct for it.
+
+`auth` is re-resolved on every call as well, layered over the connect-time credential, so a token rotated mid-session takes effect without a reconnect.
+
+## Cancellation
+
+The turn's `AbortSignal` reaches `tools/call`. When a turn is cancelled or a tool times out, the request to the MCP server is cancelled too — not just the promise on this side.
 
 ## Runtime matrix
 
@@ -67,6 +94,7 @@ The root export needs the `nodejs_compat` flag on Workers. It imports `AsyncLoca
 interface McpOptions {
   allowedHosts?: readonly string[] | ((server: string, ctx: { session: Session }) => readonly string[]);
   auth?: (server: string, ctx: { session: Session }) => Promise<{ token: string }>;
+  session?: Session;               // required when `auth`, or a resolver `allowedHosts`, is set
   tools?: { allow?: readonly string[] } | { block?: readonly string[] };
   disclosure?: { budget?: number | 'auto'; alwaysLoad?: readonly string[] };
   timeoutMs?: number;              // default 60_000
@@ -75,7 +103,15 @@ interface McpOptions {
 }
 ```
 
-`tools` is a discovery filter and accepts either `allow` or `block`, never both. `auth` runs at execute time, never at parse time, and its result never reaches persisted run state.
+`tools` is a discovery filter and accepts either `allow` or `block`, never both. `auth` runs at connect time and again per call, never at parse time, and its result never reaches persisted run state.
+
+## Tool names
+
+A projected name is `${server}__${tool}` and is used verbatim, which is what keeps `Policy` rules and transcripts readable.
+
+A server name is only unique inside one `mcp.json`, and Agent Plugins has no global registry, so two plugins both naming a server `local` is expected rather than exotic. When two servers in one call share a name, **both** get a suffix hashed from the server's identity (`local_a1b2c3d4__search`) and a `server-name-collision` diagnostic reports it. Neither is dropped. Suffixing both — rather than letting the first keep the plain name — is what stops a `Policy` rule silently repointing at a different backend when a plugin list is reordered.
+
+MCP puts almost no constraint on what a server may publish as a tool name; model providers require `^[a-zA-Z0-9_-]{1,64}$` and reject the whole request otherwise. A name that would be rejected — `search.docs`, a 90-character name, a non-ASCII one — is therefore rewritten: illegal characters become `_`, the name is clamped to 64, and a short deterministic hash of the original is appended so two remote tools cannot collide. The rewrite is stable across processes, because durable journal entries are written against it.
 
 ## Errors
 
@@ -84,6 +120,9 @@ MCP separates two failure kinds, and so does this client.
 - A **protocol error** (unknown tool, malformed request) rejects the call.
 - A **tool execution error** — a result with `isError: true` — also rejects, carrying the
   server's own message, prefixed `MCP tool error:`.
+
+Every transport shares one result adapter, so this holds on stdio exactly as it does over
+HTTP. It did not always: stdio had a second copy that never checked `isError`.
 
 The second case matters more than it looks. Those messages are written for the model to
 correct against: *"Invalid departure date: must be in the future."* Returning that text as
@@ -119,9 +158,11 @@ A deferred tool sheds schema **prose**, not the argument **contract**. It keeps 
 
 That split is load-bearing. An earlier version replaced the whole schema with `{ type: 'object' }`; with no parameter names at generation time the model produced a malformed call in **2 of 5** live runs, against **0 of 5** once names were kept.
 
-On a server so large that even names blow the budget, names are dropped too and the bare object schema is used. That holds the budget at any tool count — the same budget applied twice, not a setting.
+On a server so large that even names blow the budget, names are dropped too and the bare object schema is used. That bounds **schema bulk** at any tool count — the same budget applied twice, not a setting.
 
-One floor applies to both tiers: the **catalog** of every tool name and description is always in the prompt, because that is what the model routes on. The budget governs schema bulk on top of the catalog, not the catalog itself.
+It does not bound the prompt. One floor applies to every tier: the **catalog** of every tool name and description is always present, because that is what the model routes on. The budget governs schema bulk on top of the catalog, never the catalog itself.
+
+So a server broad enough for its catalog alone to exceed the budget is over budget with nothing left to shed. Trimming descriptions would buy the number back by destroying the routing signal, which is the wrong trade at any tool count. The client reports it instead — a `disclosure-budget-exceeded` diagnostic naming the tool count, the measured floor, and the `tools` filter as the way down — rather than implying a bound it cannot hold.
 
 ## Hibernation on Durable Objects
 
@@ -133,15 +174,25 @@ import { createSqliteMcpConnectionStore, mcpTools, rebuildMcpToolsFromStorage } 
 const store = createSqliteMcpConnectionStore(ctx.storage.sql);
 
 // first run
-const tools = await mcpTools(servers, { storage: store, allowedHosts });
+const toolset = await mcpTools(servers, { storage: store, allowedHosts, session });
 
 // after a wake
-const rebuilt = await rebuildMcpToolsFromStorage(servers, { storage: store, allowedHosts }, { stdio: false });
+const rebuilt = await rebuildMcpToolsFromStorage(
+  servers,
+  { storage: store, allowedHosts, session },
+  { stdio: false },
+);
 ```
 
-Only an enumerated subset persists: `id`, `name`, `type`, `url`. No function, socket, header, or credential is ever written. Configured `headers` stay out on purpose — copying them into durable storage would widen a plaintext secret's blast radius from process memory to a database. You supply the config again on wake; the store records only *which* servers were connected.
+A Durable Object is itself the session boundary, so the session-scoped toolset lands here naturally: one DO, one session, one set of connections rebuilt on each wake.
 
-`rebuildMcpToolsFromStorage` has no fallback to the supplied `servers` when the store is empty. A wake rebuilds what was persisted, and a cold start is `mcpTools`. They are different situations.
+A wake makes **no `tools/list` call**. The row carries the catalogue the server published last time, so the tool map is projected from storage before the server is asked anything; the fresh listing is then checked in the background and the map corrected in place if it moved. `McpToolset.reconciled` settles when that check finishes — await it only if you would rather pay the round trip than risk one stale turn.
+
+Reconciliation does not block on purpose: awaiting the fresh listing before returning the map would restore the exact round trip the cache removes. The admitted cost is a window where the model can call a tool the server has withdrawn since, so each connection tracks what the server currently publishes and refuses anything else with a message the model can act on.
+
+Only an enumerated subset persists: `id`, `name`, `type`, `url`, `tools`. No function, socket, header, or credential is ever written. `tools` is public catalogue metadata — the same text the model is shown in its prompt — never what authenticates to the server. Configured `headers` stay out on purpose — copying them into durable storage would widen a plaintext secret's blast radius from process memory to a database. You supply the config again on wake; the store records only *which* servers were connected.
+
+`rebuildMcpToolsFromStorage` has no fallback to the supplied `servers` when the store is empty. A wake rebuilds what was persisted, and a cold start is `mcpTools`. They are different situations. A row whose `type` or `url` no longer matches the supplied config is refused outright — a different endpoint is a different catalogue, whatever the entry is still called.
 
 ## Related
 

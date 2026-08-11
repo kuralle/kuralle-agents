@@ -11,7 +11,7 @@ describe('MCP auth isolation', () => {
     const good = startStubMcpServer({ tools: [defaultEchoTool()] });
 
     const diagnostics: string[] = [];
-    const tools = await mcpTools(
+    const { tools, close } = await mcpTools(
       [
         {
           name: 'unauthorized',

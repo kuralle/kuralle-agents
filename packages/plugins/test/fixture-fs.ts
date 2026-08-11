@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, readlinkSync, lstatSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, readlinkSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { InMemoryFs } from '@kuralle-agents/fs';
 
@@ -42,5 +42,15 @@ export async function loadFixtureIntoMemoryFs(
   }
 
   await walk(fixtureDir, root);
+
+  // A sibling `outside/` directory mounts at `/outside`, next to the plugin root rather
+  // than inside it. That is what lets a fixture express "a symlink whose target exists but
+  // is outside the plugin root" — §4.1(3)'s actual case. Without it an escaping symlink is
+  // indistinguishable from a missing file, and the fixture proves nothing.
+  const outsideDir = join(fixtureDir, '..', 'outside');
+  if (existsSync(outsideDir)) {
+    await walk(outsideDir, '/outside');
+  }
+
   return { fs, root };
 }

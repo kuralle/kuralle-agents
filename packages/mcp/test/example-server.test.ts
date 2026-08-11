@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { createMockSession } from '@kuralle-agents/core/testing';
 import { mcpTools } from '../src/index.js';
 import {
@@ -21,10 +21,22 @@ function ctx() {
   return minimalToolContext(createMockSession());
 }
 
+/**
+ * Registers the toolset for teardown so no test in this file leaks a live connection.
+ * `close()` is the only thing that ends one — dropping the reference does not.
+ */
+const openToolsets: Array<() => Promise<void>> = [];
+
+afterEach(async () => {
+  await Promise.all(openToolsets.splice(0).map((close) => close()));
+});
+
 async function connect(url: string, name = 'example') {
-  return mcpTools([{ name, type: 'streamable-http', url }], {
+  const { tools, close } = await mcpTools([{ name, type: 'streamable-http', url }], {
     allowedHosts: ['127.0.0.1', 'localhost'],
   });
+  openToolsets.push(close);
+  return tools;
 }
 
 describe('example MCP server', () => {

@@ -35,6 +35,8 @@ export {
   DEFAULT_DIR_MODE,
   DEFAULT_FILE_MODE,
   SYMLINK_MODE,
+  containsPath,
+  containsResolvedPath,
 } from './path-utils.js';
 export { toBuffer, fromBuffer, getEncoding } from './encoding.js';
 export { createFsTool } from './tool.js';

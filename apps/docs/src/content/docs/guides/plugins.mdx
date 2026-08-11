@@ -32,6 +32,30 @@ my-plugin/
 | `skills/` | Top-level skill directories only — nested `SKILL.md` files inside a skill folder are bundled resources, not separate skills. Wired into `AgentConfig.skills` via the returned `SkillStoreLike`. |
 | `mcp.json` | Declares `mcpServers` (stdio, `streamable-http`, or `sse`). Parsed only when the file exists; a missing file is **not** an error. See the [MCP guide](/guides/mcp/). |
 
+## Not the same as a file-authored agent
+
+Both are a folder with a `skills/` directory, so they look alike. They solve opposite problems.
+
+| | Agent Plugin | [File-authored agent](/guides/file-authored-agents/) |
+|---|---|---|
+| Whose code | someone else's, published | yours |
+| Defines | a **capability bundle** to attach to an agent | the **agent itself** |
+| Spec | [Agent Plugins 1.0.0](https://agent-plugins.org), portable across clients | Kuralle's own format |
+| Manifest | `plugin.json` | `agent.json` + `instructions.md` |
+| Model, policy, routing | not present — the host decides | part of the agent definition |
+| MCP servers | declared in `mcp.json` | supplied by the host |
+| Loaded | at runtime, by `loadAgentPlugin(fs, root)` | at build time, by `kuralle build` |
+| Bad input | partial isolation — skip the broken part, keep the rest | the compiler rejects the build |
+| Identity | the plugin name | a content-addressed artifact digest |
+
+The difference in the last two rows follows from the first. You wrote a file-authored agent, so a
+mistake in it is a bug to fix before shipping and the compiler should stop you. You did **not** write
+the plugin, so a mistake in it must not take down an agent that merely loads it — hence
+[four failure widths](#four-failure-widths) instead of a thrown error.
+
+They compose: a file-authored agent can load plugins at runtime, and both feed
+[`AgentConfig.skills`](/guides/skills/) through the same `SkillStoreLike`.
+
 ## Quick start
 
 Mirror a plugin directory onto any `FileSystem` (disk, in-memory, Durable-Object SQLite) and load it:
@@ -142,6 +166,64 @@ via the `@kuralle-agents/mcp/node` subpath. That is a platform limit, not a miss
 See the [MCP guide](/guides/mcp/) for connecting servers, SSRF guards, disclosure budgets, and
 wiring tools into an agent.
 
+## How a `stdio` server is launched
+
+A `stdio` entry is not a request — it is a program this machine runs. Four things are decided for
+you before the process starts.
+
+```jsonc
+{
+  "mcpServers": {
+    "local": {
+      "type": "stdio",
+      "command": "./bin/server",          // resolved against the plugin root
+      "args": ["--data", "${PLUGIN_DATA}"],
+      "env": { "LOG_LEVEL": "debug" },
+      "cwd": "${PLUGIN_DATA}"             // optional; defaults to the plugin root
+    }
+  }
+}
+```
+
+**`command`** is either a bare token (`npx`, `uvx`, `python`) resolved through the platform search
+path, or a plugin-relative `./…` path resolved against the plugin root. Nothing else is accepted.
+
+**`cwd`** defaults to the plugin root when omitted (§7.2.1). When given, it must be `./…`,
+`${PLUGIN_ROOT}`, or `${PLUGIN_DATA}`, and it must stay under the root it names.
+
+**`env`** is composed, not inherited. The subprocess starts from a fixed base — `PATH`, `HOME`,
+`TMPDIR`, `LANG`, `LC_ALL`, and the Windows equivalents `SystemRoot`, `PATHEXT`, `APPDATA` — then the
+plugin's own `env`, then the reserved variables last, which a plugin can never override.
+
+<Aside type="caution" title="An allowlist is not a sandbox">
+The base environment fails closed: a variable a plugin needs and does not get breaks it loudly at
+connect, where inheriting would put every ambient credential in the host process in front of
+third-party code. `HOME` is on the list knowing it points at `~/.aws` and `~/.ssh` — the subprocess
+can reach those anyway, so withholding it would break `npm` and buy nothing. Spec §4.1 is explicit
+that plugin containment is **not** a security sandbox. Govern what a server can *do* with
+[`Policy`](/guides/policy/), not with the environment.
+</Aside>
+
+### `${PLUGIN_ROOT}` and `${PLUGIN_DATA}`
+
+Two placeholders expand inside `args`, `env`, and `cwd`, and arrive as environment variables:
+
+| Variable | Points at | Writable |
+|----------|-----------|----------|
+| `PLUGIN_ROOT` | the plugin directory | treat as read-only |
+| `PLUGIN_DATA` | a private data directory for this plugin | yes |
+
+`PLUGIN_DATA` is a **sibling** of the plugin directory, keyed by plugin name — a plugin at
+`/plugins/acme` gets `/plugins/data/acme`. Keeping it outside the plugin root means writing state
+never mutates the distributed bundle, so a plugin stays byte-identical to what was published.
+
+The client creates it and proves it writable **before** the subprocess starts, so a server can write
+on its first line without a `mkdir` of its own. If it cannot be created, that one server entry is
+skipped with a diagnostic and the plugin's other components still load.
+
+Expansion is single-pass: text introduced by one substitution is never rescanned, so a path that
+happens to contain `${PLUGIN_ROOT}` cannot expand twice.
+
 ## Live example
 
 The repo vendors a verbatim copy of `remotion-dev/codex-plugin` and proves offline loading:
@@ -158,5 +240,6 @@ a skills-only published plugin.
 
 - [Skills](/guides/skills/) — progressive disclosure for the `skills/` component
 - [MCP](/guides/mcp/) — connecting and governing plugin-declared MCP servers
+- [File-authored Agents](/guides/file-authored-agents/) — the folder format for *your own* agent, not a third-party bundle
 - [Workspace](/guides/workspace/) — mount plugins on a workspace filesystem
 - [Tool Policy](/guides/policy/) — approval gate for MCP tool calls (not plugin loading)

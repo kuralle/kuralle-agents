@@ -22,7 +22,7 @@ real Git repository (read-only /repo)    writable state (/output)
 The implementation uses Kuralle primitives throughout:
 
 - `defineAgent` and typed `defineTool` contracts for the operator and its effects.
-- The Pi driver by default through the shared production runtime; `KURALLE_DRIVER=ai-sdk` exercises the same agent with the built-in driver.
+- The Pi driver by default, wired in `src/production-runtime.ts`; `bun run chat:ai-sdk` (or `KURALLE_DRIVER=ai-sdk`) runs the same agent on Core's built-in driver.
 - A composite Kuralle workspace with an immutable `/repo` mount and a writable `/output` mount.
 - A filesystem skill that progressively discloses the release checklist.
 - A custom Kuralle policy plus tool-level approval gates for checks, candidate persistence, and GitHub draft creation.

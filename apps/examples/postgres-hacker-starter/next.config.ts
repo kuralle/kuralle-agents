@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     '@kuralle-agents/core',
     '@kuralle-agents/postgres-store',
-    '@kuralle-examples/shared',
   ],
 };
 

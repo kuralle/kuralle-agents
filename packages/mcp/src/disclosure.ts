@@ -82,10 +82,16 @@ export function serializeToolDefsForBudget(
  * Not a mode flag: the caller never picks one. It is the same budget applied twice, because
  * two things are true at once. Parameter names are what keep the model calling a deferred
  * tool correctly — without them it malformed 2 calls in 5. But names still scale with tool
- * count, so on a large enough server even names blow the budget, and REQ-16 promises the
- * prompt stays under budget *however many tools a server publishes*. `bare` is what keeps
- * that promise unconditionally; `names` is what we use whenever it fits, which is the
+ * count, so on a large enough server even names blow the budget. `bare` is the floor of what
+ * schema disclosure can shed; `names` is what we use whenever it fits, which is the
  * overwhelmingly common case.
+ *
+ * What the budget governs is schema bulk, and only that. Below `bare` sits the catalog —
+ * every tool's name and description — which no tier drops, because it is what the model
+ * routes on. A server broad enough for its catalog alone to exceed the budget is over
+ * budget with nothing left to shed, and `catalogTokens` exists to report exactly that.
+ * Trimming descriptions would buy the number back by destroying the routing signal, which
+ * is the wrong trade at any tool count.
  */
 export type DisclosureMode = 'inline' | 'names' | 'bare';
 
@@ -107,13 +113,19 @@ export function resolveDisclosureMode(
   return estimateTokens(withNames) <= budget ? 'names' : 'bare';
 }
 
-export function shouldInlineServerSchemas(
-  serverName: string,
-  remoteTools: readonly RemoteToolListing[],
-  budget: number,
-  alwaysLoad: readonly string[] | undefined,
-): boolean {
-  return resolveDisclosureMode(serverName, remoteTools, budget, alwaysLoad) === 'inline';
+/**
+ * The irreducible cost of a server: every tool's description plus the bare object schema
+ * that replaces its parameters. No disclosure tier goes below this, because the catalog is
+ * what the model routes on. Reported when it exceeds the budget so the limit is visible
+ * rather than silently unenforceable.
+ */
+export function catalogTokens(remoteTools: readonly RemoteToolListing[]): number {
+  const parts: string[] = [];
+  for (const remoteTool of remoteTools) {
+    parts.push(deferredToolDescription(remoteTool.description ?? remoteTool.name));
+    parts.push(JSON.stringify(BARE_OBJECT_SCHEMA));
+  }
+  return estimateTokens(parts.join('\n'));
 }
 
 function scalarTypeOf(spec: unknown): string {

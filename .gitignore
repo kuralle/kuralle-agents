@@ -1,4 +1,6 @@
 .env
+.dev.vars
+.dev.vars.*
 .next
 **/.next
 node_modules

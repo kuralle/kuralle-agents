@@ -36,10 +36,26 @@ export type McpServerConfig =
   | {
       name: string;
       type: 'stdio';
+      /** Resolved against the plugin root when the source was `./…`; a bare token otherwise. */
       command: string;
       args?: string[];
+      /** Expanded plugin entries only. The launcher composes the final environment. */
       env?: Record<string, string>;
+      /** Resolved. Defaults to `pluginRoot` when the plugin omitted it (§7.2.1). */
       cwd?: string;
+      /**
+       * Which root `cwd` was declared against. `${PLUGIN_ROOT}` and `${PLUGIN_DATA}` have
+       * different permitted roots under §7.2.1, and the resolved absolute path alone no
+       * longer says which — so the parser records what it already knew rather than making
+       * the launcher guess from the string a second time.
+       */
+      cwdRoot?: 'plugin' | 'data';
+      /**
+       * Present only for a config parsed from a plugin. A hand-written config has no
+       * plugin root, so it correctly receives no `PLUGIN_*` variables.
+       */
+      pluginRoot?: string;
+      pluginDataRoot?: string;
     }
   | {
       name: string;

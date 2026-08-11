@@ -16,12 +16,16 @@ export {
 export type { McpSqlStorage } from './connection-store.js';
 export { composeMcpSystemPrompt } from './compose-prompt.js';
 export {
+  catalogTokens,
   estimateTokens,
   DEFAULT_DISCLOSURE_BUDGET_TOKENS,
   MCP_DESCRIBE_TOOL,
 } from './disclosure.js';
+export { isProviderLegalToolName } from './tool-name.js';
 export type {
   McpOptions,
+  McpToolset,
+  McpToolCallOptions,
   McpConnectionStore,
   PersistedServer,
   Diagnostic,

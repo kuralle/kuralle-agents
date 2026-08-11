@@ -1,0 +1,5 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "symlink-escape-plugin",
+  "description": "Ships a bin/ symlink that escapes the plugin root, for §4.1 launch containment."
+}

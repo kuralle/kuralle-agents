@@ -4,8 +4,8 @@ import {
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client';
 import type { Diagnostic, McpServerConfig } from '@kuralle-agents/plugins';
-import type { Session } from '@kuralle-agents/core';
 import { activeGeneratedHeaders } from './auth-context.js';
+import { createConnectedServer } from './connected-server.js';
 import {
   authFailureDiagnostic,
   authStatusFromError,
@@ -40,64 +40,110 @@ export function stdioRequiresNodeDiagnostic(serverName: string): Diagnostic {
 
 type FetchLike = typeof fetch;
 
-function createGuardedFetch(
-  baseFetch: FetchLike,
-  configuredHeaders: Record<string, string> | undefined,
-): FetchLike {
-  return async (input, init) => {
-    const generated = activeGeneratedHeaders();
-    const merged = mergeRequestHeaders(configuredHeaders, generated);
-    const headers = new Headers(init?.headers);
-    for (const [name, value] of Object.entries(merged)) {
-      headers.set(name, value);
-    }
-    return baseFetch(input, { ...init, headers });
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECT_HOPS = 5;
+
+export function crossOriginHeadersWithheldDiagnostic(
+  serverName: string,
+  target: string,
+): Diagnostic {
+  return {
+    section: '7.2.1',
+    rule: 'cross-origin-headers-withheld',
+    origin: serverName,
+    message:
+      `MCP server "${serverName}" directed a request to "${target}", a different origin than ` +
+      'its configured URL. Configured headers and credentials were withheld from that hop. ' +
+      'If the endpoint legitimately lives on another origin, configure it as that origin.',
   };
 }
 
-function textOf(
-  content: Array<{ type: string; text?: string; [key: string]: unknown }> | undefined,
-): string {
-  return (content ?? [])
-    .filter((block) => block.type === 'text' && typeof block.text === 'string')
-    .map((block) => block.text as string)
-    .join('\n')
-    .trim();
+function urlOf(input: Parameters<FetchLike>[0]): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
 }
 
-function extractToolContent(result: {
-  content?: Array<{ type: string; text?: string; [key: string]: unknown }>;
-  structuredContent?: unknown;
-  isError?: boolean;
-}): unknown {
-  // `isError: true` is a tool *execution* error — a failed call whose text the model is
-  // meant to read and correct against ("date must be in the future"). Returning that text
-  // as an ordinary value told the model the call succeeded, and recorded a success in the
-  // durable journal, so a replay would skip a call that never worked. Throw instead, and
-  // carry the server's message: the spec asks clients to surface these precisely so the
-  // model can self-correct rather than repeat the same call.
-  if (result.isError) {
-    const message = textOf(result.content);
-    throw new Error(
-      message ? `MCP tool error: ${message}` : 'MCP tool returned an error result',
-    );
-  }
-  if (result.structuredContent !== undefined) {
-    return result.structuredContent;
-  }
-  if (result.content && result.content.length > 0) {
-    const texts = result.content
-      .filter((block) => block.type === 'text' && typeof block.text === 'string')
-      .map((block) => block.text as string);
-    if (texts.length === 1) {
-      return texts[0];
+/**
+ * Header precedence, lowest to highest: plugin-configured, the connect-time credential,
+ * then the per-call credential resolved inside the active tool execution.
+ *
+ * The connect-time layer is what makes `initialize` and `tools/list` authenticated. The
+ * per-call layer on top of it lets a rotated token take effect without reconnecting.
+ * Agent Plugins §7.2.1 puts client-generated headers above configured ones; both
+ * generated layers sit above `configured` here, and the fresher one wins.
+ *
+ * Redirects are followed manually rather than by the platform. §7.2.1 forbids forwarding
+ * configured headers to a different origin, and a platform-followed redirect is invisible
+ * to a wrapper — this function is called once and never learns the hop happened. Measured:
+ * the platform does strip `Authorization` across origins, but a configured header such as
+ * `X-Tenant` is carried through untouched, which is the leak the rule exists to stop.
+ */
+function createGuardedFetch(
+  baseFetch: FetchLike,
+  configuredHeaders: Record<string, string> | undefined,
+  connectHeaders: Record<string, string>,
+  guard: {
+    serverName: string;
+    configuredOrigin: string;
+    allowedHosts: readonly string[] | null;
+    onDiagnostic?: (d: Diagnostic) => void;
+  },
+): FetchLike {
+  return async (input, init) => {
+    let url = new URL(urlOf(input));
+    let method = init?.method ?? 'GET';
+    let body = init?.body;
+
+    for (let hop = 0; ; hop += 1) {
+      const hostFailure = checkAllowedHost(guard.serverName, url, guard.allowedHosts);
+      if (hostFailure) {
+        guard.onDiagnostic?.(hostFailure);
+        throw new Error(hostFailure.message);
+      }
+
+      const headers = new Headers(init?.headers);
+      if (url.origin === guard.configuredOrigin) {
+        const atConnect = mergeRequestHeaders(configuredHeaders, connectHeaders);
+        const merged = mergeRequestHeaders(atConnect, activeGeneratedHeaders());
+        for (const [name, value] of Object.entries(merged)) {
+          headers.set(name, value);
+        }
+      } else {
+        guard.onDiagnostic?.(
+          crossOriginHeadersWithheldDiagnostic(guard.serverName, url.origin),
+        );
+        headers.delete('authorization');
+        for (const name of Object.keys(configuredHeaders ?? {})) {
+          headers.delete(name);
+        }
+      }
+
+      const response = await baseFetch(url, {
+        ...init,
+        method,
+        body,
+        headers,
+        redirect: 'manual',
+      });
+
+      const location = response.headers.get('location');
+      if (!REDIRECT_STATUSES.has(response.status) || !location) {
+        return response;
+      }
+      if (hop >= MAX_REDIRECT_HOPS) {
+        throw new Error(
+          `MCP server "${guard.serverName}" exceeded ${MAX_REDIRECT_HOPS} redirects.`,
+        );
+      }
+
+      url = new URL(location, url);
+      if (response.status === 303 || (response.status === 302 && method === 'POST')) {
+        method = 'GET';
+        body = undefined;
+      }
     }
-    if (texts.length > 1) {
-      return texts.join('\n');
-    }
-    return result.content;
-  }
-  return null;
+  };
 }
 
 export async function connectRemoteMcpServer(
@@ -106,7 +152,9 @@ export async function connectRemoteMcpServer(
     timeoutMs: number;
     fetch?: FetchLike;
     allowedHosts: readonly string[] | null;
-    session: Session;
+    /** Resolved before the handshake; covers `initialize` and `tools/list`. */
+    connectHeaders?: Record<string, string>;
+    onDiagnostic?: (d: Diagnostic) => void;
   },
 ): Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }> {
   const parsed = parseRemoteUrl(config.url);
@@ -120,9 +168,15 @@ export async function connectRemoteMcpServer(
   }
 
   const baseFetch = opts.fetch ?? fetch;
-  const guardedFetch = createGuardedFetch(baseFetch, config.headers);
+  const connectHeaders = opts.connectHeaders ?? {};
+  const guardedFetch = createGuardedFetch(baseFetch, config.headers, connectHeaders, {
+    serverName: config.name,
+    configuredOrigin: parsed.origin,
+    allowedHosts: opts.allowedHosts,
+    onDiagnostic: opts.onDiagnostic,
+  });
   const requestInit = {
-    headers: headersToFetchInit(config.headers ?? {}),
+    headers: headersToFetchInit(mergeRequestHeaders(config.headers, connectHeaders)),
   };
 
   const client = new Client(CLIENT_INFO);
@@ -155,44 +209,12 @@ export async function connectRemoteMcpServer(
   // Server instructions are intentionally discarded — never forwarded to prompts.
   void client.getInstructions();
 
-  const server: ConnectedMcpServer = {
+  const server = createConnectedServer(client, {
     serverName: config.name,
+    timeoutMs: opts.timeoutMs,
     configuredHeaders: config.headers ?? {},
     url: config.url,
-    close: async () => {
-      await client.close();
-    },
-    listTools: async () => {
-      const { tools } = await client.listTools();
-      return tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema as Record<string, unknown> | undefined,
-      }));
-    },
-    callTool: async (name, args) => {
-      try {
-        const result = await client.callTool(
-          { name, arguments: args },
-          { timeout: opts.timeoutMs },
-        );
-        return extractToolContent(result);
-      } catch (error) {
-        const authStatus = authStatusFromError(error);
-        if (authStatus) {
-          throw Object.assign(
-            new Error(authFailureDiagnostic(config.name, authStatus).message),
-            {
-              mcpAuthFailure: true,
-              status: authStatus,
-              serverName: config.name,
-            },
-          );
-        }
-        throw error;
-      }
-    },
-  };
+  });
 
   return { server };
 }
@@ -203,10 +225,13 @@ export async function connectMcpServer(
     timeoutMs: number;
     fetch?: FetchLike;
     allowedHosts: readonly string[] | null;
-    session: Session;
+    connectHeaders?: Record<string, string>;
+    onDiagnostic?: (d: Diagnostic) => void;
+    fs?: unknown;
     stdio: boolean;
     connectStdio?: (
       config: Extract<McpServerConfig, { type: 'stdio' }>,
+      stdioOpts: { timeoutMs: number; fs?: unknown },
     ) => Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }>;
   },
 ): Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }> {
@@ -214,7 +239,7 @@ export async function connectMcpServer(
     if (!opts.stdio || !opts.connectStdio) {
       return { diagnostic: stdioRequiresNodeDiagnostic(config.name) };
     }
-    return opts.connectStdio(config);
+    return opts.connectStdio(config, { timeoutMs: opts.timeoutMs, fs: opts.fs });
   }
   return connectRemoteMcpServer(config, opts);
 }

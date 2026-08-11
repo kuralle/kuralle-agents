@@ -16,11 +16,14 @@ bun run dev
 
 Open `http://localhost:3000`. The included database container listens on port `55432` so it does not collide with a conventional host Postgres installation.
 
-Pi is the default Kuralle channel driver. To exercise the same agent with Core's built-in AI SDK driver, set:
+Pi is the default Kuralle channel driver, wired in `server/production-runtime.ts`.
 
-```bash
-KURALLE_DRIVER=ai-sdk bun run dev
-```
+| Driver | Command |
+| --- | --- |
+| Pi — the default | `bun run dev` |
+| Core's built-in AI SDK driver | `KURALLE_DRIVER=ai-sdk bun run dev` |
+
+`GET /api/health` reports which driver is live.
 
 For an optimized process:
 

@@ -1,0 +1,10 @@
+{
+  "name": "kuralle-plugins-tests",
+  "main": "vitest/worker-entry.ts",
+  "compatibility_date": "2026-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "PLUGIN_DO", "class_name": "PluginLoaderDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PluginLoaderDO"] }]
+}

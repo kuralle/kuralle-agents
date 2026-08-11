@@ -1,6 +1,6 @@
 // This production example defaults to Pi. Set KURALLE_DRIVER=ai-sdk for the built-in driver.
 import type { SessionStore, TraceStore } from '@kuralle-agents/core';
-import { createProductionRuntime } from '@kuralle-examples/shared/runtime';
+import { createProductionRuntime } from './production-runtime.js';
 import { resolve } from 'node:path';
 import { buildReleaseGovernanceAgent } from './agent.js';
 import { loadReleaseAgentConfig } from './config.js';
