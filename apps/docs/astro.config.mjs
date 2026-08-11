@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import mdx from '@astrojs/mdx';
 import starlight from '@astrojs/starlight';
 import { createStarlightTypeDocPlugin } from 'starlight-typedoc';
 import tailwindcss from '@tailwindcss/vite';
@@ -220,6 +221,11 @@ export default defineConfig({
       },
       customCss: ['./src/styles/global.css'],
     }),
+    // Registered after starlight, which sets up astro-expressive-code and errors if mdx()
+    // precedes it. Without this integration MDX never extended the markdown config, so GFM
+    // reached `.md` and not `.mdx` — every pipe table in every guide rendered as a
+    // paragraph of literal `|` characters, silently, because a broken table still builds.
+    mdx({ gfm: true, extendMarkdownConfig: true }),
   ],
   vite: {
     plugins: [tailwindcss()],
