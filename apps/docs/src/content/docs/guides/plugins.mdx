@@ -93,7 +93,8 @@ const agent = defineAgent({
 ```
 
 `loadAgentPlugin` always resolves paths under `root`. Manifest or MCP paths that escape the plugin
-root are rejected.
+root are rejected — see [Containment](#containment-is-checked-twice) for what "escape" means once
+symlinks are involved.
 
 ## Four failure widths
 
@@ -223,6 +224,33 @@ skipped with a diagnostic and the plugin's other components still load.
 
 Expansion is single-pass: text introduced by one substitution is never rescanned, so a path that
 happens to contain `${PLUGIN_ROOT}` cannot expand twice.
+
+## Containment is checked twice
+
+§4.1 requires a plugin's paths to stay inside the plugin, and §4.1(3) defines that against the
+**filesystem-resolved** path — symlinks followed. A plugin can ship `bin/server` as a symlink to
+`/usr/bin/curl`; the string `./bin/server` looks perfectly contained.
+
+Two checks run, at different moments, because one moment cannot serve both rules:
+
+| When | What it catches | Why it cannot do the other job |
+|------|-----------------|--------------------------------|
+| **Parse** — `loadAgentPlugin` | `../` escapes, cheaply and early | `${PLUGIN_DATA}` does not exist yet, so resolving it would reject the specification's own `cwd` example |
+| **Launch** — before the subprocess spawns | symlinks that resolve outside the permitted root | too late to stop a plugin from loading at all, and it never runs on Workers |
+
+A failure at either point invalidates that **one server entry** under §7.2.2 — `section: "4.1"`,
+`rule: "path-escapes-plugin-root"` — and the two are deliberately indistinguishable to a consumer.
+The plugin's skills and its other servers still load (§11.3).
+
+A symlink that stays **inside** the plugin root is permitted, explicitly. This is a containment
+check, not a ban on symlinks.
+
+<Aside type="caution" title="Containment is not a sandbox">
+§4.1 says so directly, and it is worth repeating because the guard reads like a security boundary.
+It stops a plugin *declaring* a path outside itself. It does not stop the process that path launches
+from doing anything it likes once running — the environment allowlist above is not a jail either.
+Use [`Policy`](/guides/policy/) to govern what a connected server may **do**.
+</Aside>
 
 ## Live example
 

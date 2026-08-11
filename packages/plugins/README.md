@@ -106,7 +106,17 @@ Supply real credentials in code, through the `auth` resolver on `@kuralle-agents
 
 `PLUGIN_DATA` is a **sibling** of the plugin directory, keyed by plugin name — a plugin at `/plugins/acme` gets `/plugins/data/acme`. Keeping it outside the plugin root means writing state never mutates the distributed bundle, so a plugin stays byte-identical to what was published. `@kuralle-agents/mcp/node` creates it and proves it writable before the subprocess starts.
 
-A `command` is either a bare token resolved through the platform search path, or a plugin-relative `./…` path resolved against the plugin root. `cwd` defaults to the plugin root when omitted.
+A `command` is either a bare token resolved through the platform search path, or a plugin-relative `./…` path resolved against the plugin root. `cwd` defaults to the plugin root when omitted, and `cwdRoot` records which root it was declared against.
+
+## Containment
+
+§4.1 keeps a plugin's declared paths inside the plugin, and defines that against the **filesystem-resolved** path. A plugin can ship `bin/server` as a symlink to `/usr/bin/curl` — the string `./bin/server` looks contained.
+
+Two checks run. Parsing catches `../` escapes early. `@kuralle-agents/mcp/node` re-checks `command` and `cwd` through `realpath` immediately before spawning, which is the first moment `${PLUGIN_DATA}` exists — resolving it at parse time would reject the specification's own `cwd` example.
+
+Either failure invalidates that one server entry (`section: "4.1"`, `rule: "path-escapes-plugin-root"`) and leaves the plugin's skills and other servers loading. A symlink that stays inside the plugin root is permitted; this is containment, not a ban on symlinks.
+
+It is not a sandbox — §4.1 says so. It constrains what a plugin may *declare*, not what the process it launches may do. Use `Policy` for that.
 
 ## Platform limits
 

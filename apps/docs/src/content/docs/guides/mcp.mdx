@@ -92,7 +92,7 @@ see [Hibernation and reconnect](#hibernation-and-reconnect).
 
 | `type` | Fields |
 |--------|--------|
-| `stdio` | `name`, `command`, optional `args`, `env`, `cwd` |
+| `stdio` | `name`, `command`, optional `args`, `env`, `cwd`, `cwdRoot`, `pluginRoot`, `pluginDataRoot` |
 | `streamable-http` | `name`, `url`, optional `headers` |
 | `sse` | `name`, `url`, optional `headers` |
 
@@ -109,6 +109,11 @@ see [Hibernation and reconnect](#hibernation-and-reconnect).
 | `storage?` | Persist remote server metadata for hibernation wake (`rebuildMcpToolsFromStorage`) |
 | `onDiagnostic?` | `(Diagnostic) => void` — connection, auth, and transport failures |
 | `fetch?` | Test hook: custom `fetch` for HTTP transports |
+
+The stdio fields beyond `command`/`args`/`env`/`cwd` are produced by the plugin parser, not written
+by hand: `cwdRoot` records whether `cwd` was declared against `${PLUGIN_ROOT}` or `${PLUGIN_DATA}`,
+and the two root fields carry the plugin's location so the launcher can supply `PLUGIN_ROOT` and
+`PLUGIN_DATA` and check containment. See [Agent Plugins](/guides/plugins/#containment-is-checked-twice).
 
 Qualified tool names use a double underscore: `payments__create_invoice` (server `payments`, remote
 tool `create_invoice`).
@@ -337,7 +342,7 @@ A `PersistedServer` row holds exactly five fields:
 | `name` | `"docs"` |
 | `type` | `"streamable-http"` |
 | `url` | `"https://mcp.example.com/mcp"` |
-| `tools` | `[{ name: "search", description: "…", inputSchema: { … } }]` |
+| `tools` | `PersistedTool[]` — `[{ name: "search", description: "…", inputSchema: { … } }]` |
 
 No function, socket, `fetch` override, auth resolver, token, or configured header is ever written.
 The store is a one-wake capability seed, not a config source.

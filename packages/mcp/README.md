@@ -136,6 +136,7 @@ durable journal, so a replay would skip a call that never worked.
 - **Server `instructions` are never forwarded** into the system prompt. They are third-party text and would be a prompt-injection seam.
 - **`allowedHosts` is an SSRF guard.** A plugin file supplies the URL, so a host outside the list fails with no outbound request.
 - **stdio `env` is an allowlist**, not an inherit.
+- **A stdio `command` and `cwd` are re-checked through `realpath` before the spawn.** A plugin shipping `bin/server` as a symlink outside its own root is refused, where a lexical check sees a clean plugin-relative path. The entry is skipped; the plugin's other components still load. This is containment, not a sandbox.
 
 ## Disclosure budget
 
