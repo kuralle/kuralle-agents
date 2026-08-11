@@ -1,0 +1,5 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "cwd-data-plugin",
+  "description": "Declares the specification's own cwd example, ${PLUGIN_DATA}."
+}

@@ -1,6 +1,8 @@
+import { realpath } from 'node:fs/promises';
 import { resolve as hostResolve } from 'node:path';
 import { Client } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { containsResolvedPath } from '@kuralle-agents/fs';
 import type { Diagnostic, McpServerConfig } from '@kuralle-agents/plugins';
 import { connectionFailureDiagnostic } from '../connect.js';
 import { createConnectedServer } from '../connected-server.js';
@@ -69,6 +71,66 @@ function rebaseExpandedRoots(
   return value;
 }
 
+/**
+ * §4.1(3) resolves containment through symlinks, and the host filesystem is where that
+ * resolution has to happen: `posix_spawn` follows the real links, not whatever a virtual
+ * `FileSystem` would report. `containsResolvedPath` is the canonical check; only the
+ * `realpath` it calls is host-bound.
+ */
+const HOST_FS = { realpath: (path: string) => realpath(path) };
+
+/**
+ * §4.1(4): a `command` or `cwd` that fails containment makes the entry invalid.
+ *
+ * This runs at launch rather than at parse. §4.1(3) demands a filesystem-resolved check,
+ * and §7.2.1 permits `cwd: "${PLUGIN_DATA}"` — a directory the client must create *before
+ * launching*, so at parse time it reliably does not exist and `realpath` would reject the
+ * specification's own example. Parse keeps its lexical check for `../` escapes; this is the
+ * first moment both paths genuinely exist, so it is where symlinks get caught.
+ */
+async function checkDeclaredPaths(
+  config: Extract<McpServerConfig, { type: 'stdio' }>,
+  paths: {
+    command: string;
+    cwd: string | undefined;
+    pluginRoot: string | undefined;
+    pluginDataRoot: string | undefined;
+  },
+): Promise<Diagnostic | null> {
+  const escaped = (what: string, value: string): Diagnostic => ({
+    section: '4.1',
+    rule: 'path-escapes-plugin-root',
+    origin: config.name,
+    message:
+      `stdio MCP server "${config.name}" ${what} "${value}" resolves outside its ` +
+      'permitted root once symlinks are followed; the server entry is skipped.',
+  });
+
+  // §4.1(5): a bare command goes through platform search and is an opaque string, not a
+  // package path. Only a plugin-relative one was ever claimed to live inside the plugin.
+  //
+  // By this point the parser has already resolved a `./…` declaration to an absolute path
+  // and left a bare token alone, so "absolute" *is* "was plugin-relative". Testing for a
+  // leading `./` here looks right and never fires — the first version of this guard did,
+  // and let the escaping symlink straight through.
+  const commandIsPluginRelative = config.command.startsWith('/');
+  if (commandIsPluginRelative && paths.pluginRoot !== undefined) {
+    if (!(await containsResolvedPath(HOST_FS, paths.pluginRoot, paths.command))) {
+      return escaped('command', config.command);
+    }
+  }
+
+  if (paths.cwd !== undefined) {
+    const root =
+      config.cwdRoot === 'data' ? paths.pluginDataRoot : paths.pluginRoot;
+    if (root !== undefined && !(await containsResolvedPath(HOST_FS, root, paths.cwd))) {
+      return escaped('working directory', config.cwd ?? paths.cwd);
+    }
+  }
+
+  return null;
+}
+
 async function connectStdioServer(
   config: Extract<McpServerConfig, { type: 'stdio' }>,
   opts: StdioConnectorOptions,
@@ -88,6 +150,18 @@ async function connectStdioServer(
     if (dataFailure) {
       return { diagnostic: dataFailure };
     }
+  }
+
+  // After the PLUGIN_DATA mkdir — a `cwd` of `${PLUGIN_DATA}` has to exist to be resolved
+  // — and before anything is spawned.
+  const containmentFailure = await checkDeclaredPaths(config, {
+    command,
+    cwd,
+    pluginRoot,
+    pluginDataRoot,
+  });
+  if (containmentFailure) {
+    return { diagnostic: containmentFailure };
   }
 
   const roots = [

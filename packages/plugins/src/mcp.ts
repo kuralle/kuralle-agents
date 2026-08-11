@@ -146,14 +146,20 @@ function validateCommand(command: string, pluginRoot: string): Parsed<string> {
   return ok(resolved);
 }
 
+interface ValidatedCwd {
+  cwd: string;
+  /** The root this `cwd` is permitted to sit under — see `McpServerConfig.cwdRoot`. */
+  root: 'plugin' | 'data';
+}
+
 function validateCwd(
   cwd: unknown,
   pluginRoot: string,
   pluginDataRoot: string,
-): Parsed<string> {
+): Parsed<ValidatedCwd> {
   if (cwd === undefined) {
     // §7.2.1: when omitted, the working directory is the plugin root.
-    return ok(normalizePath(pluginRoot));
+    return ok({ cwd: normalizePath(pluginRoot), root: 'plugin' });
   }
 
   if (typeof cwd !== 'string' || cwd.length === 0) {
@@ -198,7 +204,7 @@ function validateCwd(
     );
   }
 
-  return ok(resolved);
+  return ok({ cwd: resolved, root: rootedInPlugin ? 'plugin' : 'data' });
 }
 
 function hasDuplicateHeaderNames(
@@ -409,7 +415,8 @@ function parseStdioServer(
     name,
     type: 'stdio',
     command: command.value,
-    cwd: cwd.value,
+    cwd: cwd.value.cwd,
+    cwdRoot: cwd.value.root,
     pluginRoot: normalizePath(pluginRoot),
     pluginDataRoot: normalizePath(pluginDataRoot),
   };
