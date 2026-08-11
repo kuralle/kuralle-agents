@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/pi-driver",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "description": "Pi agent-core model/tool loop for Kuralle agents",
   "type": "module",
   "main": "dist/index.js",

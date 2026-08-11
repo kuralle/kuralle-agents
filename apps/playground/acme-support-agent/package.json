@@ -2,7 +2,7 @@
   "name": "acme-support-agent",
   "private": true,
   "license": "Apache-2.0",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "ingest": "bun run scripts/ingest.ts",

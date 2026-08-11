@@ -1,6 +1,6 @@
 {
   "name": "@kuralle-agents/build",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "description": "Deterministic folder compiler for Kuralle agent artifacts",
   "license": "Apache-2.0",
   "repository": {
