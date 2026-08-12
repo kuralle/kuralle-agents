@@ -111,13 +111,13 @@ async function dispatchConfirmGate(
   ctx: RunContext,
 ): Promise<NormalizedTransition> {
   const gate = node.confirmGate!;
-  if (!hasPendingUserInput(ctx.session) && ctx.turnInputConsumed) {
+  if (!hasPendingUserInput(ctx.session, ctx.runState) && ctx.turnInputConsumed) {
     return { kind: 'stay' };
   }
 
   let input = '';
   let rawInput: UserInputContent = '';
-  if (hasPendingUserInput(ctx.session)) {
+  if (hasPendingUserInput(ctx.session, ctx.runState)) {
     const signal = await driver.awaitUser(ctx);
     rawInput = signal.input;
     input = userInputToText(signal.input);
@@ -129,7 +129,7 @@ async function dispatchConfirmGate(
 
   const verdict = parseConfirmation(input);
   if (verdict === 'decline') {
-    setPendingUserInput(ctx.session, rawInput);
+    setPendingUserInput(ctx.session, rawInput, ctx.runState);
   } else {
     ctx.turnInputConsumed = true;
   }
@@ -203,7 +203,7 @@ async function dispatchNode(
     // context. Returning `stay` lets the loop park as `awaitingUser`. (A plain
     // decide with no choices is a pure branch and still runs; and an interactive
     // decide that IS the turn's first input-node still decides on that input.)
-    if (node.choices?.length && !hasPendingUserInput(ctx.session) && ctx.turnInputConsumed) {
+    if (node.choices?.length && !hasPendingUserInput(ctx.session, ctx.runState) && ctx.turnInputConsumed) {
       return { kind: 'stay' };
     }
     // On resume, the new turn's input is buffered as pending and is not yet in
@@ -211,7 +211,7 @@ async function dispatchNode(
     // collect path) so the decision sees the user's actual reply instead of
     // stale context — without this, a multi-turn flow stalls at the first
     // interactive decide because the reply never reaches `decide()`.
-    if (hasPendingUserInput(ctx.session)) {
+    if (hasPendingUserInput(ctx.session, ctx.runState)) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
     }
@@ -266,7 +266,7 @@ async function dispatchNode(
     //     swallow input here — it returns its transition (`next: () => 'stay'`) and the
     //     main loop's stay-branch owns awaitUser.
     let freshUserInput = false;
-    if (hasPendingUserInput(ctx.session) && !ctx.turnInputConsumed && ctx.outOfBandControl) {
+    if (hasPendingUserInput(ctx.session, ctx.runState) && !ctx.turnInputConsumed && ctx.outOfBandControl) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
       ctx.turnInputConsumed = true;
@@ -582,7 +582,7 @@ export async function runFlow(
     }
 
     if (transition.kind === 'stay') {
-      if (!hasPendingUserInput(ctx.session)) {
+      if (!hasPendingUserInput(ctx.session, ctx.runState)) {
         await ctx.runStore.putRunState(run);
         return { kind: 'awaitingUser' };
       }

@@ -1,63 +1,56 @@
 /**
- * Per-session async mutex.
+ * Per-key async mutex.
  *
- * Serializes concurrent `stream()` calls for the same sessionId.
- * Two concurrent turns for different sessionIds run in parallel.
- * Two concurrent turns for the SAME sessionId are queued — the second
- * waits for the first to complete before starting.
+ * SessionMutex serializes conversation-run turns and Session document mutations
+ * (messages, working memory) for one sessionId.
+ * RunMutex serializes steps within one flow run, keyed by runId.
+ * Two keys run in parallel; the same key queues.
  *
- * This prevents the read-modify-write race on session state that
- * occurs when two requests arrive for the same session simultaneously
- * (user double-tap, webhook retry, mid-stream takeover).
- *
- * The mutex uses a Map of per-session promise chains. When a session
- * has no active lock, the chain is empty and acquire() resolves
- * immediately. When locked, acquire() appends to the chain and waits.
+ * The mutex uses a Map of per-key promise chains. When a key has no active lock,
+ * the chain is empty and acquire() resolves immediately. When locked, acquire()
+ * appends to the chain and waits.
  *
  * Locks are released in the `finally` block via the returned release
  * function, guaranteeing cleanup even on errors or aborts.
  */
-export class SessionMutex {
-  /** Map of sessionId to the tail of the promise chain. */
+export class KeyedMutex {
+  /** Map of key to the tail of the promise chain. */
   private locks = new Map<string, Promise<void>>();
 
   /**
-   * Acquire the lock for a session.
+   * Acquire the lock for a key.
    *
-   * If the session is not locked, resolves immediately.
-   * If the session is locked by another turn, waits until the
-   * previous turn releases.
+   * If the key is not locked, resolves immediately.
+   * If the key is locked, waits until the previous holder releases.
    *
-   * @param sessionId - The session to lock.
-   * @returns A release function that MUST be called when the turn completes.
+   * @returns A release function that MUST be called when the critical section completes.
    */
-  async acquire(sessionId: string): Promise<() => void> {
-    // Get the current tail of the chain (or a resolved promise if unlocked)
-    const currentTail = this.locks.get(sessionId) ?? Promise.resolve();
+  async acquire(key: string): Promise<() => void> {
+    const currentTail = this.locks.get(key) ?? Promise.resolve();
 
-    // Create a new promise that the NEXT waiter will await
     let releaseFn!: () => void;
     const newTail = new Promise<void>((resolve) => {
       releaseFn = () => {
-        // Clean up the map entry if this is the last in the chain
-        if (this.locks.get(sessionId) === newTail) {
-          this.locks.delete(sessionId);
+        if (this.locks.get(key) === newTail) {
+          this.locks.delete(key);
         }
         resolve();
       };
     });
 
-    // Set the new tail BEFORE awaiting — so the next concurrent caller
-    // sees this promise in the chain
-    this.locks.set(sessionId, newTail);
+    this.locks.set(key, newTail);
 
     await currentTail.catch(() => {});
 
     return releaseFn;
   }
 
-  /** Number of sessions currently locked. For testing/debugging. */
+  /** Number of keys currently locked. For testing/debugging. */
   get size(): number {
     return this.locks.size;
   }
 }
+
+export class SessionMutex extends KeyedMutex {}
+
+export class RunMutex extends KeyedMutex {}

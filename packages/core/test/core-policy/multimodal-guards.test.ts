@@ -3,7 +3,6 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import { createPiiInputGuard } from '../../src/processors/builtin/piiGuard.js';
 import { createPromptInjectionGuard } from '../../src/processors/builtin/promptInjectionGuard.js';
@@ -70,7 +69,7 @@ describe('input guards on multimodal turns (loop fixes)', () => {
     );
 
     const runStore = new SessionRunStore(sessionStore, 'mm-pii');
-    const runState = await runStore.getRunState(sessionDerivedRunId('mm-pii'));
+    const runState = await runStore.getRunState('mm-pii');
     const userMessage = runState?.messages.find((message) => message.role === 'user');
     expect(Array.isArray(userMessage?.content)).toBe(true);
     const parts = userMessage?.content as unknown as Array<Record<string, unknown>>;
@@ -141,7 +140,7 @@ describe('input guards on multimodal turns (loop fixes)', () => {
     );
 
     const runStore = new SessionRunStore(sessionStore, 'txt-pii');
-    const runState = await runStore.getRunState(sessionDerivedRunId('txt-pii'));
+    const runState = await runStore.getRunState('txt-pii');
     const userMessage = runState?.messages.find((message) => message.role === 'user');
     expect(String(userMessage?.content)).toContain('[redacted card number]');
 
@@ -177,7 +176,7 @@ describe('compaction with multimodal history (loop fixes)', () => {
     }
 
     const runStore = new SessionRunStore(sessionStore, 'mm-compact');
-    const runState = await runStore.getRunState(sessionDerivedRunId('mm-compact'));
+    const runState = await runStore.getRunState('mm-compact');
     expect(runState?.messages[0]?.role).toBe('system');
     expect(String(runState?.messages[0]?.content)).toContain('Conversation summary');
     // kept tail still starts at a user message

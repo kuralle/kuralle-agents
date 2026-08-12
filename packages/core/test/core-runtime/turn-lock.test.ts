@@ -5,7 +5,6 @@ import { action, decide, defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { makeTestSession, setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import {
   consumePendingUserInput,
@@ -51,7 +50,7 @@ describe('H3 per-session turn lock', () => {
     await Promise.all([h1, h2]);
 
     const runStore = new SessionRunStore(sessionStore, sessionId);
-    const runState = await runStore.getRunState(sessionDerivedRunId(sessionId));
+    const runState = await runStore.getRunState(sessionId);
     const userInputs = (runState?.messages ?? [])
       .filter((m) => m.role === 'user')
       .map((m) => String(m.content));

@@ -4,7 +4,6 @@ import { action, defineFlow } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
@@ -41,7 +40,7 @@ describe('terminal handoff targets', () => {
 
     const sessionStore = new MemoryStore();
     const sessionId = 'terminal-handoff-escalate';
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
     const hostSelect = async (): Promise<HostSelection> => ({ kind: 'enterFlow', flow });
 
     const runtime = createRuntime({
@@ -120,7 +119,7 @@ describe('terminal handoff targets', () => {
 
     const sessionStore = new MemoryStore();
     const sessionId = 'terminal-handoff-direct';
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
     const hostSelect = async (): Promise<HostSelection> => ({ kind: 'enterFlow', flow });
 
     const runtime = createRuntime({

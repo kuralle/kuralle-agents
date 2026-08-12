@@ -1,6 +1,5 @@
 import type { SessionStore } from '../../session/SessionStore.js';
-import { SessionRunStore } from './SessionRunStore.js';
-import { sessionDerivedRunId } from '../openRun.js';
+import { readSessionDurableRuns } from './types.js';
 import { EFFECT_KEY_VERSION } from './effectKeyVersion.js';
 
 /** Why a persisted run will refuse to resume after upgrading. */
@@ -54,38 +53,40 @@ export async function findUnresumableRuns(
   const found: UnresumableRun[] = [];
 
   for (const sessionId of ids) {
-    const runStore = new SessionRunStore(sessionStore, sessionId);
-    const runId = sessionDerivedRunId(sessionId);
-    const runState = await runStore.getRunState(runId);
-    if (!runState) continue;
+    const session = await sessionStore.get(sessionId);
+    if (!session) continue;
+    const runs = readSessionDurableRuns(session);
 
-    const steps = await runStore.getSteps(runId);
-    const base = {
-      sessionId,
-      runId,
-      recordedSteps: steps.length,
-      updatedAt: runState.updatedAt,
-    };
+    for (const [runId, persisted] of Object.entries(runs)) {
+      const runState = persisted.runState;
+      const steps = persisted.steps;
+      const base = {
+        sessionId,
+        runId,
+        recordedSteps: steps.length,
+        updatedAt: runState.updatedAt,
+      };
 
-    if (runState.waitingFor && !runState.waitingFor.resumeKey) {
-      found.push({
-        ...base,
-        reason: 'legacy-approval',
-        waitingFor: runState.waitingFor.signalName,
-      });
-      continue;
-    }
+      if (runState.waitingFor && !runState.waitingFor.resumeKey) {
+        found.push({
+          ...base,
+          reason: 'legacy-approval',
+          waitingFor: runState.waitingFor.signalName,
+        });
+        continue;
+      }
 
-    if (
-      runState.activeFlow &&
-      steps.length > 0 &&
-      runState.effectKeyVersion !== EFFECT_KEY_VERSION
-    ) {
-      found.push({
-        ...base,
-        reason: 'legacy-effect-keys',
-        activeFlow: runState.activeFlow,
-      });
+      if (
+        runState.activeFlow &&
+        steps.length > 0 &&
+        runState.effectKeyVersion !== EFFECT_KEY_VERSION
+      ) {
+        found.push({
+          ...base,
+          reason: 'legacy-effect-keys',
+          activeFlow: runState.activeFlow,
+        });
+      }
     }
   }
 

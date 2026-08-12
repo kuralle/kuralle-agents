@@ -8,7 +8,6 @@ import { action, defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { liveModel } from '../helpers/liveModel.js';
@@ -75,7 +74,7 @@ describeLive(`core-v2 durable approval smoke (${lm?.label ?? 'no live key'})`, (
 
     const sessionStore = new MemoryStore();
     const sessionId = `approval-live-${Date.now()}`;
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
     const hostSelect = async (): Promise<HostSelection> => ({ kind: 'enterFlow', flow });
 
     const runtime = createRuntime({

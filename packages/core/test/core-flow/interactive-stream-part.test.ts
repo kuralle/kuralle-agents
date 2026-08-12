@@ -4,7 +4,6 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { collect, decide, defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
@@ -167,6 +166,5 @@ describe('interactive stream part', () => {
     await handle2;
 
     expect(partsWithout.some((p) => p.type === 'interactive')).toBe(false);
-    expect(sessionDerivedRunId(withoutChoicesId)).toBeTruthy();
   });
 });

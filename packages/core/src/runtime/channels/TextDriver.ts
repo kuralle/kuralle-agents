@@ -196,7 +196,7 @@ export class TextDriver implements ChannelDriver {
   }
 
   async awaitUser(ctx: RunContext): Promise<UserSignal> {
-    const input = consumeAllPendingUserInput(ctx.session) ?? '';
+    const input = consumeAllPendingUserInput(ctx.session, ctx.runState) ?? '';
     return { type: 'message', input };
   }
 

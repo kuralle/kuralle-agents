@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { openRun, sessionDerivedRunId } from '../../src/runtime/openRun.js';
+import { openRun } from '../../src/runtime/openRun.js';
 import { peekPendingUserInput } from '../../src/runtime/channels/inputBuffer.js';
 import { makeRunState, makeTestSession, stubModel } from './helpers.js';
 
@@ -43,7 +43,7 @@ describe('RunOptions.selection propagation', () => {
     const sessionId = 'sel-form-sess';
     const memoryStore = new MemoryStore();
     const agents = agentsMap();
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
 
     const runState = makeRunState(sessionId, runId);
     runState.state = { existing: true };
@@ -77,7 +77,7 @@ describe('RunOptions.selection propagation', () => {
     });
 
     const flowSessionId = 'sel-id-flow-sess';
-    const runId = sessionDerivedRunId(flowSessionId);
+    const runId = flowSessionId;
     const runState = makeRunState(flowSessionId, runId);
     runState.activeFlow = 'checkout';
     await seedRun(memoryStore, flowSessionId, runState);
@@ -97,7 +97,7 @@ describe('RunOptions.selection propagation', () => {
     const sessionId = 'sel-replay-sess';
     const memoryStore = new MemoryStore();
     const agents = agentsMap();
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
     const selection = { formData: { cart: 2, tier: 'gold' } };
 
     await openRun(agents, openRunOpts(memoryStore, sessionId, { selection }));

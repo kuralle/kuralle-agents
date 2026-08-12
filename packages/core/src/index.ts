@@ -539,6 +539,7 @@ export type {
 export type { ChoiceOption, ResolvedSelection } from './types/selection.js';
 export type {
   RunState,
+  RunKind,
   StepRecord,
   SignalDelivery,
   SignalActor,
@@ -550,7 +551,7 @@ export type {
   SessionDurableRuns,
   PersistedRun,
 } from './runtime/durable/types.js';
-export { DURABLE_RUNS_KEY } from './runtime/durable/types.js';
+export { DURABLE_RUNS_KEY, runKind } from './runtime/durable/types.js';
 export type { RunStore } from './runtime/durable/RunStore.js';
 export {
   TextDriver,
@@ -574,6 +575,7 @@ export {
   Runtime,
   type HarnessConfig,
   type RunOptions,
+  type RunHandle,
   type TracingConfig,
 } from './runtime/Runtime.js';
 export type { RuntimeLike } from './runtime/RuntimeLike.js';

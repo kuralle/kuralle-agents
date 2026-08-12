@@ -4,7 +4,6 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import {
   createInProcessScheduler,
@@ -63,7 +62,7 @@ describe('wake turns', () => {
     expect(result.text).toContain('ready to check out');
 
     const runStore = new SessionRunStore(sessionStore, 'wake-sess');
-    const runState = await runStore.getRunState(sessionDerivedRunId('wake-sess'));
+    const runState = await runStore.getRunState('wake-sess');
     // The wake reaches the model as a system NOTE folded into the prompt, not as a message.
     // A wake is an instruction, not a turn anybody took — and AI SDK 7 rejects system
     // messages inside `messages`. The assistant's proactive reply is the transcript record.

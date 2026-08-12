@@ -3,7 +3,6 @@ import { findUnresumableRuns } from '../../src/runtime/durable/findUnresumableRu
 import { EFFECT_KEY_VERSION } from '../../src/runtime/durable/effectKeyVersion.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { makeRunState, makeTestSession } from './helpers.js';
 import type { RunState, StepRecord } from '../../src/runtime/durable/types.js';
 
@@ -31,7 +30,7 @@ describe('findUnresumableRuns', () => {
     const session = makeTestSession(sessionId);
     await store.save(session);
     const runStore = new SessionRunStore(store, sessionId);
-    const run = makeRunState(sessionId, sessionDerivedRunId(sessionId));
+    const run = makeRunState(sessionId, sessionId);
     mutate(run);
     await runStore.initRun(run);
     if (withStep) await runStore.appendStep(run.runId, step);

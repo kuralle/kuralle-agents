@@ -12,7 +12,6 @@ import { skillRestrictionPolicy, type SkillActivation } from '../../src/skills/s
 import { ToolApprovalDeniedError } from '../../src/tools/effect/errors.js';
 import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { SkillResolver } from '../../src/types/skills.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
@@ -174,7 +173,7 @@ describe('SkillResolver (a6-dynamic)', () => {
     expect(capturedSkillPrompt).toContain('tenant-skill');
 
     const runStore = new SessionRunStore(runtime.getSessionStore(), 'baseline-sess');
-    const runState = await runStore.getRunState(sessionDerivedRunId('baseline-sess'));
+    const runState = await runStore.getRunState('baseline-sess');
     const notes = systemNoteBlocks(runState!);
     expect(notes.some((note) => note.includes('skills available in this run changed'))).toBe(false);
   });

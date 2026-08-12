@@ -5,7 +5,6 @@ import { defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { EscalationRequest } from '../../src/escalation/types.js';
@@ -94,7 +93,7 @@ describe('escalation loop', () => {
     expect(session?.metadata?.lastEscalation?.reason).toBe('user-request');
 
     const runStore = new SessionRunStore(sessionStore, 'esc-sess');
-    const runState = await runStore.getRunState(sessionDerivedRunId('esc-sess'));
+    const runState = await runStore.getRunState('esc-sess');
     expect(runState?.status).toBe('paused');
   });
 
@@ -200,7 +199,7 @@ describe('escalation loop', () => {
     expect(parts.find((part) => part.type === 'escalation')).toBeDefined();
 
     const runStore = new SessionRunStore(sessionStore, 'flow-esc');
-    const runState = await runStore.getRunState(sessionDerivedRunId('flow-esc'));
+    const runState = await runStore.getRunState('flow-esc');
     expect(runState?.waitingFor?.signalName).toBe('__escalate');
     expect(runState?.state.__escalationNotified).toBe(true);
   });
@@ -242,7 +241,7 @@ describe('escalation loop', () => {
     });
 
     const runStore = new SessionRunStore(sessionStore, 'resume-sess');
-    const runState = await runStore.getRunState(sessionDerivedRunId('resume-sess'));
+    const runState = await runStore.getRunState('resume-sess');
     expect(runState?.status).toBe('running');
     expect(runState?.waitingFor).toBeUndefined();
     expect(runState?.activeFlow).toBeUndefined();

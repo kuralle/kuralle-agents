@@ -11,7 +11,7 @@ import type { Hooks } from '../types/hooks.js';
 import type { Tool, AnyTool } from '../types/effectTool.js';
 import type { TurnResult } from '../types/channel.js';
 import type { StreamPart, TurnHandle } from '../types/stream.js';
-import type { SignalDelivery } from './durable/types.js';
+import { runKind, type InterruptRequest, type RunKind, type SignalDelivery } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import type { ConversationOutcome, ConversationOutcomeMarkedBy } from '../outcomes/types.js';
 import type { DeploymentTraceContext } from '../types/trace.js';
@@ -32,7 +32,7 @@ import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 
 import type { classifyHostTarget, selectHostTarget } from './select.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
-import { openRun, sessionDerivedRunId } from './openRun.js';
+import { openRun, resolveTargetRunId, mintRunId, type OpenRunResult } from './openRun.js';
 
 function resolveOutOfBandControl(agent: AgentConfig): boolean {
   const hasFlows = (agent.flows?.length ?? 0) > 0;
@@ -57,7 +57,7 @@ import { extractionSucceeded } from '../memory/extract/runExtraction.js';
 import { runExtractors } from '../memory/extract/runExtractors.js';
 import type { ExtractedValueStore } from '../memory/extract/store.js';
 import type { Extractor } from '../memory/extract/types.js';
-import { SessionMutex } from './SessionMutex.js';
+import { SessionMutex, RunMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
 import {
   readLastPromptTokens,
@@ -201,12 +201,41 @@ export interface RunOptions {
   seedMessages?: ModelMessage[];
   historyDelta?: ModelMessage[];
   driver?: ChannelDriver;
+  /**
+   * Address an existing run in this session. Unknown and cross-session values
+   * fail closed. Omit to open the session's conversation run.
+   */
+  runId?: string;
+  /**
+   * When omitted, opens the session's conversation run. `'flow'` mints a new
+   * headless flow run (server-side id). Caller-supplied `runId` is resume-only
+   * and wins over this field.
+   */
+  kind?: RunKind;
+  /**
+   * Creation-only with `kind: 'flow'`. Sets `activeFlow` on the minted run.
+   * Ignored on resume.
+   */
+  flowName?: string;
   signalDelivery?: SignalDelivery;
   /** Stable key for this inbound user message; duplicate webhook retries are ignored (H2). */
   idempotencyKey?: string;
   abortSignal?: AbortSignal;
   /** Immutable release identity already authorized and pinned by the deployment host. */
   deployment?: DeploymentTraceContext;
+}
+
+export interface RunHandle {
+  runId: string;
+  sessionId: string;
+  kind: RunKind;
+  status: 'running' | 'paused' | 'finished' | 'error' | 'aborted';
+  activeAgentId: string;
+  activeFlow?: string;
+  activeNode?: string;
+  waitingFor?: InterruptRequest;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export class Runtime {
@@ -217,7 +246,9 @@ export class Runtime {
   private readonly terminalHandoffTargets: Set<string>;
   private readonly hooks?: Hooks;
   private readonly activeTurnAborts = new Map<string, AbortController>();
+  private readonly sessionAbortKeys = new Map<string, Set<string>>();
   private readonly sessionMutex = new SessionMutex();
+  private readonly runMutex = new RunMutex();
   private readonly traceStore?: TraceStore;
   private readonly traceSinks: TraceSink[];
   private readonly pendingTraceWrites = new Set<Promise<void>>();
@@ -266,12 +297,13 @@ export class Runtime {
       : undefined;
     const bus = createEventBus();
     const abortController = new AbortController();
-    this.activeTurnAborts.set(sessionId, abortController);
+    const pendingAbortKey = `pending:${randomUUID()}`;
+    this.registerTurnAbort(sessionId, pendingAbortKey, abortController);
     if (opts.abortSignal) {
       opts.abortSignal.addEventListener('abort', () => abortController.abort(), { once: true });
     }
 
-    const execute = async (): Promise<TurnResult> => {
+    const execute = async (opened: OpenRunResult): Promise<TurnResult> => {
       let runCtx!: import('../types/run-context.js').RunContext;
       // Whether the user has been told anything at all this turn. A terminal handoff with
       // no escalation handler configured used to emit zero text — seven consecutive turns
@@ -294,21 +326,6 @@ export class Runtime {
         void runHookSafely('onStreamPart', () => this.hooks?.onStreamPart?.(runCtx, part));
       };
 
-      const opened = await openRun(this.agentsById, {
-        sessionId,
-        userId: opts.userId,
-        input: opts.input,
-        selection: opts.selection,
-        wake: opts.wake,
-        agentId: opts.agentId,
-        seedMessages: opts.seedMessages,
-        historyDelta: opts.historyDelta,
-        signalDelivery: opts.signalDelivery,
-        idempotencyKey: opts.idempotencyKey,
-        transcriptionModel: this.config.transcriptionModel,
-        defaultAgentId: this.config.defaultAgentId,
-        sessionStore: this.sessionStore,
-      });
       const turnMessageBaseline = opened.runState.messages.length;
       // `appendConversationAudit` writes into the live session during the turn.
       // Stores with a dedicated audit log need only the entries created by this
@@ -772,7 +789,7 @@ export class Runtime {
           throw error;
         }
       } finally {
-        this.activeTurnAborts.delete(sessionId);
+        this.unregisterTurnAbort(sessionId, opened.runState.runId);
         const activeAgentConfig = this.agentsById.get(runCtx.runState.activeAgentId);
         const extractionConfig = resolveExtractionConfig(activeAgentConfig?.memory);
         const extractors = activeAgentConfig?.memory?.extract;
@@ -836,11 +853,57 @@ export class Runtime {
     };
 
     const gated = async (): Promise<TurnResult> => {
-      const release = await this.sessionMutex.acquire(sessionId);
+      const target = await resolveTargetRunId(this.sessionStore, sessionId, {
+        runId: opts.runId,
+        signalDelivery: opts.signalDelivery,
+        kind: opts.kind,
+      });
+      const releaseSession =
+        target.lockKind === 'conversation'
+          ? await this.sessionMutex.acquire(sessionId)
+          : undefined;
+      const addressedRunId =
+        opts.runId ??
+        opts.signalDelivery?.runId ??
+        (opts.signalDelivery ? target.runId : undefined);
+      const releaseAddressedRun = addressedRunId
+        ? await this.runMutex.acquire(addressedRunId)
+        : undefined;
       try {
-        return await execute();
+        const opened = await openRun(this.agentsById, {
+          sessionId,
+          userId: opts.userId,
+          input: opts.input,
+          selection: opts.selection,
+          wake: opts.wake,
+          agentId: opts.agentId,
+          seedMessages: opts.seedMessages,
+          historyDelta: opts.historyDelta,
+          signalDelivery: opts.signalDelivery,
+          idempotencyKey: opts.idempotencyKey,
+          transcriptionModel: this.config.transcriptionModel,
+          defaultAgentId: this.config.defaultAgentId,
+          sessionStore: this.sessionStore,
+          runId: addressedRunId ?? opts.runId,
+          kind: opts.kind,
+          flowName: opts.flowName,
+          mint: opts.kind === 'flow' ? () => mintRunId() : undefined,
+        });
+        this.unregisterTurnAbort(sessionId, pendingAbortKey);
+        this.registerTurnAbort(sessionId, opened.runState.runId, abortController);
+        const releaseMintedRun =
+          releaseAddressedRun === undefined
+            ? await this.runMutex.acquire(opened.runState.runId)
+            : undefined;
+        try {
+          return await execute(opened);
+        } finally {
+          releaseMintedRun?.();
+        }
       } finally {
-        release();
+        this.unregisterTurnAbort(sessionId, pendingAbortKey);
+        releaseAddressedRun?.();
+        releaseSession?.();
       }
     };
 
@@ -902,7 +965,26 @@ export class Runtime {
   }
 
   abortSession(sessionId: string, reason?: string): void {
-    this.activeTurnAborts.get(sessionId)?.abort(reason);
+    const keys = this.sessionAbortKeys.get(sessionId);
+    if (!keys) return;
+    for (const key of [...keys]) {
+      this.activeTurnAborts.get(key)?.abort(reason);
+    }
+  }
+
+  private registerTurnAbort(sessionId: string, key: string, controller: AbortController): void {
+    this.activeTurnAborts.set(key, controller);
+    const keys = this.sessionAbortKeys.get(sessionId) ?? new Set<string>();
+    keys.add(key);
+    this.sessionAbortKeys.set(sessionId, keys);
+  }
+
+  private unregisterTurnAbort(sessionId: string, key: string): void {
+    this.activeTurnAborts.delete(key);
+    const keys = this.sessionAbortKeys.get(sessionId);
+    if (!keys) return;
+    keys.delete(key);
+    if (keys.size === 0) this.sessionAbortKeys.delete(sessionId);
   }
 
   async replayAuditLog(
@@ -1104,6 +1186,31 @@ export class Runtime {
     });
   }
 
+  async getRun(runId: string, sessionId?: string): Promise<RunHandle | null> {
+    const scopeId = sessionId ?? runId;
+    const session = await this.sessionStore.get(scopeId);
+    if (!session) {
+      return null;
+    }
+    const runStore = new SessionRunStore(this.sessionStore, session.id);
+    const runState = await runStore.getRunState(runId);
+    if (!runState || runState.sessionId !== session.id) {
+      return null;
+    }
+    return {
+      runId: runState.runId,
+      sessionId: runState.sessionId,
+      kind: runKind(runState),
+      status: runState.status,
+      activeAgentId: runState.activeAgentId,
+      activeFlow: runState.activeFlow,
+      activeNode: runState.activeNode,
+      waitingFor: runState.waitingFor,
+      createdAt: runState.createdAt,
+      updatedAt: runState.updatedAt,
+    };
+  }
+
   async getConversationLength(sessionId: string): Promise<number> {
     const runStore = new SessionRunStore(this.sessionStore, sessionId);
     const runState = await runStore.getRunState(sessionId);
@@ -1197,7 +1304,7 @@ export class Runtime {
       throw new Error(`Session not found: ${sessionId}`);
     }
     const runStore = new SessionRunStore(this.sessionStore, sessionId);
-    const runState = await runStore.getRunState(sessionDerivedRunId(sessionId));
+    const runState = await runStore.getRunState(sessionId);
     if (!runState) {
       throw new Error(`No run state for session: ${sessionId}`);
     }

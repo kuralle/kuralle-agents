@@ -1,7 +1,7 @@
 import type { Session } from '../../types/session.js';
 import { StaleWriteError, type SessionStore } from '../../session/SessionStore.js';
 import type { RunState, StepRecord, PersistedRun, SessionDurableRuns } from './types.js';
-import { DURABLE_RUNS_KEY } from './types.js';
+import { DURABLE_RUNS_KEY, readSessionDurableRuns } from './types.js';
 import {
   LogConflictError,
   RunNotFoundError,
@@ -19,8 +19,7 @@ function cloneSession<T>(value: T): T {
 }
 
 function readRuns(session: Session): SessionDurableRuns {
-  const runs = (session as Session & { [DURABLE_RUNS_KEY]?: SessionDurableRuns })[DURABLE_RUNS_KEY];
-  return runs ?? {};
+  return readSessionDurableRuns(session);
 }
 
 function writeRuns(session: Session, runs: SessionDurableRuns): void {

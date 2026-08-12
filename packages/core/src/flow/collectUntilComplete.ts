@@ -59,7 +59,7 @@ export async function collectUntilComplete(
   for (;;) {
     if (
       (await schemaSatisfied(node, state)) &&
-      (!hasPendingUserInput(ctx.session) || pendingConsumed)
+      (!hasPendingUserInput(ctx.session, ctx.runState) || pendingConsumed)
     ) {
       const data = await projectCollectData(node, state);
       return normalizeTransition(await node.onComplete(data, state));
@@ -74,7 +74,7 @@ export async function collectUntilComplete(
     // `messages` with nothing pending and `turnInputConsumed` false, so we fall
     // through and extract it.
     let consumedPendingInput = false;
-    if (hasPendingUserInput(ctx.session)) {
+    if (hasPendingUserInput(ctx.session, ctx.runState)) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
       pendingConsumed = true;

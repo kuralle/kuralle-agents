@@ -1,4 +1,4 @@
-import type { ModelMessage } from 'ai';
+import type { ModelMessage, UserContent } from 'ai';
 
 export type StepKind = 'tool' | 'approval' | 'signal' | 'now' | 'uuid';
 
@@ -74,9 +74,17 @@ export interface PersistedFlowPark extends PersistedFlowFrame {
   node: string;
 }
 
+export type RunKind = 'conversation' | 'flow';
+
 export interface RunState {
   runId: string;
   sessionId: string;
+  /**
+   * Conversation runs own the chat turn loop (one per session, keyed by sessionId).
+   * Flow runs are one execution of a flow and live under their own key.
+   * Absent on runs persisted before run identity — treated as `'conversation'`.
+   */
+  kind?: RunKind;
   status: 'running' | 'paused' | 'finished' | 'error' | 'aborted';
   activeAgentId: string;
   activeFlow?: string;
@@ -102,6 +110,11 @@ export interface RunState {
   effectKeyVersion?: number;
   /** Inbound message idempotency keys already accepted (H2 webhook-retry dedup). */
   processedInboundKeys?: string[];
+  /**
+   * Per-run pending-input FIFO for `kind: 'flow'`. Conversation runs keep using
+   * the session working-memory buffer; flow runs must not.
+   */
+  pendingInput?: UserContent[];
   /** Message count at the last completed extraction; drives the token trigger. */
   lastExtractedMessageCount?: number;
 }
@@ -114,6 +127,12 @@ export interface SignalDelivery {
   decision?: 'approve' | 'deny';
   reason?: string;
   payload?: unknown;
+  /**
+   * Resume this run. Must already exist under the session named on the request.
+   * Unknown and cross-session values fail closed. Omit to scan the session for a
+   * matching `waitingFor` (legacy clients that only send sessionId).
+   */
+  runId?: string;
 }
 
 export interface PersistedRun {
@@ -124,3 +143,11 @@ export interface PersistedRun {
 export const DURABLE_RUNS_KEY = 'durableRuns' as const;
 
 export type SessionDurableRuns = Record<string, PersistedRun>;
+
+export function runKind(run: { kind?: RunKind }): RunKind {
+  return run.kind ?? 'conversation';
+}
+
+export function readSessionDurableRuns(session: object): SessionDurableRuns {
+  return (session as { [DURABLE_RUNS_KEY]?: SessionDurableRuns })[DURABLE_RUNS_KEY] ?? {};
+}

@@ -3,7 +3,7 @@ import type { ConversationOutcome, ConversationOutcomeMarkedBy } from '../outcom
 import type { Session } from '../types/session.js';
 import type { SessionStore } from '../session/SessionStore.js';
 import type { TurnHandle } from '../types/stream.js';
-import type { RunOptions } from './Runtime.js';
+import type { RunHandle, RunOptions } from './Runtime.js';
 
 export interface RuntimeLike {
   run(opts: RunOptions): TurnHandle;
@@ -21,6 +21,7 @@ export interface RuntimeLike {
     outcome: ConversationOutcome,
     opts?: { reason?: string; markedBy?: ConversationOutcomeMarkedBy },
   ): Promise<void>;
+  getRun?(runId: string, sessionId?: string): Promise<RunHandle | null>;
   getConversationLength?(sessionId: string): Promise<number>;
   compressNow?(
     sessionId: string,

@@ -4,7 +4,6 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { TokenAccumulator } from '../../src/runtime/TokenAccumulator.js';
 import {
   compactMessages,
@@ -66,7 +65,7 @@ describe('F1: real token usage budgeting', () => {
 
     const sessionStore = new MemoryStore();
     const sessionId = 'f1-usage-session';
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
 
     const runtime = createRuntime({
       agents: [agent],
