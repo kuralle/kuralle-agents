@@ -452,6 +452,23 @@ export type {
   NodeGrounding,
   FlowStateBoundary,
 } from './types/flow.js';
+export type {
+  JsonSchema,
+  FlowDefinition,
+  FlowNodeDefinition,
+  TransitionRef,
+  Predicate,
+  PathOrLiteral,
+  PredicateContext,
+  MappingConfig,
+  MappingSource,
+} from './flows/definition/index.js';
+export {
+  evaluatePredicate,
+  derivePredicateLabel,
+  flowDefinitionSchema,
+  predicateSchema,
+} from './flows/definition/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
 /** Read the state of the flow a run is currently in. Flow state lives in an isolated
