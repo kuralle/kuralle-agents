@@ -25,6 +25,8 @@ export interface Flow {
   instructions?: string;
   context?: ContextStrategy;
   maxOscillations?: number;
+  /** How this flow was produced. Omitted on code-authored `defineFlow` graphs. */
+  origin?: 'definition' | 'code';
   /** Explicit state mapping at flow boundaries. The active frame is otherwise isolated. */
   state?: FlowStateBoundary;
   /**

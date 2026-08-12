@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { renderScopeTemplate, resolveScopePath } from '../template.js';
+import type { PredicateContext } from './predicate.js';
 
 export type MappingSource =
   | { value: unknown }
@@ -22,6 +24,22 @@ export type TemplateSyntaxIssue = { code: 'mustache_placeholder' | 'empty_placeh
 const PLACEHOLDER = /\$\{([^}]*)\}/g;
 const MUSTACHE = /\{\{[^}]*\}\}/;
 const KNOWN_ROOTS = new Set<string>(TEMPLATE_PATH_ROOTS);
+
+export function resolveMapping(config: MappingConfig, scope: PredicateContext): Record<string, unknown> {
+  const resolved: Record<string, unknown> = {};
+  for (const [key, source] of Object.entries(config)) {
+    if ('value' in source) {
+      resolved[key] = source.value;
+      continue;
+    }
+    if ('template' in source) {
+      resolved[key] = renderScopeTemplate(source.template, scope);
+      continue;
+    }
+    resolved[key] = resolveScopePath(source.path, scope);
+  }
+  return resolved;
+}
 
 export function validateTemplateSyntax(template: string): TemplateSyntaxIssue[] {
   const issues: TemplateSyntaxIssue[] = [];

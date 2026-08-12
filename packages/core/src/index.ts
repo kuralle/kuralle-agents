@@ -466,6 +466,7 @@ export type {
   FlowValidationIssueCode,
   FlowRegistryIndex,
   FlowValidationRepairAction,
+  FlowRehydrationDeps,
 } from './flows/definition/index.js';
 export {
   evaluatePredicate,
@@ -474,6 +475,10 @@ export {
   predicateSchema,
   validateFlowDefinition,
   assertValidFlowDefinition,
+  rehydrateFlow,
+  toStorableFlow,
+  resolveMapping,
+  renderScopeTemplate,
 } from './flows/definition/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';

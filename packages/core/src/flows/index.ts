@@ -43,6 +43,7 @@ export type {
   FlowValidationRepairOperation,
   FlowValidationRepairSource,
   SchemaCompatibility,
+  FlowRehydrationDeps,
 } from './definition/index.js';
 export {
   FLOW_DEFINITION_NODE_KINDS,
@@ -53,6 +54,7 @@ export {
   mappingSourceSchema,
   mappingConfigSchema,
   validateTemplateSyntax,
+  resolveMapping,
   TEMPLATE_PATH_ROOTS,
   flowNodeDefinitionSchema,
   flowDefinitionSchema,
@@ -61,4 +63,10 @@ export {
   assertValidFlowDefinition,
   PREDICATE_MAX_DEPTH,
   PREDICATE_MAX_NODES,
+  rehydrateFlow,
+  toStorableFlow,
+  renderScopeTemplate,
+  resolveScopePath,
+  FLOW_INPUT_KEY,
+  FLOW_RESULTS_KEY,
 } from './definition/index.js';
