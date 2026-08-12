@@ -339,6 +339,12 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
 
 export interface TurnHandle extends Promise<import('./channel.js').TurnResult> {
   readonly events: AsyncIterable<StreamPart>;
+  /**
+   * Resolves as soon as the run is opened — before the turn body finishes —
+   * so a caller minting `kind: 'flow'` can persist the id it must resume with
+   * even if the turn later throws.
+   */
+  readonly runId: Promise<string>;
   toResponseStream(format?: 'sse' | 'ndjson'): ReadableStream;
   toUIMessageStreamResponse(opts?: { sessionId?: string }): Response;
   cancel(reason?: string): void;

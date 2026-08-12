@@ -639,6 +639,53 @@ describe('public flow-run creation', () => {
     expect(afterFlows[0]!.runState.runId).toBe(persistedId);
   });
 
+  it('exposes the minted flow runId on the turn handle for resume', async () => {
+    const sessionId = 'handle-runid-sess';
+    const store = new MemoryStore();
+    const flow = nameIntakeFlow();
+    const agent = defineAgent({
+      id: defaultAgentId,
+      model: stubModel,
+      flows: [flow],
+    });
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const driver: ChannelDriver = {
+      async runAgentTurn() {
+        await hold;
+        return { text: 'ask', toolResults: [] };
+      },
+      async awaitUser() {
+        return { type: 'message', input: '' };
+      },
+    };
+    const runtime = createRuntime({
+      agents: [agent],
+      defaultAgentId,
+      sessionStore: store,
+      defaultModel: stubModel,
+    });
+
+    const handle = runtime.run({ sessionId, kind: 'flow', flowName: 'name-intake', driver });
+    const runId = await handle.runId;
+    expect(runId).not.toBe(sessionId);
+    expect(runId.length).toBeGreaterThan(0);
+    release();
+    const result = await handle;
+    expect(result.runId).toBe(runId);
+
+    const resumed = await runtime.run({ sessionId, runId, driver });
+    expect(resumed.runId).toBe(runId);
+    const after = (await store.get(sessionId))!;
+    const afterFlows = Object.values(readSessionDurableRuns(after)).filter(
+      (persisted) => runKind(persisted.runState) === 'flow',
+    );
+    expect(afterFlows).toHaveLength(1);
+    expect(afterFlows[0]!.runState.runId).toBe(runId);
+  });
+
   it('does not mint a flow run into another session', async () => {
     const store = new MemoryStore();
     const victim = await openRun(agentsMap(), openOpts(store, 'victim-sess', { kind: 'flow' }));
@@ -782,6 +829,77 @@ describe('per-run abort', () => {
     releaseB();
     const resultB = await turnB;
     expect(resultB.text).toBe('B-ok');
+  });
+
+  it('abortSession aborts every overlapping run on that session', async () => {
+    const sessionId = 'abort-session-fanout';
+    const store = new MemoryStore();
+    const agents = agentsMap();
+    const flowA = await openRun(agents, openOpts(store, sessionId, { kind: 'flow' }));
+    const flowB = await openRun(agents, openOpts(store, sessionId, { kind: 'flow' }));
+
+    let started = 0;
+    let bothStarted!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      bothStarted = resolve;
+    });
+
+    const hangUntilAbort = (ctx: { abortSignal?: AbortSignal }): Promise<never> =>
+      new Promise((_, reject) => {
+        const onAbort = () => reject(ctx.abortSignal?.reason ?? new Error('aborted'));
+        if (ctx.abortSignal?.aborted) {
+          onAbort();
+          return;
+        }
+        ctx.abortSignal?.addEventListener('abort', onAbort, { once: true });
+      });
+
+    const driverA: ChannelDriver = {
+      async runAgentTurn(_node, ctx) {
+        started += 1;
+        if (started >= 2) bothStarted();
+        await hangUntilAbort(ctx);
+        return { text: 'A', toolResults: [] };
+      },
+      async awaitUser() {
+        return { type: 'message', input: '' };
+      },
+    };
+    const driverB: ChannelDriver = {
+      async runAgentTurn(_node, ctx) {
+        started += 1;
+        if (started >= 2) bothStarted();
+        await hangUntilAbort(ctx);
+        return { text: 'B', toolResults: [] };
+      },
+      async awaitUser() {
+        return { type: 'message', input: '' };
+      },
+    };
+
+    const runtime = createRuntime({
+      agents: [defineAgent({ id: defaultAgentId, model: stubModel, instructions: 'ok' })],
+      defaultAgentId,
+      sessionStore: store,
+      defaultModel: stubModel,
+    });
+
+    const turnA = runtime.run({
+      sessionId,
+      runId: flowA.runState.runId,
+      input: 'a',
+      driver: driverA,
+    });
+    const turnB = runtime.run({
+      sessionId,
+      runId: flowB.runState.runId,
+      input: 'b',
+      driver: driverB,
+    });
+    await ready;
+    runtime.abortSession(sessionId, 'stop-all');
+    await expect(turnA).rejects.toBeTruthy();
+    await expect(turnB).rejects.toBeTruthy();
   });
 });
 

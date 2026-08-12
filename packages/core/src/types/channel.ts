@@ -60,6 +60,8 @@ export interface TurnUsageSnapshot {
 export interface TurnResult {
   text: string;
   toolResults: ToolResultRecord[];
+  /** The run this turn executed. Conversation turns use the session id; a newly minted flow run is a distinct id. */
+  runId?: string;
   control?: TurnControl;
   interrupted?: boolean;
   truncateAt?: number;

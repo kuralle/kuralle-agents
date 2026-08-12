@@ -303,6 +303,23 @@ export class Runtime {
       opts.abortSignal.addEventListener('abort', () => abortController.abort(), { once: true });
     }
 
+    let settleRunId!: (id: string) => void;
+    let failRunId!: (error: unknown) => void;
+    let runIdSettled = false;
+    const runIdPromise = new Promise<string>((resolve, reject) => {
+      settleRunId = (id: string) => {
+        if (runIdSettled) return;
+        runIdSettled = true;
+        resolve(id);
+      };
+      failRunId = (error: unknown) => {
+        if (runIdSettled) return;
+        runIdSettled = true;
+        reject(error);
+      };
+    });
+    void runIdPromise.catch(() => undefined);
+
     const execute = async (opened: OpenRunResult): Promise<TurnResult> => {
       let runCtx!: import('../types/run-context.js').RunContext;
       // Whether the user has been told anything at all this turn. A terminal handoff with
@@ -849,7 +866,7 @@ export class Runtime {
         });
       }
 
-      return { text: collectAssistantText(runCtx.runState.messages), toolResults: [] };
+      return { text: collectAssistantText(runCtx.runState.messages), toolResults: [], runId: opened.runState.runId };
     };
 
     const gated = async (): Promise<TurnResult> => {
@@ -889,6 +906,7 @@ export class Runtime {
           flowName: opts.flowName,
           mint: opts.kind === 'flow' ? () => mintRunId() : undefined,
         });
+        settleRunId(opened.runState.runId);
         this.unregisterTurnAbort(sessionId, pendingAbortKey);
         this.registerTurnAbort(sessionId, opened.runState.runId, abortController);
         const releaseMintedRun =
@@ -900,6 +918,9 @@ export class Runtime {
         } finally {
           releaseMintedRun?.();
         }
+      } catch (error) {
+        failRunId(error);
+        throw error;
       } finally {
         this.unregisterTurnAbort(sessionId, pendingAbortKey);
         releaseAddressedRun?.();
@@ -911,6 +932,7 @@ export class Runtime {
       bus,
       abortController,
       run: gated,
+      runId: runIdPromise,
     });
   }
 

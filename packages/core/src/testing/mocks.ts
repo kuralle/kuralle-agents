@@ -26,6 +26,7 @@ export function createMockTurnHandle(
 ): TurnHandle {
   return Object.assign(Promise.resolve(settled), {
     events,
+    runId: Promise.resolve(settled.runId ?? ''),
     toResponseStream: () => new ReadableStream(),
     toUIMessageStreamResponse(opts?: { sessionId?: string }): Response {
       return createUIMessageStreamResponse({

@@ -229,19 +229,21 @@ export async function openRun(
       ? effectiveInput.length > 0
       : Array.isArray(effectiveInput) && effectiveInput.length > 0;
 
-  const isResume = Boolean(options.signalDelivery);
-  const isFlowContinuation = Boolean(runState.activeFlow);
-  const isFreshLogicalRun =
-    isConversation && (hasInput || Boolean(options.wake)) && !isResume && !isFlowContinuation;
-  if (isFreshLogicalRun) {
-    runState.runEpoch = (runState.runEpoch ?? 0) + 1;
-    await runStore.pruneStepsBeforeEpoch(runId, runState.runEpoch);
-    resetTurnCount(runState);
-    if (Array.isArray(runState.state.__completedFlows)) {
-      runState.state.__completedFlows = [];
+  if (isConversation) {
+    const isResume = Boolean(options.signalDelivery);
+    const isFlowContinuation = Boolean(runState.activeFlow);
+    const isFreshLogicalRun =
+      (hasInput || Boolean(options.wake)) && !isResume && !isFlowContinuation;
+    if (isFreshLogicalRun) {
+      runState.runEpoch = (runState.runEpoch ?? 0) + 1;
+      await runStore.pruneStepsBeforeEpoch(runId, runState.runEpoch);
+      resetTurnCount(runState);
+      if (Array.isArray(runState.state.__completedFlows)) {
+        runState.state.__completedFlows = [];
+      }
+      runState.updatedAt = Date.now();
+      await runStore.putRunState(runState);
     }
-    runState.updatedAt = Date.now();
-    await runStore.putRunState(runState);
   }
 
   if (hasInput && effectiveInput !== undefined) {
