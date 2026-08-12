@@ -35,6 +35,14 @@ export type {
   AuthoringUnion,
   CanonicalUnion,
   ValidatableUnion,
+  FlowRegistryIndex,
+  FlowRegistrySchemas,
+  FlowValidationIssue,
+  FlowValidationIssueCode,
+  FlowValidationRepairAction,
+  FlowValidationRepairOperation,
+  FlowValidationRepairSource,
+  SchemaCompatibility,
 } from './definition/index.js';
 export {
   FLOW_DEFINITION_NODE_KINDS,
@@ -48,4 +56,9 @@ export {
   TEMPLATE_PATH_ROOTS,
   flowNodeDefinitionSchema,
   flowDefinitionSchema,
+  choiceOptionSchema,
+  validateFlowDefinition,
+  assertValidFlowDefinition,
+  PREDICATE_MAX_DEPTH,
+  PREDICATE_MAX_NODES,
 } from './definition/index.js';

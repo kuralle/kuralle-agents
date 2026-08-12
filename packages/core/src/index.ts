@@ -462,12 +462,18 @@ export type {
   PredicateContext,
   MappingConfig,
   MappingSource,
+  FlowValidationIssue,
+  FlowValidationIssueCode,
+  FlowRegistryIndex,
+  FlowValidationRepairAction,
 } from './flows/definition/index.js';
 export {
   evaluatePredicate,
   derivePredicateLabel,
   flowDefinitionSchema,
   predicateSchema,
+  validateFlowDefinition,
+  assertValidFlowDefinition,
 } from './flows/definition/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';

@@ -23,8 +23,25 @@ export { predicateSchema, evaluatePredicate, derivePredicateLabel } from './pred
 export type { MappingSource, MappingConfig, TemplateSyntaxIssue } from './mapping.js';
 export { mappingSourceSchema, mappingConfigSchema, validateTemplateSyntax, TEMPLATE_PATH_ROOTS } from './mapping.js';
 
-export { flowNodeDefinitionSchema, flowDefinitionSchema } from './schema.js';
+export { flowNodeDefinitionSchema, flowDefinitionSchema, choiceOptionSchema } from './schema.js';
 export type { ValidatableFlowNodeDefinition, ValidatableFlowDefinition } from './schema.js';
+
+export type {
+  FlowRegistryIndex,
+  FlowRegistrySchemas,
+  FlowValidationIssue,
+  FlowValidationIssueCode,
+  FlowValidationRepairAction,
+  FlowValidationRepairOperation,
+  FlowValidationRepairSource,
+  SchemaCompatibility,
+} from './validate/index.js';
+export {
+  validateFlowDefinition,
+  assertValidFlowDefinition,
+  PREDICATE_MAX_DEPTH,
+  PREDICATE_MAX_NODES,
+} from './validate/index.js';
 
 export type {
   AuthoringReplyNode,

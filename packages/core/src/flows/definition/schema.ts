@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ChoiceOption } from '../../types/selection.js';
 import { mappingConfigSchema } from './mapping.js';
 import { predicateSchema } from './predicate.js';
 
@@ -27,7 +28,7 @@ const confirmGateRefSchema = z
   })
   .strict();
 
-const choiceOptionSchema = z
+export const choiceOptionSchema = z
   .object({
     id: z.string().min(1),
     label: z.string().min(1),
@@ -35,7 +36,7 @@ const choiceOptionSchema = z
     url: z.string().optional(),
     flow: z.object({ flowId: z.string().min(1), cta: z.string().min(1) }).strict().optional(),
   })
-  .strict();
+  .strict() satisfies z.ZodType<ChoiceOption>;
 
 const collectResolverSpecSchema = z
   .object({
