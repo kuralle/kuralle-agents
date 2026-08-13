@@ -44,6 +44,11 @@ export type {
   FlowValidationRepairSource,
   SchemaCompatibility,
   FlowRehydrationDeps,
+  FlowDefinitionVersionStatus,
+  FlowDefinitionVersion,
+  CreateVersionOptions,
+  FlowDefinitionListFilter,
+  FlowDefinitionsStore,
 } from './definition/index.js';
 export {
   FLOW_DEFINITION_NODE_KINDS,
@@ -69,4 +74,16 @@ export {
   resolveScopePath,
   FLOW_INPUT_KEY,
   FLOW_RESULTS_KEY,
+  canonicalJson,
+  flowDigest,
+  FLOW_DEFINITION_VERSION_STATUSES,
+  FlowDefinitionConflictError,
+  FlowDefinitionNotFoundError,
+  FlowDefinitionNameMismatchError,
+  cloneFlowDefinitionVersion,
+  reviveFlowDefinitionVersion,
+  isArchivedFlowName,
+  matchesFlowDefinitionListFilter,
+  stampNewFlowDefinitionVersion,
+  MemoryFlowDefinitionsStore,
 } from './definition/index.js';

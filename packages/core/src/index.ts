@@ -467,6 +467,11 @@ export type {
   FlowRegistryIndex,
   FlowValidationRepairAction,
   FlowRehydrationDeps,
+  FlowDefinitionVersionStatus,
+  FlowDefinitionVersion,
+  CreateVersionOptions,
+  FlowDefinitionListFilter,
+  FlowDefinitionsStore,
 } from './flows/definition/index.js';
 export {
   evaluatePredicate,
@@ -479,6 +484,18 @@ export {
   toStorableFlow,
   resolveMapping,
   renderScopeTemplate,
+  canonicalJson,
+  flowDigest,
+  FLOW_DEFINITION_VERSION_STATUSES,
+  FlowDefinitionConflictError,
+  FlowDefinitionNotFoundError,
+  FlowDefinitionNameMismatchError,
+  cloneFlowDefinitionVersion,
+  reviveFlowDefinitionVersion,
+  isArchivedFlowName,
+  matchesFlowDefinitionListFilter,
+  stampNewFlowDefinitionVersion,
+  MemoryFlowDefinitionsStore,
 } from './flows/definition/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';

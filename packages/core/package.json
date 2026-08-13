@@ -44,6 +44,10 @@
       "types": "./dist/session/testing.d.ts",
       "default": "./dist/session/testing.js"
     },
+    "./flows/definition/testing": {
+      "types": "./dist/flows/definition/testing.d.ts",
+      "default": "./dist/flows/definition/testing.js"
+    },
     "./tracing": {
       "types": "./dist/tracing/index.d.ts",
       "default": "./dist/tracing/index.js"

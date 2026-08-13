@@ -1,3 +1,5 @@
+export { RedisFlowDefinitionsStore } from './RedisFlowDefinitionsStore.js';
+export type { RedisFlowDefinitionsStoreOptions } from './RedisFlowDefinitionsStore.js';
 export { RedisSessionStore } from './RedisSessionStore.js';
 export type { RedisClientLike, RedisStoreOptions } from './RedisSessionStore.js';
 export { RedisTraceStore } from './RedisTraceStore.js';

@@ -66,3 +66,25 @@ export type {
 } from './authoring.js';
 
 export type { AuthoringUnion, CanonicalUnion, ValidatableUnion } from './guards.js';
+
+export { canonicalJson } from './canonical.js';
+export { flowDigest } from './digest.js';
+export {
+  FLOW_DEFINITION_VERSION_STATUSES,
+  FlowDefinitionConflictError,
+  FlowDefinitionNotFoundError,
+  FlowDefinitionNameMismatchError,
+  cloneFlowDefinitionVersion,
+  reviveFlowDefinitionVersion,
+  isArchivedFlowName,
+  matchesFlowDefinitionListFilter,
+  stampNewFlowDefinitionVersion,
+} from './store.js';
+export type {
+  FlowDefinitionVersionStatus,
+  FlowDefinitionVersion,
+  CreateVersionOptions,
+  FlowDefinitionListFilter,
+  FlowDefinitionsStore,
+} from './store.js';
+export { MemoryFlowDefinitionsStore } from './stores/MemoryFlowDefinitionsStore.js';
