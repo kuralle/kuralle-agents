@@ -1,6 +1,10 @@
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { AnyTool } from '../types/effectTool.js';
 import type { Flow } from '../types/flow.js';
+import type { LanguageModel } from 'ai';
+import { compileAuthoringPredicates } from './authoring/compileAuthoringPredicates.js';
+import type { NlPredicateProvider } from './authoring/compileNlPredicate.js';
+import type { AuthoringFlowDefinition } from './definition/authoring.js';
 import { rehydrateFlow } from './definition/rehydrate.js';
 import { assertValidFlowDefinition, validateFlowDefinition } from './definition/validate/index.js';
 import { formatFlowValidationIssues } from './definition/validate/format.js';
@@ -122,12 +126,13 @@ function registryIndex(
 }
 
 export interface RegisterDynamicFlowBundleOptions {
-  defs: readonly FlowDefinition[];
+  defs: readonly AuthoringFlowDefinition[];
   catalog: LiveFlowCatalog;
   tools: (id: string) => AnyTool | undefined;
   toolIndex: NonNullable<FlowRegistryIndex['tools']>;
   store?: FlowDefinitionsStore;
   replace?: boolean;
+  compiler?: NlPredicateProvider | LanguageModel;
 }
 
 /**
@@ -144,7 +149,26 @@ export interface RegisterDynamicFlowBundleOptions {
 export async function registerDynamicFlowBundle(
   options: RegisterDynamicFlowBundleOptions,
 ): Promise<Flow[]> {
-  const cloned = options.defs.map((def) => structuredClone(def));
+  const compiled: FlowDefinition[] = [];
+  const provenances = new Map<string, { modelId: string; promptHash: string; compilerVersion: string }>();
+  const compileFailures: string[] = [];
+  for (const def of options.defs) {
+    const result = await compileAuthoringPredicates(structuredClone(def), options.compiler);
+    if (result.issues.length > 0) {
+      compileFailures.push(
+        `Flow definition "${def.name}" failed validation with ${result.issues.length} issue(s):\n${formatFlowValidationIssues(result.issues)}`,
+      );
+      continue;
+    }
+    compiled.push(result.definition);
+    if (result.provenance) {
+      provenances.set(def.name, result.provenance);
+    }
+  }
+  if (compileFailures.length > 0) {
+    throw new Error(compileFailures.join('\n'));
+  }
+  const cloned = compiled;
   const replace = options.replace === true;
   assertUniqueBundleNames(cloned, options.catalog, replace);
   const index = registryIndex(options.catalog, cloned, options.toolIndex);
@@ -171,7 +195,16 @@ export async function registerDynamicFlowBundle(
         priorActives.set(name, await options.store.getActive(name));
       }
       for (const def of ordered) {
-        const version = await options.store.createVersion(def);
+        const provenance = provenances.get(def.name);
+        const version = await options.store.createVersion(def, {
+          ...(provenance
+            ? {
+                compilerModelId: provenance.modelId,
+                compilerPromptHash: provenance.promptHash,
+                compilerVersion: provenance.compilerVersion,
+              }
+            : {}),
+        });
         persisted.push(def.name);
         await options.store.setActive(def.name, version.versionId);
         const live = options.catalog.getDynamic(def.name);

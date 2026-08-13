@@ -14,10 +14,19 @@ export interface FlowDefinitionVersion {
   status: FlowDefinitionVersionStatus;
   authorId?: string;
   createdAt: Date;
+  /** Model id used to compile natural-language `when` clauses. Server-set. */
+  compilerModelId?: string;
+  /** SHA-256 of the NL→predicate compiler system prompt. Server-set. */
+  compilerPromptHash?: string;
+  /** NL→predicate compiler version pin. Server-set. */
+  compilerVersion?: string;
 }
 
 export interface CreateVersionOptions {
   authorId?: string;
+  compilerModelId?: string;
+  compilerPromptHash?: string;
+  compilerVersion?: string;
 }
 
 export interface FlowDefinitionListFilter {
@@ -86,6 +95,16 @@ export interface FlowDefinitionsStore {
   archive(name: string): Promise<void>;
 }
 
+function compilerProvenance(
+  row: Pick<FlowDefinitionVersion, 'compilerModelId' | 'compilerPromptHash' | 'compilerVersion'>,
+): Pick<FlowDefinitionVersion, 'compilerModelId' | 'compilerPromptHash' | 'compilerVersion'> {
+  return {
+    ...(row.compilerModelId !== undefined ? { compilerModelId: row.compilerModelId } : {}),
+    ...(row.compilerPromptHash !== undefined ? { compilerPromptHash: row.compilerPromptHash } : {}),
+    ...(row.compilerVersion !== undefined ? { compilerVersion: row.compilerVersion } : {}),
+  };
+}
+
 export function cloneFlowDefinitionVersion(row: FlowDefinitionVersion): FlowDefinitionVersion {
   return {
     versionId: row.versionId,
@@ -96,6 +115,7 @@ export function cloneFlowDefinitionVersion(row: FlowDefinitionVersion): FlowDefi
     status: row.status,
     ...(row.authorId !== undefined ? { authorId: row.authorId } : {}),
     createdAt: new Date(row.createdAt),
+    ...compilerProvenance(row),
   };
 }
 
@@ -108,6 +128,9 @@ export function reviveFlowDefinitionVersion(raw: {
   status: FlowDefinitionVersionStatus;
   authorId?: string | null;
   createdAt: Date | string;
+  compilerModelId?: string | null;
+  compilerPromptHash?: string | null;
+  compilerVersion?: string | null;
 }): FlowDefinitionVersion {
   return cloneFlowDefinitionVersion({
     versionId: raw.versionId,
@@ -118,6 +141,9 @@ export function reviveFlowDefinitionVersion(raw: {
     status: raw.status,
     ...(raw.authorId ? { authorId: raw.authorId } : {}),
     createdAt: new Date(raw.createdAt),
+    ...(raw.compilerModelId ? { compilerModelId: raw.compilerModelId } : {}),
+    ...(raw.compilerPromptHash ? { compilerPromptHash: raw.compilerPromptHash } : {}),
+    ...(raw.compilerVersion ? { compilerVersion: raw.compilerVersion } : {}),
   });
 }
 
@@ -153,5 +179,10 @@ export async function stampNewFlowDefinitionVersion(
     status: 'superseded',
     ...(options?.authorId !== undefined ? { authorId: options.authorId } : {}),
     createdAt: new Date(),
+    ...compilerProvenance({
+      compilerModelId: options?.compilerModelId,
+      compilerPromptHash: options?.compilerPromptHash,
+      compilerVersion: options?.compilerVersion,
+    }),
   };
 }

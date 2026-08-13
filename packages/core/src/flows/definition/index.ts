@@ -63,7 +63,9 @@ export type {
   AuthoringDecideNode,
   AuthoringFlowNodeDefinition,
   AuthoringFlowDefinition,
+  NlPredicate,
 } from './authoring.js';
+export { nlPredicateSchema, authoringPredicateSchema, isNlPredicate } from './authoring.js';
 
 export type { AuthoringUnion, CanonicalUnion, ValidatableUnion } from './guards.js';
 

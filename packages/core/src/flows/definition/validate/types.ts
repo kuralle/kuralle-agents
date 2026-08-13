@@ -14,7 +14,8 @@ export type FlowValidationIssueCode =
   | 'incompatible-schema'
   | 'invalid-template'
   | 'invalid-map-reference'
-  | 'predicate-too-deep';
+  | 'predicate-too-deep'
+  | 'nl-predicate-compile-failed';
 
 export type FlowValidationRepairOperation =
   | 'set-transition'

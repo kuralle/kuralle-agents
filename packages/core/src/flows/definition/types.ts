@@ -20,6 +20,8 @@ export type TransitionRef =
 export interface PredicateRoute {
   when: Predicate;
   to: TransitionRef;
+  /** Original natural-language condition, retained for display after compile. */
+  whenSource?: string;
 }
 
 export interface ConfirmGateRef {

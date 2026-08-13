@@ -31,8 +31,9 @@ import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 
 import type { classifyHostTarget, selectHostTarget } from './select.js';
-import type { FlowDefinition } from '../flows/definition/types.js';
+import type { AuthoringFlowDefinition } from '../flows/definition/authoring.js';
 import type { FlowDefinitionsStore } from '../flows/definition/store.js';
+import type { NlPredicateProvider } from '../flows/authoring/compileNlPredicate.js';
 import {
   FLOW_CATALOG_NOTE_TAG,
   LiveFlowCatalog,
@@ -1066,8 +1067,13 @@ export class Runtime {
    * Reusing an existing dynamic name is rejected unless `replace: true`.
    */
   async addDynamicFlows(
-    defs: readonly FlowDefinition[],
-    opts: { agentId: string; store?: FlowDefinitionsStore; replace?: boolean },
+    defs: readonly AuthoringFlowDefinition[],
+    opts: {
+      agentId: string;
+      store?: FlowDefinitionsStore;
+      replace?: boolean;
+      compiler?: NlPredicateProvider | LanguageModel;
+    },
   ): Promise<void> {
     return this.withFlowCatalogLock(opts.agentId, async () => {
       const agent = this.requireAgent(opts.agentId);
@@ -1079,6 +1085,7 @@ export class Runtime {
         toolIndex: tools.index,
         store: opts.store ?? this.config.flowDefinitionsStore,
         replace: opts.replace,
+        compiler: opts.compiler ?? agent.model,
       });
     });
   }

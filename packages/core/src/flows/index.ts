@@ -35,6 +35,7 @@ export type {
   AuthoringUnion,
   CanonicalUnion,
   ValidatableUnion,
+  NlPredicate,
   FlowRegistryIndex,
   FlowRegistrySchemas,
   FlowValidationIssue,
@@ -87,6 +88,9 @@ export {
   matchesFlowDefinitionListFilter,
   stampNewFlowDefinitionVersion,
   MemoryFlowDefinitionsStore,
+  nlPredicateSchema,
+  authoringPredicateSchema,
+  isNlPredicate,
 } from './definition/index.js';
 export {
   LiveFlowCatalog,
@@ -116,3 +120,20 @@ export type {
   LoadDynamicFlowsOptions,
   AgentFlowToolSurface,
 } from './addDynamicFlows.js';
+export {
+  compileNlPredicate,
+  compileAuthoringPredicates,
+  knownVariablesFromDefinition,
+  isNlPredicateProvider,
+  isPathInKnownVariables,
+  nlPredicatePromptHash,
+  scopedPredicateIssues,
+  NL_PREDICATE_COMPILER_SYSTEM,
+  NL_PREDICATE_COMPILER_VERSION,
+} from './authoring/index.js';
+export type {
+  CompileNlPredicateResult,
+  CompileAuthoringPredicatesResult,
+  NlPredicateProvider,
+  NlPredicateProvenance,
+} from './authoring/index.js';

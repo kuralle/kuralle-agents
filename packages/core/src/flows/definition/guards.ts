@@ -12,10 +12,10 @@ export type AuthoringUnion = AuthoringFlowNodeDefinition;
 export type CanonicalUnion = FlowNodeDefinition;
 export type ValidatableUnion = ValidatableFlowNodeDefinition;
 
-const authoringNodeFitsCanonical: Expect<Extends<AuthoringFlowNodeDefinition, FlowNodeDefinition>> = true;
+const canonicalNodeFitsAuthoring: Expect<Extends<FlowNodeDefinition, AuthoringFlowNodeDefinition>> = true;
 const validatableNodeFitsCanonical: Expect<Extends<ValidatableFlowNodeDefinition, FlowNodeDefinition>> = true;
 const canonicalNodeFitsValidatable: Expect<Extends<FlowNodeDefinition, ValidatableFlowNodeDefinition>> = true;
-const authoringDefFitsCanonical: Expect<Extends<AuthoringFlowDefinition, FlowDefinition>> = true;
+const canonicalDefFitsAuthoring: Expect<Extends<FlowDefinition, AuthoringFlowDefinition>> = true;
 const validatableDefFitsCanonical: Expect<Extends<ValidatableFlowDefinition, FlowDefinition>> = true;
 const canonicalDefFitsValidatable: Expect<Extends<FlowDefinition, ValidatableFlowDefinition>> = true;
 const nodeKindFitsCanonical: Expect<Extends<FlowNodeDefinition['kind'], FlowDefinitionNodeKind>> = true;
@@ -25,10 +25,10 @@ type ChoiceOptionWire = z.infer<typeof choiceOptionSchema>;
 const choiceWireFitsCanonical: Expect<Extends<ChoiceOptionWire, ChoiceOption>> = true;
 const choiceCanonicalFitsWire: Expect<Extends<ChoiceOption, ChoiceOptionWire>> = true;
 
-void authoringNodeFitsCanonical;
+void canonicalNodeFitsAuthoring;
 void validatableNodeFitsCanonical;
 void canonicalNodeFitsValidatable;
-void authoringDefFitsCanonical;
+void canonicalDefFitsAuthoring;
 void validatableDefFitsCanonical;
 void canonicalDefFitsValidatable;
 void nodeKindFitsCanonical;

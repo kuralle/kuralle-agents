@@ -1,6 +1,24 @@
+import { z } from 'zod';
 import type { ChoiceOption } from '../../types/selection.js';
 import type { MappingConfig } from './mapping.js';
-import type { Predicate } from './predicate.js';
+import { predicateSchema, type Predicate } from './predicate.js';
+
+export const nlPredicateSchema = z.object({ nl: z.string().min(1) }).strict();
+export type NlPredicate = z.infer<typeof nlPredicateSchema>;
+export const authoringPredicateSchema: z.ZodType<Predicate | NlPredicate> = z.union([
+  predicateSchema,
+  nlPredicateSchema,
+]);
+
+export function isNlPredicate(value: unknown): value is NlPredicate {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    typeof (value as { nl?: unknown }).nl === 'string'
+  );
+}
 
 type JsonSchema = Record<string, unknown>;
 
@@ -11,9 +29,10 @@ type TransitionRef =
   | { end: string }
   | 'stay';
 
-interface PredicateRoute {
-  when: Predicate;
+interface AuthoringPredicateRoute {
+  when: Predicate | NlPredicate;
   to: TransitionRef;
+  whenSource?: string;
 }
 
 interface ConfirmGateRef {
@@ -32,7 +51,7 @@ interface ReplyNodeDefinitionBase {
   id: string;
   instructions?: string;
   next?: TransitionRef;
-  routes?: PredicateRoute[];
+  routes?: AuthoringPredicateRoute[];
 }
 
 export interface AuthoringReplyTemplateNode extends ReplyNodeDefinitionBase {
@@ -67,7 +86,7 @@ export interface AuthoringActionNode {
   bind?: string;
   approval?: true;
   next?: TransitionRef;
-  routes?: PredicateRoute[];
+  routes?: AuthoringPredicateRoute[];
 }
 
 export interface AuthoringDecideNode {
@@ -76,7 +95,7 @@ export interface AuthoringDecideNode {
   instructions?: string;
   schema?: JsonSchema;
   choices?: ChoiceOption[];
-  routes?: PredicateRoute[];
+  routes?: AuthoringPredicateRoute[];
   otherwise?: TransitionRef;
   confirmGate?: ConfirmGateRef;
 }

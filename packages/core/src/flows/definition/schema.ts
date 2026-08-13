@@ -17,6 +17,7 @@ const predicateRouteSchema = z
   .object({
     when: predicateSchema,
     to: transitionRefSchema,
+    whenSource: z.string().min(1).optional(),
   })
   .strict();
 

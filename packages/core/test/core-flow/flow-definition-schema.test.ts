@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   FLOW_DEFINITION_NODE_KINDS,
+  authoringPredicateSchema,
   flowDefinitionSchema,
   mappingConfigSchema,
   validateTemplateSyntax,
@@ -111,6 +112,49 @@ describe('flowDefinitionSchema', () => {
     expect(asString.success).toBe(false);
     expect(asObject.success).toBe(true);
     expect(mixedKeys.success).toBe(false);
+  });
+
+  it('accepts whenSource on a compiled route and rejects authoring nl in the canonical schema', () => {
+    const withSource = flowDefinitionSchema.safeParse({
+      name: 'refund',
+      description: '',
+      start: 'route',
+      nodes: [
+        {
+          kind: 'decide',
+          id: 'route',
+          routes: [
+            {
+              when: { op: 'gt', left: { path: 'input.amount' }, right: { literal: 500 } },
+              whenSource: 'the refund exceeds 500',
+              to: { end: 'done' },
+            },
+          ],
+        },
+      ],
+    });
+    const withNl = flowDefinitionSchema.safeParse({
+      name: 'refund',
+      description: '',
+      start: 'route',
+      nodes: [
+        {
+          kind: 'decide',
+          id: 'route',
+          routes: [{ when: { nl: 'the refund exceeds 500' }, to: { end: 'done' } }],
+        },
+      ],
+    });
+    expect(withSource.success).toBe(true);
+    expect(withNl.success).toBe(false);
+    expect(authoringPredicateSchema.safeParse({ nl: 'the refund exceeds 500' }).success).toBe(true);
+    expect(
+      authoringPredicateSchema.safeParse({
+        op: 'gt',
+        left: { path: 'input.amount' },
+        right: { literal: 500 },
+      }).success,
+    ).toBe(true);
   });
 });
 

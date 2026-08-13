@@ -478,7 +478,11 @@ export type {
   CreateVersionOptions,
   FlowDefinitionListFilter,
   FlowDefinitionsStore,
-} from './flows/definition/index.js';
+  AuthoringFlowDefinition,
+  NlPredicate,
+  NlPredicateProvider,
+  NlPredicateProvenance,
+} from './flows/index.js';
 export {
   evaluatePredicate,
   derivePredicateLabel,
@@ -508,6 +512,13 @@ export {
   FlowCycleError,
   findFlowByName,
   FLOW_CATALOG_NOTE_TAG,
+  compileNlPredicate,
+  compileAuthoringPredicates,
+  knownVariablesFromDefinition,
+  isNlPredicate,
+  nlPredicateSchema,
+  authoringPredicateSchema,
+  NL_PREDICATE_COMPILER_VERSION,
 } from './flows/index.js';
 export type {
   FlowCatalogEntry,

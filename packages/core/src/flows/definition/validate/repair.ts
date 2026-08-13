@@ -67,6 +67,7 @@ function repairFor(
         return 'set-mapping-source';
       case 'invalid-predicate-reference':
       case 'predicate-too-deep':
+      case 'nl-predicate-compile-failed':
         return 'set-predicate';
       case 'invalid-template':
         return 'set-template';
