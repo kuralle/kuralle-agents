@@ -117,6 +117,14 @@ export interface RunState {
   pendingInput?: UserContent[];
   /** Message count at the last completed extraction; drives the token trigger. */
   lastExtractedMessageCount?: number;
+  /**
+   * Holder of the execution lease. Taken at run open, renewed on persist
+   * points during the turn, cleared at close. Absent means no live executor
+   * (idle between turns, or a run that never opened under this scheme).
+   */
+  leaseHolder?: string;
+  /** Epoch ms when the execution lease expires. A past expiry is a crashed replica; a missing lease is idle, not stale. */
+  leaseExpiresAt?: number;
 }
 
 export interface SignalDelivery {
@@ -166,6 +174,7 @@ export interface RunRef {
   flowName?: string;
   waitingFor?: InterruptRequest;
   updatedAt: number;
+  leaseExpiresAt?: number;
 }
 
 export function runMatchesFilter(state: RunState, filter: RunFilter): boolean {
@@ -192,6 +201,7 @@ export function toRunRef(state: RunState, storedInSessionId?: string): RunRef {
   };
   if (state.activeFlow !== undefined) ref.flowName = state.activeFlow;
   if (state.waitingFor !== undefined) ref.waitingFor = state.waitingFor;
+  if (state.leaseExpiresAt !== undefined) ref.leaseExpiresAt = state.leaseExpiresAt;
   return ref;
 }
 

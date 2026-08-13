@@ -20,6 +20,10 @@ import { resetTurnCount } from './policies/limits.js';
 import { addSystemNote } from './systemNotes.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { stripInternalKeys } from './internalRunState.js';
+import {
+  DEFAULT_RUN_LEASE_TTL_MS,
+  takeRunLease,
+} from './durable/runLease.js';
 
 export interface OpenRunOptions {
   sessionId: string;
@@ -58,6 +62,9 @@ export interface OpenRunOptions {
   mint?: () => string;
   /** Override the default SessionRunStore for this open. */
   runStore?: RunStore;
+  /** Execution-lease holder. Runtime passes a stable per-instance id. */
+  leaseHolder?: string;
+  leaseTtlMs?: number;
 }
 
 export function resolveRunStore(
@@ -201,6 +208,15 @@ export async function openRun(
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
   }
+
+  takeRunLease(
+    runState,
+    options.leaseHolder ?? randomUUID(),
+    options.leaseTtlMs ?? DEFAULT_RUN_LEASE_TTL_MS,
+    Date.now(),
+  );
+  runState.updatedAt = Date.now();
+  await runStore.putRunState(runState);
 
   const isConversation = runKind(runState) === 'conversation';
 

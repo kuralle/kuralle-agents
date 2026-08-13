@@ -4,6 +4,7 @@ import type { Hooks } from '../types/hooks.js';
 import type { RunContext } from '../types/run-context.js';
 import { runKind, type RunState } from './durable/types.js';
 import type { RunStore } from './durable/RunStore.js';
+import { clearRunLease } from './durable/runLease.js';
 import { isTerminalOutcome, markSessionOutcome } from './outcomeMarking.js';
 import type { ConversationOutcome } from '../outcomes/types.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
@@ -40,6 +41,7 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
   if (options.terminalOutcome) {
     runState.status = 'finished';
   }
+  clearRunLease(runState);
   await runStore.putRunState(runState);
 
   if (options.extraction) {

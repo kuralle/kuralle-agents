@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { defineTool } from '../tools/effect/defineTool.js';
 import type { Tool } from '../types/effectTool.js';
 import type { StreamPart, TurnHandle } from '../types/stream.js';
+import {
+  recoverOrphanedRuns,
+  sweepDeadlines,
+  type SweepRuntime,
+} from '../runtime/durable/sweep.js';
 
 /**
  * Deferred-work scheduling for proactive (agent-initiated) turns.
@@ -87,6 +92,77 @@ export function wakeJob(wake: WakeJobPayload): ScheduledJob {
 
 export function isWakeJob(job: ScheduledJob): boolean {
   return job.kind === WAKE_JOB_KIND;
+}
+
+export const SWEEP_JOB_KIND = 'kuralle.sweep';
+export const DEFAULT_SWEEP_INTERVAL_MS = 30_000;
+
+export interface SweepJobPayload {
+  intervalMs?: number;
+}
+
+export function sweepJob(payload: SweepJobPayload = {}): ScheduledJob {
+  return { kind: SWEEP_JOB_KIND, payload: { ...payload } };
+}
+
+export function isSweepJob(job: ScheduledJob): boolean {
+  return job.kind === SWEEP_JOB_KIND;
+}
+
+/**
+ * Registers both `recoverOrphanedRuns` and `sweepDeadlines` as the handler for
+ * `kuralle.sweep` jobs.
+ *
+ * Exactly one sweeper per RunStore. The run mutex is in-process only; two
+ * schedulers against the same store race recoveries of the same orphan.
+ */
+export function createSweepJobRunner(
+  runtime: SweepRuntime,
+  opts?: {
+    onError?: (error: unknown, job: ScheduledJob) => void;
+    reschedule?: (job: ScheduledJob) => Promise<string>;
+  },
+): (job: ScheduledJob) => Promise<void> {
+  return async (job) => {
+    if (!isSweepJob(job)) {
+      return;
+    }
+    try {
+      await recoverOrphanedRuns(runtime);
+      await sweepDeadlines(runtime);
+    } catch (error) {
+      if (opts?.onError) {
+        opts.onError(error, job);
+      } else {
+        console.warn('[Kuralle] run sweeper failed:', error);
+      }
+    }
+    if (opts?.reschedule) {
+      const intervalMs =
+        typeof job.payload.intervalMs === 'number' && job.payload.intervalMs > 0
+          ? job.payload.intervalMs
+          : DEFAULT_SWEEP_INTERVAL_MS;
+      await opts.reschedule(sweepJob({ intervalMs }));
+    }
+  };
+}
+
+/**
+ * Enqueue the first sweep tick on an existing Scheduler. Pair with
+ * `createSweepJobRunner` as that scheduler's `run` callback (and pass
+ * `reschedule` so one-shot backends tick on an interval).
+ *
+ * Exactly one sweeper per RunStore — do not call this twice against the
+ * same store.
+ */
+export async function startRunSweeper(
+  scheduler: Scheduler,
+  opts?: { intervalMs?: number; delayMs?: number },
+): Promise<string> {
+  const intervalMs = opts?.intervalMs ?? DEFAULT_SWEEP_INTERVAL_MS;
+  return scheduler.enqueue(sweepJob({ intervalMs }), {
+    delayMs: opts?.delayMs ?? intervalMs,
+  });
 }
 
 /** What a wake turn produced — handed to the host's delivery function. */

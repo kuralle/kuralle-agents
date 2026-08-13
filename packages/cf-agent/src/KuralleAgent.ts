@@ -23,6 +23,11 @@ import { AIChatAgent } from '@cloudflare/ai-chat';
 import {
   createRuntime,
   isWakeJob,
+  isSweepJob,
+  sweepJob,
+  recoverOrphanedRuns,
+  sweepDeadlines,
+  DEFAULT_SWEEP_INTERVAL_MS,
   wakeJob,
   type DeploymentTraceContext,
   type HarnessConfig,
@@ -512,10 +517,31 @@ export abstract class KuralleAgent<
   }
 
   /**
+   * Enqueue the first store-sweep tick on this DO's alarm scheduler.
+   * Exactly one sweeper per store — this DO's SqlRunStore is that store.
+   */
+  protected async startRunSweeper(intervalMs = DEFAULT_SWEEP_INTERVAL_MS): Promise<string> {
+    return this.wakeScheduler().enqueue(sweepJob({ intervalMs }), { delayMs: intervalMs });
+  }
+
+  /**
    * Override to handle non-wake scheduled jobs (engagement drips, cleanup…).
-   * Default: no-op with a warning, so a mis-routed job is visible.
+   * Sweep jobs run both `recoverOrphanedRuns` and `sweepDeadlines`, then
+   * re-enqueue at the job's interval. Default for other kinds: no-op with a
+   * warning, so a mis-routed job is visible.
    */
   protected async onScheduledJob(job: ScheduledJob): Promise<void> {
+    if (isSweepJob(job)) {
+      const built = await this.buildRuntime();
+      await recoverOrphanedRuns(built.runtime);
+      await sweepDeadlines(built.runtime);
+      const intervalMs =
+        typeof job.payload.intervalMs === 'number' && job.payload.intervalMs > 0
+          ? job.payload.intervalMs
+          : DEFAULT_SWEEP_INTERVAL_MS;
+      await this.wakeScheduler().enqueue(sweepJob({ intervalMs }), { delayMs: intervalMs });
+      return;
+    }
     console.warn(`[KuralleAgent] Unhandled scheduled job kind: ${job.kind}`);
   }
 

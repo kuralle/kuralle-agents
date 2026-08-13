@@ -41,6 +41,7 @@ function resolveOutOfBandControl(agent: AgentConfig): boolean {
 import { closeRun } from './closeRun.js';
 import type { RunStore } from './durable/RunStore.js';
 import { loadRecordedSteps } from './durable/replay.js';
+import { DEFAULT_RUN_LEASE_TTL_MS, wrapWithRunLease } from './durable/runLease.js';
 import { markSessionOutcome } from './outcomeMarking.js';
 import { resolveAgentPolicies } from './policies/resolvePolicies.js';
 import type { KnowledgeProviderConfig } from '../types/knowledge.js';
@@ -260,6 +261,7 @@ export class Runtime {
   private readonly pendingExtractions = new Set<Promise<void>>();
   private readonly extractedValueStore: ExtractedValueStore;
   private readonly runStoreOverride?: RunStore;
+  private readonly leaseHolder = randomUUID();
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
@@ -917,6 +919,11 @@ export class Runtime {
           kind: opts.kind,
           flowName: opts.flowName,
           mint: opts.kind === 'flow' ? () => mintRunId() : undefined,
+          leaseHolder: this.leaseHolder,
+        });
+        opened.runStore = wrapWithRunLease(opened.runStore, {
+          holder: this.leaseHolder,
+          ttlMs: DEFAULT_RUN_LEASE_TTL_MS,
         });
         settleRunId(opened.runState.runId);
         this.unregisterTurnAbort(sessionId, pendingAbortKey);
@@ -987,6 +994,10 @@ export class Runtime {
 
   getSessionStore(): SessionStore {
     return this.sessionStore;
+  }
+
+  getRunStore(): RunStore {
+    return resolveRunStore(this.sessionStore, '', this.runStoreOverride);
   }
 
   /** Resolves once every in-flight background extraction has settled. */

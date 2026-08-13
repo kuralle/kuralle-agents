@@ -340,9 +340,15 @@ export {
   createInProcessScheduler,
   createWakeJobRunner,
   createScheduleFollowupTool,
+  createSweepJobRunner,
+  startRunSweeper,
   wakeJob,
   isWakeJob,
+  sweepJob,
+  isSweepJob,
   WAKE_JOB_KIND,
+  SWEEP_JOB_KIND,
+  DEFAULT_SWEEP_INTERVAL_MS,
 } from './scheduler/index.js';
 export type {
   Scheduler,
@@ -466,6 +472,27 @@ export type {
   UnresumableRun,
   UnresumableReason,
 } from './runtime/durable/findUnresumableRuns.js';
+export {
+  recoverOrphanedRuns,
+  sweepDeadlines,
+} from './runtime/durable/sweep.js';
+export type {
+  SweepRuntime,
+  RecoverOrphanedRunsOptions,
+  RecoverOrphanedRunsReport,
+  SweepDeadlinesOptions,
+} from './runtime/durable/sweep.js';
+export {
+  DEFAULT_RUN_LEASE_TTL_MS,
+  isRunLeaseStale,
+  takeRunLease,
+  clearRunLease,
+} from './runtime/durable/runLease.js';
+export {
+  DEADLINE_EXPIRED_REASON,
+  SWEEPER_ACTOR_ID,
+  deadlineExpiryDelivery,
+} from './runtime/durable/deadlineExpiry.js';
 export type { Route } from './types/route.js';
 export { PART_CHANNEL } from './types/stream.js';
 export type {

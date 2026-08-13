@@ -6,6 +6,7 @@ import type {
 } from './types.js';
 import { LogConflictError, type RunStore } from './RunStore.js';
 import type { StandardSchemaV1 } from '../../types/standard-schema.js';
+import { DEADLINE_EXPIRED_REASON, isDeadlineExpiryDelivery } from './deadlineExpiry.js';
 
 export function findStepByKey(steps: StepRecord[], key: string): StepRecord | undefined {
   return steps.find((step) => step.key === key);
@@ -44,12 +45,19 @@ export async function recordSignalDelivery(
   if (!isSignalActor(delivery.actor)) {
     throw new Error('Signal delivery requires a host-authenticated actor');
   }
-  if (waitingFor.deadline !== null && Date.now() > waitingFor.deadline) {
+  const deadlineExpired = isDeadlineExpiryDelivery(delivery);
+  if (waitingFor.deadline !== null && Date.now() > waitingFor.deadline && !deadlineExpired) {
     throw new Error(`Interrupt ${waitingFor.requestId} expired before delivery`);
   }
 
   let result: unknown;
-  if (waitingFor.kind === 'approval') {
+  if (deadlineExpired) {
+    result = {
+      approved: false,
+      by: delivery.actor.id,
+      reason: DEADLINE_EXPIRED_REASON,
+    };
+  } else if (waitingFor.kind === 'approval') {
     if (
       (delivery.decision !== 'approve' && delivery.decision !== 'deny') ||
       delivery.payload !== undefined
