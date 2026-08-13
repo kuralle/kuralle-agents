@@ -86,7 +86,7 @@ const topic = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'start_interview');
-    if (r?.result) return { goto: interview, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: interview.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -107,7 +107,7 @@ const introduction = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'proceed_to_topic');
-    if (r?.result) return { goto: topic, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: topic.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });

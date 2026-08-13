@@ -278,12 +278,7 @@ describe('pharmacy_example', () => {
     const transition = await Promise.resolve(
       chooseRx.decide?.({ choice: 'rx-lis' }, state),
     );
-    const target =
-      typeof transition === 'object' && transition !== null && 'id' in transition
-        ? transition
-        : typeof transition === 'function'
-          ? transition()
-          : transition;
+    const target = transition;
     expect(state.rxId).toBe('rx-lis');
     expect(state.rxLabel).toBe('Lisinopril 10mg');
     expect(target).toBe(interactionCheck);
@@ -322,12 +317,7 @@ describe('pharmacy_example', () => {
     const transition = await Promise.resolve(
       fulfilment.decide?.({ choice: 'delivery' }, state),
     );
-    const target =
-      typeof transition === 'object' && transition !== null && 'id' in transition
-        ? transition
-        : typeof transition === 'function'
-          ? transition()
-          : transition;
+    const target = transition;
     expect(state.fulfilment).toBe('delivery');
     expect(target).toBe(collectAddress);
   });

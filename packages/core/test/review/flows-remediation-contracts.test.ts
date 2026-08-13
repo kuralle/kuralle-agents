@@ -350,7 +350,7 @@ describe('R-04 nested flows own isolated persisted state frames', () => {
       schema: z.object({ workOrderId: z.string() }),
       required: ['workOrderId'],
       ask: () => 'Which work order?',
-      onComplete: (data) => ({ goto: dispatchAction, data: data as Record<string, unknown> }),
+      onComplete: (data) => ({ goto: dispatchAction.id, data: data as Record<string, unknown> }),
     });
     const dispatch = defineFlow({
       name: 'dispatch',

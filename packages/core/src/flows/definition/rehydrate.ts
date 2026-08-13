@@ -101,7 +101,7 @@ function resolveTransitionRef(ref: TransitionRef | undefined, byId: Map<string, 
     if (!node) {
       throw new Error(`Unresolved goto "${ref.goto}"`);
     }
-    return ref.data !== undefined ? { goto: node, data: ref.data } : { goto: node };
+    return ref.data !== undefined ? { goto: ref.goto, data: ref.data } : node;
   }
   if ('handoff' in ref) {
     return { handoff: ref.handoff, reason: ref.reason };

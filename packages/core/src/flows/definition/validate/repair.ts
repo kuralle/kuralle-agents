@@ -76,6 +76,7 @@ function repairFor(
         return 'update-node';
       case 'unresolved-transition':
       case 'missing-start':
+      case 'inline-transition-target':
         return 'set-transition';
       case 'unreachable-node':
         return 'remove-node';

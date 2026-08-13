@@ -31,6 +31,12 @@ const endNode = reply({
   next: () => ({ end: 'done' }),
 });
 
+const billingNode = collect({
+  id: 'billing',
+  schema: z.object({ issue: z.string() }),
+  onComplete: () => endNode,
+});
+
 const triageNode = withChoices(
   decide({
     id: 'triage',
@@ -38,11 +44,7 @@ const triageNode = withChoices(
     schema: TriageSchema,
     decide: (sel) => {
       if (sel === 'billing') {
-        return collect({
-          id: 'billing',
-          schema: z.object({ issue: z.string() }),
-          onComplete: () => endNode,
-        });
+        return billingNode;
       }
       if (sel === 'agent') {
         return { escalate: 'support' };
@@ -61,7 +63,7 @@ const supportFlow = defineFlow({
   name: 'support',
   description: 'WhatsApp support flow',
   start: triageNode,
-  nodes: [triageNode, endNode],
+  nodes: [triageNode, billingNode, endNode],
 });
 
 export type WhatsAppServerAppOptions = {

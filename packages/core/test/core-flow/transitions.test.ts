@@ -14,13 +14,12 @@ describe('normalizeTransition', () => {
   const nodeA = reply({ id: 'a', instructions: 'A' });
   const nodeB = reply({ id: 'b', instructions: 'B' });
 
-  it('normalizes node refs and thunks to goto', () => {
-    expect(normalizeTransition(nodeB)).toEqual({ kind: 'goto', node: nodeB });
-    expect(normalizeTransition(() => nodeB)).toEqual({ kind: 'goto', node: nodeB });
-    expect(normalizeTransition({ goto: nodeB })).toEqual({ kind: 'goto', node: nodeB });
-    expect(normalizeTransition({ goto: () => nodeB, data: { x: 1 } })).toEqual({
+  it('normalizes node refs and goto ids to goto', () => {
+    expect(normalizeTransition(nodeB)).toEqual({ kind: 'goto', to: nodeB });
+    expect(normalizeTransition({ goto: 'b' })).toEqual({ kind: 'goto', to: 'b' });
+    expect(normalizeTransition({ goto: 'b', data: { x: 1 } })).toEqual({
       kind: 'goto',
-      node: nodeB,
+      to: 'b',
       data: { x: 1 },
     });
   });

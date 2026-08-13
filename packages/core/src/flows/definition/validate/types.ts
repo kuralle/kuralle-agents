@@ -8,6 +8,7 @@ export type FlowValidationIssueCode =
   | 'unresolved-transition'
   | 'unreachable-node'
   | 'invalid-reply'
+  | 'inline-transition-target'
   | 'missing-reference'
   | 'invalid-predicate-reference'
   | 'incompatible-schema'

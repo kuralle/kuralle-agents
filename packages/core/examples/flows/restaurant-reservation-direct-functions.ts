@@ -85,7 +85,7 @@ const availabilityNext = (turn: TurnResult, noAvail: ReplyNode) => {
   const r = turn.toolResults.find((t) => t.name === 'check_availability');
   if (!r?.result || typeof r.result !== 'object') return 'stay';
   const data = r.result as Record<string, unknown>;
-  return { goto: data.available ? confirm : noAvail, data };
+  return { goto: (data.available ? confirm : noAvail).id, data };
 };
 
 const noAvailability = reply({
@@ -102,7 +102,7 @@ const noAvailability = reply({
     // A model may redundantly re-check the already rejected time while writing
     // the alternatives prompt. Park instead of self-transitioning back into
     // this node; a later user-supplied available time still advances normally.
-    return data.available ? { goto: confirm, data } : 'stay';
+    return data.available ? { goto: confirm.id, data } : 'stay';
   },
 });
 
@@ -121,7 +121,7 @@ const initial = reply({
   tools: buildToolSet({ collect_party_size: collectPartySize }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'collect_party_size');
-    if (r?.result) return { goto: getTime, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: getTime.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });

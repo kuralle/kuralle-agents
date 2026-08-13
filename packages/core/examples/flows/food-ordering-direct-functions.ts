@@ -120,7 +120,7 @@ Remember to be friendly and casual.`,
   tools: () => buildToolSet({ get_delivery_estimate: getDeliveryEstimate, select_pizza_order: selectPizzaOrder }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'select_pizza_order');
-    if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: confirm.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -138,7 +138,7 @@ Remember to be friendly and casual.`,
   tools: () => buildToolSet({ get_delivery_estimate: getDeliveryEstimate, select_sushi_order: selectSushiOrder }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'select_sushi_order');
-    if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: confirm.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });

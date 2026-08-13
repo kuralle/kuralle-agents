@@ -3,6 +3,7 @@ import { addFlowValidationRepairActions } from './repair.js';
 import { validateFlowRefs } from './refs.js';
 import { inferGraphSchemas } from './schema-flow.js';
 import { validateFlowStructure } from './structure.js';
+import { formatFlowValidationIssues } from './format.js';
 import type { FlowRegistryIndex, FlowValidationIssue } from './types.js';
 
 export type {
@@ -38,6 +39,7 @@ export function validateFlowDefinition(
 export function assertValidFlowDefinition(def: FlowDefinition, index: FlowRegistryIndex = {}): void {
   const issues = validateFlowDefinition(def, index);
   if (issues.length === 0) return;
-  const details = issues.map((issue) => `- [${issue.code}] ${issue.path}: ${issue.message}`).join('\n');
-  throw new Error(`Flow definition "${def.name}" failed validation with ${issues.length} issue(s):\n${details}`);
+  throw new Error(
+    `Flow definition "${def.name}" failed validation with ${issues.length} issue(s):\n${formatFlowValidationIssues(issues)}`,
+  );
 }

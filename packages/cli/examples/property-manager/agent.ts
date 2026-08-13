@@ -351,7 +351,7 @@ const confirmDispatch = reply({
       estimateUsd?: number;
     };
     return {
-      goto: dispatchDone,
+      goto: dispatchDone.id,
       data: {
         dispatchNote: result.__denied
           ? result.message
@@ -398,7 +398,7 @@ const dispatchForWorkOrder = action({
 
     if (result.error) {
       return {
-        goto: confirmDispatch,
+        goto: confirmDispatch.id,
         data: {
           workOrderId,
           issue,
@@ -410,7 +410,7 @@ const dispatchForWorkOrder = action({
     }
 
     return {
-      goto: dispatchDone,
+      goto: dispatchDone.id,
       data: {
         dispatchNote: `${result.vendor} dispatched, $${result.estimateUsd}.`,
       },
@@ -428,7 +428,7 @@ const dispatchIntake = collect({
   instructions: (missing) =>
     `Extract the work order id to dispatch against. Still missing: ${missing.join(', ')}.`,
   ask: () => 'Which work order should I dispatch a vendor for? (e.g. WO-2001)',
-  onComplete: (data) => ({ goto: dispatchForWorkOrder, data: data as Record<string, unknown> }),
+  onComplete: (data) => ({ goto: dispatchForWorkOrder.id, data: data as Record<string, unknown> }),
 });
 
 /**
@@ -454,7 +454,7 @@ const createWorkOrder = action({
     );
     if (openOnUnit.length > 0) {
       return {
-        goto: duplicateQuestion,
+        goto: duplicateQuestion.id,
         data: {
           duplicateCandidates: openOnUnit.map((workOrder) => ({
             id: workOrder.id,
@@ -471,7 +471,7 @@ const createWorkOrder = action({
       { unitId: state.unitId, issue: state.issue, urgency: state.urgency, accessNotes: state.accessNotes },
       { def: create_work_order },
     );
-    return { goto: intakeDone, data: { workOrderId: (created as { workOrderId: string }).workOrderId } };
+    return { goto: intakeDone.id, data: { workOrderId: (created as { workOrderId: string }).workOrderId } };
   },
 });
 
@@ -490,7 +490,7 @@ const createDistinctWorkOrder = action({
       { def: create_work_order },
     );
     return {
-      goto: intakeDone,
+      goto: intakeDone.id,
       data: { workOrderId: (created as { workOrderId: string }).workOrderId },
     };
   },
@@ -499,7 +499,7 @@ const createDistinctWorkOrder = action({
 const reuseExistingWorkOrder = action({
   id: 'reuse_existing_work_order_action',
   run: async (state) => ({
-    goto: intakeDone,
+    goto: intakeDone.id,
     data: {
       workOrderId: state.existingWorkOrderId,
       reusedExisting: true,
@@ -564,7 +564,7 @@ const intake = collect({
     const asks = missing.map((m) => label[m] ?? m);
     return `Before I can log this — ${asks.join(', and ')}?`;
   },
-  onComplete: (data) => ({ goto: createWorkOrder, data: data as Record<string, unknown> }),
+  onComplete: (data) => ({ goto: createWorkOrder.id, data: data as Record<string, unknown> }),
 });
 
 const workOrderFlow = defineFlow({

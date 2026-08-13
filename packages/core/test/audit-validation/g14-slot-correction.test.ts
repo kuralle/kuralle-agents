@@ -267,7 +267,7 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
       id: 'review',
       instructions: 'Confirm the appointment day.',
       onConfirm: done,
-      onDecline: () => dateCollect,
+      onDecline: { goto: 'date' },
     });
     const readback = reply({
       id: 'readback',

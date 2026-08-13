@@ -28,7 +28,7 @@ const book = action({
     const receipt = (await ctx.tool('bookShipment', { address: state.address })) as { id: string };
     // `data` is merged into flow state on the transition, so `done` and the
     // verify check above both see `trackingId`.
-    return { goto: done, data: { trackingId: receipt.id } };
+    return { goto: done.id, data: { trackingId: receipt.id } };
   },
 });
 
