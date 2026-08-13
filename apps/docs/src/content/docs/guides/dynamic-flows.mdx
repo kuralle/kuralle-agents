@@ -46,6 +46,27 @@ if (issues.length > 0) {
 
 `flowDefinitionSchema` lives in **core**. Server packages import it; they do not copy the Zod union. Strict at save, lenient at boot: a bad POST never reaches storage; one corrupt stored row cannot sink startup.
 
+A `FlowDefinition` becomes a runnable `Flow` through `rehydrateFlow(definition, { tools })` — the reverse, `toStorableFlow(flow)`, recovers the definition a rehydrated flow was built from. A definition can also declare post-run `gates` (predicate or judge checks over the run record) — see [verification gates](/guides/flow-execution#post-run-verification-gates).
+
+## Register programmatically
+
+The HTTP router below is a thin wrapper over three `Runtime` methods you can call directly:
+
+```typescript
+import { createRuntime, MemoryFlowDefinitionsStore } from '@kuralle-agents/core';
+
+const store = new MemoryFlowDefinitionsStore();
+const runtime = createRuntime({ agents: [support], flowDefinitionsStore: store });
+
+await runtime.addDynamicFlows([definition], { agentId: 'support' }); // validate + persist + register
+await runtime.removeDynamicFlow('refund', { agentId: 'support' });   // live catalog only; store row stays active
+await runtime.loadDynamicFlows({ agentId: 'support' });              // boot: load every active version
+```
+
+`addDynamicFlows` registers a bundle atomically — dependencies first, root last — and rejects a reused name unless `replace: true`. `removeDynamicFlow` drops the flow from the live catalog without touching the store, so the next `loadDynamicFlows` (including boot) reloads it unless you archive the name first. `loadDynamicFlows` skips and logs corrupt rows per row — one bad definition cannot sink boot.
+
+`FlowDefinitionsStore` is versioned and insert-only, with four backends: `MemoryFlowDefinitionsStore` (core), `PostgresFlowDefinitionsStore` (`@kuralle-agents/postgres-store`), `RedisFlowDefinitionsStore` (`@kuralle-agents/redis-store`), and `SqlFlowDefinitionsStore` on Durable Object SQLite (`@kuralle-agents/cf-agent`). Set it once as `flowDefinitionsStore` on the harness config, or pass `store` per call.
+
 ## POST to a live server
 
 Mount the stored-flows router next to the chat router:
@@ -108,7 +129,9 @@ A stored version's `definition` and `digest` never change — `setActive` and `a
 
 That is why archive is not delete: an in-flight refund must still find the definition it started with after you ship v2.
 
-See [Durable Execution](/guides/durable-execution) for the effect journal, and [Flow Execution Model](/guides/flow-execution) for how a flow pauses on `'stay'` and resumes at the same node.
+If a parked run's flow name resolves to a **different** digest on resume — a live code flow was redefined in place, or the pinned version is gone — the resume fails closed with `FlowDriftError` (`recovery: ['restart', 'abandon']`) rather than silently executing a different graph.
+
+See [Durable Execution](/guides/durable-execution) for the effect journal and durable flow runs (`kind: 'flow'`, resume by `runId`, the crash sweeper), and [Flow Execution Model](/guides/flow-execution) for how a flow pauses on `'stay'` and resumes at the same node.
 
 ## Policy permissions
 
@@ -130,3 +153,44 @@ Pass the same `Policy` instance you use for tools if you want one function to co
 On Cloudflare, override `getStoredFlowsPolicy()` on `KuralleAgent`. A successful write calls `onStoredFlowsMutated()`; `KuralleThreadAgent` bumps its bound-revision cache generation so threads pick up the new active version on their next bind.
 
 Execution of a registered flow still uses the ordinary turn-level tool Policy. Catalog permission and tool permission are separate layers.
+
+## Let an agent author flows
+
+`createFlowBuilderAgent` builds an agent whose job is writing FlowDefinitions for a *target* surface. It composes `FLOW_BUILDER_AUTHORING_PLAYBOOK` — the full authoring contract, node kinds, predicate DSL, and issue-code repair table — into the instructions, and wires four tools (`FLOW_BUILDER_TOOL_NAMES`):
+
+| Tool | Purpose |
+|---|---|
+| `list_available_tools` | The target surface's tool catalog — an action node may only name these |
+| `list_available_flows` | Flows already registered — nested flow ids must come from here |
+| `list_available_agents` | Handoff targets a transition may name |
+| `save_flow` | Validate and register the drafted definition on the target runtime |
+
+```typescript
+import { createFlowBuilderAgent, type FlowBuilderHost } from '@kuralle-agents/core';
+
+const host: FlowBuilderHost = {
+  targetAgentId: 'support',
+  getRuntime: () => runtime,
+  tools: () => support.tools ?? {},
+};
+
+const builder = createFlowBuilderAgent({
+  id: 'flow-builder',
+  model,
+  surfaceInstructions: 'You author flows for the support agent. Discover catalogs first.',
+  host,
+});
+```
+
+The catalogs ground the author in what actually exists; `save_flow` returns the same `FlowValidationIssue[]` (with repair actions) as the HTTP 422 path, so a wrong draft is a one-turn fix.
+
+An authoring definition may write route conditions in natural language — `when: { nl: 'the customer is eligible' }`. `save_flow` (and `addDynamicFlows`) **compiles NL predicates to the structural DSL at save time**, keeps the original text as `whenSource`, and records compiler provenance (model, compiler version) on the stored version. A condition that will not compile fails validation as `nl-predicate-compile-failed`; nothing interprets natural language at run time.
+
+## Other ways a definition arrives
+
+The stored-flows catalog is the *live* supply mode. Two more are static:
+
+- **Agent Plugins** — a plugin's `flows/*.flow.json` files are validated by `loadAgentPlugin` and returned on `plugin.flows` for the host to register. See [Agent Plugins](/guides/plugins#flows-are-a-host-extension).
+- **File-authored agents** — `flows/*.flow.json` in the agent folder is validated strictly by `kuralle build` and embedded in the immutable artifact. See [File-authored Agents](/guides/file-authored-agents).
+
+Runnable examples live in `packages/core/examples/flows/`: `rehydrate-definition.ts` (JSON → running flow), `dynamic-registration.ts` (register on a live runtime, then enter), and `flow-builder.ts` (an agent drafts, saves, and a user runs the result).

@@ -30,6 +30,8 @@ const flow = defineFlow({
 
 Attach the flow to an agent with `defineAgent({ flows: [flow] })`.
 
+`defineFlow` validates the graph structurally and throws with the full issue list: a transition that returns a thunk (`() => node`) or a node object not registered in `nodes` is rejected (`inline-transition-target`), as are unreachable nodes and a `start` missing from `nodes`. The same validator backs the JSON dialect — see [Dynamic Flows](/guides/dynamic-flows).
+
 ## Node kinds
 
 ### `reply`
@@ -48,6 +50,8 @@ const confirm = reply({
 
 `next` is optional. When present it's called after the model responds (unless the turn produced a handoff or end control signal) and returns the next transition; omit it to stay on the node.
 
+For transactional outcomes that must not be model-authored — "your order is placed", a refund confirmation — set `response: (state) => string` instead of letting the model speak. The engine emits that text verbatim, with no model call, and marks the turn `rendered: 'engine'` in the trace.
+
 ### `collect`
 
 Collects a structured schema from the user over one or more turns. The node re-enters until all `required` fields are filled — or `maxTurns` (default 10) is reached, at which point `onComplete` runs with whatever was collected.
@@ -60,12 +64,14 @@ const getDate = collect({
   id: 'get_date',
   schema: z.object({ date: z.string() }),
   required: ['date'],
-  instructions: (missing) => `Ask the user for: ${missing.join(', ')}`,
+  ask: (missing) => `Which ${missing.join(' and ')} would you like?`,
   onComplete: () => confirm,
 });
 ```
 
-`instructions` receives the still-missing fields (and the current flow state) on each re-entry. `onComplete` is called when all required fields are collected and returns the next node.
+A collect node **never speaks model-authored text**. The extraction turn is non-speaking; the user-facing question is the deterministic `ask(missing, state)` — or, when `ask` is omitted, a safe default built from the missing field names. That is a structural backstop: the model cannot narrate a downstream outcome ("order placed", "payment taken") from inside a collect. The optional `instructions(missing, state)` is extraction-only guidance for the non-speaking turn and is never shown to the user. `onComplete` is called when all required fields are collected and returns the next node.
+
+`resolvers` declares deterministic tier-0 resolution for individual fields (`enum_check`, `range`, `jsonpath`): a field resolved deterministically is excluded from the model's extraction schema that turn, so the model can never guess it.
 
 ### `action`
 
@@ -81,12 +87,14 @@ A node's `next` (or `onComplete`) function returns a `Transition`:
 
 | Return value | Effect |
 |---|---|
-| A node object (or `() => node`) | Move to that node on the next turn |
-| `{ goto: node, data? }` | Move to `node`, merging `data` into flow state |
+| A node object registered in `nodes` | Move to that node on the next turn |
+| `{ goto: 'nodeId', data? }` | Move to the node with that id, merging `data` into flow state |
 | `{ end: 'label' }` | End the flow with a label |
 | `{ handoff: 'agentId', reason? }` | Hand off to another agent |
 | `{ escalate: 'reason' }` | Escalate to a human |
 | `'stay'` | Stay on the current node for another turn |
+
+Targets are node objects from `nodes` or node ids — never inline node definitions or thunks. `defineFlow` rejects both at definition time, because an inline target has no stable identity for a parked run to resume against.
 
 ## Writing node instructions
 
@@ -171,7 +179,7 @@ Full worked sample:
 
 ## Holding position across turns
 
-A flow records its current node on the session and resumes there on the next turn. When a node returns `'stay'` (and there's no pending input), the run is persisted and the turn ends; the next `runtime.run({ input })` re-enters the *same* node rather than restarting the flow. A `collect` node uses this to gather one field at a time over several turns.
+A flow records its current node on the durable run and resumes there on the next turn. When a node returns `'stay'` (and there's no pending input), the run is persisted and the turn ends; the next `runtime.run({ input })` re-enters the *same* node rather than restarting the flow. A `collect` node uses this to gather one field at a time over several turns.
 
 This means the flow keeps its place across turns automatically — you don't wire anything for it. For the full picture of how nodes are dispatched, how context is reshaped between them, and how a flow pauses and resumes, see the [Flow Execution Model](/guides/flow-execution). To author the same graph as JSON, hot-register it on a live server, and version it behind Policy, see [Dynamic Flows](/guides/dynamic-flows).
 

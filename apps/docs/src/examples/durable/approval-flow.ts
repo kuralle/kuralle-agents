@@ -51,7 +51,7 @@ const collectAmount = collect({
   id: 'collect_amount',
   schema: z.object({ amount: z.number() }),
   required: ['amount'],
-  instructions: (missing) => `Ask the customer for: ${missing.join(', ')}`,
+  ask: (missing) => `What ${missing.join(' and ')} should the refund be for?`,
   onComplete: () => issueRefund,
 });
 

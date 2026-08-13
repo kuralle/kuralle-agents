@@ -106,7 +106,7 @@ const agent = defineAgent({
   workspace: fs,
   skills, // SkillStoreLike — progressive disclosure handled by the runtime
   // mcpServers → pass to mcpTools() — see /guides/mcp
-  // flows → runtime.addDynamicFlows(flows) — host registration, not the loader
+  // flows → runtime.addDynamicFlows(flows, { agentId: 'support' }) — host registration, not the loader
 });
 ```
 

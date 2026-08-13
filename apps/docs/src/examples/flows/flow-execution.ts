@@ -37,7 +37,7 @@ const getAddress = collect({
   schema: z.object({ address: z.string() }),
   required: ['address'],
   maxTurns: 5,
-  instructions: (missing) => `Ask the customer for: ${missing.join(', ')}`,
+  ask: (missing) => `Which ${missing.join(' and ')} should the shipment go to?`,
   onComplete: () => book,
 });
 

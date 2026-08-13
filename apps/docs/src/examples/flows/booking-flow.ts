@@ -12,7 +12,7 @@ const getDate = collect({
   id: 'get_date',
   schema: z.object({ date: z.string() }),
   required: ['date'],
-  instructions: (missing) => `Ask the user for: ${missing.join(', ')}`,
+  ask: (missing) => `Which ${missing.join(' and ')} would you like to book?`,
   onComplete: () => confirm,
 });
 

@@ -76,7 +76,7 @@ async function chat(input: string) {
 
 ## Flow state
 
-Flow state — current node, collected fields — lives inside the session under `session.agentStates`. When you swap session stores, flow state persists with the rest of the session automatically.
+Flow state — active flow, current node, collected fields — lives on the durable run. With the default `SessionRunStore`, runs (state plus effect journal) persist inside the session under a `durableRuns` key, so when you swap session stores, flow state moves with the rest of the session automatically. A dedicated `runStore` on the harness config (e.g. `PostgresRunStore`) journals runs outside the session instead — see [Durable Execution](/guides/durable-execution).
 
 ## Custom stores
 

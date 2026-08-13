@@ -85,6 +85,36 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });
 | `maxTurns` | Safety limit before error/transition (default: 10) |
 | `onComplete` | Returns transition when all required fields collected |
 | `instructions` | Prompt for missing fields: `(missing, state) => string` |
+| `ask` | Deterministic, framework-emitted question for missing fields — the only user-facing copy a collect node produces |
+| `resolvers` | Tier-0 deterministic slot resolvers, run before the model (see below) |
+
+## Deterministic resolvers (tier-0)
+
+`resolvers` resolve fields from the user's turn without a model call. A field resolved deterministically is excluded from the model extraction schema for that turn:
+
+```ts
+collect({
+  id: 'order_details',
+  schema: orderSchema,
+  required: ['size', 'qty'],
+  resolvers: [
+    { field: 'size', kind: 'enum_check', values: ['small', 'medium', 'large'] },
+    { field: 'qty', kind: 'range', min: 1, max: 20 },
+    { field: 'sku', kind: 'jsonpath', path: 'input.sku' },
+  ],
+  onComplete: (data) => ({ goto: 'confirm', data: data as Record<string, unknown> }),
+});
+```
+
+- `enum_check` — the turn names exactly one of `values`.
+- `range` — the turn contains exactly one number inside the bounds.
+- `jsonpath` — read the value from a scope path (`input.*` = flow input, `state.*`) instead of the turn.
+
+An ambiguous match (two enum hits, two in-range numbers) resolves nothing — the field falls back to model extraction. Each merged value records its slot source (`'deterministic'` or `'model'`).
+
+## Extraction provenance guard
+
+Model-extracted values pass a provenance check against the source turn: a string or number the turn does not actually contain is **dropped**, not merged. An empty source turn (scripted merges) skips the guard. This is the structural backstop against hallucinated slots — it applies in text mode too, not only voice.
 
 ## Template variables in later nodes
 

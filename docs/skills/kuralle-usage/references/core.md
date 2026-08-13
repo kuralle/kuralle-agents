@@ -32,7 +32,7 @@ const runtime = createRuntime({
 
 ```ts
 const handle = runtime.run({ input: 'Hi', sessionId });
-for await (const part of handle.events()) {
+for await (const part of handle.events) {
   if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
 }
 const result = await handle;
@@ -52,6 +52,8 @@ const next = reply({
       : 'stay',
 });
 ```
+
+`defineFlow` validates the graph and **throws** on duplicate ids, unresolvable transitions, and unreachable nodes. Transition targets must be registered nodes (the same object in `flow.nodes`) or `{ goto: '<id>' }` — inline node objects and transition thunks are rejected. Flows also exist as data: the `FlowDefinition` JSON dialect with `validateFlowDefinition` and live registration via `runtime.addDynamicFlows` (`references/flow-definitions.md`).
 
 ## Routing
 

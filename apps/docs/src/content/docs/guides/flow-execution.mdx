@@ -30,8 +30,10 @@ The loop returns one of three results to the host: the flow **ended**, it wants 
 |---|---|---|
 | `action` | Your `run(state, ctx)` — no model call | Its return value, normalized |
 | `decide` | A structured model call against the node's `schema` | `decide(data, state)` branches on the result |
-| `reply` | A model turn (the node speaks) | `next(turn, state)`, or `stay` if no `next` |
+| `reply` | A model turn — or the node's authored `response(state)` rendered by the engine, no model call | `next(turn, state)`, or `stay` if no `next` |
 | `collect` | The extraction loop (below) | `onComplete(data, state)` once the schema is satisfied |
+
+A `reply` node with a `response` is **engine-rendered**: the text is emitted verbatim and the turn is tagged `rendered: 'engine'` in the trace (a spoken model turn is `rendered: 'model'`). Declarative flows run through the same engine; in the JSON dialect (see [Dynamic Flows](/guides/dynamic-flows)) consecutive `generate: true` reply chains are additionally **batched into one model call** per segment.
 
 `action` is the only kind handed the durable `ctx` directly — `ctx.tool`, `ctx.approve`, `ctx.signal`, `ctx.now`, `ctx.uuid`, `ctx.emit`. The [durable-execution rules](/guides/durable-execution) (use `ctx.now()` not `Date.now()`, keep effect order stable) apply specifically to `action` logic.
 
@@ -49,14 +51,14 @@ Every node's return value is normalized into one of five internal moves:
 
 | You return | Normalized move |
 |---|---|
-| a node, or `() => node` | `goto` that node |
-| `{ goto, data }` | `goto`, merging `data` into flow state |
+| a node object registered in `flow.nodes` | `goto` that node |
+| `{ goto: 'nodeId', data? }` | `goto`, merging `data` into flow state |
 | `{ end: reason }` | finish the flow |
 | `{ handoff, reason }` | hand off to another agent |
 | `{ escalate: reason }` | fire an `__escalate` signal, then hand off to `human` |
 | `'stay'` | stay on this node for another user turn |
 
-Anything else throws — a malformed transition fails loudly rather than silently doing nothing.
+Anything else throws — a malformed transition fails loudly rather than silently doing nothing. Inline node definitions and thunks (`() => node`) are not transitions: `defineFlow` rejects them at definition time (`inline-transition-target`), because a target with no registered identity cannot survive a parked run's resume.
 
 ## Reducing a transition: context and data
 
@@ -76,14 +78,26 @@ This is how a long flow keeps the model focused per stage instead of dragging th
 
 **Oscillation guard** counts how many times each `from → to` edge is traversed. Exceeding the flow's `maxOscillations` (default `2`) throws — the backstop against two nodes ping-ponging forever.
 
+## Post-run verification gates
+
+A flow can declare `gates` — checks the engine evaluates over the run record when the flow reaches a terminal transition. Two kinds, two severities:
+
+- `kind: 'predicate'` — a declarative predicate over `input`, `state`, `results`, and `requestContext`.
+- `kind: 'judge'` — a structured model verdict over an explicit allow-list of run-record paths (`inputs`), with an optional `rubric`. Requires `flowGateJudge` (a provider or a `LanguageModel`) on the harness config; an absent judge is an execution error.
+
+Each gate is `severity: 'blocking'` or `'advisory'`. A failed blocking gate — or **any gate that failed to execute**, regardless of declared severity — sets the run's `verification` record to `outcome: 'failed-verification'` and the turn ends with that reason; advisory failures are recorded in the verdicts but do not block. The verdicts travel on the `flow-end` event, so a consumer sees exactly which gate failed and why.
+
 ## The `collect` extraction loop
 
 `collect` is the most involved node. Each pass:
 
 1. If the schema's `required` fields are all populated, project that data and call `onComplete`.
 2. Otherwise, if `maxTurns` (default `10`) is exceeded, bail out through `onComplete` with whatever was gathered.
-3. Build a per-turn **extraction tool** named `submit_<nodeId>_data`. Its schema is the node schema made partial and nullable (so the model can submit just-learned fields), and its description embeds the still-missing fields plus the user's latest verbatim message to anchor extraction.
-4. Run the model turn, merge any submitted fields into flow state, and loop. If still incomplete and there's no buffered input, `stay` (wait for the user).
+3. Run the node's **tier-0 `resolvers`** (`enum_check`, `range`, `jsonpath`) against the fresh user text. A field resolved deterministically is recorded with `slotSources: 'deterministic'` and excluded from the model's schema this turn.
+4. Build a per-turn **extraction tool** named `submit_<nodeId>_data` for the fields that remain. Its schema is the node schema made partial and nullable (so the model can submit just-learned fields), and its description embeds the still-missing fields plus the user's latest verbatim message to anchor extraction.
+5. Run the **non-speaking** extraction turn and merge submitted fields into flow state — dropping any model-extracted value with no provenance in the user's actual message (the never-guess guard). If still incomplete and there's no buffered input, `stay` (wait for the user).
+
+The extraction turn produces no user-facing text. When the node pauses on missing fields, the engine emits the node's deterministic `ask(missing, state)` — or a safe default built from the field names — so a collect can never narrate a downstream outcome. `instructions` on a collect node only steers the non-speaking extraction.
 
 Collected fields are stored under an internal `__collect_<nodeId>` key, and the turn counter under `__collectTurns_<nodeId>` — namespaced so they don't collide with your domain state. `onComplete` receives only the projected required fields.
 

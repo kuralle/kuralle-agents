@@ -1,6 +1,6 @@
 # @kuralle-agents/redis-store
 
-Redis-backed session store, memory service, and vector store for Kuralle.
+Redis-backed session, flow-definition, memory, trace, and vector stores for Kuralle.
 
 ## Install
 
@@ -12,12 +12,13 @@ Peers: `@kuralle-agents/core @kuralle-agents/rag`.
 
 ## What it does
 
-Three backend implementations — sessions, long-term memory, and vector search — all backed by Redis. Works with Upstash, node-redis, ioredis, or any client that exposes compatible `get` / `set` / `del` commands.
+Backend implementations for sessions, dynamic flow definitions, long-term memory, traces, and vector search — all backed by Redis. Works with Upstash, node-redis, ioredis, or any client that exposes compatible `get` / `set` / `del` commands.
 
 **Key exports:**
 
 - **`RedisSessionStore`** — `SessionStore` implementation for durable session persistence.
 - **`RedisTraceStore`** — independent native trace persistence and read API.
+- **`RedisFlowDefinitionsStore`** — versioned `FlowDefinitionsStore` for dynamic `FlowDefinition`s.
 - **`RedisExtractedValueStore`** — durable store for extractor output (cross-session memory).
 - **`RedisPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
 - **`RedisVectorStore`** — `VectorStoreCore` implementation for vector similarity search.
@@ -53,6 +54,27 @@ const runtime = createRuntime({
 ```
 
 Trace keys use a separate `trace`/`traces` namespace from sessions.
+
+## Flow definitions store
+
+Versioned storage for dynamic `FlowDefinition`s — the backend for `runtime.addDynamicFlows` / `loadDynamicFlows`:
+
+```ts
+import { createRuntime } from '@kuralle-agents/core';
+import { RedisFlowDefinitionsStore } from '@kuralle-agents/redis-store';
+
+const flowDefinitionsStore = new RedisFlowDefinitionsStore({ client, prefix: 'kuralle' });
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  flowDefinitionsStore,
+});
+
+await runtime.loadDynamicFlows({ agentId: 'support' });   // boot: reload active versions
+```
+
+Keys live under `<prefix>:flowdef:*`. Any compatible client works, including the Upstash REST client on Cloudflare Workers. See the [dynamic flows guide](https://agents.kuralle.com/guides/dynamic-flows).
 
 ## Client adapters
 
