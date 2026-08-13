@@ -61,7 +61,7 @@ function liveModelForProvider(provider: ExampleProvider): LiveModel {
     if (!xai) {
       throw new Error('KURALLE_EXAMPLE_PROVIDER=xai but XAI_API_KEY is not set');
     }
-    return { model: createXai({ apiKey: xai })('grok-2-1212'), label: 'xai:grok-2-1212' };
+    return { model: createXai({ apiKey: xai })('grok-4.6'), label: 'xai:grok-4.6' };
   }
   const openaiKey = process.env.OPENAI_API_KEY;
   if (!openaiKey) {
@@ -88,7 +88,7 @@ export function resolveLiveModel(): LiveModel | null {
   }
   const xai = process.env.XAI_API_KEY;
   if (xai) {
-    return { model: createXai({ apiKey: xai })('grok-2-1212'), label: 'xai:grok-2-1212' };
+    return { model: createXai({ apiKey: xai })('grok-4.6'), label: 'xai:grok-4.6' };
   }
   const openaiKey = process.env.OPENAI_API_KEY;
   if (openaiKey) {
