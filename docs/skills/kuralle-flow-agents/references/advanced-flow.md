@@ -99,7 +99,7 @@ action({
   id: 'transferring',
   run: async (state, ctx) => {
     await ctx.tool('start_transfer', { patientId: state.patientId });
-    return { goto: endNode };
+    return endNode;
   },
 });
 ```

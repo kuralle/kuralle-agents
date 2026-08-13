@@ -84,7 +84,7 @@ const getVisitReasons = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'record_visit_reasons');
-    if (r?.result) return { goto: verify, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: verify.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -106,7 +106,7 @@ const getConditions = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'record_conditions');
-    if (r?.result) return { goto: getVisitReasons, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: getVisitReasons.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -128,7 +128,7 @@ const getAllergies = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'record_allergies');
-    if (r?.result) return { goto: getConditions, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: getConditions.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -155,7 +155,7 @@ const getPrescriptions = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'record_prescriptions');
-    if (r?.result) return { goto: getAllergies, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: getAllergies.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -180,7 +180,7 @@ const start = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'verify_birthday');
-    if (r?.result) return { goto: getPrescriptions, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: getPrescriptions.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });

@@ -10,11 +10,13 @@ import {
   type StepFinalizePatch,
   type StepRecord,
 } from '@kuralle-agents/core';
+import { flowDefinitionsStoreConformanceCases } from '@kuralle-agents/core/flows/definition/testing';
 import { SqlPersistentMemoryStore } from '../src/SqlPersistentMemoryStore.js';
 import { createSqlExecutor } from '../src/sqlExecutor.js';
 import { KuralleAgent } from '../src/KuralleAgent.js';
 import { SqlTraceStore } from '../src/SqlTraceStore.js';
 import { SqlRunStore } from '../src/SqlRunStore.js';
+import { SqlFlowDefinitionsStore } from '../src/SqlFlowDefinitionsStore.js';
 import { OtelTraceSink } from '@kuralle-agents/core';
 import type { LanguageModel } from 'ai';
 
@@ -137,6 +139,27 @@ export class TestMemoryDO extends DurableObject {
     }
     if (url.pathname === '/run-store') {
       return dispatchRunStore(createSqlExecutor(this.ctx.storage.sql), request);
+    }
+    if (url.pathname === '/flow-def-contract') {
+      const sql = createSqlExecutor(this.ctx.storage.sql);
+      const failures: { name: string; error: string }[] = [];
+      for (const testCase of flowDefinitionsStoreConformanceCases) {
+        const store = new SqlFlowDefinitionsStore(sql);
+        sql`DELETE FROM kuralle_flow_definition_versions`;
+        try {
+          await testCase.run(store);
+        } catch (error) {
+          failures.push({
+            name: testCase.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      return Response.json({
+        total: flowDefinitionsStoreConformanceCases.length,
+        passed: flowDefinitionsStoreConformanceCases.length - failures.length,
+        failures,
+      });
     }
     if (url.pathname !== '/roundtrip') {
       return new Response('not found', { status: 404 });

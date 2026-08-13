@@ -7,6 +7,7 @@ import type { TurnResult } from './channel.js';
 import type { ActionContext } from './run-context.js';
 import type { NodeVerify } from '../flow/verify.js';
 import type { ChoiceOption } from './selection.js';
+import { assertValidCodeFlow } from '../flows/definition/validate/code-flow.js';
 
 export type FlowState = Record<string, unknown>;
 
@@ -25,6 +26,8 @@ export interface Flow {
   instructions?: string;
   context?: ContextStrategy;
   maxOscillations?: number;
+  /** How this flow was produced. Omitted on code-authored `defineFlow` graphs. */
+  origin?: 'definition' | 'code';
   /** Explicit state mapping at flow boundaries. The active frame is otherwise isolated. */
   state?: FlowStateBoundary;
   /**
@@ -70,8 +73,7 @@ export interface NodeGrounding {
 
 export type Transition =
   | FlowNode
-  | (() => FlowNode)
-  | { goto: FlowNode | (() => FlowNode); data?: Record<string, unknown> }
+  | { goto: string; data?: Record<string, unknown> }
   | { handoff: string; reason?: string }
   | { escalate: string }
   | { end: string }
@@ -184,5 +186,6 @@ export function confirmGate(node: {
 }
 
 export function defineFlow(flow: Flow): Flow {
+  assertValidCodeFlow(flow);
   return flow;
 }

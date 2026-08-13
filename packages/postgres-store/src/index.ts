@@ -21,6 +21,8 @@ export type {
   PostgresDeploymentStoreOptions,
   PostgresDeploymentTables,
 } from './PostgresDeploymentStore.js';
+export { PostgresFlowDefinitionsStore } from './PostgresFlowDefinitionsStore.js';
+export type { PostgresFlowDefinitionsStoreOptions } from './PostgresFlowDefinitionsStore.js';
 export { PostgresThreadExecutionCoordinator } from './PostgresThreadExecutionCoordinator.js';
 export type {
   PostgresThreadExecutionCoordinatorOptions,

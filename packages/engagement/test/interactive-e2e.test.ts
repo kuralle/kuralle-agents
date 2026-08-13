@@ -69,11 +69,12 @@ function inboundButton(id: string, title: string): InboundMessage {
 
 describe('withchoices_attaches', () => {
   it('attaches choices to decide while preserving kind', () => {
+    const end = reply({ id: 'end', instructions: 'Done', next: () => ({ end: 'done' }) });
     const base = decide({
       id: 'pick',
       instructions: 'Choose',
       schema: z.object({ choice: z.string() }),
-      decide: () => reply({ id: 'end', instructions: 'Done', next: () => ({ end: 'done' }) }),
+      decide: () => end,
     });
     const node = withChoices(base, [{ id: 'a', label: 'A' }]);
     expect(node.kind).toBe('decide');

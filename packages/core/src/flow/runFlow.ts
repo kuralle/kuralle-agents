@@ -64,6 +64,27 @@ function buildNodeRegistry(flow: Flow): Map<string, FlowNode> {
   return registry;
 }
 
+function resolveGotoTarget(
+  to: FlowNode | string,
+  registry: Map<string, FlowNode>,
+  flowName: string,
+): FlowNode {
+  if (typeof to === 'string') {
+    const node = registry.get(to);
+    if (!node) {
+      throw new Error(`Transition goto "${to}" does not resolve to a node id.`);
+    }
+    return node;
+  }
+  const registered = registry.get(to.id);
+  if (registered !== to) {
+    throw new Error(
+      `Node "${to.id}" is not a member of flow.nodes in "${flowName}"; register it in nodes and reference that object.`,
+    );
+  }
+  return to;
+}
+
 function resolveStartNode(flow: Flow): FlowNode {
   return resolveNodeRef(flow.start);
 }
@@ -592,10 +613,7 @@ export async function runFlow(
       continue;
     }
 
-    const target = transition.node;
-    if (!registry.has(target.id)) {
-      registry.set(target.id, target);
-    }
+    const target = resolveGotoTarget(transition.to, registry, flow.name);
 
     const oscillation = bumpOscillation(edgeCounts, node.id, target.id);
     if (oscillation > maxOscillations) {

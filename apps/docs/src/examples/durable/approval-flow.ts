@@ -37,13 +37,13 @@ const issueRefund = action({
     });
 
     if (!decision.approved) {
-      return { goto: declined };
+      return declined;
     }
 
     // Recorded in the effect log. If the run resumes after this point, the
     // recorded result is replayed instead of charging the customer twice.
     const receipt = await ctx.tool('processRefund', { amount });
-    return { goto: confirmed, data: { receipt } };
+    return { goto: confirmed.id, data: { receipt } };
   },
 });
 

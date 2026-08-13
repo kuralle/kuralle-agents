@@ -17,7 +17,7 @@ import { z } from 'zod';
 - **`collect({ id, schema, required?, instructions?, onComplete })`** — model **extracts structured data** matching the zod `schema` from free-form input; `onComplete(data, state)` returns a `Transition`. **This is the free-form extraction primitive.** Extracted data merges into `state`.
 - **`decide({ id, instructions, schema, decide })`** — model picks a value from `schema`; `decide(value, state)` returns a `Transition`. Routes; pair with `withChoices` for interactive.
 - **`action({ id, run, verify?, outputSchema? })`** — `run(state, ctx)` runs a durable effect (`ctx.tool(name, args)` for exactly-once tool calls) and returns a `Transition`. Use for lookups / charges / writes.
-- **`Transition`** = a node | `() => node` | `{ goto: node, data? }` | `{ handoff: string, reason? }` | `{ escalate: string }` | `{ end: string }` | `'stay'`.
+- **`Transition`** = a registered node | `{ goto: '<id>', data? }` | `{ handoff: string, reason? }` | `{ escalate: string }` | `{ end: string }` | `'stay'`.
 - **`defineFlow({ name, description, start, nodes: [...] })`**, **`defineAgent({ id, name, instructions, model, flows: [flow] })`**.
 
 `state` is the durable flow state (`Record<string, unknown>`); extracted/collected fields land here and survive resume.

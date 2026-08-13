@@ -7,6 +7,7 @@ import type { RunContext } from '../types/run-context.js';
 import type { RunState } from './durable/types.js';
 import { runFlow } from '../flow/runFlow.js';
 import { resolveReplyNode } from '../flow/nodeBuilders.js';
+import { findFlowByName } from '../flows/liveFlowCatalog.js';
 import { SuspendError } from './durable/RunStore.js';
 import { buildAgentReplyNode } from './agentReply.js';
 import { deriveAgentShape } from './deriveAgent.js';
@@ -384,8 +385,4 @@ async function executeHostControl(
   }
 
   return { kind: 'turnComplete' };
-}
-
-function findFlowByName(agent: AgentConfig, flowName: string): Flow | undefined {
-  return agent.flows?.find((flow) => flow.name === flowName);
 }

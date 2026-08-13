@@ -48,7 +48,7 @@ const next = reply({
   instructions: 'Proceed.',
   next: (turn) =>
     turn.toolResults.some((r) => r.name === 'advance')
-      ? { goto: confirmNode, data: turn.toolResults[0].result as Record<string, unknown> }
+      ? { goto: confirmNode.id, data: turn.toolResults[0].result as Record<string, unknown> }
       : 'stay',
 });
 ```

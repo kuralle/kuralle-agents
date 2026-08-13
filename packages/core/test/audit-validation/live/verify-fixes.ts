@@ -48,7 +48,8 @@ async function verifyG1() {
   const collectName = collect({ id: 'get_name', schema: z.object({ name: z.string().min(2).nullable() }), required: ['name'], maxTurns: 6, instructions: () => 'Ask the customer for their full name to open the account.', onComplete: () => done });
   const done = reply({ id: 'done', instructions: 'Thank {{name}} — the account is open. One sentence.', next: () => ({ end: 'opened' }) });
   const openFlow = defineFlow({ name: 'open-account', description: 'Open an account (collects the name)', start: collectName, nodes: [collectName, done] });
-  const faqFlow = defineFlow({ name: 'hours', description: 'Answer opening-hours questions', start: reply({ id: 'h', instructions: 'Say the branch is open 9am-5pm weekdays. One sentence.', next: () => ({ end: 'answered' }) }), nodes: [reply({ id: 'h', instructions: 'Say the branch is open 9am-5pm weekdays. One sentence.', next: () => ({ end: 'answered' }) })] });
+  const hours = reply({ id: 'h', instructions: 'Say the branch is open 9am-5pm weekdays. One sentence.', next: () => ({ end: 'answered' }) });
+  const faqFlow = defineFlow({ name: 'hours', description: 'Answer opening-hours questions', start: hours, nodes: [hours] });
   const bank = defineAgent({ id: 'bank', instructions: 'You are a bank assistant. Use open-account to open accounts and hours for opening-hours questions.', model, flows: [openFlow, faqFlow], experimental: { outOfBandControl: true } });
   const obs = await runChat({ label: 'G1: digression parks + resumes', agents: [bank], defaultAgentId: 'bank', turns: ['I want to open an account.', 'Actually, what are your opening hours?', 'My name is Priya Fernando'], print: true, dumpState: true });
   // Behavioural proof: the account flow was entered, a digression happened, and the name was ultimately collected/resumed.
@@ -74,8 +75,8 @@ async function verifyG14() {
   const review: ReturnType<typeof confirmGate> = confirmGate({
     id: 'review',
     instructions: 'The caller is confirming the appointment day.',
-    onConfirm: () => done,
-    onDecline: () => collectDay,
+    onConfirm: done,
+    onDecline: { goto: 'collect_day' },
   });
   const flow = defineFlow({ name: 'book', description: 'Book an appointment (collect day, confirm)', start: collectDay, nodes: [collectDay, readback, review, done] });
   const agent = defineAgent({ id: 'clinic', instructions: 'You are a clinic booking assistant. Use the book flow to schedule appointments.', model, flows: [flow], experimental: { outOfBandControl: true } });

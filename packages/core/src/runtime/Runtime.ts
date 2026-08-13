@@ -31,6 +31,20 @@ import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 
 import type { classifyHostTarget, selectHostTarget } from './select.js';
+import type { FlowDefinition } from '../flows/definition/types.js';
+import type { FlowDefinitionsStore } from '../flows/definition/store.js';
+import {
+  FLOW_CATALOG_NOTE_TAG,
+  LiveFlowCatalog,
+  applyFlowCatalogAnnouncement,
+  findFlowByName,
+  rebaselineFlowCatalogAnnouncement,
+} from '../flows/liveFlowCatalog.js';
+import {
+  agentToolSurface,
+  loadDynamicFlowsIntoCatalog,
+  registerDynamicFlowBundle,
+} from '../flows/addDynamicFlows.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
 import { openRun, resolveRunStore, resolveTargetRunId, mintRunId, type OpenRunResult } from './openRun.js';
 
@@ -188,6 +202,11 @@ export interface HarnessConfig {
    * `sessionStore`. A shared adapter (e.g. `PostgresRunStore`) is used as-is.
    */
   runStore?: RunStore;
+  /**
+   * Default versioned store for `addDynamicFlows` / `loadDynamicFlows` when the
+   * call does not pass `store`. Live registration still works without one.
+   */
+  flowDefinitionsStore?: FlowDefinitionsStore;
 }
 
 export interface RunOptions {
@@ -262,9 +281,14 @@ export class Runtime {
   private readonly extractedValueStore: ExtractedValueStore;
   private readonly runStoreOverride?: RunStore;
   private readonly leaseHolder = randomUUID();
+  private readonly flowCatalogs = new Map<string, LiveFlowCatalog>();
+  private readonly flowCatalogMutex = new SessionMutex();
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
+    for (const agent of this.agentsById.values()) {
+      this.flowCatalogs.set(agent.id, new LiveFlowCatalog(agent.flows ?? []));
+    }
     // Defence in depth: `defineAgent` validates `memory.extract` for callers that use it, but
     // the runtime also accepts raw `AgentConfig` literals (e.g. from a deployment binder) that
     // never went through `defineAgent` — validate again here so those configs fail fast too.
@@ -490,12 +514,21 @@ export class Runtime {
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = openingSurface.globalTools;
       runCtx.agentTools = opened.agent.tools ?? {};
-      runCtx.outOfBandControl = resolveOutOfBandControl(opened.agent);
+      let activeAgent = this.liveAgent(opened.agent);
+      runCtx.outOfBandControl = resolveOutOfBandControl(activeAgent);
       runCtx.skillPrompt = openingSurface.skillPrompt;
       // Restore the live catalog from the persisted run state so a resumed or replayed run
       // keeps the skills it added, the ones it withdrew, and the snapshot of what it already
       // announced — without re-narrating a committed change or re-resolving a withdrawn skill.
       restoreLiveSkillCatalog(openingSurface.skillCatalog, freshRunState.state);
+      const openingFlowCatalog = this.flowCatalogs.get(opened.agent.id);
+      if (
+        openingFlowCatalog &&
+        applyFlowCatalogAnnouncement(openingFlowCatalog, opened.agent.id, freshRunState)
+      ) {
+        freshRunState.updatedAt = Date.now();
+        await opened.runStore.putRunState(freshRunState);
+      }
       runCtx.workingMemoryPrompt = appendGoalsPrompt(
         openingSurface.workingMemoryPrompt,
         opened.session.workingMemory,
@@ -503,7 +536,7 @@ export class Runtime {
       runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
 
       await runCtx.resumePendingInterrupt(
-        resolvePendingApprovalTool(opened.agent, runCtx.runState),
+        resolvePendingApprovalTool(activeAgent, runCtx.runState),
       );
 
       await runHookSafely('onStart', () => this.hooks?.onStart?.(runCtx));
@@ -514,7 +547,6 @@ export class Runtime {
 
       const driver = opts.driver ?? this.config.driver ?? new TextDriver();
 
-      let activeAgent = opened.agent;
       let loopResult: HostLoopResult = { kind: 'turnComplete' };
       let handoffCount = 0;
       let terminalOutcome: ConversationOutcome | undefined;
@@ -671,7 +703,15 @@ export class Runtime {
             }
 
             runCtx.runState.activeAgentId = loopResult.to;
-            activeAgent = target;
+            activeAgent = this.liveAgent(target);
+            const targetFlowCatalog = this.flowCatalogs.get(target.id);
+            if (
+              targetFlowCatalog &&
+              applyFlowCatalogAnnouncement(targetFlowCatalog, target.id, runCtx.runState)
+            ) {
+              runCtx.runState.updatedAt = Date.now();
+              await runCtx.runStore.putRunState(runCtx.runState);
+            }
             const targetSurface = await buildAgentToolSurface(target, opened.session, {
               configTools: this.config.tools,
               knowledgeProvider,
@@ -729,7 +769,7 @@ export class Runtime {
                 : target.instructions;
             runCtx.model = targetModel;
             runCtx.controlModel = target.controlModel ?? targetModel;
-            runCtx.outOfBandControl = resolveOutOfBandControl(target);
+            runCtx.outOfBandControl = resolveOutOfBandControl(activeAgent);
             runCtx.limits = targetPolicies.limits;
             runCtx.refinementPolicies = targetPolicies.refinementPolicies;
             runCtx.validationPolicies = targetPolicies.validationPolicies;
@@ -1000,6 +1040,96 @@ export class Runtime {
     return resolveRunStore(this.sessionStore, '', this.runStoreOverride);
   }
 
+  /**
+   * Atomically register a bundle of stored flow definitions on a live agent.
+   *
+   * Persistence is not transactional across rows. On failure the in-memory
+   * catalog rolls back this bundle's registrations; members that already
+   * persisted are best-effort archived so a later `loadDynamicFlows` does not
+   * resurrect them.
+   *
+   * Reusing an existing dynamic name is rejected unless `replace: true`.
+   */
+  async addDynamicFlows(
+    defs: readonly FlowDefinition[],
+    opts: { agentId: string; store?: FlowDefinitionsStore; replace?: boolean },
+  ): Promise<void> {
+    return this.withFlowCatalogLock(opts.agentId, async () => {
+      const agent = this.requireAgent(opts.agentId);
+      const tools = agentToolSurface(agent, this.config.tools);
+      await registerDynamicFlowBundle({
+        defs,
+        catalog: this.catalogFor(agent),
+        tools: tools.lookup,
+        toolIndex: tools.index,
+        store: opts.store ?? this.config.flowDefinitionsStore,
+        replace: opts.replace,
+      });
+    });
+  }
+
+  /**
+   * Drop a dynamic flow from this runtime's live catalog.
+   *
+   * The store row stays active; a later `loadDynamicFlows` (including boot)
+   * will reload it unless the caller archives the name first.
+   */
+  async removeDynamicFlow(name: string, opts: { agentId: string }): Promise<boolean> {
+    return this.withFlowCatalogLock(opts.agentId, () =>
+      this.catalogFor(this.requireAgent(opts.agentId)).remove(name),
+    );
+  }
+
+  /**
+   * Load `status: 'active'` versions onto the agent's live catalog. Per-row
+   * failures are logged and skipped so one corrupt definition cannot sink boot.
+   */
+  async loadDynamicFlows(opts: { agentId: string; store?: FlowDefinitionsStore }): Promise<void> {
+    return this.withFlowCatalogLock(opts.agentId, async () => {
+      const store = opts.store ?? this.config.flowDefinitionsStore;
+      if (!store) {
+        throw new Error('loadDynamicFlows requires a FlowDefinitionsStore');
+      }
+      const agent = this.requireAgent(opts.agentId);
+      const tools = agentToolSurface(agent, this.config.tools);
+      await loadDynamicFlowsIntoCatalog({
+        catalog: this.catalogFor(agent),
+        store,
+        tools: tools.lookup,
+        toolIndex: tools.index,
+      });
+    });
+  }
+
+  private async withFlowCatalogLock<T>(agentId: string, fn: () => T | Promise<T>): Promise<T> {
+    const release = await this.flowCatalogMutex.acquire(agentId);
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  private requireAgent(agentId: string): AgentConfig {
+    const agent = this.agentsById.get(agentId);
+    if (!agent) {
+      throw new Error(`Unknown agent "${agentId}"`);
+    }
+    return agent;
+  }
+
+  private catalogFor(agent: AgentConfig): LiveFlowCatalog {
+    const existing = this.flowCatalogs.get(agent.id);
+    if (existing) return existing;
+    const created = new LiveFlowCatalog(agent.flows ?? []);
+    this.flowCatalogs.set(agent.id, created);
+    return created;
+  }
+
+  private liveAgent(agent: AgentConfig): AgentConfig {
+    return this.catalogFor(agent).overlay(agent);
+  }
+
   /** Resolves once every in-flight background extraction has settled. */
   async settled(): Promise<void> {
     await Promise.allSettled([...this.pendingExtractions]);
@@ -1183,6 +1313,12 @@ export class Runtime {
         internal.skillCatalog = catalog.serialize();
       });
       removeSystemNote(runCtx.runState, SKILL_CATALOG_NOTE_TAG);
+    }
+
+    const flowCatalog = this.flowCatalogs.get(agent.id);
+    if (flowCatalog) {
+      rebaselineFlowCatalogAnnouncement(flowCatalog, agent.id, runCtx.runState);
+      removeSystemNote(runCtx.runState, FLOW_CATALOG_NOTE_TAG);
     }
 
     runCtx.runState.updatedAt = Date.now();
@@ -1419,7 +1555,7 @@ function resolvePendingApprovalTool(
 ): AnyTool | undefined {
   const operation = runState.waitingFor?.operation;
   if (!operation || !runState.activeFlow || !runState.activeNode) return undefined;
-  const flow = agent.flows?.find((candidate) => candidate.name === runState.activeFlow);
+  const flow = findFlowByName(agent, runState.activeFlow);
   const node = flow?.nodes.find((candidate) => candidate.id === runState.activeNode);
   if (node?.kind !== 'reply') return undefined;
   return resolveReplyNode(node, currentFlowState(runState)).localTools?.[operation.toolName];

@@ -40,6 +40,7 @@ export { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
 export { SqlExtractedValueStore } from './SqlExtractedValueStore.js';
 export { SqlTraceStore } from './SqlTraceStore.js';
 export { SqlRunStore } from './SqlRunStore.js';
+export { SqlFlowDefinitionsStore } from './SqlFlowDefinitionsStore.js';
 export { createSqlExecutor } from './sqlExecutor.js';
 export { lastUserInputFromMessages } from './cfMessageInput.js';
 export {

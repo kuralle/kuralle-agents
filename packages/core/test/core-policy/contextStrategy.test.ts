@@ -28,14 +28,15 @@ describe('context strategy', () => {
       { role: 'user', content: 'second question' },
     ] satisfies ModelMessage[];
 
+    const start = reply({ id: 'a', instructions: 'x' });
     await applyContextStrategy({
       strategy: 'reset',
       run: runState,
       flow: defineFlow({
         name: 'f',
         description: 'd',
-        start: reply({ id: 'a', instructions: 'x' }),
-        nodes: [],
+        start,
+        nodes: [start],
       }),
       model: {} as import('ai').LanguageModel,
     });
@@ -53,11 +54,12 @@ describe('context strategy', () => {
       { role: 'assistant', content: 'Understood.' },
     ] satisfies ModelMessage[];
 
+    const start = reply({ id: 'a', instructions: 'x' });
     const flow = defineFlow({
       name: 'billing',
       description: 'Billing flow',
-      start: reply({ id: 'a', instructions: 'x' }),
-      nodes: [],
+      start,
+      nodes: [start],
       context: 'reset_with_summary',
     });
 

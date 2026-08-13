@@ -122,12 +122,12 @@ describe('runSilentExtraction early break', () => {
       };
     });
 
+    const confirm = reply({ id: 'confirm', instructions: 'Confirm', next: () => ({ end: 'done' }) });
     const collectNode = collect({
       id: 'name',
       schema: z.object({ first: z.string(), last: z.string() }),
       required: ['first', 'last'],
-      onComplete: () =>
-        reply({ id: 'confirm', instructions: 'Confirm', next: () => ({ end: 'done' }) }),
+      onComplete: () => confirm,
     });
     const submit = createExtractionSubmitTool(collectNode, ['first', 'last']);
     const { session, runStore, runState } = await setupDurableHarness(
@@ -186,11 +186,12 @@ describe('runSilentExtraction early break', () => {
       };
     });
 
+    const done = reply({ id: 'done', instructions: 'Done', next: () => ({ end: 'done' }) });
     const collectNode = collect({
       id: 'name',
       schema: z.object({ first: z.string(), last: z.string() }),
       required: ['first', 'last'],
-      onComplete: () => reply({ id: 'done', instructions: 'Done', next: () => ({ end: 'done' }) }),
+      onComplete: () => done,
     });
     const submit = createExtractionSubmitTool(collectNode, ['first', 'last']);
     const resolved = resolveCollectExtractionNode(collectNode, ['first', 'last'], {}, submit);
@@ -259,11 +260,12 @@ describe('runSilentExtraction early break', () => {
       };
     });
 
+    const done = reply({ id: 'done', instructions: 'Done', next: () => ({ end: 'done' }) });
     const collectNode = collect({
       id: 'intake',
       schema: z.object({ unitId: z.string().min(1) }),
       required: ['unitId'],
-      onComplete: () => reply({ id: 'done', instructions: 'Done', next: () => ({ end: 'done' }) }),
+      onComplete: () => done,
     });
     const { session, runStore, runState } = await setupDurableHarness(
       'extract-submit-error',

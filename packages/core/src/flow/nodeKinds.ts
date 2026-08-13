@@ -6,6 +6,16 @@ import type {
   ReplyNode,
 } from '../types/flow.js';
 
+const NODE_KINDS = new Set(['reply', 'collect', 'action', 'decide']);
+
+export function isFlowNode(value: unknown): value is FlowNode {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const kind = (value as FlowNode).kind;
+  return typeof kind === 'string' && NODE_KINDS.has(kind) && typeof (value as FlowNode).id === 'string';
+}
+
 export function isReplyNode(node: FlowNode): node is ReplyNode {
   return node.kind === 'reply';
 }

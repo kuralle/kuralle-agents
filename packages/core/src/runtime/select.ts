@@ -5,6 +5,7 @@ import type { Flow } from '../types/flow.js';
 import type { Route } from '../types/route.js';
 import type { RunState } from './durable/types.js';
 import { availableHostFlows, collectTransferTargets } from './hostControlTools.js';
+import { findFlowByName } from '../flows/liveFlowCatalog.js';
 import { instrumentedGenerateObject } from './channels/instrumentModelCall.js';
 import type { StreamPart } from '../types/stream.js';
 import type { RunStore } from './durable/RunStore.js';
@@ -194,7 +195,7 @@ export async function selectHostTarget(
 ): Promise<HostSelection> {
   const verdict = await classifyHostTarget({ ...options, allowKeep: true });
   if (verdict.action === 'enterFlow' && verdict.flowName) {
-    const flow = (options.agent.flows ?? []).find((f) => f.name === verdict.flowName);
+    const flow = findFlowByName(options.agent, verdict.flowName);
     if (flow) {
       return { kind: 'enterFlow', flow };
     }
@@ -213,7 +214,7 @@ export function verdictToSelection(
     return { kind: 'keep' };
   }
   if (verdict.action === 'enterFlow' && verdict.flowName) {
-    const flow = (agent.flows ?? []).find((f) => f.name === verdict.flowName);
+    const flow = findFlowByName(agent, verdict.flowName);
     if (flow) {
       return { kind: 'enterFlow', flow };
     }

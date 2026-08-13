@@ -18,6 +18,12 @@ const flowSource = (name: string): string =>
 
 export const CORE_FLOW_SCENARIOS: StressScenario[] = [
   {
+    id: 'dynamic-registration',
+    source: flowSource('dynamic-registration'),
+    prompts: ['Please start a refund'],
+    expectation: { flows: ['refund'], tools: ['enter_flow'] },
+  },
+  {
     id: 'extraction-node-demo',
     source: flowSource('extraction-node-demo'),
     prompts: [
