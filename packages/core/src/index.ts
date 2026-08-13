@@ -507,11 +507,21 @@ export {
   FlowCycleError,
   findFlowByName,
   FLOW_CATALOG_NOTE_TAG,
+  FLOW_BUILDER_AUTHORING_PLAYBOOK,
+  FLOW_BUILDER_TOOL_NAMES,
+  createFlowBuilderAgent,
+  composeFlowBuilderInstructions,
+  createFlowBuilderTools,
 } from './flows/index.js';
 export type {
   FlowCatalogEntry,
   FlowCatalogDelta,
   PersistedLiveFlowCatalog,
+  CreateFlowBuilderAgentOptions,
+  SaveFlowResult,
+  FlowBuilderCatalogEntry,
+  FlowBuilderHost,
+  FlowBuilderRuntime,
 } from './flows/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
