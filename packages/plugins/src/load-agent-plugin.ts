@@ -9,7 +9,13 @@ import {
   MCP_CONFIG_FILE,
 } from './mcp.js';
 import { rejection } from './diagnostics.js';
-import type { Diagnostic, LoadPluginResult, McpServerConfig } from './types.js';
+import { loadFlowsComponent, pluginFlowRegistryIndex } from './flows.js';
+import type {
+  Diagnostic,
+  LoadAgentPluginOptions,
+  LoadPluginResult,
+  McpServerConfig,
+} from './types.js';
 
 const MANIFEST_FILE = 'plugin.json';
 const SKILLS_DIR = 'skills';
@@ -94,6 +100,7 @@ async function loadSkillsComponent(
 export async function loadAgentPlugin(
   fs: FileSystem,
   root: string,
+  options?: LoadAgentPluginOptions,
 ): Promise<LoadPluginResult> {
   const normalizedRoot = normalizePath(root);
   const manifestPath = resolvePath(normalizedRoot, MANIFEST_FILE);
@@ -179,12 +186,23 @@ export async function loadAgentPlugin(
     }
   }
 
+  const { flows, diagnostics: flowDiagnostics } = await loadFlowsComponent(
+    fs,
+    normalizedRoot,
+    pluginFlowRegistryIndex(
+      options?.hostTools,
+      mcpServers.map((server) => server.name),
+    ),
+  );
+  componentDiagnostics.push(...flowDiagnostics);
+
   return {
     ok: true,
     plugin: {
       manifest: validation.manifest,
       skills,
       mcpServers,
+      flows,
       diagnostics: [...validation.diagnostics, ...componentDiagnostics],
     },
   };

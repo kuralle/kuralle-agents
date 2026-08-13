@@ -1,14 +1,15 @@
 ---
 title: Agent Plugins
-description: Load third-party Agent Plugins — plugin.json, skills/, and optional mcp.json — with partial failure isolation.
+description: Load third-party Agent Plugins — plugin.json, skills/, optional mcp.json, and optional flows/ — with partial failure isolation.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 An **Agent Plugin** is a directory with a fixed layout: a `plugin.json` manifest at the root, a
-`skills/` tree of [agentskills.io](https://agentskills.io) folders, and an optional `mcp.json` that
-declares MCP servers to connect. Kuralle loads the bundle with `loadAgentPlugin(fs, root)` and returns
-a **discriminated result** — never throws — so callers can wire skills and MCP independently of
+`skills/` tree of [agentskills.io](https://agentskills.io) folders, an optional `mcp.json` that
+declares MCP servers to connect, and — as a Kuralle host extension — an optional `flows/` directory of
+declarative flow graphs. Kuralle loads the bundle with `loadAgentPlugin(fs, root)` and returns
+a **discriminated result** — never throws — so callers can wire skills, MCP, and flows independently of
 whatever failed inside the bundle.
 
 ```bash
@@ -23,6 +24,8 @@ my-plugin/
 ├── skills/              # optional — SKILL.md folders
 │   └── returns-policy/
 │       └── SKILL.md
+├── flows/               # optional — Kuralle host extension
+│   └── returns.flow.json
 └── mcp.json             # optional — MCP server declarations
 ```
 
@@ -30,7 +33,21 @@ my-plugin/
 |------|------|
 | `plugin.json` | Identity and metadata (`name`, `$schema`, optional `version`, `license`, …). Validated against the [Agent Plugins schema](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json). |
 | `skills/` | Top-level skill directories only — nested `SKILL.md` files inside a skill folder are bundled resources, not separate skills. Wired into `AgentConfig.skills` via the returned `SkillStoreLike`. |
+| `flows/` | Optional Kuralle host extension. Top-level `*.flow.json` files are validated as `FlowDefinition` graphs and returned on `plugin.flows` — the host registers them with `runtime.addDynamicFlows`. A missing directory is **not** an error. |
 | `mcp.json` | Declares `mcpServers` (stdio, `streamable-http`, or `sse`). Parsed only when the file exists; a missing file is **not** an error. See the [MCP guide](/guides/mcp/). |
+
+## Flows are a host extension
+
+[Agent Plugins 1.0.0](https://agent-plugins.org) does not define `flows/`. Other hosts ignore unknown
+directories, so a plugin that ships `flows/*.flow.json` stays portable. Kuralle reads those files as
+declarative `FlowDefinition` graphs.
+
+`loadAgentPlugin` **validates** them and returns them on `plugin.flows`. It does not register them —
+the host decides that with `runtime.addDynamicFlows`. Pass `hostTools` when loading so an action node
+cannot name a tool the host did not register; the plugin's own `mcp.json` server names are also
+prospective tools. Omit `hostTools` and the validator skips tool-reference checks (the registry index
+is gated: an absent kind is not a failure) rather than rejecting every action node. [`Policy`](/guides/policy/)
+still gates execution.
 
 ## Not the same as a file-authored agent
 
@@ -51,7 +68,7 @@ Both are a folder with a `skills/` directory, so they look alike. They solve opp
 The difference in the last two rows follows from the first. You wrote a file-authored agent, so a
 mistake in it is a bug to fix before shipping and the compiler should stop you. You did **not** write
 the plugin, so a mistake in it must not take down an agent that merely loads it — hence
-[four failure widths](#four-failure-widths) instead of a thrown error.
+[five failure widths](#five-failure-widths) instead of a thrown error.
 
 They compose: a file-authored agent can load plugins at runtime, and both feed
 [`AgentConfig.skills`](/guides/skills/) through the same `SkillStoreLike`.
@@ -81,7 +98,7 @@ if (!result.ok) {
   return;
 }
 
-const { manifest, skills, mcpServers, diagnostics } = result.plugin;
+const { manifest, skills, mcpServers, flows, diagnostics } = result.plugin;
 
 const agent = defineAgent({
   id: 'support',
@@ -89,34 +106,37 @@ const agent = defineAgent({
   workspace: fs,
   skills, // SkillStoreLike — progressive disclosure handled by the runtime
   // mcpServers → pass to mcpTools() — see /guides/mcp
+  // flows → runtime.addDynamicFlows(flows) — host registration, not the loader
 });
 ```
 
-`loadAgentPlugin` always resolves paths under `root`. Manifest or MCP paths that escape the plugin
+`loadAgentPlugin` always resolves paths under `root`. Manifest, MCP, or flow paths that escape the plugin
 root are rejected — see [Containment](#containment-is-checked-twice) for what "escape" means once
 symlinks are involved.
 
-## Four failure widths
+## Five failure widths
 
 The loader applies **different blast radii** depending on what broke. That is why loading returns
 `{ ok: true, plugin } | { ok: false, rejection, diagnostics }` instead of throwing.
 
-| What failed | Outcome | Skills | MCP servers |
-|-------------|---------|--------|-------------|
-| Bad **`plugin.json`** (missing, unreadable, schema violation) | **Reject the whole plugin** (`ok: false`) | not loaded | not loaded |
-| Bad **`mcp.json`** (malformed, schema violation, unsafe config) | **Disable MCP for this plugin** — skills still load | loaded | `[]` + diagnostics |
-| Bad **skill folder** (invalid frontmatter, name mismatch) | **Skip that skill** — rest of `skills/` still loads | partial | unchanged |
-| Bad **server entry** in `mcp.json` (unknown transport, SSRF, secret in env) | **Skip that server** — siblings still load | unchanged | partial + diagnostics |
+| What failed | Outcome | Skills | MCP servers | Flows |
+|-------------|---------|--------|-------------|-------|
+| Bad **`plugin.json`** (missing, unreadable, schema violation) | **Reject the whole plugin** (`ok: false`) | not loaded | not loaded | not loaded |
+| Bad **`mcp.json`** (malformed, schema violation, unsafe config) | **Disable MCP for this plugin** — skills and flows still load | loaded | `[]` + diagnostics | unchanged |
+| Bad **skill folder** (invalid frontmatter, name mismatch) | **Skip that skill** — rest of `skills/` still loads | partial | unchanged | unchanged |
+| Bad **server entry** in `mcp.json` (unknown transport, SSRF, secret in env) | **Skip that server** — siblings still load | unchanged | partial + diagnostics | unchanged |
+| Bad **flow file** (unreadable, bad JSON, envelope-schema violation, validation issues) | **Skip that flow** — siblings, skills, and MCP still load | unchanged | unchanged | partial + diagnostics |
 
 Diagnostics carry `{ section, rule, origin, message }` so you can log or surface them without
-guessing which layer failed. A missing `mcp.json` or `skills/` directory produces **no**
-diagnostics — those components are optional by spec (§6.2).
+guessing which layer failed. A missing `mcp.json`, `skills/`, or `flows/` directory produces **no**
+diagnostics — those components are optional (`skills/` and `mcp.json` by spec §6.2; `flows/` as a
+host extension).
 
 <Aside type="note" title="Missing components are not errors">
 A plugin that ships skills but no `mcp.json` — like the vendored
 [`remotion-dev/codex-plugin`](https://github.com/remotion-dev/codex-plugin) fixture in this repo —
-loads with `mcpServers: []` and `diagnostics: []`. Warning about a missing MCP file would be
-non-conformant.
+loads with `mcpServers: []`, `flows: []`, and `diagnostics: []`. Warning about a missing MCP file or
+`flows/` directory would be non-conformant.
 </Aside>
 
 ## Worked example — partial skill failure
@@ -138,6 +158,10 @@ good skill; the bad folder is skipped.
 Given a malformed `mcp.json` instead, skills still load, `mcpServers` is `[]`, and a diagnostic
 marks `mcp.json` invalid — MCP is disabled for that plugin, not the whole bundle.
 
+Given one valid `flows/*.flow.json` and one malformed sibling, the valid flow is returned on
+`plugin.flows` and a diagnostic with `section: "flows"` names the broken file. Skills and MCP are
+untouched.
+
 ## `LoadPluginResult`
 
 ```typescript
@@ -149,6 +173,7 @@ interface LoadedPlugin {
   manifest: PluginManifest;
   skills: SkillStoreLike;
   mcpServers: readonly McpServerConfig[];
+  flows: readonly FlowDefinition[]; // validated, not registered
   diagnostics: readonly Diagnostic[];
 }
 ```
@@ -240,7 +265,9 @@ Two checks run, at different moments, because one moment cannot serve both rules
 
 A failure at either point invalidates that **one server entry** under §7.2.2 — `section: "4.1"`,
 `rule: "path-escapes-plugin-root"` — and the two are deliberately indistinguishable to a consumer.
-The plugin's skills and its other servers still load (§11.3).
+The plugin's skills and its other servers still load (§11.3). A `flows/*.flow.json` symlink that
+resolves outside the plugin root is skipped the same way (`section: "flows"`, same rule) — that one
+flow is dropped; siblings, skills, and MCP still load.
 
 A symlink that stays **inside** the plugin root is permitted, explicitly. This is a containment
 check, not a ban on symlinks.
@@ -268,6 +295,8 @@ a skills-only published plugin.
 
 - [Skills](/guides/skills/) — progressive disclosure for the `skills/` component
 - [MCP](/guides/mcp/) — connecting and governing plugin-declared MCP servers
+- [Flows](/guides/flows/) — the `FlowDefinition` graphs `flows/*.flow.json` carry
+- [Dynamic Flows](/guides/dynamic-flows/) — `runtime.addDynamicFlows` for host registration
 - [File-authored Agents](/guides/file-authored-agents/) — the folder format for *your own* agent, not a third-party bundle
 - [Workspace](/guides/workspace/) — mount plugins on a workspace filesystem
 - [Tool Policy](/guides/policy/) — approval gate for MCP tool calls (not plugin loading)

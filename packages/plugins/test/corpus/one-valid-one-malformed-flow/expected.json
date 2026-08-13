@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "flows": ["greet"],
+  "diagnostics": [
+    {
+      "section": "flows",
+      "rule": "flow-invalid-json",
+      "origin": "flows/broken.flow.json"
+    }
+  ]
+}
