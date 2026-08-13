@@ -69,6 +69,8 @@ function repairFor(
       case 'predicate-too-deep':
       case 'nl-predicate-compile-failed':
         return 'set-predicate';
+      case 'invalid-gate':
+        return 'update-node';
       case 'invalid-template':
         return 'set-template';
       case 'missing-reference':

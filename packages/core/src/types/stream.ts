@@ -1,4 +1,5 @@
 import type { ConversationOutcome } from '../outcomes/types.js';
+import type { FlowGateVerdict } from '../flows/definition/types.js';
 import type { ChoiceOption } from './selection.js';
 import type { EscalationReason } from '../escalation/types.js';
 
@@ -75,6 +76,8 @@ export interface FlowEnterPayload {
 export interface FlowEndPayload {
   flow: string;
   reason: string;
+  gates?: FlowGateVerdict[];
+  outcome?: 'failed-verification';
 }
 
 export interface NodeEnterPayload {

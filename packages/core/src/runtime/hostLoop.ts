@@ -173,6 +173,10 @@ async function runActiveFlow(
   clearActiveFlow(run);
   await ctx.runStore.putRunState(run);
 
+  if (run.verification?.outcome === 'failed-verification') {
+    return { kind: 'ended', reason: 'failed-verification' };
+  }
+
   return { kind: 'turnComplete' };
 }
 

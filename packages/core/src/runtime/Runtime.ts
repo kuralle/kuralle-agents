@@ -18,6 +18,7 @@ import type { DeploymentTraceContext } from '../types/trace.js';
 import { MemoryStore } from '../session/stores/MemoryStore.js';
 import { TextDriver } from './channels/TextDriver.js';
 import { createRunContext } from './ctx.js';
+import type { FlowGateJudgeProvider } from '../flow/evaluateGates.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
@@ -197,6 +198,11 @@ export interface HarnessConfig {
    * Omitted, tools honour `needsApproval` exactly as before.
    */
   policy?: Policy;
+  /**
+   * Structured judge for flow `gates` of kind `judge`. Absent provider is an
+   * execution error (always blocking, even when the gate is declared advisory).
+   */
+  flowGateJudge?: FlowGateJudgeProvider | LanguageModel;
   /** Read-only observability, configured independently from durable session state. */
   tracing?: TracingConfig;
   /**
@@ -505,6 +511,7 @@ export class Runtime {
         fs: openingSurface.resolvedWorkspace?.fs,
         getSkill: openingSurface.getSkill,
         signalDelivery: opts.signalDelivery,
+        flowGateJudge: this.config.flowGateJudge,
       });
 
       // Session retrieval cache (G6): created once per run, persists across
@@ -823,7 +830,8 @@ export class Runtime {
           }
 
           if (loopResult.kind === 'ended') {
-            terminalOutcome = 'resolved';
+            terminalOutcome =
+              loopResult.reason === 'failed-verification' ? 'failed-verification' : 'resolved';
             break;
           }
 
@@ -893,6 +901,7 @@ export class Runtime {
           ctx: runCtx,
           terminalOutcome,
           outcomeReason: loopResult.kind === 'ended' ? loopResult.reason : undefined,
+          outcomeGates: runCtx.runState.verification?.verdicts,
           extraction:
             extractionConfig && extractors?.length && extractionModel
               ? {

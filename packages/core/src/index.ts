@@ -462,6 +462,9 @@ export type {
   JsonSchema,
   FlowDefinition,
   FlowNodeDefinition,
+  FlowGateSpec,
+  FlowGateVerdict,
+  FlowVerificationRecord,
   TransitionRef,
   Predicate,
   PathOrLiteral,
@@ -487,6 +490,7 @@ export {
   evaluatePredicate,
   derivePredicateLabel,
   flowDefinitionSchema,
+  flowGateSpecSchema,
   predicateSchema,
   validateFlowDefinition,
   assertValidFlowDefinition,
@@ -537,6 +541,15 @@ export type {
 } from './flows/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
+export {
+  evaluateFlowGates,
+  gateFailureIsBlocking,
+  isFlowGateJudgeProvider,
+  asFlowGateJudgeProvider,
+  FLOW_GATE_JUDGE_SYSTEM,
+  flowGateJudgeResultSchema,
+} from './flow/evaluateGates.js';
+export type { FlowGateJudgeProvider } from './flow/evaluateGates.js';
 /** Read the state of the flow a run is currently in. Flow state lives in an isolated
  *  frame, so `runState.state` no longer holds it — this is how a caller inspects an
  *  in-flight flow. Values only reach the root state when the flow declares

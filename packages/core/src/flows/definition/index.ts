@@ -14,17 +14,24 @@ export type {
   ActionNodeDefinition,
   DecideNodeDefinition,
   FlowNodeDefinition,
+  FlowGateKind,
+  FlowGateSeverity,
+  PredicateFlowGateSpec,
+  JudgeFlowGateSpec,
+  FlowGateSpec,
+  FlowGateVerdict,
+  FlowVerificationRecord,
   FlowDefinition,
 } from './types.js';
 export { FLOW_DEFINITION_NODE_KINDS, PREDICATE_PATH_ROOTS } from './types.js';
 
 export type { PathOrLiteral, Predicate, PredicateContext } from './predicate.js';
-export { predicateSchema, evaluatePredicate, derivePredicateLabel } from './predicate.js';
+export { predicateSchema, evaluatePredicate, derivePredicateLabel, readPredicatePath, pickAllowListedPaths } from './predicate.js';
 
 export type { MappingSource, MappingConfig, TemplateSyntaxIssue } from './mapping.js';
 export { mappingSourceSchema, mappingConfigSchema, validateTemplateSyntax, resolveMapping, TEMPLATE_PATH_ROOTS } from './mapping.js';
 
-export { flowNodeDefinitionSchema, flowDefinitionSchema, choiceOptionSchema } from './schema.js';
+export { flowNodeDefinitionSchema, flowDefinitionSchema, flowGateSpecSchema, choiceOptionSchema } from './schema.js';
 export type { ValidatableFlowNodeDefinition, ValidatableFlowDefinition } from './schema.js';
 
 export type { FlowRehydrationDeps } from './rehydrate.js';

@@ -1,4 +1,5 @@
 import type { ModelMessage, UserContent } from 'ai';
+import type { FlowVerificationRecord } from '../../flows/definition/types.js';
 
 export type StepKind = 'tool' | 'approval' | 'signal' | 'now' | 'uuid';
 
@@ -135,6 +136,11 @@ export interface RunState {
   pendingInput?: UserContent[];
   /** Message count at the last completed extraction; drives the token trigger. */
   lastExtractedMessageCount?: number;
+  /**
+   * Post-run verification of this flow, recorded when the flow reached a terminal
+   * transition that declared `gates`. Absent when the flow has no gates.
+   */
+  verification?: FlowVerificationRecord;
   /**
    * Holder of the execution lease. Taken at run open, renewed on persist
    * points during the turn, cleared at close. Absent means no live executor

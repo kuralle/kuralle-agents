@@ -17,6 +17,7 @@ import type { SkillHandle } from '../skills/skillHandle.js';
 import type { SkillActivation } from '../skills/skillActivation.js';
 import type { LiveSkillCatalog } from '../skills/liveSkillCatalog.js';
 import type { SkillLike } from './skills.js';
+import type { FlowGateJudgeProvider } from '../flow/evaluateGates.js';
 
 export interface ResumedToolOutcome {
   requestId: string;
@@ -173,6 +174,11 @@ export interface RunContext {
   resumePendingInterrupt(def?: AnyTool): Promise<ResumedToolOutcome | undefined>;
   /** @internal Consume a directly resumed model-tool outcome at its source flow node. */
   takeResumedToolOutcome(nodeId: string): ResumedToolOutcome | undefined;
+  /**
+   * Structured judge for flow `gates` of kind `judge`. Absent at evaluation
+   * time is an execution error (always blocking).
+   */
+  flowGateJudge?: FlowGateJudgeProvider | LanguageModel;
 }
 
 export type ActionContext = Pick<

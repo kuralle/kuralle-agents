@@ -34,6 +34,8 @@ import { reduceTransition } from './reduceTransition.js';
 import { resolveReplyNode, buildNodePrompt } from './nodeBuilders.js';
 import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
+import { evaluateFlowGates } from './evaluateGates.js';
+import type { FlowEndPayload } from '../types/stream.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
 import { isApprovalDenial, isControlFlowSignal, isRecoverableToolError } from '../runtime/controlFlowSignal.js';
@@ -415,6 +417,29 @@ function transitionTargetId(transition: NormalizedTransition): string | undefine
   return typeof transition.to === 'string' ? transition.to : transition.to.id;
 }
 
+async function applyTerminalGates(
+  flow: Flow,
+  run: RunState,
+  ctx: RunContext,
+  reason: string,
+): Promise<{ payload: FlowEndPayload; blocked: boolean }> {
+  const verification = await evaluateFlowGates({
+    gates: flow.gates,
+    state: currentFlowState(run),
+    judge: ctx.flowGateJudge,
+  });
+  if (verification) {
+    run.verification = verification;
+  }
+  const payload: FlowEndPayload = {
+    flow: flow.name,
+    reason,
+    ...(verification ? { gates: verification.verdicts } : {}),
+    ...(verification?.outcome === 'failed-verification' ? { outcome: 'failed-verification' } : {}),
+  };
+  return { payload, blocked: verification?.outcome === 'failed-verification' };
+}
+
 function canBatchGenerateReplySegment(
   segment: FlowSegment,
   ctx: RunContext,
@@ -710,7 +735,18 @@ export async function runFlow(
 
     if (transition.kind === 'end') {
       const finishedState = currentFlowState(run);
+      const { payload, blocked } = await applyTerminalGates(flow, run, ctx, transition.reason);
       const output = exportFlowState(flow, finishedState);
+      if (blocked) {
+        // No automatic repair: a blocking gate failure records verdicts and stops.
+        // Re-entry after failed-verification is a product decision; the journal
+        // makes a future repair safe, but this path does not re-enter.
+        Object.assign(run.state, output);
+        run.flowFrame = undefined;
+        await ctx.runStore.putRunState(run);
+        ctx.emit({ channel: 'internal', type: 'flow-end', payload });
+        return { kind: 'ended', reason: transition.reason };
+      }
       const park = popFlowPark(run);
       if (park && agent) {
         const parkedFlow = agent.flows?.find((candidate) => candidate.name === park.flow);
@@ -724,17 +760,18 @@ export async function runFlow(
           ctx.emit({
             channel: 'internal',
             type: 'flow-end',
-            payload: { flow: flow.name, reason: transition.reason },
+            payload,
           });
           return runFlow(parkedFlow, run, driver, ctx, agent);
         }
       }
       Object.assign(run.state, output);
       run.flowFrame = undefined;
+      await ctx.runStore.putRunState(run);
       ctx.emit({
         channel: 'internal',
         type: 'flow-end',
-        payload: { flow: flow.name, reason: transition.reason },
+        payload,
       });
       return { kind: 'ended', reason: transition.reason };
     }

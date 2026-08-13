@@ -1,4 +1,11 @@
-export type ConversationOutcome = 'resolved' | 'unresolved' | 'escalated' | 'abandoned';
+import type { FlowGateVerdict } from '../flows/definition/types.js';
+
+export type ConversationOutcome =
+  | 'resolved'
+  | 'unresolved'
+  | 'escalated'
+  | 'abandoned'
+  | 'failed-verification';
 
 export type ConversationOutcomeMarkedBy = 'tool' | 'hook' | 'http' | 'auto';
 
@@ -7,6 +14,7 @@ export interface ConversationOutcomeRecord {
   reason?: string;
   markedAt: string;
   markedBy: ConversationOutcomeMarkedBy;
+  gates?: FlowGateVerdict[];
 }
 
 export interface CsatRecord {
@@ -14,4 +22,3 @@ export interface CsatRecord {
   comment?: string;
   collectedAt: string;
 }
-

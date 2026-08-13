@@ -341,6 +341,7 @@ export function rehydrateFlow(def: FlowDefinition, deps: FlowRehydrationDeps): F
     start,
     nodes,
     origin: 'definition',
+    ...(def.gates ? { gates: def.gates } : {}),
     state: {
       input: (source) => ({
         ...source,

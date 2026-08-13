@@ -35,7 +35,8 @@ Never stream a setter loop. Never save a partial graph. Never invent a tool, age
   "start": string,             // id of a node in nodes[]
   "nodes": FlowNodeDefinition[],
   "inputSchema": JsonSchema?,  // optional; paths under input.*
-  "outputSchema": JsonSchema?  // optional; checked against state at terminal transitions
+  "outputSchema": JsonSchema?, // optional; checked against state at terminal transitions
+  "gates": FlowGateSpec[]?     // optional; post-run checks over the run record
 }
 \`\`\`
 
@@ -206,6 +207,21 @@ The predicate tree exceeds depth 32 or 256 nodes. Repair: \`set-predicate\` — 
 ### nl-predicate-compile-failed
 
 A \`when: { nl: "..." }\` condition could not be compiled into a predicate at save time, or the compiled predicate referenced a variable outside the known scope. Nothing was stored. Repair: restate the condition against fields that exist (the catalogs name them), or supply the predicate JSON directly.
+
+### invalid-gate
+
+A flow-level \`gates\` entry is malformed: duplicate \`id\`, or a judge/predicate field that does not belong on that \`kind\`. Repair: \`update-node\` — give each gate a unique \`id\`; predicate gates need \`when\`; judge gates need \`inputs\` (allow-listed run-record paths).
+
+Bad: two gates with \`"id": "ok"\`. Good: \`"status-ok"\` then \`"amount-ok"\`.
+
+## Gates (post-run)
+
+Optional \`gates?: FlowGateSpec[]\` on the FlowDefinition. Evaluated in order when the flow reaches a terminal transition. Scope is the run record: \`input\`, \`state\`, \`results.<nodeId>\`.
+
+- \`{ "id", "kind": "predicate", "severity": "blocking"|"advisory", "when": Predicate }\`
+- \`{ "id", "kind": "judge", "severity": "blocking"|"advisory", "inputs": ["state.x", "results.lookup.status"], "rubric?": string }\`
+
+A check that fails to **execute** is always blocking, even if declared \`advisory\`. Advisory failures record a verdict and do not change the run outcome. Blocking failure records \`failed-verification\` with every gate's verdict. There is no automatic repair loop.
 
 ## Worked example (valid)
 

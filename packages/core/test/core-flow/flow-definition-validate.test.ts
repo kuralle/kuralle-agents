@@ -491,3 +491,50 @@ describe('assertValidFlowDefinition', () => {
     );
   });
 });
+
+describe('validateFlowDefinition gates', () => {
+  it('flags duplicate gate ids as invalid-gate', () => {
+    const issues = validateFlowDefinition(
+      flow({
+        start: 'a',
+        nodes: [{ kind: 'reply', id: 'a', generate: true, next: { end: 'done' } }],
+        gates: [
+          {
+            id: 'ok',
+            kind: 'predicate',
+            severity: 'blocking',
+            when: { op: 'eq', left: { path: 'state.status' }, right: { literal: 'ok' } },
+          },
+          {
+            id: 'ok',
+            kind: 'predicate',
+            severity: 'advisory',
+            when: { op: 'eq', left: { path: 'state.status' }, right: { literal: 'ok' } },
+          },
+        ],
+      }),
+    );
+    const issue = issueAt(issues, 'invalid-gate', 'gates.1.id');
+    expect(issue.message).toContain('ok');
+  });
+
+  it('flags a judge input that names an unknown results node', () => {
+    const issues = validateFlowDefinition(
+      flow({
+        start: 'a',
+        nodes: [{ kind: 'reply', id: 'a', generate: true, next: { end: 'done' } }],
+        gates: [
+          {
+            id: 'j',
+            kind: 'judge',
+            severity: 'blocking',
+            inputs: ['results.missing.status'],
+          },
+        ],
+      }),
+    );
+    expect(issues.some((issue) => issue.code === 'invalid-predicate-reference' && issue.path === 'gates.0.inputs.0')).toBe(
+      true,
+    );
+  });
+});

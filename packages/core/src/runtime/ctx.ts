@@ -49,6 +49,7 @@ import {
   type SkillActivation,
 } from '../skills/skillActivation.js';
 import type { LiveSkillCatalog } from '../skills/liveSkillCatalog.js';
+import type { FlowGateJudgeProvider } from '../flow/evaluateGates.js';
 import {
   diffSkillCatalog,
   renderSkillCatalogDelta,
@@ -104,6 +105,7 @@ export interface CtxDeps {
   skillMetaByName?: ReadonlyMap<string, SkillMeta>;
   skillActivations?: SkillActivation[];
   skillCatalog?: LiveSkillCatalog;
+  flowGateJudge?: FlowGateJudgeProvider | LanguageModel;
 }
 
 function publicInterrupt(request: InterruptRequest): HitlInterrupt {
@@ -592,6 +594,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
     turnInputConsumed: false,
+    flowGateJudge: deps.flowGateJudge,
     // Rebase durable effect callsites to 0. Called at flow entry so a flow's
     // effects (and any suspend/resume callsite) are anchored to the flow itself —
     // identical whether the flow was entered fresh after an answering turn (which

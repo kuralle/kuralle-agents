@@ -7,11 +7,11 @@ import type { TurnResult } from './channel.js';
 import type { ActionContext } from './run-context.js';
 import type { NodeVerify } from '../flow/verify.js';
 import type { ChoiceOption } from './selection.js';
-import type { CollectResolverSpec } from '../flows/definition/types.js';
+import type { CollectResolverSpec, FlowGateSpec } from '../flows/definition/types.js';
 import { assertValidCodeFlow } from '../flows/definition/validate/code-flow.js';
 
 export type { CollectResolverSpec };
-export type { SlotSource } from '../flows/definition/types.js';
+export type { SlotSource, FlowGateSpec } from '../flows/definition/types.js';
 
 export type FlowState = Record<string, unknown>;
 
@@ -36,6 +36,8 @@ export interface Flow {
   versionId?: string;
   /** Explicit state mapping at flow boundaries. The active frame is otherwise isolated. */
   state?: FlowStateBoundary;
+  /** Post-run checks evaluated against the run record when this flow reaches a terminal transition. */
+  gates?: FlowGateSpec[];
   /**
    * Enter this flow directly when routing says it owns the request, instead of
    * offering `enter_flow` and letting the model choose.

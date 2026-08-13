@@ -7,6 +7,7 @@ import type { RunStore } from './durable/RunStore.js';
 import { clearRunLease } from './durable/runLease.js';
 import { isTerminalOutcome, markSessionOutcome } from './outcomeMarking.js';
 import type { ConversationOutcome } from '../outcomes/types.js';
+import type { FlowGateVerdict } from '../flows/definition/types.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { syncPendingUserInput } from './channels/inputBuffer.js';
 import { runHookSafely } from './runHookSafely.js';
@@ -31,6 +32,7 @@ export interface CloseRunOptions {
   ctx: RunContext;
   terminalOutcome?: ConversationOutcome;
   outcomeReason?: string;
+  outcomeGates?: FlowGateVerdict[];
   extraction?: CloseRunExtractionOptions;
 }
 
@@ -58,7 +60,13 @@ export async function closeRun(options: CloseRunOptions): Promise<void> {
       sessionStore,
       session,
       options.terminalOutcome,
-      { reason: options.outcomeReason, markedBy: 'hook' },
+      {
+        reason: options.outcomeReason,
+        markedBy: 'hook',
+        ...(options.outcomeGates && options.outcomeGates.length > 0
+          ? { gates: options.outcomeGates }
+          : {}),
+      },
       ctx.emit,
     );
   }

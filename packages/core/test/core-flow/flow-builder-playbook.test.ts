@@ -27,6 +27,7 @@ const ISSUE_CODES = [
   'invalid-map-reference',
   'predicate-too-deep',
   'nl-predicate-compile-failed',
+  'invalid-gate',
 ] as const satisfies readonly FlowValidationIssueCode[];
 
 type MissingCodes = Exclude<FlowValidationIssueCode, (typeof ISSUE_CODES)[number]>;

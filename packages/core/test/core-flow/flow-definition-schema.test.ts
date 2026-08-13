@@ -68,6 +68,57 @@ describe('flowDefinitionSchema', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('accepts predicate and judge gates and rejects a judge without inputs', () => {
+    const ok = flowDefinitionSchema.safeParse({
+      name: 'gated',
+      description: '',
+      start: 'greet',
+      nodes: [startReply, { kind: 'reply', id: 'ask', generate: true, next: { end: 'done' } }],
+      gates: [
+        {
+          id: 'status-ok',
+          kind: 'predicate',
+          severity: 'blocking',
+          when: { op: 'eq', left: { path: 'state.status' }, right: { literal: 'ok' } },
+        },
+        {
+          id: 'judge-amount',
+          kind: 'judge',
+          severity: 'advisory',
+          inputs: ['state.amount'],
+          rubric: 'amount is a positive number',
+        },
+      ],
+    });
+    expect(ok.success).toBe(true);
+
+    const missingInputs = flowDefinitionSchema.safeParse({
+      name: 'gated',
+      description: '',
+      start: 'greet',
+      nodes: [startReply],
+      gates: [{ id: 'j', kind: 'judge', severity: 'blocking' }],
+    });
+    expect(missingInputs.success).toBe(false);
+
+    const extraWhenOnJudge = flowDefinitionSchema.safeParse({
+      name: 'gated',
+      description: '',
+      start: 'greet',
+      nodes: [startReply],
+      gates: [
+        {
+          id: 'j',
+          kind: 'judge',
+          severity: 'blocking',
+          inputs: ['state.amount'],
+          when: { op: 'truthy', value: { path: 'state.amount' } },
+        },
+      ],
+    });
+    expect(extraWhenOnJudge.success).toBe(false);
+  });
+
   it('enforces reply response template XOR generate: true', () => {
     const neither = flowDefinitionSchema.safeParse({
       name: 'x',

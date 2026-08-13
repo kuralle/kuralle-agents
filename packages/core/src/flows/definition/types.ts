@@ -97,6 +97,42 @@ export type FlowNodeDefinition =
   | ActionNodeDefinition
   | DecideNodeDefinition;
 
+export type FlowGateKind = 'predicate' | 'judge';
+export type FlowGateSeverity = 'blocking' | 'advisory';
+
+export interface PredicateFlowGateSpec {
+  id: string;
+  kind: 'predicate';
+  severity: FlowGateSeverity;
+  when: Predicate;
+}
+
+export interface JudgeFlowGateSpec {
+  id: string;
+  kind: 'judge';
+  severity: FlowGateSeverity;
+  /** Explicit allow-list of run-record paths (`input | state | results.<nodeId>`). */
+  inputs: string[];
+  rubric?: string;
+}
+
+export type FlowGateSpec = PredicateFlowGateSpec | JudgeFlowGateSpec;
+
+export interface FlowGateVerdict {
+  id: string;
+  kind: FlowGateKind;
+  severity: FlowGateSeverity;
+  passed: boolean;
+  /** Set when the check failed to run. Always treated as blocking. */
+  executionError?: true;
+  reason?: string;
+}
+
+export interface FlowVerificationRecord {
+  outcome: 'passed' | 'failed-verification';
+  verdicts: FlowGateVerdict[];
+}
+
 export interface FlowDefinition {
   name: string;
   description: string;
@@ -104,4 +140,5 @@ export interface FlowDefinition {
   outputSchema?: JsonSchema;
   start: string;
   nodes: FlowNodeDefinition[];
+  gates?: FlowGateSpec[];
 }

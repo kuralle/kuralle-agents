@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { ChoiceOption } from '../../types/selection.js';
 import type { MappingConfig } from './mapping.js';
 import { predicateSchema, type Predicate } from './predicate.js';
-import type { CollectResolverSpec } from './types.js';
+import type { CollectResolverSpec, FlowGateSpec } from './types.js';
 
 export const nlPredicateSchema = z.object({ nl: z.string().min(1) }).strict();
 export type NlPredicate = z.infer<typeof nlPredicateSchema>;
@@ -109,4 +109,5 @@ export interface AuthoringFlowDefinition {
   outputSchema?: JsonSchema;
   start: string;
   nodes: AuthoringFlowNodeDefinition[];
+  gates?: FlowGateSpec[];
 }

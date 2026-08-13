@@ -3,6 +3,7 @@ import { addFlowValidationRepairActions } from './repair.js';
 import { validateFlowRefs } from './refs.js';
 import { inferGraphSchemas } from './schema-flow.js';
 import { validateFlowStructure } from './structure.js';
+import { validateFlowGates } from './gates.js';
 import { formatFlowValidationIssues } from './format.js';
 import type { FlowRegistryIndex, FlowValidationIssue } from './types.js';
 
@@ -19,6 +20,7 @@ export type {
 export { PREDICATE_MAX_DEPTH, PREDICATE_MAX_NODES } from './types.js';
 export { validateFlowStructure } from './structure.js';
 export { validateFlowRefs } from './refs.js';
+export { validateFlowGates } from './gates.js';
 export { inferGraphSchemas } from './schema-flow.js';
 export type { GraphSchemaInference } from './schema-flow.js';
 export { schemaCompatibility } from './schema-utils.js';
@@ -31,7 +33,12 @@ export function validateFlowDefinition(
   return addFlowValidationRepairActions(
     def,
     index,
-    [...validateFlowStructure(def), ...validateFlowRefs(def, index), ...inference.issues],
+    [
+      ...validateFlowStructure(def),
+      ...validateFlowRefs(def, index),
+      ...inference.issues,
+      ...validateFlowGates(def, inference),
+    ],
     inference,
   );
 }

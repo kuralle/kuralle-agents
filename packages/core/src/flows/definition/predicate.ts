@@ -101,6 +101,44 @@ function resolveValue(ref: PathOrLiteral, ctx: PredicateContext): unknown | Miss
   return resolvePath(ref.path, ctx);
 }
 
+export function readPredicatePath(path: string, ctx: PredicateContext): unknown | undefined {
+  const value = resolvePath(path, ctx);
+  return value === MISSING ? undefined : value;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function setNested(target: Record<string, unknown>, path: string, value: unknown): void {
+  const parts = path.split('.').filter(Boolean);
+  if (parts.length === 0) return;
+  let cursor: Record<string, unknown> = target;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const key = parts[i]!;
+    const next = cursor[key];
+    if (!isPlainRecord(next)) {
+      cursor[key] = {};
+    }
+    cursor = cursor[key] as Record<string, unknown>;
+  }
+  cursor[parts[parts.length - 1]!] = value;
+}
+
+/** Build a nested object containing only the listed run-record paths. */
+export function pickAllowListedPaths(ctx: PredicateContext, paths: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const raw of paths) {
+    const value = resolvePath(raw, ctx);
+    if (value === MISSING) continue;
+    const templateMatch = PATH_PLACEHOLDER.exec(raw.trim());
+    const path = templateMatch ? templateMatch[1]!.trim() : raw.trim();
+    if (path === '') continue;
+    setNested(out, path, value);
+  }
+  return out;
+}
+
 export function evaluatePredicate(pred: Predicate, ctx: PredicateContext): boolean {
   switch (pred.op) {
     case 'and':

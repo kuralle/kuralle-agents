@@ -136,6 +136,32 @@ export const flowNodeDefinitionSchema = z.union([
   decideNodeSchema,
 ]);
 
+const flowGateSeveritySchema = z.enum(['blocking', 'advisory']);
+
+const predicateFlowGateSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.literal('predicate'),
+    severity: flowGateSeveritySchema,
+    when: predicateSchema,
+  })
+  .strict();
+
+const judgeFlowGateSchema = z
+  .object({
+    id: z.string().min(1),
+    kind: z.literal('judge'),
+    severity: flowGateSeveritySchema,
+    inputs: z.array(z.string().min(1)).min(1),
+    rubric: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const flowGateSpecSchema = z.discriminatedUnion('kind', [
+  predicateFlowGateSchema,
+  judgeFlowGateSchema,
+]);
+
 export const flowDefinitionSchema = z
   .object({
     name: z.string().min(1),
@@ -144,6 +170,7 @@ export const flowDefinitionSchema = z
     outputSchema: jsonSchemaSchema.optional(),
     start: z.string().min(1),
     nodes: z.array(flowNodeDefinitionSchema),
+    gates: z.array(flowGateSpecSchema).optional(),
   })
   .strict();
 

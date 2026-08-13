@@ -15,7 +15,8 @@ export type FlowValidationIssueCode =
   | 'invalid-template'
   | 'invalid-map-reference'
   | 'predicate-too-deep'
-  | 'nl-predicate-compile-failed';
+  | 'nl-predicate-compile-failed'
+  | 'invalid-gate';
 
 export type FlowValidationRepairOperation =
   | 'set-transition'
