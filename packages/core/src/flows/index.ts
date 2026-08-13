@@ -87,3 +87,31 @@ export {
   stampNewFlowDefinitionVersion,
   MemoryFlowDefinitionsStore,
 } from './definition/index.js';
+export {
+  LiveFlowCatalog,
+  FlowNameConflictError,
+  FlowCycleError,
+  findFlowByName,
+  diffFlowCatalog,
+  renderFlowCatalogDelta,
+  applyFlowCatalogAnnouncement,
+  rebaselineFlowCatalogAnnouncement,
+  FLOW_CATALOG_NOTE_TAG,
+} from './liveFlowCatalog.js';
+export type {
+  FlowCatalogEntry,
+  FlowCatalogDelta,
+  PersistedLiveFlowCatalog,
+} from './liveFlowCatalog.js';
+export {
+  registerDynamicFlowBundle,
+  loadDynamicFlowsIntoCatalog,
+  topoSortFlowDefinitions,
+  nestedFlowReferences,
+  agentToolSurface,
+} from './addDynamicFlows.js';
+export type {
+  RegisterDynamicFlowBundleOptions,
+  LoadDynamicFlowsOptions,
+  AgentFlowToolSurface,
+} from './addDynamicFlows.js';

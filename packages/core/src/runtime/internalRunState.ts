@@ -33,6 +33,8 @@ export interface InternalRunState {
   resolvedSkills?: Record<string, unknown>;
   /** Serialized live skill catalog (a5). */
   skillCatalog?: unknown;
+  /** Serialized live flow-catalog announcement snapshot (per run, not the roster). */
+  flowCatalog?: unknown;
 }
 
 /** Read the framework slice. Never throws; absent state reads as empty. */

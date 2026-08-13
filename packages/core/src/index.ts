@@ -496,7 +496,17 @@ export {
   matchesFlowDefinitionListFilter,
   stampNewFlowDefinitionVersion,
   MemoryFlowDefinitionsStore,
-} from './flows/definition/index.js';
+  LiveFlowCatalog,
+  FlowNameConflictError,
+  FlowCycleError,
+  findFlowByName,
+  FLOW_CATALOG_NOTE_TAG,
+} from './flows/index.js';
+export type {
+  FlowCatalogEntry,
+  FlowCatalogDelta,
+  PersistedLiveFlowCatalog,
+} from './flows/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
 /** Read the state of the flow a run is currently in. Flow state lives in an isolated
