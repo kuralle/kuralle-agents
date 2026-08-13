@@ -1,9 +1,10 @@
 import type { StandardSchemaV1 } from '../types/standard-schema.js';
-import type { CollectNode, FlowState } from '../types/flow.js';
+import type { CollectNode, FlowState, SlotSource } from '../types/flow.js';
 import type { Tool } from '../types/effectTool.js';
 import type { StreamPart } from '../types/stream.js';
 import { defineTool } from '../tools/effect/defineTool.js';
 import { z } from 'zod';
+import { filterByProvenance } from './slotResolution.js';
 
 function collectDataKey(nodeId: string): string {
   return `__collect_${nodeId}`;
@@ -106,6 +107,7 @@ export async function wouldCollectSatisfyAfterToolResults(
   node: CollectNode,
   state: FlowState,
   toolResults: Array<{ name: string; result: unknown }>,
+  sourceText?: string,
 ): Promise<boolean> {
   const submitName = submitToolName(node.id);
   let data = getCollectData(state, node.id);
@@ -114,10 +116,11 @@ export async function wouldCollectSatisfyAfterToolResults(
       continue;
     }
     const incoming = isPlainRecord(record.result) ? record.result : {};
-    if (isEmptySubmission(incoming) || isNonDataToolResult(incoming)) {
+    const { accepted } = filterByProvenance(incoming, sourceText);
+    if (isEmptySubmission(accepted) || isNonDataToolResult(incoming)) {
       continue;
     }
-    data = mergeExtractionData(data, incoming);
+    data = mergeExtractionData(data, accepted);
   }
   const probeState: FlowState = { ...state, [collectDataKey(node.id)]: data };
   return schemaSatisfied(node, probeState);
@@ -185,7 +188,7 @@ export function createExtractionSubmitTool(
   return defineTool({
     name: toolName,
     description,
-    input: toNullablePartialSchema(node.schema),
+    input: toNullablePartialSchema(node.schema, missingFields),
     execute: async (args: unknown) => (isPlainRecord(args) ? args : {}),
   });
 }
@@ -197,34 +200,58 @@ function submitToolName(nodeId: string): string {
 export interface MergeTurnExtractionResult {
   merged: boolean;
   incoming?: Record<string, unknown>;
+  submitted?: Record<string, unknown>;
+  dropped?: string[];
+  slotSources?: Record<string, SlotSource>;
 }
 
 export function mergeTurnExtraction(
   node: CollectNode,
   state: FlowState,
   toolResults: Array<{ name: string; result: unknown }>,
+  opts?: { sourceText?: string },
 ): MergeTurnExtractionResult {
   const submitName = submitToolName(node.id);
   let merged = false;
   let lastIncoming: Record<string, unknown> | undefined;
+  let lastSubmitted: Record<string, unknown> | undefined;
+  const dropped: string[] = [];
+  const slotSources: Record<string, SlotSource> = {};
   const current = getCollectData(state, node.id);
 
   for (const record of toolResults) {
     if (record.name !== submitName) {
       continue;
     }
-    const incoming = isPlainRecord(record.result) ? record.result : {};
-    if (isEmptySubmission(incoming) || isNonDataToolResult(incoming)) {
+    const raw = isPlainRecord(record.result) ? record.result : {};
+    lastSubmitted = raw;
+    const { accepted, dropped: guardedOut } = filterByProvenance(raw, opts?.sourceText);
+    dropped.push(...guardedOut);
+    if (isEmptySubmission(accepted) || isNonDataToolResult(raw)) {
       continue;
     }
-    const next = mergeExtractionData(current, incoming);
+    const next = mergeExtractionData(current, accepted);
     setCollectData(state, node.id, next);
     Object.assign(current, next);
     merged = true;
-    lastIncoming = incoming;
+    lastIncoming = accepted;
+    for (const key of Object.keys(accepted)) {
+      if (fieldPopulated(accepted[key])) {
+        slotSources[key] = 'model';
+      }
+    }
   }
 
-  return merged ? { merged: true, incoming: lastIncoming } : { merged: false };
+  if (!merged && dropped.length === 0) {
+    return { merged: false };
+  }
+  return {
+    merged,
+    incoming: lastIncoming,
+    submitted: lastSubmitted,
+    ...(dropped.length > 0 ? { dropped } : {}),
+    ...(Object.keys(slotSources).length > 0 ? { slotSources } : {}),
+  };
 }
 
 export function emitExtractionTelemetry(
@@ -232,10 +259,15 @@ export function emitExtractionTelemetry(
   state: FlowState,
   incoming: Record<string, unknown>,
   emit: (part: StreamPart) => void,
+  extra?: { dropped?: string[]; slotSources?: Record<string, SlotSource> },
 ): void {
+  const droppedSet = new Set(extra?.dropped ?? []);
   const fieldsAccepted: string[] = [];
-  const fieldsRejected: string[] = [];
+  const fieldsRejected: string[] = [...droppedSet];
   for (const [key, value] of Object.entries(incoming)) {
+    if (droppedSet.has(key)) {
+      continue;
+    }
     if (fieldPopulated(value)) {
       fieldsAccepted.push(key);
     } else {
@@ -257,7 +289,14 @@ export function emitExtractionTelemetry(
     type: 'custom',
     payload: {
       name: 'flow.extraction.update',
-      data: { nodeId: node.id, collected, missing },
+      data: {
+        nodeId: node.id,
+        collected,
+        missing,
+        ...(extra?.slotSources && Object.keys(extra.slotSources).length > 0
+          ? { slotSources: extra.slotSources }
+          : {}),
+      },
     },
   });
 }
@@ -280,14 +319,21 @@ export function inferRequiredFields(schema: StandardSchemaV1): string[] {
   return [];
 }
 
-function toNullablePartialSchema(schema: StandardSchemaV1): z.ZodTypeAny {
+function toNullablePartialSchema(
+  schema: StandardSchemaV1,
+  keys?: readonly string[],
+): z.ZodTypeAny {
   const zodSchema = schema as z.ZodObject<z.ZodRawShape>;
   if (typeof zodSchema?.shape !== 'object') {
     return schema as z.ZodTypeAny;
   }
 
+  const allowed = keys ? new Set(keys) : undefined;
   const partialShape: Record<string, z.ZodTypeAny> = {};
   for (const [key, fieldSchema] of Object.entries(zodSchema.shape)) {
+    if (allowed && !allowed.has(key)) {
+      continue;
+    }
     partialShape[key] = (fieldSchema as z.ZodTypeAny).optional().nullable();
   }
   return z.object(partialShape);

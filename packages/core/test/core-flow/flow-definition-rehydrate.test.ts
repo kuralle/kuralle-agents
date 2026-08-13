@@ -62,7 +62,7 @@ function corpus(): FlowDefinition[] {
     ask: 'What is your email?',
     instructions: 'Collect email and amount',
     assign: { 'state.email': 'email', 'state.amount': 'amount' },
-    resolvers: [{ field: 'email', kind: 'jsonpath' }],
+    resolvers: [{ field: 'email', kind: 'jsonpath', path: 'input.email' }],
     required: ['email', 'amount'],
     maxTurns: 4,
     choices: [{ id: 'skip', label: 'Skip' }],

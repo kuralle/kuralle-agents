@@ -7,7 +7,11 @@ import type { TurnResult } from './channel.js';
 import type { ActionContext } from './run-context.js';
 import type { NodeVerify } from '../flow/verify.js';
 import type { ChoiceOption } from './selection.js';
+import type { CollectResolverSpec } from '../flows/definition/types.js';
 import { assertValidCodeFlow } from '../flows/definition/validate/code-flow.js';
+
+export type { CollectResolverSpec };
+export type { SlotSource } from '../flows/definition/types.js';
 
 export type FlowState = Record<string, unknown>;
 
@@ -123,6 +127,8 @@ export interface CollectNode extends NodeVerification {
   ask?: (missing: string[], state: FlowState) => string;
   choices?: ChoiceOption[];
   maxTurns?: number;
+  /** Deterministic tier-0 slot resolvers. A field resolved here is excluded from the model schema this turn. */
+  resolvers?: CollectResolverSpec[];
   onComplete: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
 }
 

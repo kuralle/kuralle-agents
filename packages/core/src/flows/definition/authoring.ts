@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { ChoiceOption } from '../../types/selection.js';
 import type { MappingConfig } from './mapping.js';
 import { predicateSchema, type Predicate } from './predicate.js';
+import type { CollectResolverSpec } from './types.js';
 
 export const nlPredicateSchema = z.object({ nl: z.string().min(1) }).strict();
 export type NlPredicate = z.infer<typeof nlPredicateSchema>;
@@ -39,11 +40,6 @@ interface ConfirmGateRef {
   onConfirm: TransitionRef;
   onDecline: TransitionRef;
   onAmbiguous?: TransitionRef;
-}
-
-interface CollectResolverSpec {
-  field: string;
-  kind: string;
 }
 
 interface ReplyNodeDefinitionBase {

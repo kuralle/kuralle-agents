@@ -30,10 +30,12 @@ export interface ConfirmGateRef {
   onAmbiguous?: TransitionRef;
 }
 
-export interface CollectResolverSpec {
-  field: string;
-  kind: string;
-}
+export type CollectResolverSpec =
+  | { field: string; kind: 'enum_check'; values: string[] }
+  | { field: string; kind: 'range'; min?: number; max?: number }
+  | { field: string; kind: 'jsonpath'; path: string };
+
+export type SlotSource = 'deterministic' | 'model';
 
 interface ReplyNodeDefinitionBase {
   kind: 'reply';

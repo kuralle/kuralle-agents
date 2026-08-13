@@ -6,6 +6,7 @@ export type {
   PredicateRoute,
   ConfirmGateRef,
   CollectResolverSpec,
+  SlotSource,
   ReplyTemplateNodeDefinition,
   ReplyGenerateNodeDefinition,
   ReplyNodeDefinition,

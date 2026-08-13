@@ -219,6 +219,16 @@ export class TraceRecorder {
           this.currentAgentId = part.payload.targetAgent;
           break;
         }
+        case 'custom': {
+          if (part.payload.name !== 'flow.extraction.update' || !this.currentNode) break;
+          const data = part.payload.data as { slotSources?: Record<string, 'deterministic' | 'model'> };
+          if (!data?.slotSources || typeof data.slotSources !== 'object') break;
+          this.currentNode.attributes.slotSources = {
+            ...this.currentNode.attributes.slotSources,
+            ...data.slotSources,
+          };
+          break;
+        }
         case 'error': {
           const span = this.openTools.at(-1) ?? this.currentNode ?? this.currentFlow ?? this.root;
           span.status = 'error';

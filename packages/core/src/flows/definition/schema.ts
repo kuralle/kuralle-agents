@@ -39,12 +39,30 @@ export const choiceOptionSchema = z
   })
   .strict() satisfies z.ZodType<ChoiceOption>;
 
-const collectResolverSpecSchema = z
-  .object({
-    field: z.string().min(1),
-    kind: z.string().min(1),
-  })
-  .strict();
+const collectResolverSpecSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      field: z.string().min(1),
+      kind: z.literal('enum_check'),
+      values: z.array(z.string().min(1)).min(1),
+    })
+    .strict(),
+  z
+    .object({
+      field: z.string().min(1),
+      kind: z.literal('range'),
+      min: z.number().optional(),
+      max: z.number().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      field: z.string().min(1),
+      kind: z.literal('jsonpath'),
+      path: z.string().min(1),
+    })
+    .strict(),
+]);
 
 const replyBase = {
   kind: z.literal('reply'),

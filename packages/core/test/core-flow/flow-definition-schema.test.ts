@@ -31,7 +31,7 @@ describe('flowDefinitionSchema', () => {
           schema: { type: 'object', properties: { email: { type: 'string' } } },
           ask: 'What is your email?',
           assign: { 'state.email': 'email' },
-          resolvers: [{ field: 'email', kind: 'jsonpath' }],
+          resolvers: [{ field: 'email', kind: 'jsonpath', path: 'input.email' }],
           next: { goto: 'charge' },
         },
         {
@@ -155,6 +155,23 @@ describe('flowDefinitionSchema', () => {
         right: { literal: 500 },
       }).success,
     ).toBe(true);
+  });
+
+  it('rejects a jsonpath resolver that omits path', () => {
+    const parsed = flowDefinitionSchema.safeParse({
+      name: 'x',
+      description: '',
+      start: 'ask',
+      nodes: [
+        {
+          kind: 'collect',
+          id: 'ask',
+          schema: { type: 'object' },
+          resolvers: [{ field: 'email', kind: 'jsonpath' }],
+        },
+      ],
+    });
+    expect(parsed.success).toBe(false);
   });
 });
 

@@ -67,6 +67,8 @@ export type {
   Transition,
   ReplyNode,
   CollectNode,
+  CollectResolverSpec,
+  SlotSource,
   ActionNode,
   ConfirmGate,
   DecideNode,
