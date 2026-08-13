@@ -1,20 +1,39 @@
-/// <reference types="bun-types" />
 /**
  * Shared contract-test harness for every `RunStore` adapter.
  *
  * Every store adapter (SessionRunStore, postgres-store, cf-agent DO-SQLite)
  * MUST pass this contract. Adapters call
- * `runRunStoreContract(() => new MyStore(...))` from within a `bun test`
- * test file.
+ * `runRunStoreContract(() => new MyStore(...), { describe, test, expect, beforeEach })`
+ * from a bun or vitest file — the harness is injected so this module can load
+ * under workerd (no `bun:test` import).
  *
  * This helper is NOT re-exported from the package's main barrel — import
- * explicitly from `@kuralle-agents/core/runtime/durable/testing` to avoid
- * pulling `bun:test` into runtime bundles.
+ * explicitly from `@kuralle-agents/core/runtime/durable/testing`.
  */
-import { beforeEach, describe, expect, test } from 'bun:test';
 import type { InterruptRequest, RunFilter, RunRef, RunState, StepRecord } from './types.js';
 import type { RunStore } from './RunStore.js';
 import { RunNotFoundError, RunNotTerminalError } from './RunStore.js';
+
+type TestBlock = () => void | Promise<void>;
+
+export interface RunStoreContractApi {
+  describe: (name: string, fn: () => void) => void;
+  test: (name: string, fn: TestBlock) => void;
+  beforeEach: (fn: TestBlock) => void;
+  expect: (actual: unknown) => {
+    toEqual(expected: unknown): void;
+    toBe(expected: unknown): void;
+    toHaveProperty(key: string): void;
+    toBeNull(): void;
+    not: {
+      toHaveProperty(key: string): void;
+      toBeNull(): void;
+    };
+    rejects: {
+      toBeInstanceOf(expected: unknown): unknown;
+    };
+  };
+}
 
 export type RunStoreFactory = () => RunStore | Promise<RunStore>;
 
@@ -117,9 +136,10 @@ function idsOf(refs: RunRef[]): string[] {
 
 /**
  * Registers the shared RunStore contract tests. Must be invoked at the
- * top level of a bun test file.
+ * top level of a test file with that file's `describe`/`test`/`expect`/`beforeEach`.
  */
-export function runRunStoreContract(factory: RunStoreFactory): void {
+export function runRunStoreContract(factory: RunStoreFactory, t: RunStoreContractApi): void {
+  const { describe, test, expect, beforeEach } = t;
   describe('RunStore contract', () => {
     describe('listRuns filters', () => {
       let store: RunStore;

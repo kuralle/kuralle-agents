@@ -1,15 +1,18 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, beforeEach, test } from 'bun:test';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { runRunStoreContract } from '../../src/runtime/durable/testing.js';
 import { makeRunState, makeTestSession } from './helpers.js';
 
-runRunStoreContract(async () => {
-  const memory = new MemoryStore();
-  const sessionId = 'conformance';
-  await memory.save(makeTestSession(sessionId));
-  return new SessionRunStore(memory, sessionId);
-});
+runRunStoreContract(
+  async () => {
+    const memory = new MemoryStore();
+    const sessionId = 'conformance';
+    await memory.save(makeTestSession(sessionId));
+    return new SessionRunStore(memory, sessionId);
+  },
+  { describe, test, expect, beforeEach },
+);
 
 describe('SessionRunStore listRuns scans every session', () => {
   it('yields runs stored under different sessions from one enumerator', async () => {

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import pg from 'pg';
 import {
   LogConflictError,
@@ -63,16 +63,19 @@ describe.skipIf(!POSTGRES_URL)('PostgresRunStore contract', () => {
     await pool.end();
   });
 
-  runRunStoreContract(async () => {
-    const store = new PostgresRunStore({
-      client: pool,
-      stateTableName: STATE_TABLE,
-      stepsTableName: STEPS_TABLE,
-    });
-    await store.ready;
-    await pool.query(`TRUNCATE ${STATE_TABLE} CASCADE`);
-    return store;
-  });
+  runRunStoreContract(
+    async () => {
+      const store = new PostgresRunStore({
+        client: pool,
+        stateTableName: STATE_TABLE,
+        stepsTableName: STEPS_TABLE,
+      });
+      await store.ready;
+      await pool.query(`TRUNCATE ${STATE_TABLE} CASCADE`);
+      return store;
+    },
+    { describe, test, expect, beforeEach },
+  );
 
   test('deleteRun does not remove a run stored under a different session', async () => {
     const store = new PostgresRunStore({

@@ -30,6 +30,7 @@ import {
 } from '@kuralle-agents/core';
 import type {
   HitlInterrupt,
+  InterruptRequest,
   PersistentMemoryStore,
   UserInputContent,
   SignalActor,
@@ -45,6 +46,7 @@ import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
 import { BridgeSessionStore } from './BridgeSessionStore.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
 import { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
+import { SqlRunStore } from './SqlRunStore.js';
 import { createUIMessageStreamResponse } from 'ai';
 import type { DurableSqlStorage, SqlExecutor } from './types.js';
 import { durableAgentSurface } from './durable-agent-surface.js';
@@ -125,10 +127,20 @@ export abstract class KuralleAgent<
     // so an instance field is not a reliable hand-off to the completion-oriented
     // HTTP facade. The durable run journal is authoritative across that boundary.
     const sessionId = this.getSessionId();
-    const state = await new OrchestrationStore(this.getSql()).get(sessionId);
-    const run = state?.durableRuns?.[sessionId]?.runState
-      ?? Object.values(state?.durableRuns ?? {}).find((candidate) => candidate.runState.status === 'paused')?.runState;
-    const waiting = run?.status === 'paused' ? run.waitingFor : undefined;
+    const runStore = await this.durableRunStore();
+    let waiting: InterruptRequest | undefined;
+    for await (const ref of runStore.listRuns({ status: 'paused' })) {
+      if (ref.waitingFor?.kind === 'approval') {
+        waiting = ref.waitingFor;
+        break;
+      }
+    }
+    if (!waiting) {
+      const state = await new OrchestrationStore(this.getSql()).get(sessionId);
+      const run = state?.durableRuns?.[sessionId]?.runState
+        ?? Object.values(state?.durableRuns ?? {}).find((candidate) => candidate.runState.status === 'paused')?.runState;
+      waiting = run?.status === 'paused' ? run.waitingFor : undefined;
+    }
     if (!waiting || waiting.kind !== 'approval') return undefined;
 
     const interrupt: HitlInterrupt = {
@@ -207,10 +219,16 @@ export abstract class KuralleAgent<
     return undefined;
   }
 
-  /**
-   * Get the SQL executor for the Durable Object.
-   * CF's AIChatAgent exposes this.sql as a tagged template function.
-   */
+  private async durableRunStore(): Promise<SqlRunStore> {
+    const sql = this.getSql();
+    const store = new SqlRunStore(sql);
+    const orch = await new OrchestrationStore(sql).get(this.getSessionId());
+    if (orch?.durableRuns) {
+      await store.importLegacyRuns(orch.durableRuns);
+    }
+    return store;
+  }
+
   private getSql(): SqlExecutor {
     return durableAgentSurface<Env, State>(this).sql.bind(this);
   }
@@ -330,12 +348,14 @@ export abstract class KuralleAgent<
     const extraConfig = this.getRuntimeConfig();
     const runtimeConfig = { ...extraConfig, ...definition.config };
     const workingMemoryStore = this.getWorkingMemoryStore();
+    const runStore = runtimeConfig.runStore ?? await this.durableRunStore();
     return {
       runtime: createRuntime({
         ...runtimeConfig,
         agents: definition.agents,
         defaultAgentId,
         sessionStore,
+        runStore,
         ...(workingMemoryStore && !runtimeConfig.defaultWorkingMemoryStore
           ? { defaultWorkingMemoryStore: workingMemoryStore }
           : {}),
