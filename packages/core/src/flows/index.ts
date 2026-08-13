@@ -76,6 +76,7 @@ export {
   FLOW_RESULTS_KEY,
   canonicalJson,
   flowDigest,
+  digestForLiveFlow,
   FLOW_DEFINITION_VERSION_STATUSES,
   FlowDefinitionConflictError,
   FlowDefinitionNotFoundError,

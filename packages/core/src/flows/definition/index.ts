@@ -68,7 +68,7 @@ export type {
 export type { AuthoringUnion, CanonicalUnion, ValidatableUnion } from './guards.js';
 
 export { canonicalJson } from './canonical.js';
-export { flowDigest } from './digest.js';
+export { flowDigest, digestForLiveFlow } from './digest.js';
 export {
   FLOW_DEFINITION_VERSION_STATUSES,
   FlowDefinitionConflictError,

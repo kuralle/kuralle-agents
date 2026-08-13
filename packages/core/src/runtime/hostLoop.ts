@@ -5,6 +5,7 @@ import type { Flow } from '../types/flow.js';
 import type { ChannelDriver, TurnControl } from '../types/channel.js';
 import type { RunContext } from '../types/run-context.js';
 import type { RunState } from './durable/types.js';
+import { clearActiveFlow } from './durable/flowPin.js';
 import { runFlow } from '../flow/runFlow.js';
 import { resolveReplyNode } from '../flow/nodeBuilders.js';
 import { findFlowByName } from '../flows/liveFlowCatalog.js';
@@ -144,10 +145,7 @@ async function runActiveFlow(
     // A handoff fired from inside a flow: the source flow is abandoned for this turn.
     // Clear the active-flow pointers so the target agent does not try (and fail) to
     // resume a flow that belongs to the source agent (G17).
-    run.activeFlow = undefined;
-    run.activeNode = undefined;
-    run.flowFrame = undefined;
-    run.flowStack = undefined;
+    clearActiveFlow(run);
     await ctx.runStore.putRunState(run);
     return { kind: 'handoff', to: result.to, reason: result.reason };
   }
@@ -172,10 +170,7 @@ async function runActiveFlow(
     }
   }
 
-  run.activeFlow = undefined;
-  run.activeNode = undefined;
-  run.flowFrame = undefined;
-  run.flowStack = undefined;
+  clearActiveFlow(run);
   await ctx.runStore.putRunState(run);
 
   return { kind: 'turnComplete' };

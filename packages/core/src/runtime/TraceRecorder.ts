@@ -197,6 +197,11 @@ export class TraceRecorder {
           this.emitSpan(span);
           break;
         }
+        case 'turn-end':
+          if (this.currentNode && part.payload.rendered) {
+            this.currentNode.attributes.rendered = part.payload.rendered;
+          }
+          break;
         case 'handoff': {
           const handoffFrom = this.currentAgentId;
           const span = this.openSpan({

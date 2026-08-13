@@ -12,6 +12,13 @@ import { inferRequiredFields, clearCollectData, setPendingRecoveryMessage } from
 import { addSystemNote } from '../runtime/systemNotes.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
+import {
+  assertParkedFlowDigest,
+  captureFlowPin,
+  clearFlowPin,
+  restoreFlowPin,
+  stampActiveFlow,
+} from '../runtime/durable/flowPin.js';
 import { hasPendingUserInput, setPendingUserInput } from '../runtime/channels/inputBuffer.js';
 import { userInputToText, type UserInputContent } from '../runtime/userInput.js';
 import { collectUntilComplete } from './collectUntilComplete.js';
@@ -184,7 +191,7 @@ function deterministicReply(node: Extract<FlowNode, { kind: 'reply' }>, run: Run
     ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
     appendAssistantMessage(run, text);
   }
-  ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
+  ctx.emit({ channel: 'internal', type: 'turn-end', payload: { rendered: 'engine' } });
   return { text, toolResults: [] };
 }
 
@@ -432,6 +439,9 @@ export async function runFlow(
 ): Promise<FlowResult> {
   const registry = buildNodeRegistry(flow);
   const startNode = resolveStartNode(flow);
+  if (run.activeNode) {
+    await assertParkedFlowDigest(run, flow);
+  }
   const initialNodeId = run.activeNode ?? startNode.id;
   let node = registry.get(initialNodeId);
   if (!node) {
@@ -454,7 +464,7 @@ export async function runFlow(
     // is what `continuity.test.ts` and the G14 slot-correction test encode.
     clearFlowCollectCache(state, flow);
     run.activeNode = node.id;
-    run.activeFlow = flow.name;
+    await stampActiveFlow(run, flow);
     ctx.emit({ channel: 'internal', type: 'flow-enter', payload: { flow: flow.name } });
     ctx.emit({ channel: 'internal', type: 'node-enter', payload: { nodeName: node.id } });
     emitInteractiveOnNodeEnter(node, state, ctx.emit);
@@ -543,9 +553,11 @@ export async function runFlow(
         flow: flow.name,
         node: run.activeNode ?? node.id,
         state: currentFlowState(run),
+        ...captureFlowPin(run),
       });
       run.activeFlow = transition.flow.name;
       run.activeNode = undefined;
+      clearFlowPin(run);
       await ctx.runStore.putRunState(run);
       return runFlow(transition.flow, run, driver, ctx, agent);
     }
@@ -561,6 +573,7 @@ export async function runFlow(
           run.flowFrame = { flow: park.flow, state: park.state };
           run.activeFlow = park.flow;
           run.activeNode = park.node;
+          restoreFlowPin(run, park);
           await ctx.runStore.putRunState(run);
           ctx.emit({
             channel: 'internal',

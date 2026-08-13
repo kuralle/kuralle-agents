@@ -78,6 +78,11 @@ describe('findUnresumableRuns', () => {
       run.activeFlow = 'checkout';
       run.effectKeyVersion = EFFECT_KEY_VERSION;
     });
+    // Flow-name scheme (v1) — legacy-resumable after the digest bump.
+    await seed(store, 's-v1', (run) => {
+      run.activeFlow = 'checkout';
+      run.effectKeyVersion = 1;
+    });
     // Old scheme but outside a flow — the key is unchanged there.
     await seed(store, 's-no-flow', (run) => {
       delete run.effectKeyVersion;

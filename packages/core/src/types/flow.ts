@@ -28,6 +28,8 @@ export interface Flow {
   maxOscillations?: number;
   /** How this flow was produced. Omitted on code-authored `defineFlow` graphs. */
   origin?: 'definition' | 'code';
+  /** Store version this live flow was published as. Absent on code-authored flows. */
+  versionId?: string;
   /** Explicit state mapping at flow boundaries. The active frame is otherwise isolated. */
   state?: FlowStateBoundary;
   /**
