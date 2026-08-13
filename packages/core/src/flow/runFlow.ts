@@ -191,7 +191,7 @@ function deterministicReply(node: Extract<FlowNode, { kind: 'reply' }>, run: Run
     ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
     appendAssistantMessage(run, text);
   }
-  ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
+  ctx.emit({ channel: 'internal', type: 'turn-end', payload: { rendered: 'engine' } });
   return { text, toolResults: [] };
 }
 

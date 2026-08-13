@@ -132,7 +132,10 @@ export interface InteractivePayload {
   prompt: string;
 }
 
-export interface TurnEndPayload {}
+export interface TurnEndPayload {
+  /** Set on reply turns so the node span can record `rendered: 'engine' | 'model'`. */
+  rendered?: 'engine' | 'model';
+}
 
 export interface TurnIncompletePayload {
   reason: 'length' | 'content-filter' | 'error' | 'other';

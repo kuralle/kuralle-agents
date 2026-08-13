@@ -62,6 +62,8 @@ export interface AgentSpan {
     controlPath?: boolean;
     /** Imperative `ctx.tool` call (not model-issued). */
     imperative?: boolean;
+    /** How a reply node's user-facing text was produced. Token accounting reads this. */
+    rendered?: 'engine' | 'model';
     /** SHA-256 of the initiating agent's validated skill snapshot. */
     skillContentHash?: string;
     /** Skill snapshot hashes observed across all agents in this turn, including handoffs. */
