@@ -19,6 +19,8 @@ It uses `gpt-4.1-mini` and exercises the generated Node server through `kuralle 
 agent/
   instructions.md
   agent.json
+  flows/
+    refund.flow.json
   skills/
     explain-artifact/
       SKILL.md
@@ -28,8 +30,11 @@ agent/
 ```
 
 `instructions.md` is required. `agent.json` contains serializable identity, model, and limit fields.
-References become a read-only mount, while the workspace seed is copied once into each thread's
-private workspace. Skill bodies and resources remain progressively loaded content.
+`flows/*.flow.json` files are declarative `FlowDefinition` graphs. The compiler validates each one
+strictly and embeds it inline in the artifact — a bad flow fails the build and names the dotted
+issue path. TypeScript modules under `flows/` still compile to capability references resolved from
+the host runtime. References become a read-only mount, while the workspace seed is copied once into
+each thread's private workspace. Skill bodies and resources remain progressively loaded content.
 
 <Aside type="note" title="This is not an Agent Plugin">
 The `skills/` directory here looks identical to the one in an

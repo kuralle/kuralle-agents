@@ -1,3 +1,7 @@
+import {
+  assertValidFlowDefinition,
+  flowDefinitionSchema,
+} from '@kuralle-agents/core';
 import { canonicalJson, sha256 } from './canonical.js';
 import { DeploymentError } from './errors.js';
 import type {
@@ -5,6 +9,7 @@ import type {
   ArtifactInputV1,
   CapabilityReference,
   ContentEntry,
+  InlineFlowEntry,
   PolicyArtifact,
   SkillArtifact,
   ToolReference,
@@ -113,6 +118,38 @@ function capabilityReference(value: unknown, path: string): CapabilityReference 
   string(ref.capability, `${path}.capability`, { id: true });
   string(ref.versionRange, `${path}.versionRange`);
   return value as CapabilityReference;
+}
+
+function inlineFlowEntry(value: unknown, path: string): InlineFlowEntry {
+  const flow = record(value, path);
+  exactKeys(flow, ['kind', 'id', 'definition'], [], path);
+  string(flow.id, `${path}.id`, { id: true });
+  const definition = record(flow.definition, `${path}.definition`);
+  const parsed = flowDefinitionSchema.safeParse(definition);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const suffix = issue && issue.path.length > 0 ? issue.path.map(String).join('.') : '';
+    fail(
+      issue?.message ?? 'must be a valid flow definition',
+      suffix ? `${path}.definition.${suffix}` : `${path}.definition`,
+    );
+  }
+  if (parsed.data.name !== flow.id) {
+    fail('must match definition.name', `${path}.id`);
+  }
+  try {
+    assertValidFlowDefinition(parsed.data);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : 'invalid flow definition', `${path}.definition`);
+  }
+  return value as InlineFlowEntry;
+}
+
+function artifactFlow(value: unknown, path: string): { id: string } {
+  const flow = record(value, path);
+  if (flow.kind === 'inline') return inlineFlowEntry(value, path);
+  if (flow.kind !== undefined) fail('has an unsupported flow kind', `${path}.kind`);
+  return capabilityReference(value, path);
 }
 
 function toolReference(value: unknown, path: string): ToolReference {
@@ -271,7 +308,7 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
   unique(toolIds, 'artifact.tools');
 
   const flowEntries = array(artifact.flows, 'artifact.flows');
-  const flowIds = flowEntries.map((flow, index) => capabilityReference(flow, `artifact.flows[${index}]`).id);
+  const flowIds = flowEntries.map((flow, index) => artifactFlow(flow, `artifact.flows[${index}]`).id);
   unique(flowIds, 'artifact.flows');
   policies(artifact.policies, 'artifact.policies');
 
