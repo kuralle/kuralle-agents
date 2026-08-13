@@ -173,7 +173,7 @@ Full worked sample:
 
 A flow records its current node on the session and resumes there on the next turn. When a node returns `'stay'` (and there's no pending input), the run is persisted and the turn ends; the next `runtime.run({ input })` re-enters the *same* node rather than restarting the flow. A `collect` node uses this to gather one field at a time over several turns.
 
-This means the flow keeps its place across turns automatically — you don't wire anything for it. For the full picture of how nodes are dispatched, how context is reshaped between them, and how a flow pauses and resumes, see the [Flow Execution Model](/guides/flow-execution).
+This means the flow keeps its place across turns automatically — you don't wire anything for it. For the full picture of how nodes are dispatched, how context is reshaped between them, and how a flow pauses and resumes, see the [Flow Execution Model](/guides/flow-execution). To author the same graph as JSON, hot-register it on a live server, and version it behind Policy, see [Dynamic Flows](/guides/dynamic-flows).
 
 ## Example: booking flow
 

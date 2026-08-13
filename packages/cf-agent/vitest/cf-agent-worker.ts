@@ -1,9 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { ChannelDriver, HarnessConfig, ScheduledJob } from '@kuralle-agents/core';
+import type { ChannelDriver, HarnessConfig, Policy, ScheduledJob } from '@kuralle-agents/core';
 import {
   LogConflictError,
   RunNotTerminalError,
   StaleWriteError,
+  defineAgent,
   type DeleteRunOptions,
   type RunFilter,
   type RunState,
@@ -14,10 +15,12 @@ import { flowDefinitionsStoreConformanceCases } from '@kuralle-agents/core/flows
 import { SqlPersistentMemoryStore } from '../src/SqlPersistentMemoryStore.js';
 import { createSqlExecutor } from '../src/sqlExecutor.js';
 import { KuralleAgent } from '../src/KuralleAgent.js';
+import { KuralleThreadAgent } from '../src/KuralleThreadAgent.js';
 import { SqlTraceStore } from '../src/SqlTraceStore.js';
 import { SqlRunStore } from '../src/SqlRunStore.js';
 import { SqlFlowDefinitionsStore } from '../src/SqlFlowDefinitionsStore.js';
 import { OtelTraceSink } from '@kuralle-agents/core';
+import type { BoundAgentRevision, ThreadAssignmentRequest, ThreadPin } from '@kuralle-agents/deployment';
 import type { LanguageModel } from 'ai';
 
 type RunStoreOp =
@@ -239,6 +242,109 @@ export class TestApprovalAgent extends KuralleAgent {
 
   protected getRuntimeConfig(): Partial<HarnessConfig> {
     return { driver: approvalDriver() };
+  }
+}
+
+/** Workerd parity for the stored-flows HTTP surface. */
+export class TestStoredFlowsAgent extends KuralleAgent {
+  protected getAgents(): HarnessConfig['agents'] {
+    return [{ id: 'clerk', instructions: 'Help.', model: {} as LanguageModel }];
+  }
+
+  protected getDefaultAgentId(): string {
+    return 'clerk';
+  }
+
+  protected override getStoredFlowsPolicy(): Policy | undefined {
+    if (!this.name.includes('deny-write')) return undefined;
+    return {
+      decide: (req) =>
+        req.toolName === 'stored-flows:write'
+          ? { kind: 'deny', reason: 'writes forbidden' }
+          : { kind: 'allow' },
+    };
+  }
+}
+
+function testPin(request: ThreadAssignmentRequest): ThreadPin {
+  return {
+    tenantId: request.tenantId,
+    threadId: request.threadId,
+    agentEntityId: request.agentEntityId,
+    agentVersionId: 'version-1',
+    artifactDigest: 'a'.repeat(64),
+    runtimeRevisionId: 'runtime-1',
+    releaseId: 'release-1',
+    environment: request.environment,
+    configGeneration: request.configGeneration ?? 1,
+    secretGeneration: request.secretGeneration ?? 1,
+    assignedAt: request.assignedAt ?? '2026-08-01T00:00:00.000Z',
+  };
+}
+
+/** Workerd fixture: a stored-flows write must miss the pin-key cache on the next bind. */
+export class TestThreadStoredFlowsAgent extends KuralleThreadAgent {
+  private binds = 0;
+
+  protected authorizeThreadInitialization(): boolean {
+    return true;
+  }
+
+  protected async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
+    return testPin(request);
+  }
+
+  protected async bindPinnedAgent(pin: ThreadPin): Promise<BoundAgentRevision> {
+    this.binds += 1;
+    const agent = defineAgent({
+      id: 'support',
+      instructions: 'Help.',
+      model: {} as LanguageModel,
+    });
+    return {
+      artifact: {
+        schemaVersion: 1,
+        artifactId: 'artifact-1',
+        digest: pin.artifactDigest,
+        compiler: { name: 'kuralle', version: '0' },
+        runtimeApiRange: '0.x',
+        agent: { id: agent.id, model: 'test' },
+        instructions: [],
+        skills: [],
+        references: [],
+        workspaceSeed: [],
+        agents: [],
+        tools: [],
+        flows: [],
+        policies: {},
+        requiredCapabilities: [],
+        secretRefs: [],
+        sourceMap: [],
+      },
+      agent,
+      deployment: {
+        tenantId: pin.tenantId,
+        agentEntityId: pin.agentEntityId,
+        agentVersionId: pin.agentVersionId,
+        artifactDigest: pin.artifactDigest,
+        releaseId: pin.releaseId,
+        runtimeRevisionId: pin.runtimeRevisionId,
+        environment: pin.environment,
+        configGeneration: pin.configGeneration,
+        secretGeneration: pin.secretGeneration,
+      },
+      references: [],
+      workspaceSeed: [],
+    };
+  }
+
+  override async onRequest(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/_test/bind')) {
+      await this.resolveRuntimeDefinition();
+      return Response.json({ binds: this.binds });
+    }
+    return super.onRequest(request);
   }
 }
 

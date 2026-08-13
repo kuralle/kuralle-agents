@@ -42,6 +42,16 @@ export {
   type DeploymentControlPlaneAuthorization,
   type DeploymentControlPlaneRouterOptions,
 } from './deploymentControlPlaneRouter.js';
+export {
+  createStoredFlowsRouter,
+  decideStoredFlowsAccess,
+  serializeStoredFlowVersion,
+  STORED_FLOWS_READ,
+  STORED_FLOWS_WRITE,
+  type CreateStoredFlowsRouterOptions,
+  type StoredFlowsRuntime,
+  type StoredFlowVersionBody,
+} from './storedFlowsRouter.js';
 
 import {
   shouldEmit,

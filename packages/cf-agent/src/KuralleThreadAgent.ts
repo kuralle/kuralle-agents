@@ -15,6 +15,8 @@ import { SqlThreadPinStore } from './SqlThreadPinStore.js';
 export abstract class KuralleThreadAgent<Env = unknown, State = unknown>
   extends KuralleAgent<Env, State> {
   private boundRevision?: { key: string; value: BoundAgentRevision };
+  /** Bumped on a successful stored-flows write so the pin-key cache misses. */
+  private storedFlowsGeneration = 0;
 
   /** Authenticate the private control-plane initialization request. Fail closed. */
   protected abstract authorizeThreadInitialization(request: Request): boolean | Promise<boolean>;
@@ -36,6 +38,7 @@ export abstract class KuralleThreadAgent<Env = unknown, State = unknown>
       pin.runtimeRevisionId,
       pin.configGeneration,
       pin.secretGeneration,
+      this.storedFlowsGeneration,
     ].join(':');
     const bound = this.boundRevision?.key === key
       ? this.boundRevision.value
@@ -62,6 +65,10 @@ export abstract class KuralleThreadAgent<Env = unknown, State = unknown>
 
   protected override getDefaultAgentId(): string {
     throw new Error('KuralleThreadAgent resolves its default agent from the pinned artifact');
+  }
+
+  protected override onStoredFlowsMutated(): void {
+    this.storedFlowsGeneration += 1;
   }
 
   override async onRequest(request: Request): Promise<Response> {
