@@ -13,7 +13,11 @@ import {
 } from './durable/types.js';
 import { setPendingUserInput } from './channels/inputBuffer.js';
 import { SessionRunStore } from './durable/SessionRunStore.js';
-import { assertResumableEffectKeys, EFFECT_KEY_VERSION } from './durable/effectKeyVersion.js';
+import {
+  assertResumableEffectKeys,
+  EFFECT_KEY_VERSION,
+  shouldAdoptCurrentEffectKeyVersion,
+} from './durable/effectKeyVersion.js';
 import { RunNotFoundError, type RunStore } from './durable/RunStore.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { resetTurnCount } from './policies/limits.js';
@@ -223,8 +227,13 @@ export async function openRun(
   // A run journaled before effects were scoped by flow cannot resume inside one: its
   // recorded steps are keyed without the flow, so none would match and every effect it
   // already performed would run again. Refuse rather than re-charge a card.
-  assertResumableEffectKeys(runState, await runStore.getSteps(runId));
-  if (runState.effectKeyVersion !== EFFECT_KEY_VERSION) {
+  //
+  // Do not flip a v1 in-flow journal to v2 here: `effectRunId()` would start emitting
+  // `flow@digest` keys and every already-journaled step would re-execute. Adopt v2 on
+  // flow exit, or when the journal is empty.
+  const journaled = await runStore.getSteps(runId);
+  assertResumableEffectKeys(runState, journaled);
+  if (shouldAdoptCurrentEffectKeyVersion(runState, journaled)) {
     runState.effectKeyVersion = EFFECT_KEY_VERSION;
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);

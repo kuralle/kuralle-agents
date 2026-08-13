@@ -1,5 +1,5 @@
 import type { SessionStore } from '../../session/SessionStore.js';
-import { EFFECT_KEY_VERSION } from './effectKeyVersion.js';
+import { isResumableEffectKeyVersion } from './effectKeyVersion.js';
 import { SessionRunStore } from './SessionRunStore.js';
 
 /** Why a persisted run will refuse to resume after upgrading. */
@@ -80,7 +80,7 @@ export async function findUnresumableRuns(
     if (
       runState.activeFlow &&
       steps.length > 0 &&
-      runState.effectKeyVersion !== EFFECT_KEY_VERSION
+      !isResumableEffectKeyVersion(runState.effectKeyVersion)
     ) {
       found.push({
         ...base,

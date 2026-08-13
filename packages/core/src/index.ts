@@ -492,6 +492,7 @@ export {
   renderScopeTemplate,
   canonicalJson,
   flowDigest,
+  digestForLiveFlow,
   FLOW_DEFINITION_VERSION_STATUSES,
   FlowDefinitionConflictError,
   FlowDefinitionNotFoundError,
@@ -625,6 +626,7 @@ export type {
   RunStatus,
   RunFilter,
   RunRef,
+  RunFlowRef,
   StepRecord,
   SignalDelivery,
   SignalActor,
@@ -645,6 +647,8 @@ export {
   StepNotFoundError,
   isTerminalRunStatus,
 } from './runtime/durable/RunStore.js';
+export { FlowDriftError } from './runtime/durable/flowPin.js';
+export type { FlowDriftRecovery } from './runtime/durable/flowPin.js';
 export {
   TextDriver,
   AiSdkModelTurnLoop,

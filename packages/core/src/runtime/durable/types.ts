@@ -70,8 +70,16 @@ export interface PersistedFlowFrame {
   state: Record<string, unknown>;
 }
 
+export interface RunFlowRef {
+  name: string;
+  versionId?: string;
+}
+
 export interface PersistedFlowPark extends PersistedFlowFrame {
   node: string;
+  /** Digest of the parked parent, restored on pop so parent drift is still fail-closed. */
+  flowDigest?: string;
+  flowRef?: RunFlowRef;
 }
 
 export type RunKind = 'conversation' | 'flow';
@@ -89,6 +97,15 @@ export interface RunState {
   activeAgentId: string;
   activeFlow?: string;
   activeNode?: string;
+  /**
+   * Canonical digest of the flow this run entered. Stamped on entry, compared
+   * on resume. Absent on runs journaled before digest pinning — those resume
+   * as they did (classify, don't break). Integrity metadata: never taken from
+   * a caller argument to force a resume.
+   */
+  flowDigest?: string;
+  /** Store identity of the flow this run entered, when it came from a published version. */
+  flowRef?: RunFlowRef;
   /** State owned by the active flow. It is persisted independently from root runtime state. */
   flowFrame?: PersistedFlowFrame;
   /** Suspended parent flow frames, ordered outermost to innermost. */
@@ -102,11 +119,12 @@ export interface RunState {
    *  Scopes the durable effect-key namespace so a new turn re-executes rather than replaying a
    *  prior turn's cached result (F6/G8). Absent on legacy runs → treat as 0. */
   runEpoch?: number;
-  /** Which effect-key scheme this run's journal was written under. Version 1 scopes a
-   *  flow's effects by flow name; before it, callsites were rebased to 0 on every flow
-   *  entry with no flow in the key, so a resumed in-flow run would not find its own
-   *  recorded steps and would re-execute their side effects. Absent on a run journaled
-   *  before the change — see `assertResumableEffectKeys`. */
+  /** Which effect-key scheme this run's journal was written under. Version 2 scopes a
+   *  flow's effects by `flow@digest`; version 1 scoped by flow name only. Before
+   *  version 1, callsites were rebased to 0 on every flow entry with no flow in the
+   *  key, so a resumed in-flow run would not find its own recorded steps and would
+   *  re-execute their side effects. Absent on a run journaled before version 1 —
+   *  see `assertResumableEffectKeys`. Version 1 journals are legacy-resumable. */
   effectKeyVersion?: number;
   /** Inbound message idempotency keys already accepted (H2 webhook-retry dedup). */
   processedInboundKeys?: string[];

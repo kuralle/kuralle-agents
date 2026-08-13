@@ -438,6 +438,7 @@ describe('R-04 nested flows own isolated persisted state frames', () => {
       flow: 'intake',
       node: 'parent-reply',
       state: { issue: 'Bedroom window latch broken', urgency: 'routine' },
+      flowDigest: 'code:intake',
     });
 
     await collectParts(runtime.run({ sessionId, input: 'WO-HEAT', driver }));

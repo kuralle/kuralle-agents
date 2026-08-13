@@ -47,6 +47,7 @@ import {
 } from '../flows/addDynamicFlows.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
 import { openRun, resolveRunStore, resolveTargetRunId, mintRunId, type OpenRunResult } from './openRun.js';
+import { assertParkedFlowDigest } from './durable/flowPin.js';
 
 function resolveOutOfBandControl(agent: AgentConfig): boolean {
   const hasFlows = (agent.flows?.length ?? 0) > 0;
@@ -534,6 +535,20 @@ export class Runtime {
         opened.session.workingMemory,
       );
       runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
+
+      if (
+        freshRunState.waitingFor &&
+        freshRunState.activeFlow &&
+        freshRunState.flowDigest
+      ) {
+        const parkedFlow = findFlowByName(activeAgent, freshRunState.activeFlow);
+        if (!parkedFlow) {
+          throw new Error(
+            `Active flow "${freshRunState.activeFlow}" not found on agent "${activeAgent.id}"`,
+          );
+        }
+        await assertParkedFlowDigest(freshRunState, parkedFlow);
+      }
 
       await runCtx.resumePendingInterrupt(
         resolvePendingApprovalTool(activeAgent, runCtx.runState),
@@ -1505,6 +1520,8 @@ export class Runtime {
     runState.waitingFor = undefined;
     runState.activeFlow = undefined;
     runState.activeNode = undefined;
+    runState.flowDigest = undefined;
+    runState.flowRef = undefined;
     delete runState.state[ESCALATION_NOTIFIED_KEY];
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);

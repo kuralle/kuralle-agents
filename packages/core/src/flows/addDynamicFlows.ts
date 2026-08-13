@@ -174,6 +174,8 @@ export async function registerDynamicFlowBundle(
         const version = await options.store.createVersion(def);
         persisted.push(def.name);
         await options.store.setActive(def.name, version.versionId);
+        const live = options.catalog.getDynamic(def.name);
+        if (live) live.versionId = version.versionId;
       }
     }
     return registered;
@@ -212,6 +214,7 @@ export async function loadDynamicFlowsIntoCatalog(
   options: LoadDynamicFlowsOptions,
 ): Promise<void> {
   const rows = await options.store.list({ status: 'active' });
+  const byName = new Map(rows.map((row) => [row.name, row]));
   let ordered: FlowDefinition[];
   try {
     ordered = topoSortFlowDefinitions(rows.map((row) => row.definition));
@@ -242,6 +245,8 @@ export async function loadDynamicFlowsIntoCatalog(
         mode: 'lenient',
         onUnsupportedSchema: 'warn',
       });
+      const row = byName.get(def.name);
+      if (row) flow.versionId = row.versionId;
       options.catalog.register(flow);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
