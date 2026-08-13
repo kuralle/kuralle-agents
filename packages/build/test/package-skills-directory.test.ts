@@ -6,7 +6,6 @@ import { packageSkillsDirectory } from '../src/packageSkillsDirectory.js';
 import { isPackagedSkill } from '@kuralle-agents/core';
 
 const FIXTURES = join(import.meta.dir, 'fixtures', 'skills-packaging');
-const ENV_FIXTURES = join(import.meta.dir, 'fixtures', 'skills-packaging-with-env');
 
 describe('packageSkillsDirectory', () => {
   it('packages a fixture directory twice with byte-identical ids', async () => {
@@ -46,7 +45,14 @@ describe('packageSkillsDirectory', () => {
   });
 
   it('throws when a skill directory contains .env, naming the file', async () => {
-    await expect(packageSkillsDirectory(ENV_FIXTURES)).rejects.toThrow(/\.env/);
+    const root = await mkdtemp(join(tmpdir(), 'skills-env-'));
+    await mkdir(join(root, 'with-env'), { recursive: true });
+    await writeFile(
+      join(root, 'with-env', 'SKILL.md'),
+      '---\nname: with-env\ndescription: Has env.\n---\n\nBody.\n',
+    );
+    await writeFile(join(root, 'with-env', '.env'), 'SECRET=1\n');
+    await expect(packageSkillsDirectory(root)).rejects.toThrow(/\.env/);
   });
 
   // macOS and Windows are case-insensitive by default, so `.ENV` and `.env` are the

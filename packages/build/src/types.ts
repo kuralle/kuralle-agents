@@ -11,6 +11,7 @@ export type BuildDiagnosticCode =
   | 'MODULE_EXPORT_INVALID'
   | 'PATH_INVALID'
   | 'SKILL_INVALID'
+  | 'FLOW_INVALID'
   | 'SYMLINK_REJECTED'
   | 'TARGET_INCOMPATIBLE'
   | 'UNKNOWN_SLOT';

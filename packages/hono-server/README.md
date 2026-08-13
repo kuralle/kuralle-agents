@@ -19,6 +19,7 @@ Peers: `@kuralle-agents/core`, `ai@^6`.
 **Key exports:**
 
 - **`createKuralleChatRouter`** — full router: chat, SSE (native default), WebSocket, session, outcome, audit endpoints.
+- **`createStoredFlowsRouter`** — `GET/POST/DELETE /api/stored/flows` catalog, Policy-gated (`stored-flows:read` / `stored-flows:write`). Default-allow when no policy is passed (authless dev-router posture).
 - **`createKuralleSseChatRouter`** — raw JSON-SSE only (explicit legacy wire).
 - **`createOpenAICompatRouter`** — OpenAI-compatible `/v1/chat/completions` endpoint.
 - **`createKuralleRouter`** — standalone router for flow-manager instances.

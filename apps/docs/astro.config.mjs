@@ -122,6 +122,7 @@ const sidebar = [
       { label: 'Agents', link: '/guides/agents' },
       { label: 'Flows', link: '/guides/flows' },
       { label: 'Flow Execution Model', link: '/guides/flow-execution' },
+      { label: 'Dynamic Flows', link: '/guides/dynamic-flows' },
       { label: 'Tools', link: '/guides/tools' },
       { label: 'Routing & Handoffs', link: '/guides/routing' },
     ],

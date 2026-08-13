@@ -1,6 +1,6 @@
 import { readdir, lstat, readFile } from 'node:fs/promises';
 import { basename, join, relative, resolve, sep } from 'node:path';
-import { parseSkillFrontmatter } from '@kuralle-agents/core';
+import { parseSkillFrontmatter, assertValidFlowDefinition, flowDefinitionSchema } from '@kuralle-agents/core';
 import {
   createArtifact,
   sha256,
@@ -9,6 +9,7 @@ import {
   type ArtifactInputV1,
   type CapabilityReference,
   type ContentEntry,
+  type InlineFlowEntry,
   type PolicyArtifact,
   type SkillArtifact,
 } from '@kuralle-agents/deployment';
@@ -232,6 +233,26 @@ function moduleId(path: string, directory: 'tools' | 'flows'): string {
     .join('.');
 }
 
+function isTopLevelFlowJson(agentPath: string): boolean {
+  const parts = agentPath.split('/');
+  return parts.length === 2 && parts[0] === 'flows' && parts[1]!.endsWith('.flow.json');
+}
+
+function flowSchemaIssuePath(parsed: ReturnType<typeof flowDefinitionSchema.safeParse>): string {
+  if (parsed.success) return '';
+  const issue = parsed.error.issues[0];
+  if (!issue || issue.path.length === 0) return '';
+  return issue.path.map(String).join('.');
+}
+
+function flowSchemaIssueMessage(parsed: ReturnType<typeof flowDefinitionSchema.safeParse>): string {
+  if (parsed.success) return 'invalid flow definition';
+  const issue = parsed.error.issues[0];
+  const path = flowSchemaIssuePath(parsed);
+  if (!issue) return 'invalid flow definition';
+  return path ? `${path}: ${issue.message}` : issue.message;
+}
+
 async function compileModules(
   state: CompileState,
   agentDir: string,
@@ -258,7 +279,15 @@ async function compileModules(
     const projectPath = sourcePath(state, absolute);
     const agentPath = portablePath(relative(agentDir, absolute));
     if (!/\.tsx?$/.test(agentPath)) {
-      diagnostic(state, 'UNKNOWN_SLOT', projectPath, `${directory} may contain only .ts or .tsx modules`);
+      if (directory === 'flows' && isTopLevelFlowJson(agentPath)) continue;
+      diagnostic(
+        state,
+        'UNKNOWN_SLOT',
+        projectPath,
+        directory === 'flows'
+          ? `${directory} may contain only .ts, .tsx, or top-level .flow.json files`
+          : `${directory} may contain only .ts or .tsx modules`,
+      );
       continue;
     }
     const data = await trackedFile(state, absolute);
@@ -291,6 +320,73 @@ async function compileModules(
     sourceMap.push({ source: agentPath, target: `${singular}:${id}`, digest });
   }
   return { references, sourceMap };
+}
+
+async function compileInlineFlows(
+  state: CompileState,
+  agentDir: string,
+): Promise<{ entries: InlineFlowEntry[]; sourceMap: ArtifactInputV1['sourceMap'] }> {
+  const entries: InlineFlowEntry[] = [];
+  const sourceMap: ArtifactInputV1['sourceMap'] = [];
+  const absoluteDirectory = join(agentDir, 'flows');
+  try {
+    const stats = await lstat(absoluteDirectory);
+    if (stats.isSymbolicLink() || !stats.isDirectory()) return { entries, sourceMap };
+  } catch {
+    return { entries, sourceMap };
+  }
+  for (const entry of await sortedEntries(absoluteDirectory)) {
+    if (!entry.name.endsWith('.flow.json')) continue;
+    const absolute = join(absoluteDirectory, entry.name);
+    const projectPath = sourcePath(state, absolute);
+    const agentPath = portablePath(relative(agentDir, absolute));
+    if (entry.isSymbolicLink()) continue;
+    if (!entry.isFile()) {
+      diagnostic(state, 'PATH_INVALID', projectPath, 'expected a regular file');
+      continue;
+    }
+    const data = await trackedFile(state, absolute);
+    if (!data) continue;
+    const text = decodedText(state, data, projectPath);
+    if (text === null) continue;
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch (error) {
+      diagnostic(
+        state,
+        'FLOW_INVALID',
+        projectPath,
+        error instanceof Error ? error.message : 'invalid JSON',
+      );
+      continue;
+    }
+    const parsed = flowDefinitionSchema.safeParse(json);
+    if (!parsed.success) {
+      diagnostic(
+        state,
+        'FLOW_INVALID',
+        projectPath,
+        flowSchemaIssueMessage(parsed),
+      );
+      continue;
+    }
+    try {
+      assertValidFlowDefinition(parsed.data);
+    } catch (error) {
+      diagnostic(
+        state,
+        'FLOW_INVALID',
+        projectPath,
+        error instanceof Error ? error.message : 'invalid flow definition',
+      );
+      continue;
+    }
+    const digest = await sha256(data);
+    entries.push({ kind: 'inline', id: parsed.data.name, definition: parsed.data });
+    sourceMap.push({ source: agentPath, target: `flow:${parsed.data.name}`, digest });
+  }
+  return { entries, sourceMap };
 }
 
 async function compilePolicies(
@@ -535,6 +631,7 @@ async function compileOne(
   // case-fold collision state, so parallel reads would make the diagnostic
   // attached to the threshold/collision depend on I/O scheduling.
   const toolResult = await compileModules(state, agentDir, artifactId, 'tools');
+  const inlineFlowResult = await compileInlineFlows(state, agentDir);
   const flowResult = await compileModules(state, agentDir, artifactId, 'flows');
   const policyResult = await compilePolicies(state, agentDir, artifactId);
   const skills = await compileSkills(state, agentDir);
@@ -573,6 +670,7 @@ async function compileOne(
     ...(configDigest ? [{ source: 'agent.json', target: 'agent', digest: configDigest }] : []),
     { source: 'instructions.md', target: 'instructions', digest: instructions.digest },
     ...toolResult.sourceMap,
+    ...inlineFlowResult.sourceMap,
     ...flowResult.sourceMap,
     ...policyResult.sourceMap,
     ...skills.flatMap(skill => skill.files.map(file => ({
@@ -609,7 +707,8 @@ async function compileOne(
         digest: child.digest,
       })),
       tools: toolResult.references.map(reference => ({ kind: 'trusted' as const, ...reference })),
-      flows: flowResult.references,
+      flows: [...inlineFlowResult.entries, ...flowResult.references]
+        .sort((a, b) => a.id.localeCompare(b.id)),
       policies: policyResult.policies,
       requiredCapabilities,
       secretRefs: [],

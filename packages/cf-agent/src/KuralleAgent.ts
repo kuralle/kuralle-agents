@@ -30,7 +30,9 @@ import {
   DEFAULT_SWEEP_INTERVAL_MS,
   wakeJob,
   type DeploymentTraceContext,
+  type FlowDefinitionsStore,
   type HarnessConfig,
+  type Policy,
   type Runtime,
 } from '@kuralle-agents/core';
 import type {
@@ -56,6 +58,8 @@ import { createUIMessageStreamResponse } from 'ai';
 import type { DurableSqlStorage, SqlExecutor } from './types.js';
 import { durableAgentSurface } from './durable-agent-surface.js';
 import { lastUserInputFromMessages } from './cfMessageInput.js';
+import { SqlFlowDefinitionsStore } from './SqlFlowDefinitionsStore.js';
+import { dispatchStoredFlowsRequest } from './storedFlowsHttp.js';
 
 export interface ResolvedRuntimeDefinition {
   agents: HarnessConfig['agents'];
@@ -200,6 +204,28 @@ export abstract class KuralleAgent<
    */
   protected getRuntimeConfig(): Partial<HarnessConfig> {
     return {};
+  }
+
+  /**
+   * Policy for `GET/POST/DELETE /api/stored/flows`. Decisions are requested as
+   * `stored-flows:read` and `stored-flows:write`.
+   *
+   * Omitted: default-allow, matching the authless hono-server dev router.
+   * Production DOs must override this. `authorId` on the request is metadata,
+   * never a grant. `ask` is treated as deny — this surface has no HITL path.
+   */
+  protected getStoredFlowsPolicy(): Policy | undefined {
+    return undefined;
+  }
+
+  /**
+   * Called after a successful stored-flows POST or DELETE. Thread agents bump
+   * the pin-key cache generation so the next turn re-binds.
+   */
+  protected onStoredFlowsMutated(): void {}
+
+  protected getFlowDefinitionsStore(): FlowDefinitionsStore {
+    return new SqlFlowDefinitionsStore(this.getSql());
   }
 
   /**
@@ -354,17 +380,22 @@ export abstract class KuralleAgent<
     const runtimeConfig = { ...extraConfig, ...definition.config };
     const workingMemoryStore = this.getWorkingMemoryStore();
     const runStore = runtimeConfig.runStore ?? await this.durableRunStore();
+    const flowDefinitionsStore =
+      runtimeConfig.flowDefinitionsStore ?? this.getFlowDefinitionsStore();
+    const runtime = createRuntime({
+      ...runtimeConfig,
+      agents: definition.agents,
+      defaultAgentId,
+      sessionStore,
+      runStore,
+      flowDefinitionsStore,
+      ...(workingMemoryStore && !runtimeConfig.defaultWorkingMemoryStore
+        ? { defaultWorkingMemoryStore: workingMemoryStore }
+        : {}),
+    });
+    await runtime.loadDynamicFlows({ agentId: defaultAgentId });
     return {
-      runtime: createRuntime({
-        ...runtimeConfig,
-        agents: definition.agents,
-        defaultAgentId,
-        sessionStore,
-        runStore,
-        ...(workingMemoryStore && !runtimeConfig.defaultWorkingMemoryStore
-          ? { defaultWorkingMemoryStore: workingMemoryStore }
-          : {}),
-      }),
+      runtime,
       deployment: definition.deployment,
     };
   }
@@ -551,6 +582,18 @@ export abstract class KuralleAgent<
    */
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    const storedFlows = await dispatchStoredFlowsRequest({
+      request,
+      store: this.getFlowDefinitionsStore(),
+      runtimeForWrite: async () => {
+        const built = await this.buildRuntime();
+        return { runtime: built.runtime, agentId: built.runtime.getDefaultAgentId() };
+      },
+      storedFlowsPolicy: this.getStoredFlowsPolicy(),
+      onMutated: () => this.onStoredFlowsMutated(),
+    });
+    if (storedFlows) return storedFlows;
 
     // HTTP counterpart to the native Agents WebSocket chat protocol. This is
     // intentionally completion-oriented JSON: browser clients should use

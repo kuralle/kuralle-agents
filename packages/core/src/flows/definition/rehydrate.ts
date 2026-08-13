@@ -18,6 +18,7 @@ import { evaluatePredicate } from './predicate.js';
 import type { PredicateContext } from './predicate.js';
 import { adaptJsonSchema, jsonSchemaRequiredFields, type UnsupportedSchemaMode } from './jsonSchemaAdapter.js';
 import { stashFlowDefinition } from './storable.js';
+import { segmentsForLiveFlow } from './segments.js';
 import type {
   ActionNodeDefinition,
   CollectNodeDefinition,
@@ -348,5 +349,7 @@ export function rehydrateFlow(def: FlowDefinition, deps: FlowRehydrationDeps): F
       }),
     },
   };
-  return stashFlowDefinition(flow, cloneDefinition(def));
+  stashFlowDefinition(flow, cloneDefinition(def));
+  segmentsForLiveFlow(flow);
+  return flow;
 }

@@ -138,3 +138,22 @@ export type {
   NlPredicateProvider,
   NlPredicateProvenance,
 } from './authoring/index.js';
+export {
+  FLOW_BUILDER_AUTHORING_PLAYBOOK,
+  FLOW_BUILDER_TOOL_NAMES,
+  createFlowBuilderAgent,
+  composeFlowBuilderInstructions,
+  createFlowBuilderTools,
+  normalizeFlowBuilderCatalog,
+  registryIndexFromCatalogs,
+} from './authoring/index.js';
+export type {
+  CreateFlowBuilderAgentOptions,
+  SaveFlowResult,
+  SaveFlowSuccess,
+  SaveFlowFailure,
+  FlowBuilderCatalogEntry,
+  FlowBuilderCatalogSource,
+  FlowBuilderHost,
+  FlowBuilderRuntime,
+} from './authoring/index.js';

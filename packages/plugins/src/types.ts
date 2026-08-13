@@ -1,4 +1,4 @@
-import type { SkillStoreLike } from '@kuralle-agents/core';
+import type { FlowDefinition, SkillStoreLike } from '@kuralle-agents/core';
 
 export interface Diagnostic {
   section: string;
@@ -70,10 +70,21 @@ export type McpServerConfig =
       headers?: Record<string, string>;
     };
 
+export interface LoadAgentPluginOptions {
+  /**
+   * Host-registered tool names. When omitted, the flow validator's tools index
+   * kind is absent — gated semantics skip tool-reference checks rather than
+   * failing every action node. An empty array still enables the check class.
+   */
+  hostTools?: readonly string[];
+}
+
 export interface LoadedPlugin {
   manifest: PluginManifest;
   skills: SkillStoreLike;
   mcpServers: readonly McpServerConfig[];
+  /** Validated definitions. The host registers them via `runtime.addDynamicFlows`. */
+  flows: readonly FlowDefinition[];
   diagnostics: readonly Diagnostic[];
 }
 

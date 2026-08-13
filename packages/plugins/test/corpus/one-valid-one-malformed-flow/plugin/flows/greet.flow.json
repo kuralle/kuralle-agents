@@ -1,0 +1,13 @@
+{
+  "name": "greet",
+  "description": "Say hello.",
+  "start": "hello",
+  "nodes": [
+    {
+      "kind": "reply",
+      "id": "hello",
+      "response": { "template": "Hello." },
+      "next": { "end": "done" }
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import type { FlowDefinition } from '@kuralle-agents/core';
+
 export type ArtifactSchemaVersion = 1;
 
 export interface CompilerIdentity {
@@ -38,6 +40,18 @@ export interface CapabilityReference {
   id: string;
   capability: string;
   versionRange: string;
+}
+
+export interface InlineFlowEntry {
+  kind: 'inline';
+  id: string;
+  definition: FlowDefinition;
+}
+
+export type ArtifactFlow = CapabilityReference | InlineFlowEntry;
+
+export function isInlineFlowEntry(value: ArtifactFlow): value is InlineFlowEntry {
+  return 'kind' in value && value.kind === 'inline';
 }
 
 export interface TrustedToolReference extends CapabilityReference {
@@ -131,7 +145,7 @@ export interface AgentArtifactV1 {
   workspaceSeed: ContentEntry[];
   agents: AgentNode[];
   tools: ToolReference[];
-  flows: CapabilityReference[];
+  flows: ArtifactFlow[];
   policies: PolicyArtifact;
   requiredCapabilities: CapabilityRequirement[];
   secretRefs: SecretReference[];
