@@ -1,6 +1,6 @@
 import type { SessionStore } from '../../session/SessionStore.js';
-import { readSessionDurableRuns } from './types.js';
 import { EFFECT_KEY_VERSION } from './effectKeyVersion.js';
+import { SessionRunStore } from './SessionRunStore.js';
 
 /** Why a persisted run will refuse to resume after upgrading. */
 export type UnresumableReason =
@@ -48,45 +48,45 @@ export async function findUnresumableRuns(
   sessionStore: SessionStore,
   options: { sessionIds?: string[] } = {},
 ): Promise<UnresumableRun[]> {
-  const ids =
-    options.sessionIds ?? (await sessionStore.list()).map((session) => session.id);
+  const enumerator = new SessionRunStore(sessionStore, options.sessionIds?.[0] ?? '');
+  const allow = options.sessionIds ? new Set(options.sessionIds) : undefined;
   const found: UnresumableRun[] = [];
 
-  for (const sessionId of ids) {
-    const session = await sessionStore.get(sessionId);
-    if (!session) continue;
-    const runs = readSessionDurableRuns(session);
+  for await (const ref of enumerator.listRuns({})) {
+    const sessionId = ref.sessionId;
+    if (!sessionId) continue;
+    if (allow && !allow.has(sessionId)) continue;
 
-    for (const [runId, persisted] of Object.entries(runs)) {
-      const runState = persisted.runState;
-      const steps = persisted.steps;
-      const base = {
-        sessionId,
-        runId,
-        recordedSteps: steps.length,
-        updatedAt: runState.updatedAt,
-      };
+    const runStore = new SessionRunStore(sessionStore, sessionId);
+    const runState = await runStore.getRunState(ref.runId);
+    if (!runState) continue;
+    const steps = await runStore.getSteps(ref.runId);
+    const base = {
+      sessionId,
+      runId: ref.runId,
+      recordedSteps: steps.length,
+      updatedAt: runState.updatedAt,
+    };
 
-      if (runState.waitingFor && !runState.waitingFor.resumeKey) {
-        found.push({
-          ...base,
-          reason: 'legacy-approval',
-          waitingFor: runState.waitingFor.signalName,
-        });
-        continue;
-      }
+    if (runState.waitingFor && !runState.waitingFor.resumeKey) {
+      found.push({
+        ...base,
+        reason: 'legacy-approval',
+        waitingFor: runState.waitingFor.signalName,
+      });
+      continue;
+    }
 
-      if (
-        runState.activeFlow &&
-        steps.length > 0 &&
-        runState.effectKeyVersion !== EFFECT_KEY_VERSION
-      ) {
-        found.push({
-          ...base,
-          reason: 'legacy-effect-keys',
-          activeFlow: runState.activeFlow,
-        });
-      }
+    if (
+      runState.activeFlow &&
+      steps.length > 0 &&
+      runState.effectKeyVersion !== EFFECT_KEY_VERSION
+    ) {
+      found.push({
+        ...base,
+        reason: 'legacy-effect-keys',
+        activeFlow: runState.activeFlow,
+      });
     }
   }
 

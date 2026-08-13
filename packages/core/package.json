@@ -32,6 +32,10 @@
       "types": "./dist/runtime/index.d.ts",
       "default": "./dist/runtime/index.js"
     },
+    "./runtime/durable/testing": {
+      "types": "./dist/runtime/durable/testing.d.ts",
+      "default": "./dist/runtime/durable/testing.js"
+    },
     "./guards": {
       "types": "./dist/guards/index.d.ts",
       "default": "./dist/guards/index.js"

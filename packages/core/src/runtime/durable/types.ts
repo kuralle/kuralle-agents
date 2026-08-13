@@ -148,6 +148,53 @@ export function runKind(run: { kind?: RunKind }): RunKind {
   return run.kind ?? 'conversation';
 }
 
+export type RunStatus = RunState['status'];
+
+export interface RunFilter {
+  status?: RunStatus;
+  kind?: RunKind;
+  flowName?: string;
+  waitingSignalId?: string;
+  deadlineBefore?: Date;
+}
+
+export interface RunRef {
+  runId: string;
+  sessionId?: string;
+  status: RunStatus;
+  kind: RunKind;
+  flowName?: string;
+  waitingFor?: InterruptRequest;
+  updatedAt: number;
+}
+
+export function runMatchesFilter(state: RunState, filter: RunFilter): boolean {
+  if (filter.status !== undefined && state.status !== filter.status) return false;
+  if (filter.kind !== undefined && runKind(state) !== filter.kind) return false;
+  if (filter.flowName !== undefined && state.activeFlow !== filter.flowName) return false;
+  if (filter.waitingSignalId !== undefined) {
+    if (state.waitingFor?.requestId !== filter.waitingSignalId) return false;
+  }
+  if (filter.deadlineBefore !== undefined) {
+    const deadline = state.waitingFor?.deadline;
+    if (deadline == null || deadline >= filter.deadlineBefore.getTime()) return false;
+  }
+  return true;
+}
+
+export function toRunRef(state: RunState, storedInSessionId?: string): RunRef {
+  const ref: RunRef = {
+    runId: state.runId,
+    sessionId: storedInSessionId ?? state.sessionId,
+    status: state.status,
+    kind: runKind(state),
+    updatedAt: state.updatedAt,
+  };
+  if (state.activeFlow !== undefined) ref.flowName = state.activeFlow;
+  if (state.waitingFor !== undefined) ref.waitingFor = state.waitingFor;
+  return ref;
+}
+
 export function readSessionDurableRuns(session: object): SessionDurableRuns {
   return (session as { [DURABLE_RUNS_KEY]?: SessionDurableRuns })[DURABLE_RUNS_KEY] ?? {};
 }

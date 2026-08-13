@@ -540,6 +540,9 @@ export type { ChoiceOption, ResolvedSelection } from './types/selection.js';
 export type {
   RunState,
   RunKind,
+  RunStatus,
+  RunFilter,
+  RunRef,
   StepRecord,
   SignalDelivery,
   SignalActor,
@@ -551,8 +554,9 @@ export type {
   SessionDurableRuns,
   PersistedRun,
 } from './runtime/durable/types.js';
-export { DURABLE_RUNS_KEY, runKind } from './runtime/durable/types.js';
-export type { RunStore } from './runtime/durable/RunStore.js';
+export { DURABLE_RUNS_KEY, runKind, runMatchesFilter, toRunRef } from './runtime/durable/types.js';
+export type { RunStore, DeleteRunOptions } from './runtime/durable/RunStore.js';
+export { RunNotTerminalError, isTerminalRunStatus } from './runtime/durable/RunStore.js';
 export {
   TextDriver,
   AiSdkModelTurnLoop,
