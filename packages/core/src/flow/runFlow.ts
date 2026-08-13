@@ -1,7 +1,7 @@
 import type { ModelMessage } from 'ai';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
-import type { CollectNode, DecideNode, Flow, FlowNode } from '../types/flow.js';
+import type { CollectNode, DecideNode, Flow, FlowNode, ReplyNode } from '../types/flow.js';
 import {
   popFlowPark,
   pushFlowPark,
@@ -31,7 +31,7 @@ import {
 import { normalizeTransition, resolveNodeRef } from './normalizeTransition.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
 import { reduceTransition } from './reduceTransition.js';
-import { resolveReplyNode } from './nodeBuilders.js';
+import { resolveReplyNode, buildNodePrompt } from './nodeBuilders.js';
 import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
@@ -50,6 +50,7 @@ import {
   exportFlowState,
 } from './flowState.js';
 import { emptySignalSchema } from '../runtime/durable/signalSchemas.js';
+import { segmentStartingAt, type FlowSegment } from '../flows/definition/segments.js';
 
 export type FlowResult =
   | { kind: 'ended'; reason: string }
@@ -409,6 +410,129 @@ async function dispatchNode(
   throw new Error(`Unknown node kind: ${(node as FlowNode).kind}`);
 }
 
+function transitionTargetId(transition: NormalizedTransition): string | undefined {
+  if (transition.kind !== 'goto') return undefined;
+  return typeof transition.to === 'string' ? transition.to : transition.to.id;
+}
+
+function canBatchGenerateReplySegment(
+  segment: FlowSegment,
+  ctx: RunContext,
+  registry: Map<string, FlowNode>,
+): boolean {
+  if (segment.kind !== 'generate-replies') return false;
+  if (ctx.outOfBandControl) return false;
+  for (const id of segment.nodeIds) {
+    const candidate = registry.get(id);
+    if (!candidate || !isReplyNode(candidate)) return false;
+    if (candidate.response || candidate.tools || candidate.confidenceGate) return false;
+  }
+  return true;
+}
+
+/**
+ * One `runAgentTurn` for a homogeneous generate-reply chain, then per-node `next` /
+ * verify / traces. Errors propagate to the existing runFlow catch — never skip
+ * recoverable/degrade machinery. Mixed generate+action is not batched: a post-action
+ * reply's copy would stream before `ctx.tool`, or actions would have to become model
+ * tools and change the journal.
+ */
+async function dispatchGenerateReplySegment(
+  segment: FlowSegment,
+  startNode: FlowNode,
+  run: RunState,
+  driver: ChannelDriver,
+  ctx: RunContext,
+  agent: AgentConfig | undefined,
+  flow: Flow,
+  registry: Map<string, FlowNode>,
+  edgeCounts: Map<string, number>,
+): Promise<{ node: FlowNode; transition: NormalizedTransition }> {
+  const replies: ReplyNode[] = [];
+  for (const id of segment.nodeIds) {
+    const candidate = registry.get(id);
+    if (!candidate || !isReplyNode(candidate)) {
+      return {
+        node: startNode,
+        transition: await dispatchNode(startNode, run, driver, ctx, agent, flow),
+      };
+    }
+    replies.push(candidate);
+  }
+
+  const first = replies[0]!;
+  const state = currentFlowState(run);
+  const base = resolveReplyNode(first, state);
+  const combined = replies
+    .map((replyNode) => buildNodePrompt(replyNode, state))
+    .filter((prompt) => prompt.trim())
+    .join('\n\n');
+  const turn = await driver.runAgentTurn({ ...base, prompt: combined || base.prompt }, ctx);
+  await persistTurnUsageFromTurn(ctx, turn);
+
+  if (turn.interrupted) {
+    const signal = await driver.awaitUser(ctx);
+    appendUserMessage(run, signal.input);
+    return {
+      node: first,
+      transition: await dispatchNode(first, run, driver, ctx, agent, flow),
+    };
+  }
+  if (turn.control?.type === 'handoff') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'handoff', to: turn.control.target, reason: turn.control.reason } };
+  }
+  if (turn.control?.type === 'end') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'end', reason: turn.control.reason } };
+  }
+  if (turn.control?.type === 'escalate') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'escalate', reason: turn.control.reason } };
+  }
+  if (turn.control?.type === 'recover') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'end', reason: turn.control.reason ?? 'error_degraded' } };
+  }
+
+  appendAssistantMessage(run, turn.text);
+
+  let current: FlowNode = first;
+  let transition: NormalizedTransition = { kind: 'stay' };
+  for (let i = 0; i < replies.length; i++) {
+    const currentReply = replies[i]!;
+    current = currentReply;
+    const nodeState = currentFlowState(run);
+    transition = currentReply.next
+      ? normalizeTransition(await currentReply.next(turn, nodeState))
+      : { kind: 'stay' };
+    if (i === replies.length - 1) break;
+
+    const steps = await loadRecordedSteps(ctx.runStore, run.runId);
+    await runNodeVerify(current, {
+      state: currentFlowState(run),
+      steps,
+      data: transition.kind === 'goto' ? transition.data : undefined,
+    });
+    if (transition.kind !== 'goto' || transitionTargetId(transition) !== segment.nodeIds[i + 1]) break;
+
+    const target = resolveGotoTarget(transition.to, registry, flow.name);
+    bumpOscillation(edgeCounts, current.id, target.id);
+    await reduceTransition({
+      fromNodeId: current.id,
+      toNode: target,
+      run,
+      flow,
+      model: ctx.model,
+      data: transition.data,
+      emit: ctx.emit,
+      abortSignal: ctx.abortSignal,
+    });
+    await ctx.runStore.putRunState(run);
+  }
+  return { node: current, transition };
+}
+
 /**
  * Drop everything a previous run of `flow` collected. Namespaced cache keys AND the
  * un-namespaced copies `reduceTransition` promotes onto `run.state` via Object.assign.
@@ -486,8 +610,30 @@ export async function runFlow(
     }
     let transition: NormalizedTransition;
     try {
-      transition = await dispatchNode(node, run, driver, ctx, agent, flow);
+      const segment = segmentStartingAt(flow, node.id);
+      if (segment && canBatchGenerateReplySegment(segment, ctx, registry)) {
+        const walked = await dispatchGenerateReplySegment(
+          segment,
+          node,
+          run,
+          driver,
+          ctx,
+          agent,
+          flow,
+          registry,
+          edgeCounts,
+        );
+        node = walked.node;
+        transition = walked.transition;
+      } else {
+        transition = await dispatchNode(node, run, driver, ctx, agent, flow);
+      }
     } catch (error) {
+      if (error instanceof VerifyBlockedError) {
+        ctx.emit({ channel: 'client', type: 'error', payload: { error: error.message } });
+        await ctx.runStore.putRunState(run);
+        return { kind: 'awaitingUser' };
+      }
       // Neither is a malfunction, so neither may reach degradeFlowError and be reported to
       // the user as "something went wrong on my side". A suspend resumes later; a denial is
       // the action node author's to handle, since they chose to call the tool.
