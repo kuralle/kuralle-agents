@@ -1,6 +1,6 @@
 # @kuralle-agents/postgres-store
 
-Postgres-backed deployment, session, memory, trace, and vector stores for Kuralle.
+Postgres-backed deployment, session, run, memory, trace, and vector stores for Kuralle.
 
 ## Install
 
@@ -12,11 +12,12 @@ Peers: `@kuralle-agents/core @kuralle-agents/rag pg@^8`.
 
 ## What it does
 
-Three backend implementations — sessions, long-term memory, and pgvector similarity search — backed by a single Postgres connection pool.
+Postgres-backed session, run, memory, trace, deployment, and pgvector stores, sharing one connection pool.
 
 **Key exports:**
 
 - **`PostgresSessionStore`** — `SessionStore` implementation for durable session persistence.
+- **`PostgresRunStore`** — row-per-step `RunStore` (run state + journal), selected via `HarnessConfig.runStore`.
 - **`PostgresTraceStore`** — independent native trace persistence and read API.
 - **`PostgresExtractedValueStore`** — durable store for extractor output (cross-session memory).
 - **`PostgresPersistentMemoryStore`** — `PersistentMemoryStore` for durable USER/MEMORY markdown blocks.
@@ -66,6 +67,27 @@ const runtime = createRuntime({
   sessionStore,
 });
 ```
+
+## Run store
+
+```ts
+import { Pool } from 'pg';
+import { createRuntime } from '@kuralle-agents/core';
+import { PostgresRunStore, PostgresSessionStore } from '@kuralle-agents/postgres-store';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const sessionStore = new PostgresSessionStore({ client: pool });
+const runStore = new PostgresRunStore({ client: pool });
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  sessionStore,
+  runStore,
+});
+```
+
+Tables: `kuralle_run_state` (PK `run_id`, index on `(status, kind)`) and `kuralle_run_steps` (PK `(run_id, index)`). `autoMigrate` defaults to `true`. Override `stateTableName` / `stepsTableName` for tests.
 
 ## Trace store
 

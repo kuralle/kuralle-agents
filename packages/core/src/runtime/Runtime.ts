@@ -32,14 +32,14 @@ import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 
 import type { classifyHostTarget, selectHostTarget } from './select.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
-import { openRun, resolveTargetRunId, mintRunId, type OpenRunResult } from './openRun.js';
+import { openRun, resolveRunStore, resolveTargetRunId, mintRunId, type OpenRunResult } from './openRun.js';
 
 function resolveOutOfBandControl(agent: AgentConfig): boolean {
   const hasFlows = (agent.flows?.length ?? 0) > 0;
   return agent.experimental?.outOfBandControl ?? hasFlows;
 }
 import { closeRun } from './closeRun.js';
-import { SessionRunStore } from './durable/SessionRunStore.js';
+import type { RunStore } from './durable/RunStore.js';
 import { loadRecordedSteps } from './durable/replay.js';
 import { markSessionOutcome } from './outcomeMarking.js';
 import { resolveAgentPolicies } from './policies/resolvePolicies.js';
@@ -182,6 +182,11 @@ export interface HarnessConfig {
   policy?: Policy;
   /** Read-only observability, configured independently from durable session state. */
   tracing?: TracingConfig;
+  /**
+   * Durable run journal. When omitted, each session uses `SessionRunStore` over
+   * `sessionStore`. A shared adapter (e.g. `PostgresRunStore`) is used as-is.
+   */
+  runStore?: RunStore;
 }
 
 export interface RunOptions {
@@ -254,6 +259,7 @@ export class Runtime {
   private readonly pendingTraceWrites = new Set<Promise<void>>();
   private readonly pendingExtractions = new Set<Promise<void>>();
   private readonly extractedValueStore: ExtractedValueStore;
+  private readonly runStoreOverride?: RunStore;
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
@@ -279,6 +285,11 @@ export class Runtime {
       ? [this.traceStore, ...configuredSinks.filter((sink) => sink !== this.traceStore)]
       : [];
     this.extractedValueStore = resolveExtractedValueStore(config.extractedValueStore);
+    this.runStoreOverride = config.runStore;
+  }
+
+  private runStoreFor(sessionId: string): RunStore {
+    return resolveRunStore(this.sessionStore, sessionId, this.runStoreOverride);
   }
 
   run(opts: RunOptions): TurnHandle {
@@ -901,6 +912,7 @@ export class Runtime {
           transcriptionModel: this.config.transcriptionModel,
           defaultAgentId: this.config.defaultAgentId,
           sessionStore: this.sessionStore,
+          runStore: this.runStoreOverride,
           runId: addressedRunId ?? opts.runId,
           kind: opts.kind,
           flowName: opts.flowName,
@@ -1214,7 +1226,7 @@ export class Runtime {
     if (!session) {
       return null;
     }
-    const runStore = new SessionRunStore(this.sessionStore, session.id);
+    const runStore = this.runStoreFor(session.id);
     const runState = await runStore.getRunState(runId);
     if (!runState || runState.sessionId !== session.id) {
       return null;
@@ -1234,7 +1246,7 @@ export class Runtime {
   }
 
   async getConversationLength(sessionId: string): Promise<number> {
-    const runStore = new SessionRunStore(this.sessionStore, sessionId);
+    const runStore = this.runStoreFor(sessionId);
     const runState = await runStore.getRunState(sessionId);
     return runState?.messages.length ?? 0;
   }
@@ -1325,7 +1337,7 @@ export class Runtime {
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
-    const runStore = new SessionRunStore(this.sessionStore, sessionId);
+    const runStore = this.runStoreFor(sessionId);
     const runState = await runStore.getRunState(sessionId);
     if (!runState) {
       throw new Error(`No run state for session: ${sessionId}`);

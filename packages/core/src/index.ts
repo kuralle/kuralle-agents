@@ -555,8 +555,14 @@ export type {
   PersistedRun,
 } from './runtime/durable/types.js';
 export { DURABLE_RUNS_KEY, runKind, runMatchesFilter, toRunRef } from './runtime/durable/types.js';
-export type { RunStore, DeleteRunOptions } from './runtime/durable/RunStore.js';
-export { RunNotTerminalError, isTerminalRunStatus } from './runtime/durable/RunStore.js';
+export type { RunStore, DeleteRunOptions, StepFinalizePatch } from './runtime/durable/RunStore.js';
+export {
+  LogConflictError,
+  RunNotFoundError,
+  RunNotTerminalError,
+  StepNotFoundError,
+  isTerminalRunStatus,
+} from './runtime/durable/RunStore.js';
 export {
   TextDriver,
   AiSdkModelTurnLoop,

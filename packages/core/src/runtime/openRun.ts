@@ -14,7 +14,7 @@ import {
 import { setPendingUserInput } from './channels/inputBuffer.js';
 import { SessionRunStore } from './durable/SessionRunStore.js';
 import { assertResumableEffectKeys, EFFECT_KEY_VERSION } from './durable/effectKeyVersion.js';
-import { RunNotFoundError } from './durable/RunStore.js';
+import { RunNotFoundError, type RunStore } from './durable/RunStore.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { resetTurnCount } from './policies/limits.js';
 import { addSystemNote } from './systemNotes.js';
@@ -56,12 +56,22 @@ export interface OpenRunOptions {
    * resume ids go on `runId`, not here.
    */
   mint?: () => string;
+  /** Override the default SessionRunStore for this open. */
+  runStore?: RunStore;
+}
+
+export function resolveRunStore(
+  sessionStore: SessionStore,
+  sessionId: string,
+  override?: RunStore,
+): RunStore {
+  return override ?? new SessionRunStore(sessionStore, sessionId);
 }
 
 export interface OpenRunResult {
   session: Session;
   runState: RunState;
-  runStore: SessionRunStore;
+  runStore: RunStore;
   agent: AgentConfig;
 }
 
@@ -136,7 +146,7 @@ export async function openRun(
   }
 
   const session = await loadOrCreateSession(options);
-  const runStore = new SessionRunStore(options.sessionStore, session.id);
+  const runStore = resolveRunStore(options.sessionStore, session.id, options.runStore);
   const addressedRunId = resolveAddressedRunId(options, session);
 
   let runId: string;
@@ -176,7 +186,11 @@ export async function openRun(
     if (kind === 'flow' && options.flowName) {
       runState.activeFlow = options.flowName;
     }
-    await runStore.initRun(runState);
+    if (runStore.initRun) {
+      await runStore.initRun(runState);
+    } else {
+      await runStore.putRunState(runState);
+    }
     if (kind === 'conversation' && initialMessages.length > 0) {
       await mutateSessionWithRetry(options.sessionStore, session.id, (latest) => {
         latest.messages = [...initialMessages];
@@ -236,7 +250,7 @@ export async function openRun(
       (hasInput || Boolean(options.wake)) && !isResume && !isFlowContinuation;
     if (isFreshLogicalRun) {
       runState.runEpoch = (runState.runEpoch ?? 0) + 1;
-      await runStore.pruneStepsBeforeEpoch(runId, runState.runEpoch);
+      await runStore.pruneStepsBeforeEpoch?.(runId, runState.runEpoch);
       resetTurnCount(runState);
       if (Array.isArray(runState.state.__completedFlows)) {
         runState.state.__completedFlows = [];
