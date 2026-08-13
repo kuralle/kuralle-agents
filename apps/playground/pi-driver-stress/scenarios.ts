@@ -24,6 +24,12 @@ export const CORE_FLOW_SCENARIOS: StressScenario[] = [
     expectation: { flows: ['refund'], tools: ['enter_flow'] },
   },
   {
+    id: 'rehydrate-definition',
+    source: flowSource('rehydrate-definition'),
+    prompts: ['I want to check my order eligibility for account acc-1.'],
+    expectation: { flows: ['eligibility'] },
+  },
+  {
     id: 'extraction-node-demo',
     source: flowSource('extraction-node-demo'),
     prompts: [
