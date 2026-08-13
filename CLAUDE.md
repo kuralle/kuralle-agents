@@ -19,7 +19,17 @@ routing, and durable tool execution. Monorepo on Bun workspaces, built on the Ve
   derived from which fields you populate: `flows[]` → flow agent, `routes` + `routing` →
   triage, `agents[]` → composition.
 - **Flows** — node graphs via `defineFlow` + `reply` / `collect` / `action` / `decide`. Each
-  node returns its next transition.
+  node returns its next transition; targets are registered nodes referenced by id (`defineFlow`
+  validates structure at definition time). Flows also have a declarative JSON dialect —
+  `FlowDefinition` in `packages/core/src/flows/definition/` (predicate DSL, mapping configs,
+  `${...}` templates) — validated in collect mode with repair actions, rehydrated via
+  `rehydrateFlow`, registered live via `runtime.addDynamicFlows` / the versioned
+  `FlowDefinitionsStore` / `POST /api/stored/flows` (Policy: `stored-flows:read|write`), and
+  supplied inline in deployment artifacts (`flows/*.flow.json`) or Agent Plugin `flows/`
+  directories. Flow runs are durable: `RunOptions.kind: 'flow'` mints a run with its own
+  journal (`TurnHandle.runId`), digest-pinned against redefinition (`FlowDriftError`), with
+  crash recovery + deadline sweeping over `RunStore` backends (Postgres, DO SQLite).
+  See `/guides/dynamic-flows` and `docs/research/dynamic-durable-flows-port.md`.
 - **Runtime** — `createRuntime(...)` → `Runtime`; `runtime.run({ input, sessionId })` →
   `TurnHandle` (`.events` AsyncIterable, awaitable result,
   `toResponseStream('sse' | 'ndjson')`). Orchestrates sessions, history, handoffs, streaming,
