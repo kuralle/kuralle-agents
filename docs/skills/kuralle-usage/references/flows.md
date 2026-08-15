@@ -90,7 +90,7 @@ collect({
 });
 ```
 
-Kinds: `enum_check` (exact match against `values`), `range` (numeric bounds), `jsonpath` (extract by path). Model-extracted values also pass a provenance guard — a value the source turn does not contain is dropped, not merged. See `references/extraction-nodes.md`.
+Kinds: `enum_check` (exact match against `values`), `range` (numeric bounds), `jsonpath` (extract by path). Fields named in `verbatimFields` also pass a provenance guard — a value the source turn does not contain is dropped, not merged. See `references/extraction-nodes.md`.
 
 ## Gates
 

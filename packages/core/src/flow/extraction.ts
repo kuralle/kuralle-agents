@@ -116,7 +116,7 @@ export async function wouldCollectSatisfyAfterToolResults(
       continue;
     }
     const incoming = isPlainRecord(record.result) ? record.result : {};
-    const { accepted } = filterByProvenance(incoming, sourceText);
+    const { accepted } = filterByProvenance(incoming, sourceText, node.verbatimFields);
     if (isEmptySubmission(accepted) || isNonDataToolResult(incoming)) {
       continue;
     }
@@ -225,7 +225,11 @@ export function mergeTurnExtraction(
     }
     const raw = isPlainRecord(record.result) ? record.result : {};
     lastSubmitted = raw;
-    const { accepted, dropped: guardedOut } = filterByProvenance(raw, opts?.sourceText);
+    const { accepted, dropped: guardedOut } = filterByProvenance(
+      raw,
+      opts?.sourceText,
+      node.verbatimFields,
+    );
     dropped.push(...guardedOut);
     if (isEmptySubmission(accepted) || isNonDataToolResult(raw)) {
       continue;

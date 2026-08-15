@@ -67,7 +67,7 @@ const refund: FlowDefinition = {
 | kind | key fields |
 |---|---|
 | `reply` | exactly one of `response: { template }` (engine-rendered, never model-authored) or `generate: true` (model-authored); `instructions?`, `next?`, `routes?` |
-| `collect` | `schema` (JSON Schema), `required?`, `ask?`, `assign?`, `resolvers?`, `maxTurns?`, `choices?`, `next?` |
+| `collect` | `schema` (JSON Schema), `required?`, `ask?`, `assign?`, `resolvers?`, `verbatimFields?`, `maxTurns?`, `choices?`, `next?` |
 | `action` | `tool` (by name on the agent's tool surface), `args?` (`MappingConfig`), `bind?`, `approval?: true`, `next?`, `routes?` |
 | `decide` | `instructions?`, `schema?`, `choices?`, `routes?`, `otherwise?`, `confirmGate?` |
 

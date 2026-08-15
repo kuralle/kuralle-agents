@@ -131,6 +131,13 @@ export interface CollectNode extends NodeVerification {
   maxTurns?: number;
   /** Deterministic tier-0 slot resolvers. A field resolved here is excluded from the model schema this turn. */
   resolvers?: CollectResolverSpec[];
+  /** Fields the user must supply in their own words. A model-extracted value for one of
+   *  these is dropped unless it appears in the turn text, which stops the model inventing
+   *  an identifier the user never gave. Declare it only for slots that are quoted rather
+   *  than normalised: extraction legitimately rewrites dates, times, numbers, enums and
+   *  free-text summaries, and a value that arrives from a button or list reply is never
+   *  in the turn text at all. */
+  verbatimFields?: readonly string[];
   onComplete: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
 }
 

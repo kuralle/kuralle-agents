@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { openai } from '@ai-sdk/openai';
 import { z } from 'zod';
-import pg from '../../../postgres-store/node_modules/pg/lib/index.js';
+import pg from 'pg';
 import { appendFileSync } from 'node:fs';
 import { createRuntime, defineAgent, defineTool } from '../../../core/dist/index.js';
 import {

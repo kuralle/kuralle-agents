@@ -95,7 +95,7 @@ Each gate is `severity: 'blocking'` or `'advisory'`. A failed blocking gate — 
 2. Otherwise, if `maxTurns` (default `10`) is exceeded, bail out through `onComplete` with whatever was gathered.
 3. Run the node's **tier-0 `resolvers`** (`enum_check`, `range`, `jsonpath`) against the fresh user text. A field resolved deterministically is recorded with `slotSources: 'deterministic'` and excluded from the model's schema this turn.
 4. Build a per-turn **extraction tool** named `submit_<nodeId>_data` for the fields that remain. Its schema is the node schema made partial and nullable (so the model can submit just-learned fields), and its description embeds the still-missing fields plus the user's latest verbatim message to anchor extraction.
-5. Run the **non-speaking** extraction turn and merge submitted fields into flow state — dropping any model-extracted value with no provenance in the user's actual message (the never-guess guard). If still incomplete and there's no buffered input, `stay` (wait for the user).
+5. Run the **non-speaking** extraction turn and merge submitted fields into flow state — dropping any value for a `verbatimFields` slot that has no provenance in the user's actual message (the never-guess guard). If still incomplete and there's no buffered input, `stay` (wait for the user).
 
 The extraction turn produces no user-facing text. When the node pauses on missing fields, the engine emits the node's deterministic `ask(missing, state)` — or a safe default built from the field names — so a collect can never narrate a downstream outcome. `instructions` on a collect node only steers the non-speaking extraction.
 

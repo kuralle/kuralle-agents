@@ -42,15 +42,26 @@ export function resolveDeterministicSlots(
 
 /**
  * Drop model-extracted values that cannot be found in the source turn.
- * No source text (undefined or blank) skips the guard — scripted merges with
- * empty history still accept values. A non-empty turn that does not contain
- * the value drops it.
+ *
+ * The guard applies ONLY to fields the node declares in `verbatimFields`. It compares the
+ * extracted value against the raw turn text, so it can only judge slots the user is
+ * expected to quote — an account id, an order number, a name. Extraction otherwise
+ * normalises: "next Friday" becomes an ISO date, "four" becomes 4, a spoken complaint
+ * becomes a written summary, and a list-reply payload never appears in the turn text at
+ * all. Guarding those by containment drops correct values, and a dropped required field
+ * stalls the collect node until it exhausts maxTurns. Declaring the guarded fields keeps
+ * the anti-fabrication property where lexical evidence means something.
+ *
+ * No source text (undefined or blank) skips the guard — scripted merges with empty
+ * history still accept values.
  */
 export function filterByProvenance(
   incoming: Record<string, unknown>,
   sourceText: string | undefined,
+  guardedFields: readonly string[] | undefined,
 ): { accepted: Record<string, unknown>; dropped: string[] } {
-  if (sourceText === undefined || sourceText.trim() === '') {
+  const guarded = guardedFields && guardedFields.length > 0 ? new Set(guardedFields) : undefined;
+  if (!guarded || sourceText === undefined || sourceText.trim() === '') {
     return { accepted: incoming, dropped: [] };
   }
   const accepted: Record<string, unknown> = {};
@@ -59,7 +70,7 @@ export function filterByProvenance(
     if (!fieldPopulated(value)) {
       continue;
     }
-    if (valueHasProvenance(value, sourceText)) {
+    if (!guarded.has(key) || valueHasProvenance(value, sourceText)) {
       accepted[key] = value;
     } else {
       dropped.push(key);

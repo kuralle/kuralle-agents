@@ -186,6 +186,7 @@ function rehydrateCollect(
     ...(def.maxTurns !== undefined ? { maxTurns: def.maxTurns } : {}),
     ...(def.choices ? { choices: def.choices } : {}),
     ...(def.resolvers ? { resolvers: def.resolvers } : {}),
+    ...(def.verbatimFields ? { verbatimFields: def.verbatimFields } : {}),
     ...(def.ask !== undefined
       ? {
           ask: (_missing: string[], state: FlowState) =>

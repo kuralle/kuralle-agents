@@ -80,7 +80,9 @@ async function chat(message: string): Promise<string> {
   return body.response;
 }
 
-async function listRuns(): Promise<Array<{ runId: string; status?: string; kind?: string; flowName?: string }>> {
+async function listRuns(): Promise<
+  Array<{ runId: string; sessionId?: string; status?: string; kind?: string; flowName?: string }>
+> {
   const res = await fetch(`${BASE}/e2e/runs`);
   return (await res.json()) as Array<{ runId: string; status?: string; kind?: string; flowName?: string }>;
 }
@@ -113,7 +115,10 @@ console.log('[e2e] flow registered/active over HTTP');
 await chat('Hi, I need a refund for my account please.');
 const parked = await listRuns();
 console.log('[e2e] runs after turn 1:', JSON.stringify(parked));
-const parkedRun = parked.find((r) => r.runId === sessionId || r.kind === 'conversation');
+// Match THIS session only. A looser predicate matches a leftover run from an earlier
+// execution against the same database, so the resume assertion below passes without the
+// run under test ever surviving the kill.
+const parkedRun = parked.find((r) => r.runId === sessionId || r.sessionId === sessionId);
 if (!parkedRun) fail('no run found after turn 1');
 const parkedRunId = parkedRun.runId;
 if (existsSync(counterFile) && readFileSync(counterFile, 'utf8').trim() !== '') {

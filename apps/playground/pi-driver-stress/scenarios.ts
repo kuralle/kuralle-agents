@@ -30,6 +30,14 @@ export const CORE_FLOW_SCENARIOS: StressScenario[] = [
     expectation: { flows: ['eligibility'] },
   },
   {
+    id: 'flow-builder',
+    source: flowSource('flow-builder'),
+    prompts: [
+      'build a refund-eligibility flow that collects an account id, checks eligibility with the lookup tool, and replies with the verdict',
+    ],
+    expectation: { tools: ['list_available_tools', 'save_flow'] },
+  },
+  {
     id: 'extraction-node-demo',
     source: flowSource('extraction-node-demo'),
     prompts: [

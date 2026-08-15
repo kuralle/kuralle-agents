@@ -114,7 +114,27 @@ An ambiguous match (two enum hits, two in-range numbers) resolves nothing — th
 
 ## Extraction provenance guard
 
-Model-extracted values pass a provenance check against the source turn: a string or number the turn does not actually contain is **dropped**, not merged. An empty source turn (scripted merges) skips the guard. This is the structural backstop against hallucinated slots — it applies in text mode too, not only voice.
+Declare `verbatimFields` on a collect node to name the slots the user must supply in their
+own words. A model-extracted value for one of those fields is **dropped**, not merged, when
+the source turn does not contain it. This is the structural backstop against hallucinated
+identifiers — it applies in text mode too, not only voice. An empty source turn (scripted
+merges) skips the guard.
+
+```ts
+collect({
+  id: 'report',
+  schema: z.object({ accountId: z.string(), issue: z.string() }),
+  required: ['accountId', 'issue'],
+  verbatimFields: ['accountId'],
+  onComplete: () => ({ goto: 'raise' }),
+})
+```
+
+Guard only the fields that are quoted rather than normalised. Extraction legitimately
+rewrites what the user said: `next Friday` becomes an ISO date, `four` becomes `4`, a
+spoken complaint becomes a written summary, and a value chosen from a list or button reply
+never appears in the turn text at all. Guarding those drops correct data, and a dropped
+required field keeps the node asking until it exhausts `maxTurns`.
 
 ## Template variables in later nodes
 

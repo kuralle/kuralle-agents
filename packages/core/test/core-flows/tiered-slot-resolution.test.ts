@@ -273,7 +273,7 @@ describe('tiered collect fixtures', () => {
     });
   });
 
-  it('drops a fabricated extracted string and re-asks naming the field', async () => {
+  it('drops a fabricated extracted string on a verbatim field and re-asks naming it', async () => {
     const driver = spyDriver({
       submit: { name: 'Ada Lovelace' },
       nodeId: 'name',
@@ -282,6 +282,7 @@ describe('tiered collect fixtures', () => {
       id: 'name',
       schema: z.object({ name: z.string().min(1) }),
       required: ['name'],
+      verbatimFields: ['name'],
       onComplete: () => ({ end: 'done' }),
     });
     const parts: StreamPart[] = [];
@@ -295,6 +296,60 @@ describe('tiered collect fixtures', () => {
     expect(result.kind).toBe('awaitingUser');
     expect(getCollectData(runState.state, 'name').name).toBeUndefined();
     expect(askText(parts).toLowerCase()).toContain('name');
+  });
+
+  it('keeps normalised values the turn text never spells out', async () => {
+    const driver = spyDriver({
+      submit: { partySize: 4, date: '2026-06-12', time: '19:00' },
+      nodeId: 'booking',
+    });
+    const node = collect({
+      id: 'booking',
+      schema: z.object({
+        partySize: z.number(),
+        date: z.string().min(1),
+        time: z.string().min(1),
+      }),
+      required: ['partySize', 'date', 'time'],
+      onComplete: () => ({ end: 'done' }),
+    });
+    const { result, runState } = await runCollect({
+      node,
+      userText: 'table for four next Friday at 7pm',
+      driver,
+    });
+
+    expect(result.kind).toBe('ended');
+    expect(getCollectData(runState.state, 'booking')).toEqual({
+      partySize: 4,
+      date: '2026-06-12',
+      time: '19:00',
+    });
+  });
+
+  it('an unguarded field survives on a node that guards another field', async () => {
+    const driver = spyDriver({
+      submit: { accountId: 'ACC-42', issue: 'Bedroom window latch broken' },
+      nodeId: 'report',
+    });
+    const node = collect({
+      id: 'report',
+      schema: z.object({ accountId: z.string().min(1), issue: z.string().min(1) }),
+      required: ['accountId', 'issue'],
+      verbatimFields: ['accountId'],
+      onComplete: () => ({ end: 'done' }),
+    });
+    const { result, runState } = await runCollect({
+      node,
+      userText: 'ACC-42 window latch, routine',
+      driver,
+    });
+
+    expect(result.kind).toBe('ended');
+    expect(getCollectData(runState.state, 'report')).toEqual({
+      accountId: 'ACC-42',
+      issue: 'Bedroom window latch broken',
+    });
   });
 
   it('two enum matches leave the field unresolved and ask naming it', async () => {

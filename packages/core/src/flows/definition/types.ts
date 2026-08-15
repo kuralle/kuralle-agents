@@ -63,6 +63,7 @@ export interface CollectNodeDefinition {
   instructions?: string;
   assign?: Record<string, string>;
   resolvers?: CollectResolverSpec[];
+  verbatimFields?: string[];
   required?: string[];
   maxTurns?: number;
   choices?: ChoiceOption[];

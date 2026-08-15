@@ -95,6 +95,7 @@ const collectNodeSchema = z
     instructions: z.string().optional(),
     assign: z.record(z.string(), z.string()).optional(),
     resolvers: z.array(collectResolverSpecSchema).optional(),
+    verbatimFields: z.array(z.string().min(1)).optional(),
     required: z.array(z.string().min(1)).optional(),
     maxTurns: z.number().int().positive().optional(),
     choices: z.array(choiceOptionSchema).optional(),
