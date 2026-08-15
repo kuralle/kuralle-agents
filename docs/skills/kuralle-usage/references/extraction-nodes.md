@@ -82,11 +82,12 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });
 |-------|-------------|
 | `schema` | Standard Schema defining collected fields |
 | `required` | Subset of fields that must be present before auto-transition |
-| `maxTurns` | Safety limit before error/transition (default: 10) |
+| `maxTurns` | Turn limit (default: 10). On exhaustion the node completes only if the schema is satisfied, else it escalates naming the missing fields |
 | `onComplete` | Returns transition when all required fields collected |
 | `instructions` | Prompt for missing fields: `(missing, state) => string` |
 | `ask` | Deterministic, framework-emitted question for missing fields — the only user-facing copy a collect node produces |
 | `resolvers` | Tier-0 deterministic slot resolvers, run before the model (see below) |
+| `verbatimFields` | Fields the user must supply in their own words; a model value not found in the turn is dropped (see below) |
 
 ## Deterministic resolvers (tier-0)
 

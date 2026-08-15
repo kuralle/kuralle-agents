@@ -69,7 +69,7 @@ Deliberate divergence:
 ### Kuralle primitive changes supported by evidence
 
 1. `NodeFileSystem` supplies the missing local-directory adapter without expanding the `FileSystem` contract. It maps virtual POSIX paths to one real root and rejects traversal and symlink escape.
-2. `fsSkillStore` now throws on malformed discovered skills. Behavioural content must not disappear behind a warning.
+2. `fsSkillStore` reports a malformed discovered skill instead of dropping it in silence: it skips that one folder and raises a `SkillDiagnostic`, falling back to a console warning when the caller registers no `onDiagnostic`. Discovery continues, so one bad `SKILL.md` cannot hide the rest. (This was proposed as a throw; skipping-with-a-report shipped, because aborting discovery lets a single malformed folder take down every skill an agent has.)
 3. The store reuses one validated discovery snapshot across catalog and body loads, avoiding repeated full-tree reads during runtime wiring.
 
 Stale-write detection remains application-specific. The generic filesystem stays small; the content tools require SHA-256 revisions only where a human is approving mutable prose.

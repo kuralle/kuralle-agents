@@ -92,7 +92,7 @@ Each gate is `severity: 'blocking'` or `'advisory'`. A failed blocking gate — 
 `collect` is the most involved node. Each pass:
 
 1. If the schema's `required` fields are all populated, project that data and call `onComplete`.
-2. Otherwise, if `maxTurns` (default `10`) is exceeded, bail out through `onComplete` with whatever was gathered.
+2. Otherwise, if `maxTurns` (default `10`) is exceeded, complete **only if the node is genuinely satisfied**; if required fields are still missing, `escalate` naming them. Running out of turns is not the same as finishing — calling `onComplete` with a half-filled record lets a downstream `action` act on it.
 3. Run the node's **tier-0 `resolvers`** (`enum_check`, `range`, `jsonpath`) against the fresh user text. A field resolved deterministically is recorded with `slotSources: 'deterministic'` and excluded from the model's schema this turn.
 4. Build a per-turn **extraction tool** named `submit_<nodeId>_data` for the fields that remain. Its schema is the node schema made partial and nullable (so the model can submit just-learned fields), and its description embeds the still-missing fields plus the user's latest verbatim message to anchor extraction.
 5. Run the **non-speaking** extraction turn and merge submitted fields into flow state — dropping any value for a `verbatimFields` slot that has no provenance in the user's actual message (the never-guess guard). If still incomplete and there's no buffered input, `stay` (wait for the user).

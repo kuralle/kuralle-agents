@@ -30,7 +30,9 @@ Three strands land together: flows become data (a validated JSON dialect that re
 
 ### Collect, hardened
 
-`collect.resolvers` resolve slots deterministically before the model sees them (tier-0): `enum_check`, `range`, `jsonpath`. A resolved field is excluded from the model schema that turn; an ambiguous match falls back to the model rather than guessing. Model-extracted values pass a provenance guard against the source turn — a value the turn does not contain is dropped, not merged.
+`collect.resolvers` resolve slots deterministically before the model sees them (tier-0): `enum_check`, `range`, `jsonpath`. A resolved field is excluded from the model schema that turn; an ambiguous match falls back to the model rather than guessing.
+
+`collect.verbatimFields` names the slots the user must supply in their own words — an account id, an order number, a name. A model-extracted value for one of those is dropped, not merged, when the source turn does not contain it. Guard only what is quoted rather than normalised: extraction legitimately rewrites what the user said (`next Friday` → an ISO date, `forty dollars` → `40`, a spoken complaint → a written summary), and a value chosen from a list or button reply is never in the turn text at all. Applying the check to every field drops correct data, and a dropped *required* field keeps the node asking until it exhausts `maxTurns`.
 
 ## Unreleased — memory isolation, an explicit memory search, and zero duplicate exported names (BREAKING under 0.x)
 
@@ -96,7 +98,7 @@ Most of what follows was found by building a full worked example — a port of V
 
 - **`parallelSafe` is now `boolean | ((args) => boolean)`.** A static boolean forced a tool with a read mode and a write mode to pick one classification for both. The predicate runs on the raw model arguments *before* schema validation, so it must be total: any throw or non-boolean return fails closed to serial. The model cannot influence the decision either way.
 - **`replay: false` no longer implies parallel-safe.** They are unrelated properties — one means "do not journal this step", the other means "safe to run concurrently with siblings". Tools that relied on the implication must declare `parallelSafe` explicitly.
-- **Filesystem skill discovery defaults to `/.agents/skills`**, not `/skills`. Pass an explicit root to `fsSkillStore` to keep the old location.
+- **Filesystem skill discovery defaults to `/.agents/skills`**, not `/skills`. Pass an explicit root to `fsSkillStore` to keep the old location. A store whose configured roots are *all* unreadable now warns once on console — it can never return a skill, and silently discovering nothing is how this move broke callers that relied on the default.
 
 ### Security
 

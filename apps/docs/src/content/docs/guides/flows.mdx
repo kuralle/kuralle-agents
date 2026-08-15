@@ -54,7 +54,7 @@ For transactional outcomes that must not be model-authored — "your order is pl
 
 ### `collect`
 
-Collects a structured schema from the user over one or more turns. The node re-enters until all `required` fields are filled — or `maxTurns` (default 10) is reached, at which point `onComplete` runs with whatever was collected.
+Collects a structured schema from the user over one or more turns. The node re-enters until all `required` fields are filled. If `maxTurns` (default 10) is reached first, `onComplete` runs **only when the schema is genuinely satisfied**; otherwise the node escalates and names the fields it could not collect, rather than handing the rest of the flow a half-filled record.
 
 ```typescript
 import { collect } from '@kuralle-agents/core';
@@ -72,6 +72,8 @@ const getDate = collect({
 A collect node **never speaks model-authored text**. The extraction turn is non-speaking; the user-facing question is the deterministic `ask(missing, state)` — or, when `ask` is omitted, a safe default built from the missing field names. That is a structural backstop: the model cannot narrate a downstream outcome ("order placed", "payment taken") from inside a collect. The optional `instructions(missing, state)` is extraction-only guidance for the non-speaking turn and is never shown to the user. `onComplete` is called when all required fields are collected and returns the next node.
 
 `resolvers` declares deterministic tier-0 resolution for individual fields (`enum_check`, `range`, `jsonpath`): a field resolved deterministically is excluded from the model's extraction schema that turn, so the model can never guess it.
+
+`verbatimFields` names the fields the user must supply in their own words — an account id, an order number, a name. A model-extracted value for one of those is dropped when the user's turn does not contain it, so the model cannot invent an identifier nobody gave it. Guard only the fields that are quoted rather than normalised. Extraction is meant to rewrite what the user said — `next Friday` becomes an ISO date, `forty dollars` becomes `40`, a spoken complaint becomes a written summary — and a value picked from a list or button reply never appears in the turn text at all. Guarding those drops correct answers, and a dropped required field keeps the node re-asking until `maxTurns` runs out.
 
 ### `action`
 
