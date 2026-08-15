@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — dynamic durable flows: a JSON flow dialect, resumable flow runs, and flows agents can author (BREAKING under 0.x)
+## 0.23.0 — dynamic durable flows: a JSON flow dialect, resumable flow runs, and flows agents can author (BREAKING under 0.x)
 
 Three strands land together: flows become data (a validated JSON dialect that registers onto a live runtime), flow runs become durable addresses (mint, resume, recover — across process death), and flow authoring becomes something an agent can do behind a validator instead of a human behind a compiler. Breaking changes ship under **0.x rules**, where a minor may break.
 
@@ -34,7 +34,34 @@ Three strands land together: flows become data (a validated JSON dialect that re
 
 `collect.verbatimFields` names the slots the user must supply in their own words — an account id, an order number, a name. A model-extracted value for one of those is dropped, not merged, when the source turn does not contain it. Guard only what is quoted rather than normalised: extraction legitimately rewrites what the user said (`next Friday` → an ISO date, `forty dollars` → `40`, a spoken complaint → a written summary), and a value chosen from a list or button reply is never in the turn text at all. Applying the check to every field drops correct data, and a dropped *required* field keeps the node asking until it exhausts `maxTurns`.
 
-## Unreleased — memory isolation, an explicit memory search, and zero duplicate exported names (BREAKING under 0.x)
+A collect node whose `maxTurns` runs out completes **only if its schema is genuinely satisfied**; otherwise it escalates and names the fields it could not collect. Running out of turns is not the same as finishing, and handing a downstream `action` a half-filled record is how an intake SOP creates a record against whatever happened to be in state.
+
+### Known limitation — JSON-dialect schemas are not validated at run time
+
+A `FlowDefinition` collect `schema` is used to shape the model's extraction tool and to derive `required`, but it is **not enforced against submitted values**: `adaptJsonSchema` returns a passthrough whose `validate` returns the value unchanged (`validated: false`), pending a workerd-safe JSON Schema validator. A slot declared `{ type: 'number' }` will therefore accept a string, and the "purge collected values the schema rejects" pass in the collect loop is inert for JSON flows. Code flows built with `defineFlow` and a real Standard Schema (zod) validate normally. Declare `required` accurately and treat JSON-dialect collect output as untrusted at the boundary where it matters.
+
+## 0.22.0 — Agent Plugins v1.0.0 conformance, launch containment, and DO wake without rediscovery
+
+Agent Plugins v1.0.0 conformance for the plugin loader and MCP client, plus the gaps a live run found rather than a type-check.
+
+**Conformance.** `PLUGIN_DATA` is created and proven writable before a subprocess starts (§9.1). A stdio server launches the way §7.2.1 describes: plugin-relative command resolved against the plugin root, `cwd` defaulting to that root, and a composed rather than inherited environment. Containment is resolved **through symlinks** at both the paths the loader reads and the paths a plugin declares, so a `bin/server` symlinked outside the plugin root is refused where a lexical check cannot see it (§4.1(3), §4.1(4)). Proven on workerd, including Durable Object SQLite.
+
+**Correctness.** Two plugins may each name a server `local` — a name is only unique inside one `mcp.json`, and Agent Plugins has no global registry. One used to vanish with no diagnostic. Both now project under names suffixed with a hash of the server's identity, so the result does not depend on plugin load order and a `Policy` rule cannot silently repoint at a different backend.
+
+**Performance.** A Durable Object wake serves its tool map from the persisted catalogue with no `tools/list` round trip, reconciles against the server in the background, and refuses a withdrawn tool with a message the model can act on. An existing DO migrates automatically.
+
+**Compatibility.** `z.email()` compiles to a lookaround regex that models validating tool schemas strictly now reject; the affected example uses an equivalent pattern without one.
+
+`McpToolset` gains `reconciled`. `McpServerConfig` (stdio) gains `cwdRoot` and `PersistedServer` gains `tools`, both optional. No breaking public API.
+
+## 0.21.1 — deferred MCP tools keep their argument contract
+
+A deferred MCP tool now keeps its argument contract — parameter names, scalar types and `required` — and defers only descriptions and constraints. The bare `{ type: 'object' }` schema it replaced left the model with nothing to call against, producing a malformed call in 2 of 5 live runs against 0 of 5 inline. The Loom & Field example went to 5 of 5.
+
+## 0.21.0 — memory isolation, an explicit memory search, and zero duplicate exported names (BREAKING under 0.x)
+
+This release also carried the first publishes of `@kuralle-agents/plugins` and `@kuralle-agents/mcp` (Agent Plugins v1.0.0 support and the MCP client). Both, and `@kuralle-agents/pi-driver`, were added to the changesets `fixed` group: each declares `core` as a `workspace:*` dependency, which pnpm rewrites to an exact version at publish, so outside the group they would have drifted off the shared version line and handed consumers two copies of `core`.
+
 
 Three strands: closing a cross-user leak in the memory stores, giving memory a read path the agent can actually call, and resolving every duplicate exported name in `core`. Breaking changes ship under **0.x rules**, where a minor may break.
 

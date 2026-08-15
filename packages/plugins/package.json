@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/plugins"
   },
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Agent Plugins loader and conformance for Kuralle agents",
   "type": "module",
   "sideEffects": false,
