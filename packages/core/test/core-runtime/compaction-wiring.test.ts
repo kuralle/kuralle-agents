@@ -4,7 +4,6 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { StreamPart } from '../../src/types/stream.js';
@@ -73,7 +72,7 @@ describe('Runtime compaction wiring', () => {
     expect(compactedEvent).toBeDefined();
 
     const runStore = new SessionRunStore(sessionStore, 'compact-sess');
-    const runState = await runStore.getRunState(sessionDerivedRunId('compact-sess'));
+    const runState = await runStore.getRunState('compact-sess');
     expect(runState?.messages[0]?.role).toBe('system');
     expect(String(runState?.messages[0]?.content)).toContain('Conversation summary');
     // session mirror stays in sync

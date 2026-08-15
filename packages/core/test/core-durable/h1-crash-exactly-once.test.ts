@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { EffectToolExecutor } from '../../src/types/run-context.js';
-import type { RunStore, StepFinalizePatch } from '../../src/runtime/durable/RunStore.js';
-import type { RunState, StepRecord } from '../../src/runtime/durable/types.js';
+import type { DeleteRunOptions, RunStore, StepFinalizePatch } from '../../src/runtime/durable/RunStore.js';
+import type { RunFilter, RunState, StepRecord } from '../../src/runtime/durable/types.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { buildCtx, reloadRunState, setupDurableHarness } from './helpers.js';
 
@@ -36,6 +36,14 @@ class CrashOnFinalizeStore implements RunStore {
 
   putRunState(state: RunState): Promise<void> {
     return this.inner.putRunState(state);
+  }
+
+  listRuns(filter: RunFilter) {
+    return this.inner.listRuns(filter);
+  }
+
+  deleteRun(runId: string, options?: DeleteRunOptions): Promise<void> {
+    return this.inner.deleteRun(runId, options);
   }
 
   initRun(state: RunState): Promise<void> {

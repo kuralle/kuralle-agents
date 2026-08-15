@@ -25,6 +25,9 @@ One tagless primitive — `defineAgent` — derives behavior from the fields you
 
 - **`defineAgent`** — define an agent; behavior is derived from which fields you set.
 - **`defineFlow` + `reply` / `collect` / `action` / `decide`** — node-graph SOPs. Your procedure lives in typed code you can test.
+- **`FlowDefinition` + `validateFlowDefinition`** — the JSON flow dialect with a typed predicate DSL; validation returns machine-readable issues with repair actions.
+- **`runtime.addDynamicFlows` / `removeDynamicFlow` / `loadDynamicFlows`** — register validated definitions on a live runtime, versioned in a `FlowDefinitionsStore` (`MemoryFlowDefinitionsStore` here; Postgres, Redis, and DO-SQLite backends in the store packages).
+- **Durable flow runs** — `runtime.run({ kind: 'flow', flowName })` mints a journaled headless run; `recoverOrphanedRuns` / `sweepDeadlines` / `startRunSweeper` re-enter crashed replicas and expired deadlines.
 - **`defineTool` + `buildToolSet`** — typed effect tools wired to both the model and the executor.
 - **`defineSkill` + `AgentConfig.skills`** — progressively-disclosed procedural knowledge (`SKILL.md`-shaped): name+description always in the prompt, full body on `load_skill`, bundled resources on `read_skill_resource`. Four supply modes — inline, packaged directory, filesystem path, per-tenant resolver.
 - **`createRuntime` / `Runtime`** — orchestrator: sessions, handoffs, streaming, flow state.
@@ -197,6 +200,38 @@ const agent = defineAgent({
 ```
 
 Rule of thumb: if you're pasting more than ~20 lines of procedure into a system prompt, it belongs in a flow.
+
+## Dynamic flows
+
+A flow is also data. `FlowDefinition` is a JSON dialect — the same `reply` / `collect` / `action` / `decide` nodes, with transitions expressed in a typed predicate DSL. `validateFlowDefinition` returns machine-readable issues with repair actions, so a UI or an agent can fix a bad definition instead of guessing. Register definitions on a live runtime:
+
+```ts
+import { createRuntime, MemoryFlowDefinitionsStore } from '@kuralle-agents/core';
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'booking',
+  flowDefinitionsStore: new MemoryFlowDefinitionsStore(),
+});
+
+await runtime.addDynamicFlows([bookingFlow], { agentId: 'booking' }); // validate + version + register
+await runtime.loadDynamicFlows({ agentId: 'booking' });               // boot: reload active versions
+```
+
+The dialect also covers engine-rendered reply templates, collect `resolvers` (declarative slot extraction with a provenance guard), and per-flow verification `gates`. Definitions are versioned in a `FlowDefinitionsStore` — Memory here, `PostgresFlowDefinitionsStore`, `RedisFlowDefinitionsStore`, or the cf-agent `SqlFlowDefinitionsStore` in production. For LLM-authored flows, `createFlowBuilderAgent` + `FLOW_BUILDER_AUTHORING_PLAYBOOK` build definitions conversationally, and `compileNlPredicate` compiles natural-language `when: { nl }` predicates with pinned provenance. Examples: `examples/flows/rehydrate-definition.ts`, `examples/flows/dynamic-registration.ts`, `examples/flows/flow-builder.ts`. Depth: the [dynamic flows guide](https://agents.kuralle.com/guides/dynamic-flows).
+
+## Durable flow runs
+
+`runtime.run({ kind: 'flow', flowName })` mints a headless flow run whose steps journal to a `RunStore` (`HarnessConfig.runStore` — `PostgresRunStore`, or the cf-agent `SqlRunStore`). `handle.runId` resolves as soon as the run opens, before the turn body finishes, so the caller can persist the id it must resume with:
+
+```ts
+const handle = runtime.run({ input, sessionId, kind: 'flow', flowName: 'booking' });
+const runId = await handle.runId;            // persist this
+// after a crash or redeploy:
+await runtime.run({ sessionId, runId });     // resumes from the journal
+```
+
+A replica holds an execution lease while it works a run. `recoverOrphanedRuns` re-enters `running` runs whose lease went stale, `sweepDeadlines` delivers the timeout outcome to `paused` runs past their deadline, and `startRunSweeper` schedules both. `RunStore.listRuns` / `deleteRun` cover operations.
 
 ## Routing
 

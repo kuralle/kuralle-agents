@@ -1,4 +1,4 @@
-import type { StepRecord, RunState } from './types.js';
+import type { StepRecord, RunState, RunFilter, RunRef } from './types.js';
 
 export class LogConflictError extends Error {
   readonly runId: string;
@@ -40,6 +40,28 @@ export class StepNotFoundError extends Error {
   }
 }
 
+export class RunNotTerminalError extends Error {
+  readonly runId: string;
+  readonly status: RunState['status'];
+
+  constructor(runId: string, status: RunState['status']) {
+    super(
+      `Refusing to delete run ${runId} in non-terminal status '${status}'. Pass { force: true } to delete a live run.`,
+    );
+    this.name = 'RunNotTerminalError';
+    this.runId = runId;
+    this.status = status;
+  }
+}
+
+export interface DeleteRunOptions {
+  force?: boolean;
+}
+
+export function isTerminalRunStatus(status: RunState['status']): boolean {
+  return status === 'finished' || status === 'error' || status === 'aborted';
+}
+
 export interface StepFinalizePatch {
   status: 'finished' | 'error';
   result?: unknown;
@@ -56,4 +78,6 @@ export interface RunStore {
   initRun?(state: RunState): Promise<void>;
   pruneStepsBeforeEpoch?(runId: string, keepEpoch: number): Promise<void>;
   reserveSteps?(runId: string, count: number): Promise<number[]>;
+  listRuns(filter: RunFilter): AsyncIterable<RunRef>;
+  deleteRun(runId: string, options?: DeleteRunOptions): Promise<void>;
 }

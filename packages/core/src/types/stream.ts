@@ -1,4 +1,5 @@
 import type { ConversationOutcome } from '../outcomes/types.js';
+import type { FlowGateVerdict } from '../flows/definition/types.js';
 import type { ChoiceOption } from './selection.js';
 import type { EscalationReason } from '../escalation/types.js';
 
@@ -75,6 +76,8 @@ export interface FlowEnterPayload {
 export interface FlowEndPayload {
   flow: string;
   reason: string;
+  gates?: FlowGateVerdict[];
+  outcome?: 'failed-verification';
 }
 
 export interface NodeEnterPayload {
@@ -132,7 +135,10 @@ export interface InteractivePayload {
   prompt: string;
 }
 
-export interface TurnEndPayload {}
+export interface TurnEndPayload {
+  /** Set on reply turns so the node span can record `rendered: 'engine' | 'model'`. */
+  rendered?: 'engine' | 'model';
+}
 
 export interface TurnIncompletePayload {
   reason: 'length' | 'content-filter' | 'error' | 'other';
@@ -339,6 +345,12 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
 
 export interface TurnHandle extends Promise<import('./channel.js').TurnResult> {
   readonly events: AsyncIterable<StreamPart>;
+  /**
+   * Resolves as soon as the run is opened — before the turn body finishes —
+   * so a caller minting `kind: 'flow'` can persist the id it must resume with
+   * even if the turn later throws.
+   */
+  readonly runId: Promise<string>;
   toResponseStream(format?: 'sse' | 'ndjson'): ReadableStream;
   toUIMessageStreamResponse(opts?: { sessionId?: string }): Response;
   cancel(reason?: string): void;

@@ -53,10 +53,8 @@ export interface OrchestrationState {
   /** Session metadata that CF's chat message store does not own. */
   metadata?: Omit<SessionMetadata, 'audit'> & { audit?: ConversationAuditEntry[] };
   /**
-   * Kuralle durable run journal (effect log + run state) for this session.
-   * `SessionRunStore` keeps the run on the Session object, so the bridge must
-   * persist + restore it here — otherwise durable tools and suspend/resume fail
-   * with "Run not found" on CF.
+   * Legacy durable run journal from before SqlRunStore. Read on get() so a
+   * pre-existing session can be copied forward; new runs are not written here.
    */
   durableRuns?: SessionDurableRuns;
   /** Optimistic-concurrency version for orchestration row CAS (C2). */

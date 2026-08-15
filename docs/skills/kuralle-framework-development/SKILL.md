@@ -21,6 +21,8 @@ This skill is for internal developers extending the Kuralle framework. Keep chan
 ```
 Runtime.run(opts) → TurnHandle
   openRun     load Session + RunState + effect log, replay
+              runId addressing: opts.runId resumes (fail-closed);
+              opts.kind:'flow' mints a headless flow run (+ flowName)
   hostLoop    route → runFlow → free converse → handoff loop
   closeRun    persist, run extractors if the trigger fires, outcome
 
@@ -28,8 +30,15 @@ runFlow       imperative loop over FlowNode handlers
   reply/collect → ChannelDriver.runAgentTurn
   action        → node.run(state, ctx) — no LLM
   decide        → driver.runStructured
+  terminal transition → evaluateFlowGates → verification record
 
 ctx.tool / ctx.approve / ctx.signal → effect log (exactly-once-modulo-idempotency)
+
+Flow registry: Runtime keeps one LiveFlowCatalog per agent (code flows +
+dynamic FlowDefinitions), mutated only under flowCatalogMutex by
+addDynamicFlows / removeDynamicFlow / loadDynamicFlows; liveAgent() overlays
+the catalog onto AgentConfig per turn. A parked run pins the flow digest;
+resume against a changed definition throws FlowDriftError.
 ```
 
 ## Find local docs (npm)
@@ -84,20 +93,59 @@ packages/core/src/
 ├── flow/runFlow.ts           # Imperative flow loop
 ├── flow/reduceTransition.ts  # Transition → events + state update
 ├── flow/nodeBuilders.ts      # Node prompt/tool assembly
+├── flow/slotResolution.ts    # Tier-0 collect resolvers + extraction provenance guard
+├── flow/evaluateGates.ts     # Flow gates (predicate/judge) at terminal transitions
 └── runtime/hostLoop.ts       # Composition: route, flow, converse, handoff
 ```
+
+### Flow definitions (JSON dialect + dynamic registration)
+
+```
+packages/core/src/flows/
+├── definition/types.ts       # FlowDefinition, node defs, TransitionRef, FlowGateSpec
+├── definition/schema.ts      # zod schemas (flowDefinitionSchema, flowGateSpecSchema)
+├── definition/predicate.ts   # Predicate DSL + evaluatePredicate
+├── definition/mapping.ts     # MappingConfig + ${...} template validation
+├── definition/rehydrate.ts   # FlowDefinition → live Flow (strict/lenient)
+├── definition/digest.ts      # canonical digest (flowDigest, digestForLiveFlow)
+├── definition/validate/      # validateFlowDefinition, issue codes, repair actions
+│                             #   code-flow.ts backs defineFlow's throw path
+├── definition/store.ts       # FlowDefinitionsStore contract (versioned, one active/name)
+├── definition/authoring.ts   # AuthoringFlowDefinition, NL predicates ({ nl })
+├── authoring/                # createFlowBuilderAgent, playbook, NL predicate compiler
+├── addDynamicFlows.ts        # registerDynamicFlowBundle, loadDynamicFlowsIntoCatalog
+└── liveFlowCatalog.ts        # LiveFlowCatalog (code + dynamic overlay per agent)
+```
+
+Both dialects share one validator core: `defineFlow` projects the code graph through
+`validate/code-flow.ts` into the same structure checks `validateFlowDefinition` runs.
+A transition-shape change must update `types/flow.ts`, `definition/types.ts`, and
+`validate/` together.
 
 ### Runtime & durability
 
 ```
 packages/core/src/
-├── runtime/Runtime.ts        # createRuntime, HarnessConfig, RunOptions
-├── runtime/openRun.ts        # Session + RunState load, replay entry
+├── runtime/Runtime.ts        # createRuntime, HarnessConfig, RunOptions,
+│                             #   addDynamicFlows / removeDynamicFlow / loadDynamicFlows
+├── runtime/openRun.ts        # Session + RunState load, replay entry, runId addressing
 ├── runtime/closeRun.ts       # Persist, memory, outcome
-├── runtime/durable/          # Effect log, RunStore, replay
+├── runtime/durable/RunStore.ts        # RunStore contract + typed errors
+├── runtime/durable/SessionRunStore.ts # Default journal over sessionStore
+├── runtime/durable/replay.ts          # Effect log replay
+├── runtime/durable/flowPin.ts         # Digest pinning, FlowDriftError
+├── runtime/durable/runLease.ts        # Execution leases (stale = orphaned)
+├── runtime/durable/sweep.ts           # recoverOrphanedRuns, sweepDeadlines
+├── runtime/durable/findUnresumableRuns.ts
 ├── runtime/channels/         # TextDriver
-└── events/TurnHandle.ts      # Event bus, TurnHandle
+└── events/TurnHandle.ts      # Event bus, TurnHandle (events, runId promise)
 ```
+
+Shared `RunStore` backends live outside core: `PostgresRunStore`
+(`packages/postgres-store/`), `SqlRunStore` (`packages/cf-agent/`, DO SQLite).
+The stored-flows HTTP surface (`/api/stored/flows`, Policy-gated as
+`stored-flows:read`/`write`) is `packages/hono-server/src/storedFlowsRouter.ts`
+and `packages/cf-agent/src/storedFlowsHttp.ts` — keep the two in lockstep.
 
 ### Tools (effect path)
 
@@ -164,10 +212,11 @@ npx tsx examples/agents/form-filler.ts
 
 ### Flow changes
 
-1. Update node types in `types/flow.ts`
-2. Update `runFlow.ts` dispatch for new node kind
-3. Update `reduceTransition.ts` if transition shapes change
-4. Run all flow examples
+1. Update node types in `types/flow.ts` **and** the JSON dialect in `flows/definition/types.ts` + `schema.ts`
+2. Update `runFlow.ts` dispatch for new node kind, and `definition/rehydrate.ts` for the dialect
+3. Update `reduceTransition.ts` and `flows/definition/validate/` if transition shapes change
+4. Node/transition semantics feed the digest — check `definition/digest.ts` so parked runs do not spuriously hit `FlowDriftError` (or silently miss real drift)
+5. Run all flow examples
 
 ### Tool / effect log changes
 

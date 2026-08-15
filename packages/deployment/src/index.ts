@@ -51,6 +51,7 @@ export {
 export type {
   AgentArtifact,
   AgentArtifactV1,
+  ArtifactFlow,
   AgentDraft,
   AgentEntity,
   AgentNode,
@@ -68,6 +69,7 @@ export type {
   ContentRole,
   HttpToolReference,
   InlineContent,
+  InlineFlowEntry,
   McpToolReference,
   PolicyArtifact,
   PublishDraftRequest,
@@ -83,3 +85,4 @@ export type {
   ToolReference,
   TrustedToolReference,
 } from './types.js';
+export { isInlineFlowEntry } from './types.js';

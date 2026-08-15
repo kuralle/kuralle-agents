@@ -49,6 +49,7 @@ import {
   type SkillActivation,
 } from '../skills/skillActivation.js';
 import type { LiveSkillCatalog } from '../skills/liveSkillCatalog.js';
+import type { FlowGateJudgeProvider } from '../flow/evaluateGates.js';
 import {
   diffSkillCatalog,
   renderSkillCatalogDelta,
@@ -56,6 +57,7 @@ import {
 } from '../skills/skillCatalog.js';
 import { addSystemNote } from './systemNotes.js';
 import { withInternalState, readInternalState } from './internalRunState.js';
+import { EFFECT_KEY_VERSION } from './durable/effectKeyVersion.js';
 
 const APPROVAL_SIGNAL = '__approval';
 const APPROVAL_DELIVERY_SCHEMA = z.object({}).strict();
@@ -103,6 +105,7 @@ export interface CtxDeps {
   skillMetaByName?: ReadonlyMap<string, SkillMeta>;
   skillActivations?: SkillActivation[];
   skillCatalog?: LiveSkillCatalog;
+  flowGateJudge?: FlowGateJudgeProvider | LanguageModel;
 }
 
 function publicInterrupt(request: InterruptRequest): HitlInterrupt {
@@ -370,12 +373,18 @@ function makeCtx(deps: CtxDeps): RunContext {
   // namespace: without it, two flows in one logical run calling a same-named tool with
   // the same arguments collide, and the second REPLAYS the first one's result. Live, that
   // made a handed-off agent replay the previous agent's "hand off to you" instruction and
-  // loop until maxHandoffs. Keyed by name, not by an entry counter, so re-entering the
-  // same flow on resume lands in the same namespace and still replays exactly once.
+  // loop until maxHandoffs. Version 2 keys by `flow@digest` so a same-named redefinition
+  // cannot replay the old version's journal. Version 1 keeps the bare flow name — appending
+  // `@digest` because a stamp appeared would orphan every already-journaled step.
   const effectRunId = () => {
     const base = logicalRunId(deps.runState.runId, deps.runState.runEpoch);
     const flow = deps.runState.activeFlow;
-    return flow ? `${base}#${flow}` : base;
+    if (!flow) return base;
+    const digest = deps.runState.flowDigest;
+    if (deps.runState.effectKeyVersion === EFFECT_KEY_VERSION && digest) {
+      return `${base}#${flow}@${digest}`;
+    }
+    return `${base}#${flow}`;
   };
 
   let resumedToolOutcome: import('../types/run-context.js').ResumedToolOutcome | undefined;
@@ -585,6 +594,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     bargeIn: deps.bargeIn,
     abortSignal: deps.abortSignal,
     turnInputConsumed: false,
+    flowGateJudge: deps.flowGateJudge,
     // Rebase durable effect callsites to 0. Called at flow entry so a flow's
     // effects (and any suspend/resume callsite) are anchored to the flow itself —
     // identical whether the flow was entered fresh after an answering turn (which

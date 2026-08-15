@@ -9,6 +9,10 @@ embedded content resolver, compatibility checks, and in-memory conformance store
 - `@kuralle-agents/deployment/node` — persistent-volume artifact content and isolated thread workspaces;
 - `@kuralle-agents/deployment/cloudflare` — D1 control plane and R2 artifact content resolver.
 
+An artifact carries its flows as data: `ArtifactFlow` is either a capability reference or an
+`InlineFlowEntry` embedding a validated `FlowDefinition`, so a pinned release ships flow behavior
+with the same immutability as its code.
+
 Published versions are append-only. An active release controls assignment only for a thread without
 a pin; an existing pin never follows a later release. The binder verifies artifact bytes, runtime API
 compatibility, capability versions, tenant identity, workspace provisioning, and deployment trace

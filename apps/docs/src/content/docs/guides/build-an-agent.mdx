@@ -183,7 +183,7 @@ The four node kinds, each for one job:
 
 A node's `next`/`onComplete` returns a transition: a node to go to, `{ end: 'label' }`,
 `{ handoff: 'agentId' }`, `{ escalate: 'reason' }`, or `'stay'`. Attach the flow with
-`defineAgent({ flows: [flow] })`. The flow remembers its current node in the session and
+`defineAgent({ flows: [flow] })`. The flow remembers its current node on the durable run and
 resumes there on the next turn — you don't wire that up.
 
 <Aside type="tip">

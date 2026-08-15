@@ -197,6 +197,11 @@ export class TraceRecorder {
           this.emitSpan(span);
           break;
         }
+        case 'turn-end':
+          if (this.currentNode && part.payload.rendered) {
+            this.currentNode.attributes.rendered = part.payload.rendered;
+          }
+          break;
         case 'handoff': {
           const handoffFrom = this.currentAgentId;
           const span = this.openSpan({
@@ -212,6 +217,16 @@ export class TraceRecorder {
           span.endTime = at;
           this.emitSpan(span);
           this.currentAgentId = part.payload.targetAgent;
+          break;
+        }
+        case 'custom': {
+          if (part.payload.name !== 'flow.extraction.update' || !this.currentNode) break;
+          const data = part.payload.data as { slotSources?: Record<string, 'deterministic' | 'model'> };
+          if (!data?.slotSources || typeof data.slotSources !== 'object') break;
+          this.currentNode.attributes.slotSources = {
+            ...this.currentNode.attributes.slotSources,
+            ...data.slotSources,
+          };
           break;
         }
         case 'error': {

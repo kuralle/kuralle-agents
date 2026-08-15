@@ -4,7 +4,7 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { action, defineFlow, reply } from '../../src/types/flow.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { openRun, sessionDerivedRunId } from '../../src/runtime/openRun.js';
+import { openRun } from '../../src/runtime/openRun.js';
 import type { AgentConfig } from '../../src/types/agentConfig.js';
 import { availableHostFlows } from '../../src/runtime/hostControlTools.js';
 import { hostLoop } from '../../src/runtime/hostLoop.js';
@@ -36,7 +36,7 @@ describe('F9: completed flows are repeatable per logical run (FIXED)', () => {
 
     const sessionId = 'f9-repeat-sess';
     const memoryStore = new MemoryStore();
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
 
     const runState = makeRunState(sessionId, runId);
     runState.state.__completedFlows = ['order'];

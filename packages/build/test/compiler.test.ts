@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'bun:test';
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { InMemoryDeploymentStore } from '@kuralle-agents/deployment';
+import { createRuntime, MemoryStore, type AgentConfig, type StreamPart } from '@kuralle-agents/core';
+import {
+  InMemoryDeploymentStore,
+  NamedRegistry,
+  VersionedRegistry,
+  bindAgentVersion,
+  type AgentVersion,
+  type RuntimeBindings,
+  type RuntimeRevision,
+  type ThreadPin,
+} from '@kuralle-agents/deployment';
 import {
   AgentBuildError,
   compileAgentDirectory,
@@ -151,5 +161,153 @@ describe('folder agent compiler', () => {
     expect((error as AgentBuildError).diagnostics.map(diagnostic => diagnostic.code)).toContain(
       'FILE_QUOTA_EXCEEDED',
     );
+  });
+});
+
+const REFUND_FLOW = JSON.stringify({
+  name: 'refund',
+  description: 'Start a refund.',
+  start: 'say',
+  nodes: [{
+    kind: 'reply',
+    id: 'say',
+    response: { template: 'Refund started' },
+    next: { end: 'done' },
+  }],
+}, null, 2);
+
+describe('inline flow.json compilation', () => {
+  it('embeds a valid flows/*.flow.json file and changes the digest when the file changes', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kuralle-inline-flow-'));
+    await writeFile(join(directory, 'instructions.md'), 'You are concise.');
+    await mkdir(join(directory, 'flows'));
+    await writeFile(join(directory, 'flows', 'refund.flow.json'), REFUND_FLOW);
+
+    const first = await compileAgentDirectory(directory, { ...OPTIONS, target: 'node' });
+    expect(first.rootArtifact.flows).toEqual([{
+      kind: 'inline',
+      id: 'refund',
+      definition: JSON.parse(REFUND_FLOW),
+    }]);
+    expect(first.modules.filter(module => module.kind === 'flow')).toEqual([]);
+
+    await writeFile(
+      join(directory, 'flows', 'refund.flow.json'),
+      REFUND_FLOW.replace('Start a refund.', 'Start a refund, revised.'),
+    );
+    const second = await compileAgentDirectory(directory, { ...OPTIONS, target: 'node' });
+    expect(first.rootArtifact.digest).not.toBe(second.rootArtifact.digest);
+  });
+
+  it('fails the build for an invalid flow file, naming the dotted issue path', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kuralle-invalid-flow-'));
+    await writeFile(join(directory, 'instructions.md'), 'You are concise.');
+    await mkdir(join(directory, 'flows'));
+    await writeFile(join(directory, 'flows', 'refund.flow.json'), JSON.stringify({
+      name: 'refund',
+      description: 'bad',
+      start: 'missing',
+      nodes: [{ kind: 'reply', id: 'greet', generate: true, next: { end: 'done' } }],
+    }));
+
+    const error = await compileAgentDirectory(directory, { ...OPTIONS, target: 'node' }).catch(value => value);
+    expect(error).toBeInstanceOf(AgentBuildError);
+    const diagnostic = (error as AgentBuildError).diagnostics.find(entry => entry.code === 'FLOW_INVALID');
+    expect(diagnostic?.path).toBe('flows/refund.flow.json');
+    expect(diagnostic?.message).toMatch(/\[missing-start\] start/);
+  });
+
+  it('keeps TypeScript flow modules as capability references alongside inline json', async () => {
+    const compiled = await compileAgentDirectory(join(FIXTURES, 'support'), OPTIONS);
+    expect(compiled.rootArtifact.flows).toEqual([{
+      id: 'checkout',
+      capability: 'test.support:flow:checkout',
+      versionRange: '=1.0.0',
+    }]);
+  });
+
+  it('binds the compiled artifact and executes the inline flow for one scripted turn', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kuralle-inline-bind-'));
+    await writeFile(join(directory, 'instructions.md'), 'You are concise.');
+    await mkdir(join(directory, 'flows'));
+    await writeFile(join(directory, 'flows', 'refund.flow.json'), REFUND_FLOW);
+    const compiled = await compileAgentDirectory(directory, { ...OPTIONS, target: 'node' });
+    const artifact = compiled.rootArtifact;
+    const createdAt = '2026-08-01T00:00:00.000Z';
+    const pin: ThreadPin = {
+      tenantId: 'tenant-a',
+      threadId: 'thread-a',
+      agentEntityId: artifact.agent.id,
+      agentVersionId: 'version-1',
+      artifactDigest: artifact.digest,
+      runtimeRevisionId: 'runtime-1',
+      releaseId: 'release-1',
+      environment: 'production',
+      configGeneration: 1,
+      secretGeneration: 1,
+      assignedAt: createdAt,
+    };
+    const agentVersion: AgentVersion = {
+      id: 'version-1',
+      tenantId: 'tenant-a',
+      agentEntityId: artifact.agent.id,
+      version: 1,
+      artifact,
+      createdBy: 'owner-1',
+      createdAt,
+    };
+    const runtimeRevision: RuntimeRevision = {
+      id: 'runtime-1',
+      artifactSchemaVersions: [1],
+      runtimeApiVersion: '1.2.0',
+      capabilities: [],
+      createdAt,
+    };
+    const models = new NamedRegistry<NonNullable<AgentConfig['model']>>();
+    models.register(
+      artifact.agent.model,
+      { specificationVersion: 'v3', provider: 'test', modelId: 'test' } as NonNullable<AgentConfig['model']>,
+    );
+    const bindings: RuntimeBindings = {
+      models,
+      tools: new VersionedRegistry(),
+      flows: new VersionedRegistry(),
+    };
+    const bound = await bindAgentVersion({
+      version: agentVersion,
+      pin,
+      runtime: runtimeRevision,
+      bindings,
+    });
+    const flow = bound.agent.flows?.[0];
+    if (!flow) throw new Error('expected compiled inline flow to bind');
+    expect(flow.name).toBe('refund');
+
+    const parts: StreamPart[] = [];
+    const handle = createRuntime({
+      agents: [bound.agent],
+      defaultAgentId: bound.agent.id,
+      defaultModel: bound.agent.model,
+      sessionStore: new MemoryStore(),
+      hostSelect: async () => ({ kind: 'enterFlow' as const, flow }),
+    }).run({
+      sessionId: 'compiled-inline-flow',
+      input: 'refund please',
+      driver: {
+        async runAgentTurn() {
+          return { text: '', toolResults: [] };
+        },
+        async awaitUser() {
+          return { type: 'message', input: '' };
+        },
+      },
+    });
+    for await (const part of handle.events) parts.push(part);
+    await handle;
+
+    expect(parts.some(part => part.type === 'flow-enter' && part.payload.flow === 'refund')).toBe(true);
+    expect(parts.some(part => part.type === 'text-delta' && part.payload.delta === 'Refund started')).toBe(true);
+    expect(parts.some(part => part.type === 'flow-end' && part.payload.flow === 'refund')).toBe(true);
+    expect(basename(directory)).toBe(artifact.agent.id);
   });
 });

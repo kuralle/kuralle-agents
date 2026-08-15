@@ -23,13 +23,21 @@ import { AIChatAgent } from '@cloudflare/ai-chat';
 import {
   createRuntime,
   isWakeJob,
+  isSweepJob,
+  sweepJob,
+  recoverOrphanedRuns,
+  sweepDeadlines,
+  DEFAULT_SWEEP_INTERVAL_MS,
   wakeJob,
   type DeploymentTraceContext,
+  type FlowDefinitionsStore,
   type HarnessConfig,
+  type Policy,
   type Runtime,
 } from '@kuralle-agents/core';
 import type {
   HitlInterrupt,
+  InterruptRequest,
   PersistentMemoryStore,
   UserInputContent,
   SignalActor,
@@ -45,10 +53,13 @@ import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
 import { BridgeSessionStore } from './BridgeSessionStore.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
 import { SqlPersistentMemoryStore } from './SqlPersistentMemoryStore.js';
+import { SqlRunStore } from './SqlRunStore.js';
 import { createUIMessageStreamResponse } from 'ai';
 import type { DurableSqlStorage, SqlExecutor } from './types.js';
 import { durableAgentSurface } from './durable-agent-surface.js';
 import { lastUserInputFromMessages } from './cfMessageInput.js';
+import { SqlFlowDefinitionsStore } from './SqlFlowDefinitionsStore.js';
+import { dispatchStoredFlowsRequest } from './storedFlowsHttp.js';
 
 export interface ResolvedRuntimeDefinition {
   agents: HarnessConfig['agents'];
@@ -125,10 +136,20 @@ export abstract class KuralleAgent<
     // so an instance field is not a reliable hand-off to the completion-oriented
     // HTTP facade. The durable run journal is authoritative across that boundary.
     const sessionId = this.getSessionId();
-    const state = await new OrchestrationStore(this.getSql()).get(sessionId);
-    const run = state?.durableRuns?.[sessionId]?.runState
-      ?? Object.values(state?.durableRuns ?? {}).find((candidate) => candidate.runState.status === 'paused')?.runState;
-    const waiting = run?.status === 'paused' ? run.waitingFor : undefined;
+    const runStore = await this.durableRunStore();
+    let waiting: InterruptRequest | undefined;
+    for await (const ref of runStore.listRuns({ status: 'paused' })) {
+      if (ref.waitingFor?.kind === 'approval') {
+        waiting = ref.waitingFor;
+        break;
+      }
+    }
+    if (!waiting) {
+      const state = await new OrchestrationStore(this.getSql()).get(sessionId);
+      const run = state?.durableRuns?.[sessionId]?.runState
+        ?? Object.values(state?.durableRuns ?? {}).find((candidate) => candidate.runState.status === 'paused')?.runState;
+      waiting = run?.status === 'paused' ? run.waitingFor : undefined;
+    }
     if (!waiting || waiting.kind !== 'approval') return undefined;
 
     const interrupt: HitlInterrupt = {
@@ -186,6 +207,28 @@ export abstract class KuralleAgent<
   }
 
   /**
+   * Policy for `GET/POST/DELETE /api/stored/flows`. Decisions are requested as
+   * `stored-flows:read` and `stored-flows:write`.
+   *
+   * Omitted: default-allow, matching the authless hono-server dev router.
+   * Production DOs must override this. `authorId` on the request is metadata,
+   * never a grant. `ask` is treated as deny — this surface has no HITL path.
+   */
+  protected getStoredFlowsPolicy(): Policy | undefined {
+    return undefined;
+  }
+
+  /**
+   * Called after a successful stored-flows POST or DELETE. Thread agents bump
+   * the pin-key cache generation so the next turn re-binds.
+   */
+  protected onStoredFlowsMutated(): void {}
+
+  protected getFlowDefinitionsStore(): FlowDefinitionsStore {
+    return new SqlFlowDefinitionsStore(this.getSql());
+  }
+
+  /**
    * Optional: durable working-memory blocks backed by DO SQLite.
    * When returned, wired into `HarnessConfig.defaultWorkingMemoryStore`.
    */
@@ -207,10 +250,16 @@ export abstract class KuralleAgent<
     return undefined;
   }
 
-  /**
-   * Get the SQL executor for the Durable Object.
-   * CF's AIChatAgent exposes this.sql as a tagged template function.
-   */
+  private async durableRunStore(): Promise<SqlRunStore> {
+    const sql = this.getSql();
+    const store = new SqlRunStore(sql);
+    const orch = await new OrchestrationStore(sql).get(this.getSessionId());
+    if (orch?.durableRuns) {
+      await store.importLegacyRuns(orch.durableRuns);
+    }
+    return store;
+  }
+
   private getSql(): SqlExecutor {
     return durableAgentSurface<Env, State>(this).sql.bind(this);
   }
@@ -330,16 +379,23 @@ export abstract class KuralleAgent<
     const extraConfig = this.getRuntimeConfig();
     const runtimeConfig = { ...extraConfig, ...definition.config };
     const workingMemoryStore = this.getWorkingMemoryStore();
+    const runStore = runtimeConfig.runStore ?? await this.durableRunStore();
+    const flowDefinitionsStore =
+      runtimeConfig.flowDefinitionsStore ?? this.getFlowDefinitionsStore();
+    const runtime = createRuntime({
+      ...runtimeConfig,
+      agents: definition.agents,
+      defaultAgentId,
+      sessionStore,
+      runStore,
+      flowDefinitionsStore,
+      ...(workingMemoryStore && !runtimeConfig.defaultWorkingMemoryStore
+        ? { defaultWorkingMemoryStore: workingMemoryStore }
+        : {}),
+    });
+    await runtime.loadDynamicFlows({ agentId: defaultAgentId });
     return {
-      runtime: createRuntime({
-        ...runtimeConfig,
-        agents: definition.agents,
-        defaultAgentId,
-        sessionStore,
-        ...(workingMemoryStore && !runtimeConfig.defaultWorkingMemoryStore
-          ? { defaultWorkingMemoryStore: workingMemoryStore }
-          : {}),
-      }),
+      runtime,
       deployment: definition.deployment,
     };
   }
@@ -492,10 +548,31 @@ export abstract class KuralleAgent<
   }
 
   /**
+   * Enqueue the first store-sweep tick on this DO's alarm scheduler.
+   * Exactly one sweeper per store — this DO's SqlRunStore is that store.
+   */
+  protected async startRunSweeper(intervalMs = DEFAULT_SWEEP_INTERVAL_MS): Promise<string> {
+    return this.wakeScheduler().enqueue(sweepJob({ intervalMs }), { delayMs: intervalMs });
+  }
+
+  /**
    * Override to handle non-wake scheduled jobs (engagement drips, cleanup…).
-   * Default: no-op with a warning, so a mis-routed job is visible.
+   * Sweep jobs run both `recoverOrphanedRuns` and `sweepDeadlines`, then
+   * re-enqueue at the job's interval. Default for other kinds: no-op with a
+   * warning, so a mis-routed job is visible.
    */
   protected async onScheduledJob(job: ScheduledJob): Promise<void> {
+    if (isSweepJob(job)) {
+      const built = await this.buildRuntime();
+      await recoverOrphanedRuns(built.runtime);
+      await sweepDeadlines(built.runtime);
+      const intervalMs =
+        typeof job.payload.intervalMs === 'number' && job.payload.intervalMs > 0
+          ? job.payload.intervalMs
+          : DEFAULT_SWEEP_INTERVAL_MS;
+      await this.wakeScheduler().enqueue(sweepJob({ intervalMs }), { delayMs: intervalMs });
+      return;
+    }
     console.warn(`[KuralleAgent] Unhandled scheduled job kind: ${job.kind}`);
   }
 
@@ -505,6 +582,18 @@ export abstract class KuralleAgent<
    */
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    const storedFlows = await dispatchStoredFlowsRequest({
+      request,
+      store: this.getFlowDefinitionsStore(),
+      runtimeForWrite: async () => {
+        const built = await this.buildRuntime();
+        return { runtime: built.runtime, agentId: built.runtime.getDefaultAgentId() };
+      },
+      storedFlowsPolicy: this.getStoredFlowsPolicy(),
+      onMutated: () => this.onStoredFlowsMutated(),
+    });
+    if (storedFlows) return storedFlows;
 
     // HTTP counterpart to the native Agents WebSocket chat protocol. This is
     // intentionally completion-oriented JSON: browser clients should use

@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased — dynamic durable flows: a JSON flow dialect, resumable flow runs, and flows agents can author (BREAKING under 0.x)
+
+Three strands land together: flows become data (a validated JSON dialect that registers onto a live runtime), flow runs become durable addresses (mint, resume, recover — across process death), and flow authoring becomes something an agent can do behind a validator instead of a human behind a compiler. Breaking changes ship under **0.x rules**, where a minor may break.
+
+### Breaking
+
+- **`defineFlow` validates at definition time and throws.** Duplicate node ids, a `start` outside `nodes`, unresolvable `goto` targets, and nodes unreachable from `start` are now definition errors, not runtime surprises. Transition targets must be **registered** nodes — the same object present in `flow.nodes`, or `{ goto: '<id>' }`. Inline node objects and transition thunks are rejected (`inline-transition-target`) — statically where transitions are declared, and at run time for transitions returned from handlers. Code flows project through the same structure validator the JSON dialect uses, so the two dialects cannot drift on what a legal graph is.
+
+### The JSON dialect
+
+`FlowDefinition` is the flow graph as data: `reply` (exactly one of `response: { template }` — engine-rendered, never model-authored — or `generate: true`), `collect`, `action`, `decide`; transitions by node id (`TransitionRef`); a typed predicate DSL over `input | state | results.<nodeId> | requestContext` for `routes[].when`; `MappingConfig` (`{ value } | { path } | { template }`) with `${...}` templates for `action.args`. `validateFlowDefinition` returns issues that carry machine-followable **repair actions** (`operation`, `arguments`, `legalSources` with schema compatibility) — built for an authoring agent that fixes its own output, not just a human reading messages.
+
+`gates` on a definition (or a code `Flow`) run at terminal transitions: predicate gates, or judge gates over an **explicit allow-list** of run-record paths. `blocking` fails the run with outcome `failed-verification`; `advisory` records a verdict; a gate that fails to *execute* always blocks, even declared advisory — a check that did not run is not a check that passed.
+
+### Durable flow runs
+
+`runtime.run({ kind: 'flow', flowName })` mints a headless, addressable flow run; `TurnHandle.runId` resolves at run open — before the turn body finishes — so the id you must resume with survives a turn that later throws. Resume is `runtime.run({ sessionId, runId })`, fail-closed on unknown and cross-session ids. `recoverOrphanedRuns` re-enters running runs whose execution lease went stale (crashed replica) through that same resume path; `sweepDeadlines` delivers the timeout outcome to paused runs past `waitingFor.deadline`; `findUnresumableRuns` lists what a version refuses to resume so it can be drained before an upgrade. Shared journals: `PostgresRunStore` (`@kuralle-agents/postgres-store`) and `SqlRunStore` (`@kuralle-agents/cf-agent`, DO SQLite); per-session `SessionRunStore` stays the default.
+
+**A parked run pins its flow's digest.** Redefining a flow under a parked run makes resume throw `FlowDriftError` — named run, node, expected and actual digest, recovery `restart | abandon` — never a silent resume against a graph the run never saw.
+
+### Registration and supply
+
+`runtime.addDynamicFlows(defs, { agentId, replace? })` registers a bundle atomically onto the agent's live catalog — every definition validates against the agent's actual tool surface first; failure rolls the catalog back and compensates persisted rows. `loadDynamicFlows` reloads `active` versions at boot, skipping invalid rows with a warning so one corrupt definition cannot sink the process. Versions persist in a `FlowDefinitionsStore` (Memory, Postgres, Redis, DO SQLite). Over HTTP, `GET/POST/DELETE /api/stored/flows` (hono-server and cf-agent) reuses `Policy` as the gate — decisions requested as `stored-flows:read` / `stored-flows:write`; `ask` is deny on this surface. Flows also arrive as files: top-level `flows/*.flow.json` in file-authored agent folders (`kuralle build` embeds them) and `flows/` directories in Agent Plugins.
+
+### Authoring
+
+`createFlowBuilderAgent` composes `FLOW_BUILDER_AUTHORING_PLAYBOOK` ahead of your surface policy and wires save/list/validate tools against a `FlowBuilderHost`. Authoring definitions may write `when: { nl: "..." }`; NL predicates compile to the DSL **at save time**, with provenance pinned on the stored version (compiler model id, prompt hash, compiler version) — what runs is always the compiled predicate, never the prose.
+
+### Collect, hardened
+
+`collect.resolvers` resolve slots deterministically before the model sees them (tier-0): `enum_check`, `range`, `jsonpath`. A resolved field is excluded from the model schema that turn; an ambiguous match falls back to the model rather than guessing. Model-extracted values pass a provenance guard against the source turn — a value the turn does not contain is dropped, not merged.
+
 ## Unreleased — memory isolation, an explicit memory search, and zero duplicate exported names (BREAKING under 0.x)
 
 Three strands: closing a cross-user leak in the memory stores, giving memory a read path the agent can actually call, and resolving every duplicate exported name in `core`. Breaking changes ship under **0.x rules**, where a minor may break.

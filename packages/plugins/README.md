@@ -1,6 +1,6 @@
 # @kuralle-agents/plugins
 
-Load [Agent Plugins v1.0.0](https://agent-plugins.org) directories into a Kuralle agent — `plugin.json`, `skills/`, and `mcp.json`.
+Load [Agent Plugins v1.0.0](https://agent-plugins.org) directories into a Kuralle agent — `plugin.json`, `skills/`, `mcp.json`, and (as a host extension) `flows/`.
 
 ## Install
 
@@ -18,9 +18,9 @@ A plugin is a directory with a fixed layout. A plugin authored for another agent
 
 **Key exports:**
 
-- **`loadAgentPlugin(fs, root)`** — reads a plugin directory and returns a discriminated result. It never throws.
+- **`loadAgentPlugin(fs, root, options?)`** — reads a plugin directory and returns a discriminated result. It never throws. Pass `hostTools` to scope action-node tool references.
 - **`expandPluginPlaceholders`** — expands `${PLUGIN_ROOT}` and `${PLUGIN_DATA}` per spec §9.2.
-- **Types** — `LoadPluginResult`, `LoadedPlugin`, `PluginManifest`, `McpServerConfig`, `Diagnostic`, `Rejection`.
+- **Types** — `LoadPluginResult`, `LoadedPlugin`, `LoadAgentPluginOptions`, `PluginManifest`, `McpServerConfig`, `Diagnostic`, `Rejection`.
 
 ## Layout
 
@@ -31,8 +31,12 @@ my-plugin/
     invoice-policy/
       SKILL.md                    name must match the directory
       references/rates.md         bundled resource
+  flows/
+    refund.flow.json              optional — Kuralle host extension
   mcp.json                        optional MCP servers
 ```
+
+Agent Plugins 1.0.0 does not define `flows/`; other hosts ignore the directory. Kuralle returns validated `FlowDefinition`s on `plugin.flows` for the host to register via `runtime.addDynamicFlows`.
 
 ## Usage
 
@@ -60,20 +64,21 @@ const agent = defineAgent({
 });
 ```
 
-`loaded.plugin.mcpServers` holds parsed server configs. Pass them to [`@kuralle-agents/mcp`](https://www.npmjs.com/package/@kuralle-agents/mcp) to connect them.
+`loaded.plugin.mcpServers` holds parsed server configs. Pass them to [`@kuralle-agents/mcp`](https://www.npmjs.com/package/@kuralle-agents/mcp) to connect them. `loaded.plugin.flows` holds validated flow definitions; the host registers them with `runtime.addDynamicFlows`.
 
 ## Failure is graded, not binary
 
-A `throw` cannot express how much of a plugin survived. A discriminated return can. The loader applies four different blast radii:
+A `throw` cannot express how much of a plugin survived. A discriminated return can. The loader applies five different blast radii:
 
-| What failed | Outcome | Skills | MCP servers |
-| --- | --- | --- | --- |
-| `plugin.json` | Reject the whole plugin (`ok: false`) | not loaded | not loaded |
-| `mcp.json` | Disable MCP for this plugin only | loaded | `[]` + diagnostic |
-| One skill folder | Skip that skill | the rest load | unchanged |
-| One server entry | Skip that server | unchanged | siblings load |
+| What failed | Outcome | Skills | MCP servers | Flows |
+| --- | --- | --- | --- | --- |
+| `plugin.json` | Reject the whole plugin (`ok: false`) | not loaded | not loaded | not loaded |
+| `mcp.json` | Disable MCP for this plugin only | loaded | `[]` + diagnostic | unchanged |
+| One skill folder | Skip that skill | the rest load | unchanged | unchanged |
+| One server entry | Skip that server | unchanged | siblings load | unchanged |
+| One flow file | Skip that flow | unchanged | unchanged | siblings load |
 
-A **missing** `skills/` or `mcp.json` is not an error. Spec §6.2 makes an absent component location legal, so it produces no diagnostic.
+A **missing** `skills/`, `mcp.json`, or `flows/` is not an error. Spec §6.2 makes an absent `skills/` or `mcp.json` legal; `flows/` is a host extension with the same missing-component rule.
 
 ## `LoadPluginResult`
 
@@ -86,6 +91,7 @@ interface LoadedPlugin {
   manifest: PluginManifest;
   skills: SkillStoreLike;                  // ready for AgentConfig.skills
   mcpServers: readonly McpServerConfig[];  // parsed, NOT connected
+  flows: readonly FlowDefinition[];        // validated, NOT registered
   diagnostics: readonly Diagnostic[];
 }
 ```

@@ -6,6 +6,7 @@ export type {
   PluginAuthor,
   PluginManifest,
   McpServerConfig,
+  LoadAgentPluginOptions,
   LoadedPlugin,
   LoadPluginResult,
 } from './types.js';

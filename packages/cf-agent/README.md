@@ -20,6 +20,8 @@ Peers: `agents` (Cloudflare Agents SDK), `zod`.
 - **`BridgeSessionStore`** — bridges Kuralle `SessionStore` interface to CF's SQLite storage.
 - **`OrchestrationStore`** — Durable Object KV for orchestration state.
 - **`SqlPersistentMemoryStore`** — DO SQLite-backed `PersistentMemoryStore` for USER/MEMORY blocks.
+- **`SqlRunStore`** — DO SQLite-backed `RunStore` for durable flow runs; wired in automatically.
+- **`SqlFlowDefinitionsStore`** — DO SQLite-backed versioned `FlowDefinitionsStore` for dynamic flows; wired in automatically.
 
 ## Streaming
 
@@ -94,6 +96,14 @@ protected getRuntimeConfig() {
 ## Flows and routing
 
 Attach `flows` for structured SOPs or `routes`/`agents` for triage — same `defineAgent` primitive as Node/Bun. No runtime differences.
+
+## Dynamic and durable flows
+
+Both work in the Durable Object with no extra wiring: `KuralleAgent` journals `kind: 'flow'` runs into `SqlRunStore` and versions dynamic `FlowDefinition`s in `SqlFlowDefinitionsStore`, both on DO SQLite. Swap them by returning `runStore` / `flowDefinitionsStore` from `getRuntimeConfig()` or overriding `getFlowDefinitionsStore()`.
+
+The DO also serves `GET/POST/DELETE /api/stored/flows` — the same contract as the hono-server `createStoredFlowsRouter`; an invalid definition returns 422 with validation issues and repair actions. Gate the routes by overriding `getStoredFlowsPolicy()`; decisions are requested as `stored-flows:read` / `stored-flows:write`, and `ask` is treated as deny. `startRunSweeper()` enqueues run recovery (`recoverOrphanedRuns` + `sweepDeadlines`) on the DO's alarm scheduler — exactly one sweeper per store, and this DO's `SqlRunStore` is that store.
+
+`KuralleThreadAgent` (the pinned-artifact production DO) bumps a cache generation on every stored-flows write, so the next turn re-binds with the new catalog. See the [dynamic flows guide](https://agents.kuralle.com/guides/dynamic-flows).
 
 ## Pi driver
 

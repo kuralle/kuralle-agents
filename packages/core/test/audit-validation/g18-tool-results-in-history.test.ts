@@ -5,7 +5,6 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { defineTool, CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
@@ -99,7 +98,7 @@ describe('G18: free-conversation tool results in history', () => {
 
     const sessionStore = new MemoryStore();
     const sessionId = 'g18-history';
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
 
     const runtime = createRuntime({
       agents: [agent],

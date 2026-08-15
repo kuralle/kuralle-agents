@@ -32,6 +32,10 @@
       "types": "./dist/runtime/index.d.ts",
       "default": "./dist/runtime/index.js"
     },
+    "./runtime/durable/testing": {
+      "types": "./dist/runtime/durable/testing.d.ts",
+      "default": "./dist/runtime/durable/testing.js"
+    },
     "./guards": {
       "types": "./dist/guards/index.d.ts",
       "default": "./dist/guards/index.js"
@@ -43,6 +47,10 @@
     "./session/testing": {
       "types": "./dist/session/testing.d.ts",
       "default": "./dist/session/testing.js"
+    },
+    "./flows/definition/testing": {
+      "types": "./dist/flows/definition/testing.d.ts",
+      "default": "./dist/flows/definition/testing.js"
     },
     "./tracing": {
       "types": "./dist/tracing/index.d.ts",

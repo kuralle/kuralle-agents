@@ -1,11 +1,116 @@
 import { DurableObject } from 'cloudflare:workers';
-import type { ChannelDriver, HarnessConfig, ScheduledJob } from '@kuralle-agents/core';
+import type { ChannelDriver, HarnessConfig, Policy, ScheduledJob } from '@kuralle-agents/core';
+import {
+  LogConflictError,
+  RunNotTerminalError,
+  StaleWriteError,
+  defineAgent,
+  type DeleteRunOptions,
+  type RunFilter,
+  type RunState,
+  type StepFinalizePatch,
+  type StepRecord,
+} from '@kuralle-agents/core';
+import { flowDefinitionsStoreConformanceCases } from '@kuralle-agents/core/flows/definition/testing';
 import { SqlPersistentMemoryStore } from '../src/SqlPersistentMemoryStore.js';
 import { createSqlExecutor } from '../src/sqlExecutor.js';
 import { KuralleAgent } from '../src/KuralleAgent.js';
+import { KuralleThreadAgent } from '../src/KuralleThreadAgent.js';
 import { SqlTraceStore } from '../src/SqlTraceStore.js';
+import { SqlRunStore } from '../src/SqlRunStore.js';
+import { SqlFlowDefinitionsStore } from '../src/SqlFlowDefinitionsStore.js';
 import { OtelTraceSink } from '@kuralle-agents/core';
+import type { BoundAgentRevision, ThreadAssignmentRequest, ThreadPin } from '@kuralle-agents/deployment';
 import type { LanguageModel } from 'ai';
+
+type RunStoreOp =
+  | { op: 'appendStep'; runId: string; record: StepRecord }
+  | { op: 'finalizeStep'; runId: string; key: string; patch: StepFinalizePatch }
+  | { op: 'getSteps'; runId: string }
+  | { op: 'getRunState'; runId: string }
+  | { op: 'putRunState'; state: RunState }
+  | { op: 'initRun'; state: RunState }
+  | { op: 'pruneStepsBeforeEpoch'; runId: string; keepEpoch: number }
+  | { op: 'reserveSteps'; runId: string; count: number }
+  | { op: 'listRuns'; filter: RunFilter }
+  | { op: 'deleteRun'; runId: string; options?: DeleteRunOptions };
+
+function reviveFilter(filter: RunFilter): RunFilter {
+  if (filter.deadlineBefore == null) return filter;
+  return { ...filter, deadlineBefore: new Date(filter.deadlineBefore) };
+}
+
+function serializeError(error: unknown): Record<string, unknown> {
+  if (error instanceof LogConflictError) {
+    return {
+      name: error.name,
+      message: error.message,
+      runId: error.runId,
+      expectedIndex: error.expectedIndex,
+      actualIndex: error.actualIndex,
+    };
+  }
+  if (error instanceof RunNotTerminalError) {
+    return { name: error.name, message: error.message, runId: error.runId, status: error.status };
+  }
+  if (error instanceof StaleWriteError) {
+    return {
+      name: error.name,
+      message: error.message,
+      sessionId: error.sessionId,
+      expectedVersion: error.expectedVersion,
+      actualVersion: error.actualVersion,
+    };
+  }
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message };
+  }
+  return { name: 'Error', message: String(error) };
+}
+
+async function dispatchRunStore(sql: ReturnType<typeof createSqlExecutor>, request: Request): Promise<Response> {
+  const store = new SqlRunStore(sql);
+  const body = (await request.json()) as RunStoreOp;
+  try {
+    switch (body.op) {
+      case 'appendStep':
+        await store.appendStep(body.runId, body.record);
+        return Response.json({ ok: true, result: null });
+      case 'finalizeStep':
+        await store.finalizeStep(body.runId, body.key, body.patch);
+        return Response.json({ ok: true, result: null });
+      case 'getSteps':
+        return Response.json({ ok: true, result: await store.getSteps(body.runId) });
+      case 'getRunState':
+        return Response.json({ ok: true, result: await store.getRunState(body.runId) });
+      case 'putRunState':
+        await store.putRunState(body.state);
+        return Response.json({ ok: true, result: body.state });
+      case 'initRun':
+        await store.initRun(body.state);
+        return Response.json({ ok: true, result: body.state });
+      case 'pruneStepsBeforeEpoch':
+        await store.pruneStepsBeforeEpoch(body.runId, body.keepEpoch);
+        return Response.json({ ok: true, result: null });
+      case 'reserveSteps':
+        return Response.json({ ok: true, result: await store.reserveSteps(body.runId, body.count) });
+      case 'listRuns': {
+        const refs = [];
+        for await (const ref of store.listRuns(reviveFilter(body.filter))) {
+          refs.push(ref);
+        }
+        return Response.json({ ok: true, result: refs });
+      }
+      case 'deleteRun':
+        await store.deleteRun(body.runId, body.options);
+        return Response.json({ ok: true, result: null });
+      default:
+        return Response.json({ ok: false, error: { name: 'Error', message: 'unknown op' } }, { status: 400 });
+    }
+  } catch (error) {
+    return Response.json({ ok: false, error: serializeError(error) }, { status: 400 });
+  }
+}
 
 export class TestMemoryDO extends DurableObject {
   async fetch(request: Request): Promise<Response> {
@@ -34,6 +139,30 @@ export class TestMemoryDO extends DurableObject {
       });
       await sink.flush();
       return Response.json(captured);
+    }
+    if (url.pathname === '/run-store') {
+      return dispatchRunStore(createSqlExecutor(this.ctx.storage.sql), request);
+    }
+    if (url.pathname === '/flow-def-contract') {
+      const sql = createSqlExecutor(this.ctx.storage.sql);
+      const failures: { name: string; error: string }[] = [];
+      for (const testCase of flowDefinitionsStoreConformanceCases) {
+        const store = new SqlFlowDefinitionsStore(sql);
+        sql`DELETE FROM kuralle_flow_definition_versions`;
+        try {
+          await testCase.run(store);
+        } catch (error) {
+          failures.push({
+            name: testCase.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      return Response.json({
+        total: flowDefinitionsStoreConformanceCases.length,
+        passed: flowDefinitionsStoreConformanceCases.length - failures.length,
+        failures,
+      });
     }
     if (url.pathname !== '/roundtrip') {
       return new Response('not found', { status: 404 });
@@ -113,6 +242,109 @@ export class TestApprovalAgent extends KuralleAgent {
 
   protected getRuntimeConfig(): Partial<HarnessConfig> {
     return { driver: approvalDriver() };
+  }
+}
+
+/** Workerd parity for the stored-flows HTTP surface. */
+export class TestStoredFlowsAgent extends KuralleAgent {
+  protected getAgents(): HarnessConfig['agents'] {
+    return [{ id: 'clerk', instructions: 'Help.', model: {} as LanguageModel }];
+  }
+
+  protected getDefaultAgentId(): string {
+    return 'clerk';
+  }
+
+  protected override getStoredFlowsPolicy(): Policy | undefined {
+    if (!this.name.includes('deny-write')) return undefined;
+    return {
+      decide: (req) =>
+        req.toolName === 'stored-flows:write'
+          ? { kind: 'deny', reason: 'writes forbidden' }
+          : { kind: 'allow' },
+    };
+  }
+}
+
+function testPin(request: ThreadAssignmentRequest): ThreadPin {
+  return {
+    tenantId: request.tenantId,
+    threadId: request.threadId,
+    agentEntityId: request.agentEntityId,
+    agentVersionId: 'version-1',
+    artifactDigest: 'a'.repeat(64),
+    runtimeRevisionId: 'runtime-1',
+    releaseId: 'release-1',
+    environment: request.environment,
+    configGeneration: request.configGeneration ?? 1,
+    secretGeneration: request.secretGeneration ?? 1,
+    assignedAt: request.assignedAt ?? '2026-08-01T00:00:00.000Z',
+  };
+}
+
+/** Workerd fixture: a stored-flows write must miss the pin-key cache on the next bind. */
+export class TestThreadStoredFlowsAgent extends KuralleThreadAgent {
+  private binds = 0;
+
+  protected authorizeThreadInitialization(): boolean {
+    return true;
+  }
+
+  protected async assignThread(request: ThreadAssignmentRequest): Promise<ThreadPin> {
+    return testPin(request);
+  }
+
+  protected async bindPinnedAgent(pin: ThreadPin): Promise<BoundAgentRevision> {
+    this.binds += 1;
+    const agent = defineAgent({
+      id: 'support',
+      instructions: 'Help.',
+      model: {} as LanguageModel,
+    });
+    return {
+      artifact: {
+        schemaVersion: 1,
+        artifactId: 'artifact-1',
+        digest: pin.artifactDigest,
+        compiler: { name: 'kuralle', version: '0' },
+        runtimeApiRange: '0.x',
+        agent: { id: agent.id, model: 'test' },
+        instructions: [],
+        skills: [],
+        references: [],
+        workspaceSeed: [],
+        agents: [],
+        tools: [],
+        flows: [],
+        policies: {},
+        requiredCapabilities: [],
+        secretRefs: [],
+        sourceMap: [],
+      },
+      agent,
+      deployment: {
+        tenantId: pin.tenantId,
+        agentEntityId: pin.agentEntityId,
+        agentVersionId: pin.agentVersionId,
+        artifactDigest: pin.artifactDigest,
+        releaseId: pin.releaseId,
+        runtimeRevisionId: pin.runtimeRevisionId,
+        environment: pin.environment,
+        configGeneration: pin.configGeneration,
+        secretGeneration: pin.secretGeneration,
+      },
+      references: [],
+      workspaceSeed: [],
+    };
+  }
+
+  override async onRequest(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/_test/bind')) {
+      await this.resolveRuntimeDefinition();
+      return Response.json({ binds: this.binds });
+    }
+    return super.onRequest(request);
   }
 }
 

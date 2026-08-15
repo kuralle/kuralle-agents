@@ -1,14 +1,9 @@
 // FINDING 6 (FIXED): runEpoch scopes the effect-key namespace per logical run so a NEW user turn
 // re-executes identical tool+args instead of replaying a prior turn's cached result.
 import { describe, expect, it } from 'bun:test';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { buildCtx, reloadRunStateFreshTurn, setupDurableHarness } from '../core-durable/helpers.js';
 
 describe('F6: cross-turn effect-key collision returns stale tool results', () => {
-  it('runId is the sessionId verbatim — the durable run spans the whole session', () => {
-    expect(sessionDerivedRunId('sess-abc')).toBe('sess-abc');
-  });
-
   it('a genuinely new turn calling the same tool with the same args re-executes with fresh results', async () => {
     const balanceSpy = { count: 0, balance: 100 };
     const toolExecutor = {

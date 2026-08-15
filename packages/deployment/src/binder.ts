@@ -1,5 +1,6 @@
 import {
   parseSkillFrontmatter,
+  rehydrateFlow,
   type AgentConfig,
   type AgentWorkspaceDefinition,
   type AgentWorkspaceResolverContext,
@@ -22,15 +23,16 @@ import { sha256 } from './canonical.js';
 import { DeploymentError } from './errors.js';
 import { assertArtifactCompatible } from './preflight.js';
 import { NamedRegistry, VersionedRegistry } from './registry.js';
-import type {
-  AgentArtifact,
-  AgentVersion,
-  CapabilityReference,
-  ContentEntry,
-  RuntimeRevision,
-  ThreadPin,
-  ToolReference,
-  TrustedToolReference,
+import {
+  isInlineFlowEntry,
+  type AgentArtifact,
+  type AgentVersion,
+  type CapabilityReference,
+  type ContentEntry,
+  type RuntimeRevision,
+  type ThreadPin,
+  type ToolReference,
+  type TrustedToolReference,
 } from './types.js';
 
 type Model = NonNullable<AgentConfig['model']>;
@@ -311,10 +313,29 @@ async function bindArtifact(
     tools[reference.id] = tool;
   }
 
-  const flows = validated.flows.map(reference => {
-    const flow = bindings.flows.resolve(reference.capability, reference.versionRange);
-    if (flow.name !== reference.id) {
-      bindingError(`bound flow ${flow.name} does not match artifact id ${reference.id}`);
+  const flows = validated.flows.map(entry => {
+    if (isInlineFlowEntry(entry)) {
+      let flow: Flow;
+      try {
+        flow = rehydrateFlow(entry.definition, {
+          tools: (id) => tools[id],
+          mode: 'strict',
+        });
+      } catch (error) {
+        return bindingError(
+          error instanceof Error
+            ? error.message
+            : `inline flow ${entry.id} could not be rehydrated`,
+        );
+      }
+      if (flow.name !== entry.id) {
+        bindingError(`bound flow ${flow.name} does not match artifact id ${entry.id}`);
+      }
+      return flow;
+    }
+    const flow = bindings.flows.resolve(entry.capability, entry.versionRange);
+    if (flow.name !== entry.id) {
+      bindingError(`bound flow ${flow.name} does not match artifact id ${entry.id}`);
     }
     return flow;
   });

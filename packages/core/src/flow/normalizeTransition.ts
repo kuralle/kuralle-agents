@@ -1,28 +1,19 @@
 import type { Flow, FlowNode, Transition } from '../types/flow.js';
 import type { FlowPark } from './collectDigression.js';
+import { isFlowNode } from './nodeKinds.js';
 
 type FlowParkRef = Pick<FlowPark, 'flow' | 'node'>;
 
 export type NormalizedTransition =
-  | { kind: 'goto'; node: FlowNode; data?: Record<string, unknown> }
+  | { kind: 'goto'; to: FlowNode | string; data?: Record<string, unknown> }
   | { kind: 'handoff'; to: string; reason?: string }
   | { kind: 'escalate'; reason: string }
   | { kind: 'end'; reason: string }
   | { kind: 'stay' }
   | { kind: 'switchFlow'; flow: Flow; park: FlowParkRef };
 
-const NODE_KINDS = new Set(['reply', 'collect', 'action', 'decide']);
-
 export function resolveNodeRef(ref: FlowNode | (() => FlowNode)): FlowNode {
   return typeof ref === 'function' ? ref() : ref;
-}
-
-function isFlowNode(value: unknown): value is FlowNode {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const kind = (value as FlowNode).kind;
-  return typeof kind === 'string' && NODE_KINDS.has(kind) && typeof (value as FlowNode).id === 'string';
 }
 
 export function normalizeTransition(transition: Transition): NormalizedTransition {
@@ -30,12 +21,8 @@ export function normalizeTransition(transition: Transition): NormalizedTransitio
     return { kind: 'stay' };
   }
 
-  if (typeof transition === 'function') {
-    return { kind: 'goto', node: transition() };
-  }
-
   if (isFlowNode(transition)) {
-    return { kind: 'goto', node: transition };
+    return { kind: 'goto', to: transition };
   }
 
   if (typeof transition === 'object' && transition !== null) {
@@ -51,7 +38,7 @@ export function normalizeTransition(transition: Transition): NormalizedTransitio
     if ('goto' in transition) {
       return {
         kind: 'goto',
-        node: resolveNodeRef(transition.goto),
+        to: transition.goto,
         data: transition.data,
       };
     }

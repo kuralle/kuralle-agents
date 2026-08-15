@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { action, collect as collectNode, defineFlow } from '../../src/types/flow.js';
@@ -67,7 +66,7 @@ async function seedActiveFlow(
   session.currentAgent = agentId;
   await store.save(session);
   const runStore = new SessionRunStore(store, sessionId);
-  const runState = makeRunState(sessionId, sessionDerivedRunId(sessionId));
+  const runState = makeRunState(sessionId, sessionId);
   runState.activeAgentId = agentId;
   runState.activeFlow = flowName;
   await runStore.initRun(runState);
@@ -180,10 +179,10 @@ describe('delegated flow audit adversarial repros', () => {
 
     expect(executions).toBe(0);
     const runStore = new SessionRunStore(store, 'approval-payload');
-    expect((await runStore.getRunState(sessionDerivedRunId('approval-payload')))?.status).toBe(
+    expect((await runStore.getRunState('approval-payload'))?.status).toBe(
       'paused',
     );
-    expect(await runStore.getSteps(sessionDerivedRunId('approval-payload'))).toHaveLength(0);
+    expect(await runStore.getSteps('approval-payload')).toHaveLength(0);
 
     await expect(
       collect(runtime.run({
@@ -197,7 +196,7 @@ describe('delegated flow audit adversarial repros', () => {
         driver: actionDriver,
       })),
     ).rejects.toThrow('non-empty signalId');
-    expect(await runStore.getSteps(sessionDerivedRunId('approval-payload'))).toHaveLength(0);
+    expect(await runStore.getSteps('approval-payload')).toHaveLength(0);
 
     await expect(
       collect(runtime.run({
@@ -213,7 +212,7 @@ describe('delegated flow audit adversarial repros', () => {
         driver: actionDriver,
       })),
     ).rejects.toThrow('unknown field "decisionId"');
-    expect(await runStore.getSteps(sessionDerivedRunId('approval-payload'))).toHaveLength(0);
+    expect(await runStore.getSteps('approval-payload')).toHaveLength(0);
 
     await collect(
       runtime.run({
@@ -231,7 +230,7 @@ describe('delegated flow audit adversarial repros', () => {
     );
 
     expect(executions).toBe(1);
-    const finishedSteps = await runStore.getSteps(sessionDerivedRunId('approval-payload'));
+    const finishedSteps = await runStore.getSteps('approval-payload');
     expect(
       finishedSteps.filter((step) => step.kind === 'tool' && step.name === 'destructive'),
     ).toHaveLength(1);

@@ -1,11 +1,14 @@
 import type { Session } from '../../types/session.js';
 import { StaleWriteError, type SessionStore } from '../../session/SessionStore.js';
-import type { RunState, StepRecord, PersistedRun, SessionDurableRuns } from './types.js';
-import { DURABLE_RUNS_KEY } from './types.js';
+import type { RunState, StepRecord, PersistedRun, SessionDurableRuns, RunFilter, RunRef } from './types.js';
+import { DURABLE_RUNS_KEY, readSessionDurableRuns, runMatchesFilter, toRunRef } from './types.js';
 import {
   LogConflictError,
   RunNotFoundError,
+  RunNotTerminalError,
   StepNotFoundError,
+  isTerminalRunStatus,
+  type DeleteRunOptions,
   type RunStore,
   type StepFinalizePatch,
 } from './RunStore.js';
@@ -19,8 +22,7 @@ function cloneSession<T>(value: T): T {
 }
 
 function readRuns(session: Session): SessionDurableRuns {
-  const runs = (session as Session & { [DURABLE_RUNS_KEY]?: SessionDurableRuns })[DURABLE_RUNS_KEY];
-  return runs ?? {};
+  return readSessionDurableRuns(session);
 }
 
 function writeRuns(session: Session, runs: SessionDurableRuns): void {
@@ -39,9 +41,12 @@ export class SessionRunStore implements RunStore {
     private readonly sessionId: string,
   ) {}
 
-  private async mutateSession(mutator: (session: Session) => void | Promise<void>): Promise<void> {
+  private async mutateSession(
+    mutator: (session: Session) => void | Promise<void>,
+    sessionId: string = this.sessionId,
+  ): Promise<void> {
     for (let attempt = 0; attempt < SessionRunStore.CAS_RETRIES; attempt++) {
-      const session = await this.requireSession();
+      const session = await this.requireSession(sessionId);
       await mutator(session);
       try {
         await this.sessionStore.save(session);
@@ -163,7 +168,8 @@ export class SessionRunStore implements RunStore {
   async getRunState(runId: string): Promise<RunState | null> {
     const session = await this.requireSession();
     const persisted = getPersistedRun(session, runId);
-    return persisted ? cloneSession(persisted.runState) : null;
+    if (!persisted?.runState) return null;
+    return cloneSession(persisted.runState);
   }
 
   async putRunState(state: RunState): Promise<void> {
@@ -207,10 +213,57 @@ export class SessionRunStore implements RunStore {
     });
   }
 
-  private async requireSession(): Promise<Session> {
-    const session = await this.sessionStore.get(this.sessionId);
+  async *listRuns(filter: RunFilter): AsyncIterable<RunRef> {
+    const sessions = await this.sessionStore.list();
+    for (const session of sessions) {
+      const runs = readRuns(session);
+      for (const persisted of Object.values(runs)) {
+        if (!runMatchesFilter(persisted.runState, filter)) continue;
+        yield cloneSession(toRunRef(persisted.runState, session.id));
+      }
+    }
+  }
+
+  async deleteRun(runId: string, options?: DeleteRunOptions): Promise<void> {
+    const located = await this.findRunSession(runId);
+    if (!located) {
+      throw new RunNotFoundError(runId);
+    }
+
+    await this.mutateSession((session) => {
+      const runs = readRuns(session);
+      const existing = runs[runId];
+      if (!existing) {
+        throw new RunNotFoundError(runId);
+      }
+      if (!isTerminalRunStatus(existing.runState.status) && !options?.force) {
+        throw new RunNotTerminalError(runId, existing.runState.status);
+      }
+      delete runs[runId];
+      writeRuns(session, runs);
+    }, located);
+  }
+
+  private async findRunSession(runId: string): Promise<string | null> {
+    const bound = await this.sessionStore.get(this.sessionId);
+    if (bound && getPersistedRun(bound, runId)) {
+      return this.sessionId;
+    }
+
+    const sessions = await this.sessionStore.list();
+    for (const session of sessions) {
+      if (session.id === this.sessionId) continue;
+      if (getPersistedRun(session, runId)) {
+        return session.id;
+      }
+    }
+    return null;
+  }
+
+  private async requireSession(sessionId: string = this.sessionId): Promise<Session> {
+    const session = await this.sessionStore.get(sessionId);
     if (!session) {
-      throw new Error(`Session not found: ${this.sessionId}`);
+      throw new Error(`Session not found: ${sessionId}`);
     }
     return session;
   }

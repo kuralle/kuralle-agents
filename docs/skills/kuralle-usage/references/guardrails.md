@@ -51,7 +51,7 @@ Global processors can also attach at runtime config when loading from packs.
 
 ```ts
 const handle = runtime.run({ input, sessionId });
-for await (const part of handle.events()) {
+for await (const part of handle.events) {
   if (part.type === 'safety-blocked') {
     console.log(`[BLOCKED] ${part.payload.rationale} — message sent: "${part.payload.userFacingMessage}"`);
   }

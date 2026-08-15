@@ -1,7 +1,6 @@
 import type { SessionStore } from '../../session/SessionStore.js';
+import { isResumableEffectKeyVersion } from './effectKeyVersion.js';
 import { SessionRunStore } from './SessionRunStore.js';
-import { sessionDerivedRunId } from '../openRun.js';
-import { EFFECT_KEY_VERSION } from './effectKeyVersion.js';
 
 /** Why a persisted run will refuse to resume after upgrading. */
 export type UnresumableReason =
@@ -49,20 +48,22 @@ export async function findUnresumableRuns(
   sessionStore: SessionStore,
   options: { sessionIds?: string[] } = {},
 ): Promise<UnresumableRun[]> {
-  const ids =
-    options.sessionIds ?? (await sessionStore.list()).map((session) => session.id);
+  const enumerator = new SessionRunStore(sessionStore, options.sessionIds?.[0] ?? '');
+  const allow = options.sessionIds ? new Set(options.sessionIds) : undefined;
   const found: UnresumableRun[] = [];
 
-  for (const sessionId of ids) {
-    const runStore = new SessionRunStore(sessionStore, sessionId);
-    const runId = sessionDerivedRunId(sessionId);
-    const runState = await runStore.getRunState(runId);
-    if (!runState) continue;
+  for await (const ref of enumerator.listRuns({})) {
+    const sessionId = ref.sessionId;
+    if (!sessionId) continue;
+    if (allow && !allow.has(sessionId)) continue;
 
-    const steps = await runStore.getSteps(runId);
+    const runStore = new SessionRunStore(sessionStore, sessionId);
+    const runState = await runStore.getRunState(ref.runId);
+    if (!runState) continue;
+    const steps = await runStore.getSteps(ref.runId);
     const base = {
       sessionId,
-      runId,
+      runId: ref.runId,
       recordedSteps: steps.length,
       updatedAt: runState.updatedAt,
     };
@@ -79,7 +80,7 @@ export async function findUnresumableRuns(
     if (
       runState.activeFlow &&
       steps.length > 0 &&
-      runState.effectKeyVersion !== EFFECT_KEY_VERSION
+      !isResumableEffectKeyVersion(runState.effectKeyVersion)
     ) {
       found.push({
         ...base,

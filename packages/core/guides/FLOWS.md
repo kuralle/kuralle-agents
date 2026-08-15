@@ -30,7 +30,7 @@ const greeting = reply({
   tools: { collect_date: collectDate }, // wire via tools + ToolSet in production
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'collect_date');
-    return r?.result ? { goto: confirm, data: r.result as Record<string, unknown> } : 'stay';
+    return r?.result ? { goto: confirm.id, data: r.result as Record<string, unknown> } : 'stay';
   },
 });
 
@@ -69,5 +69,5 @@ For tools that return `createFlowTransition(targetId, data)`, the runtime interp
 ## Transition tips
 
 - Return `createFlowTransition(targetId, data)` from tool `execute` handlers that move the flow.
-- On `reply` nodes, return `{ goto: nextNode, data }` from `next` when a tool result is ready.
+- On `reply` nodes, return `{ goto: nextNode.id, data }` from `next` when a tool result is ready.
 - Use `createFlowUpdate(data, text, keys)` to merge state without leaving the node.

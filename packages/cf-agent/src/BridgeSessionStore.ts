@@ -4,8 +4,9 @@ import { getToolName, isToolUIPart, type TextPart, type ToolCallPart, type UIMes
 import type { OrchestrationState, SqlExecutor } from './types.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
 
-/** The durable run journal is stashed on the Session under a well-known key by
- *  `SessionRunStore`; the bridge persists/restores it via OrchestrationStore. */
+/** The durable run journal used to live on the Session under DURABLE_RUNS_KEY and
+ *  was persisted in the orchestration blob. New runs go to SqlRunStore; get() still
+ *  hydrates a legacy blob so pre-existing sessions can be copied forward once. */
 type SessionWithRuns = Session & { [DURABLE_RUNS_KEY]?: SessionDurableRuns };
 
 /**
@@ -66,8 +67,8 @@ export class BridgeSessionStore implements SessionStore {
       state: orchState?.state,
       metadata: reviveMetadata(orchState?.metadata),
     };
-    // Restore the durable run journal so durable tools / suspend-resume can find
-    // the run (SessionRunStore reads it off the Session object).
+    // Restore a pre-SqlRunStore journal so copy-forward can import it. New runs
+    // are not written back here — see BridgeSessionStore.save.
     session[DURABLE_RUNS_KEY] = orchState?.durableRuns ?? {};
     session.version = orchState?.version ?? 0;
     return session;
@@ -91,7 +92,6 @@ export class BridgeSessionStore implements SessionStore {
       })),
       state: session.state,
       metadata: session.metadata,
-      durableRuns: (session as SessionWithRuns)[DURABLE_RUNS_KEY],
       version: session.version ?? 0,
     };
     await this.orchestration.save(session.id, state);

@@ -14,7 +14,6 @@ import {
 } from '@kuralle-agents/core';
 import { consumeAllPendingUserInput } from '../../core/src/runtime/channels/inputBuffer.js';
 import { SessionRunStore } from '../../core/src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../core/src/runtime/openRun.js';
 
 const backendPath = join(
   mkdtempSync(join(tmpdir(), 'kuralle-property-remediation-')),
@@ -315,7 +314,7 @@ describe('property-manager R-05/R-09 remediation', () => {
     ).toBe(false);
 
     const runStore = new SessionRunStore(store, sessionId);
-    const steps = await runStore.getSteps(sessionDerivedRunId(sessionId));
+    const steps = await runStore.getSteps(sessionId);
     expect(
       steps.filter(
         (step) => step.kind === 'tool' && step.name === 'dispatch_vendor_with_approval',

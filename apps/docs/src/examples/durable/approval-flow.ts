@@ -37,13 +37,13 @@ const issueRefund = action({
     });
 
     if (!decision.approved) {
-      return { goto: declined };
+      return declined;
     }
 
     // Recorded in the effect log. If the run resumes after this point, the
     // recorded result is replayed instead of charging the customer twice.
     const receipt = await ctx.tool('processRefund', { amount });
-    return { goto: confirmed, data: { receipt } };
+    return { goto: confirmed.id, data: { receipt } };
   },
 });
 
@@ -51,7 +51,7 @@ const collectAmount = collect({
   id: 'collect_amount',
   schema: z.object({ amount: z.number() }),
   required: ['amount'],
-  instructions: (missing) => `Ask the customer for: ${missing.join(', ')}`,
+  ask: (missing) => `What ${missing.join(' and ')} should the refund be for?`,
   onComplete: () => issueRefund,
 });
 

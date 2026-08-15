@@ -1,5 +1,7 @@
 export { PostgresSessionStore } from './PostgresSessionStore.js';
 export type { PostgresStoreOptions } from './PostgresSessionStore.js';
+export { PostgresRunStore } from './PostgresRunStore.js';
+export type { PostgresRunStoreOptions } from './PostgresRunStore.js';
 export { PostgresTraceStore } from './PostgresTraceStore.js';
 export type { PostgresTraceStoreOptions } from './PostgresTraceStore.js';
 export { PostgresPersistentMemoryStore } from './PostgresPersistentMemoryStore.js';
@@ -19,6 +21,8 @@ export type {
   PostgresDeploymentStoreOptions,
   PostgresDeploymentTables,
 } from './PostgresDeploymentStore.js';
+export { PostgresFlowDefinitionsStore } from './PostgresFlowDefinitionsStore.js';
+export type { PostgresFlowDefinitionsStoreOptions } from './PostgresFlowDefinitionsStore.js';
 export { PostgresThreadExecutionCoordinator } from './PostgresThreadExecutionCoordinator.js';
 export type {
   PostgresThreadExecutionCoordinatorOptions,

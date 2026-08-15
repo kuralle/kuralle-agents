@@ -24,9 +24,9 @@ A run is stored as two things:
 - **`RunState`** — the mutable snapshot: status (`running` / `paused` / `finished` / `error` / `aborted`), the active agent, active flow and node, the flow `state` bag, the message history, and `waitingFor` (set while suspended).
 - **`StepRecord[]`** — the append-only log. Each record holds an `index`, an idempotency `key`, a `kind` (`tool` / `approval` / `signal` / `now` / `uuid`), a `status` (`running` while pending, `finished` or `error` when done), and either a `result` or an `error`.
 
-Both live inside the session under a `durableRuns` key, so durability is inherited from whichever [`SessionStore`](/guides/sessions) you configured — Memory in development, Redis or Postgres in production.
+By default both live inside the session under a `durableRuns` key (the built-in `SessionRunStore`), so durability is inherited from whichever [`SessionStore`](/guides/sessions) you configured — Memory in development, Redis or Postgres in production. Pass `runStore` on the harness config to journal runs in a dedicated store instead: `PostgresRunStore` from `@kuralle-agents/postgres-store`, or `SqlRunStore` on Durable Object SQLite from `@kuralle-agents/cf-agent`.
 
-The **run id equals the session id**: there is exactly one durable run per session, and the run *is* the conversation.
+A run comes in two kinds. The **conversation run** is the session's default — one per session, opened by every plain `runtime.run({ input, sessionId })`; the run *is* the conversation. A **flow run** (`kind: 'flow'`) is one durable execution of a flow with its own server-minted run id, journal, and lifecycle — see [Durable flow runs](#durable-flow-runs).
 
 ## Replay: record once, replay forever
 
@@ -121,6 +121,46 @@ if (!decision.approved) return { kind: 'handoff', to: 'human', reason: 'declined
 
 Either way a denial is never degraded into "something went wrong on my side" — that message is for malfunctions, and a human saying no is not one.
 
+## Durable flow runs
+
+A flow run is minted with `kind: 'flow'`:
+
+```typescript
+const handle = runtime.run({
+  sessionId,
+  kind: 'flow',
+  flowName: 'refund',
+  input: 'Refund order #814 to the original card.',
+});
+const runId = await handle.runId;
+```
+
+`TurnHandle.runId` resolves as soon as the run is opened — before the turn body finishes — so the caller can persist the id it must resume with even if the turn later throws. Everything after that addresses the run explicitly:
+
+```typescript
+runtime.run({ sessionId, runId });                  // re-enter (e.g. after a crash)
+runtime.run({ sessionId, runId, signalDelivery });  // resolve its pending approval
+await runtime.getRun(runId, sessionId);             // status, activeFlow, activeNode, waitingFor
+```
+
+Addressing is fail-closed: an unknown `runId`, or one belonging to a different session, is rejected. A caller-supplied `runId` is resume-only and wins over `kind` — you cannot mint and resume in the same call. `flowName` applies only at creation and is ignored on resume.
+
+On entry the run **pins the digest** of the flow it entered. Resuming a parked run against a changed definition throws `FlowDriftError` (with `recovery: ['restart', 'abandon']`) instead of silently executing a different graph — see [Dynamic Flows](/guides/dynamic-flows#durability-parked-runs-pin-their-digest).
+
+### Leases, crash recovery, and deadline sweeps
+
+Every open run takes an **execution lease** (`leaseHolder` / `leaseExpiresAt`, default TTL 30s), renewed at persist points during the turn and cleared at close. A `running` run whose lease has expired marks a crashed replica; a missing lease is idle, not stale. Three primitives turn that into recovery:
+
+| Function | What it does |
+|---|---|
+| `recoverOrphanedRuns(runtime)` | Re-enters `running` runs whose lease is stale, through the same fail-closed `run({ sessionId, runId })` resume path; live leases are skipped |
+| `sweepDeadlines(runtime)` | Delivers a structured deny (`reason: 'deadline-expired'`) to `paused` runs whose `waitingFor.deadline` has passed |
+| `startRunSweeper(scheduler, opts?)` | Enqueues the recurring sweep job; pair it with `createSweepJobRunner(runtime)` as that scheduler's executor, which runs both sweeps on each tick |
+
+Run **exactly one sweeper per RunStore**. The run mutex is in-process only — two schedulers against the same store race recoveries of the same orphan.
+
+The live proof is `packages/hono-server/examples/e2e-kill-resume`: a Postgres-backed server registers a flow over HTTP, parks mid-collect, is SIGKILLed and restarted, resumes the same run — and the charge tool fires exactly once.
+
 ## Example: a refund flow with an approval gate
 
 The `action` node collects an amount, pauses for a supervisor decision, and runs the refund tool exactly once on approval.
@@ -163,4 +203,5 @@ explicit `callsite` and `index` options yourself, reserve the callsites first wi
 
 - [Tools](/guides/tools) — how `tools` wires the durable executor.
 - [Flow Execution Model](/guides/flow-execution) — `action` nodes, where you call `ctx.approve` / `ctx.tool` directly.
+- [Dynamic Flows](/guides/dynamic-flows) — JSON flow definitions, versioning, and the digest a flow run pins.
 - [Sessions & State](/guides/sessions) — the backend that persists the run log.

@@ -7,6 +7,7 @@
 - Why runtime-in-code
 - Minimal runtime setup
 - Streaming loop
+- Durable flow runs (create, resume, recover)
 - Hooks and tracing
 - Auto-retrieve wiring
 - Structured triage wiring
@@ -42,6 +43,42 @@ for await (const part of runtime.stream({ input: 'Hello', sessionId })) {
   if (part.type === 'done') sessionId = part.payload.sessionId;
 }
 ```
+
+## Durable flow runs (create, resume, recover)
+
+A flow can run as an addressable, durable run instead of riding the session's conversation run.
+
+**Create.** `kind: 'flow'` mints a new headless flow run; `flowName` (creation-only) sets `activeFlow` on it:
+
+```ts
+const handle = runtime.run({ sessionId, kind: 'flow', flowName: 'refund', input: 'start' });
+const runId = await handle.runId; // resolves at run open — persist it before the turn body finishes
+```
+
+`TurnHandle.runId` is a `Promise<string>` that resolves as soon as the run is opened, so you can persist the id you must resume with even if the turn later throws.
+
+**Resume.** Address the run directly; unknown and cross-session ids fail closed:
+
+```ts
+const resumed = runtime.run({ sessionId, runId, input: 'yes, confirm' });
+```
+
+A caller-supplied `runId` is resume-only and wins over `kind`. Inspect a run with `runtime.getRun(runId, sessionId)` → `RunHandle` (`status`, `activeFlow`, `activeNode`, `waitingFor`, ...).
+
+**Recover after a crash.** Two sweepers, run on an interval or at boot:
+
+```ts
+import { recoverOrphanedRuns, sweepDeadlines } from '@kuralle-agents/core';
+
+await recoverOrphanedRuns(runtime);            // re-enter running runs with a stale lease
+await sweepDeadlines(runtime);                 // deliver timeout outcome to paused runs past waitingFor.deadline
+```
+
+`recoverOrphanedRuns` re-enters through the same fail-closed `runtime.run({ sessionId, runId })` path; live leases are left alone. `findUnresumableRuns` lists persisted runs this version refuses to resume, so you can drain them before an upgrade.
+
+**Run journal backends.** By default each session journals through `SessionRunStore` over the `sessionStore`. For cross-replica sweeps pass a shared `runStore` on `createRuntime`: `PostgresRunStore` (`@kuralle-agents/postgres-store`) or `SqlRunStore` (`@kuralle-agents/cf-agent`, Durable Object SQLite).
+
+**Drift.** A run parked inside a flow pins the flow's digest. If the flow was redefined before resume, the resume throws `FlowDriftError` (recovery: restart or abandon) — never a silent resume. See `references/flow-definitions.md`.
 
 ## Hooks + tracing
 

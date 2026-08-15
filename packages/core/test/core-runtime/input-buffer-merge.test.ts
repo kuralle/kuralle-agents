@@ -15,7 +15,6 @@ import { makeTestSession } from '../core-durable/helpers.js';
 import { collectUntilComplete } from '../../src/flow/collectUntilComplete.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { stubModel } from '../core-durable/helpers.js';
 
@@ -78,7 +77,7 @@ describe('TextDriver awaitUser drain-all', () => {
 
     const driver = new TextDriver();
     const runState = {
-      runId: sessionDerivedRunId(session.id),
+      runId: session.id,
       sessionId: session.id,
       status: 'running' as const,
       activeAgentId: 'a',
@@ -127,7 +126,7 @@ describe('collectUntilComplete sees merged pending input', () => {
     await memoryStore.save(session);
 
     const runState = {
-      runId: sessionDerivedRunId(session.id),
+      runId: session.id,
       sessionId: session.id,
       status: 'running' as const,
       activeAgentId: 'a',

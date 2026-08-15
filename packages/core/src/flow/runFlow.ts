@@ -1,7 +1,7 @@
 import type { ModelMessage } from 'ai';
 import type { AgentConfig } from '../types/agentConfig.js';
 import type { ChannelDriver } from '../types/channel.js';
-import type { CollectNode, DecideNode, Flow, FlowNode } from '../types/flow.js';
+import type { CollectNode, DecideNode, Flow, FlowNode, ReplyNode } from '../types/flow.js';
 import {
   popFlowPark,
   pushFlowPark,
@@ -12,6 +12,13 @@ import { inferRequiredFields, clearCollectData, setPendingRecoveryMessage } from
 import { addSystemNote } from '../runtime/systemNotes.js';
 import type { RunContext, ActionContext } from '../types/run-context.js';
 import type { RunState } from '../runtime/durable/types.js';
+import {
+  assertParkedFlowDigest,
+  captureFlowPin,
+  clearFlowPin,
+  restoreFlowPin,
+  stampActiveFlow,
+} from '../runtime/durable/flowPin.js';
 import { hasPendingUserInput, setPendingUserInput } from '../runtime/channels/inputBuffer.js';
 import { userInputToText, type UserInputContent } from '../runtime/userInput.js';
 import { collectUntilComplete } from './collectUntilComplete.js';
@@ -24,9 +31,11 @@ import {
 import { normalizeTransition, resolveNodeRef } from './normalizeTransition.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
 import { reduceTransition } from './reduceTransition.js';
-import { resolveReplyNode } from './nodeBuilders.js';
+import { resolveReplyNode, buildNodePrompt } from './nodeBuilders.js';
 import { evaluateReplyControl } from './controlEvaluator.js';
 import { runNodeVerify, VerifyBlockedError } from './verify.js';
+import { evaluateFlowGates } from './evaluateGates.js';
+import type { FlowEndPayload } from '../types/stream.js';
 import { loadRecordedSteps } from '../runtime/durable/replay.js';
 import { persistTurnUsageFromTurn } from '../runtime/turnTokenUsage.js';
 import { isApprovalDenial, isControlFlowSignal, isRecoverableToolError } from '../runtime/controlFlowSignal.js';
@@ -43,6 +52,7 @@ import {
   exportFlowState,
 } from './flowState.js';
 import { emptySignalSchema } from '../runtime/durable/signalSchemas.js';
+import { segmentStartingAt, type FlowSegment } from '../flows/definition/segments.js';
 
 export type FlowResult =
   | { kind: 'ended'; reason: string }
@@ -62,6 +72,27 @@ function buildNodeRegistry(flow: Flow): Map<string, FlowNode> {
     registry.set(node.id, node);
   }
   return registry;
+}
+
+function resolveGotoTarget(
+  to: FlowNode | string,
+  registry: Map<string, FlowNode>,
+  flowName: string,
+): FlowNode {
+  if (typeof to === 'string') {
+    const node = registry.get(to);
+    if (!node) {
+      throw new Error(`Transition goto "${to}" does not resolve to a node id.`);
+    }
+    return node;
+  }
+  const registered = registry.get(to.id);
+  if (registered !== to) {
+    throw new Error(
+      `Node "${to.id}" is not a member of flow.nodes in "${flowName}"; register it in nodes and reference that object.`,
+    );
+  }
+  return to;
 }
 
 function resolveStartNode(flow: Flow): FlowNode {
@@ -111,13 +142,13 @@ async function dispatchConfirmGate(
   ctx: RunContext,
 ): Promise<NormalizedTransition> {
   const gate = node.confirmGate!;
-  if (!hasPendingUserInput(ctx.session) && ctx.turnInputConsumed) {
+  if (!hasPendingUserInput(ctx.session, ctx.runState) && ctx.turnInputConsumed) {
     return { kind: 'stay' };
   }
 
   let input = '';
   let rawInput: UserInputContent = '';
-  if (hasPendingUserInput(ctx.session)) {
+  if (hasPendingUserInput(ctx.session, ctx.runState)) {
     const signal = await driver.awaitUser(ctx);
     rawInput = signal.input;
     input = userInputToText(signal.input);
@@ -129,7 +160,7 @@ async function dispatchConfirmGate(
 
   const verdict = parseConfirmation(input);
   if (verdict === 'decline') {
-    setPendingUserInput(ctx.session, rawInput);
+    setPendingUserInput(ctx.session, rawInput, ctx.runState);
   } else {
     ctx.turnInputConsumed = true;
   }
@@ -163,7 +194,7 @@ function deterministicReply(node: Extract<FlowNode, { kind: 'reply' }>, run: Run
     ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
     appendAssistantMessage(run, text);
   }
-  ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
+  ctx.emit({ channel: 'internal', type: 'turn-end', payload: { rendered: 'engine' } });
   return { text, toolResults: [] };
 }
 
@@ -203,7 +234,7 @@ async function dispatchNode(
     // context. Returning `stay` lets the loop park as `awaitingUser`. (A plain
     // decide with no choices is a pure branch and still runs; and an interactive
     // decide that IS the turn's first input-node still decides on that input.)
-    if (node.choices?.length && !hasPendingUserInput(ctx.session) && ctx.turnInputConsumed) {
+    if (node.choices?.length && !hasPendingUserInput(ctx.session, ctx.runState) && ctx.turnInputConsumed) {
       return { kind: 'stay' };
     }
     // On resume, the new turn's input is buffered as pending and is not yet in
@@ -211,7 +242,7 @@ async function dispatchNode(
     // collect path) so the decision sees the user's actual reply instead of
     // stale context — without this, a multi-turn flow stalls at the first
     // interactive decide because the reply never reaches `decide()`.
-    if (hasPendingUserInput(ctx.session)) {
+    if (hasPendingUserInput(ctx.session, ctx.runState)) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
     }
@@ -266,7 +297,7 @@ async function dispatchNode(
     //     swallow input here — it returns its transition (`next: () => 'stay'`) and the
     //     main loop's stay-branch owns awaitUser.
     let freshUserInput = false;
-    if (hasPendingUserInput(ctx.session) && !ctx.turnInputConsumed && ctx.outOfBandControl) {
+    if (hasPendingUserInput(ctx.session, ctx.runState) && !ctx.turnInputConsumed && ctx.outOfBandControl) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
       ctx.turnInputConsumed = true;
@@ -381,6 +412,152 @@ async function dispatchNode(
   throw new Error(`Unknown node kind: ${(node as FlowNode).kind}`);
 }
 
+function transitionTargetId(transition: NormalizedTransition): string | undefined {
+  if (transition.kind !== 'goto') return undefined;
+  return typeof transition.to === 'string' ? transition.to : transition.to.id;
+}
+
+async function applyTerminalGates(
+  flow: Flow,
+  run: RunState,
+  ctx: RunContext,
+  reason: string,
+): Promise<{ payload: FlowEndPayload; blocked: boolean }> {
+  const verification = await evaluateFlowGates({
+    gates: flow.gates,
+    state: currentFlowState(run),
+    judge: ctx.flowGateJudge,
+  });
+  if (verification) {
+    run.verification = verification;
+  }
+  const payload: FlowEndPayload = {
+    flow: flow.name,
+    reason,
+    ...(verification ? { gates: verification.verdicts } : {}),
+    ...(verification?.outcome === 'failed-verification' ? { outcome: 'failed-verification' } : {}),
+  };
+  return { payload, blocked: verification?.outcome === 'failed-verification' };
+}
+
+function canBatchGenerateReplySegment(
+  segment: FlowSegment,
+  ctx: RunContext,
+  registry: Map<string, FlowNode>,
+): boolean {
+  if (segment.kind !== 'generate-replies') return false;
+  if (ctx.outOfBandControl) return false;
+  for (const id of segment.nodeIds) {
+    const candidate = registry.get(id);
+    if (!candidate || !isReplyNode(candidate)) return false;
+    if (candidate.response || candidate.tools || candidate.confidenceGate) return false;
+  }
+  return true;
+}
+
+/**
+ * One `runAgentTurn` for a homogeneous generate-reply chain, then per-node `next` /
+ * verify / traces. Errors propagate to the existing runFlow catch — never skip
+ * recoverable/degrade machinery. Mixed generate+action is not batched: a post-action
+ * reply's copy would stream before `ctx.tool`, or actions would have to become model
+ * tools and change the journal.
+ */
+async function dispatchGenerateReplySegment(
+  segment: FlowSegment,
+  startNode: FlowNode,
+  run: RunState,
+  driver: ChannelDriver,
+  ctx: RunContext,
+  agent: AgentConfig | undefined,
+  flow: Flow,
+  registry: Map<string, FlowNode>,
+  edgeCounts: Map<string, number>,
+): Promise<{ node: FlowNode; transition: NormalizedTransition }> {
+  const replies: ReplyNode[] = [];
+  for (const id of segment.nodeIds) {
+    const candidate = registry.get(id);
+    if (!candidate || !isReplyNode(candidate)) {
+      return {
+        node: startNode,
+        transition: await dispatchNode(startNode, run, driver, ctx, agent, flow),
+      };
+    }
+    replies.push(candidate);
+  }
+
+  const first = replies[0]!;
+  const state = currentFlowState(run);
+  const base = resolveReplyNode(first, state);
+  const combined = replies
+    .map((replyNode) => buildNodePrompt(replyNode, state))
+    .filter((prompt) => prompt.trim())
+    .join('\n\n');
+  const turn = await driver.runAgentTurn({ ...base, prompt: combined || base.prompt }, ctx);
+  await persistTurnUsageFromTurn(ctx, turn);
+
+  if (turn.interrupted) {
+    const signal = await driver.awaitUser(ctx);
+    appendUserMessage(run, signal.input);
+    return {
+      node: first,
+      transition: await dispatchNode(first, run, driver, ctx, agent, flow),
+    };
+  }
+  if (turn.control?.type === 'handoff') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'handoff', to: turn.control.target, reason: turn.control.reason } };
+  }
+  if (turn.control?.type === 'end') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'end', reason: turn.control.reason } };
+  }
+  if (turn.control?.type === 'escalate') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'escalate', reason: turn.control.reason } };
+  }
+  if (turn.control?.type === 'recover') {
+    appendAssistantMessage(run, turn.text);
+    return { node: first, transition: { kind: 'end', reason: turn.control.reason ?? 'error_degraded' } };
+  }
+
+  appendAssistantMessage(run, turn.text);
+
+  let current: FlowNode = first;
+  let transition: NormalizedTransition = { kind: 'stay' };
+  for (let i = 0; i < replies.length; i++) {
+    const currentReply = replies[i]!;
+    current = currentReply;
+    const nodeState = currentFlowState(run);
+    transition = currentReply.next
+      ? normalizeTransition(await currentReply.next(turn, nodeState))
+      : { kind: 'stay' };
+    if (i === replies.length - 1) break;
+
+    const steps = await loadRecordedSteps(ctx.runStore, run.runId);
+    await runNodeVerify(current, {
+      state: currentFlowState(run),
+      steps,
+      data: transition.kind === 'goto' ? transition.data : undefined,
+    });
+    if (transition.kind !== 'goto' || transitionTargetId(transition) !== segment.nodeIds[i + 1]) break;
+
+    const target = resolveGotoTarget(transition.to, registry, flow.name);
+    bumpOscillation(edgeCounts, current.id, target.id);
+    await reduceTransition({
+      fromNodeId: current.id,
+      toNode: target,
+      run,
+      flow,
+      model: ctx.model,
+      data: transition.data,
+      emit: ctx.emit,
+      abortSignal: ctx.abortSignal,
+    });
+    await ctx.runStore.putRunState(run);
+  }
+  return { node: current, transition };
+}
+
 /**
  * Drop everything a previous run of `flow` collected. Namespaced cache keys AND the
  * un-namespaced copies `reduceTransition` promotes onto `run.state` via Object.assign.
@@ -411,6 +588,9 @@ export async function runFlow(
 ): Promise<FlowResult> {
   const registry = buildNodeRegistry(flow);
   const startNode = resolveStartNode(flow);
+  if (run.activeNode) {
+    await assertParkedFlowDigest(run, flow);
+  }
   const initialNodeId = run.activeNode ?? startNode.id;
   let node = registry.get(initialNodeId);
   if (!node) {
@@ -433,7 +613,7 @@ export async function runFlow(
     // is what `continuity.test.ts` and the G14 slot-correction test encode.
     clearFlowCollectCache(state, flow);
     run.activeNode = node.id;
-    run.activeFlow = flow.name;
+    await stampActiveFlow(run, flow);
     ctx.emit({ channel: 'internal', type: 'flow-enter', payload: { flow: flow.name } });
     ctx.emit({ channel: 'internal', type: 'node-enter', payload: { nodeName: node.id } });
     emitInteractiveOnNodeEnter(node, state, ctx.emit);
@@ -455,8 +635,30 @@ export async function runFlow(
     }
     let transition: NormalizedTransition;
     try {
-      transition = await dispatchNode(node, run, driver, ctx, agent, flow);
+      const segment = segmentStartingAt(flow, node.id);
+      if (segment && canBatchGenerateReplySegment(segment, ctx, registry)) {
+        const walked = await dispatchGenerateReplySegment(
+          segment,
+          node,
+          run,
+          driver,
+          ctx,
+          agent,
+          flow,
+          registry,
+          edgeCounts,
+        );
+        node = walked.node;
+        transition = walked.transition;
+      } else {
+        transition = await dispatchNode(node, run, driver, ctx, agent, flow);
+      }
     } catch (error) {
+      if (error instanceof VerifyBlockedError) {
+        ctx.emit({ channel: 'client', type: 'error', payload: { error: error.message } });
+        await ctx.runStore.putRunState(run);
+        return { kind: 'awaitingUser' };
+      }
       // Neither is a malfunction, so neither may reach degradeFlowError and be reported to
       // the user as "something went wrong on my side". A suspend resumes later; a denial is
       // the action node author's to handle, since they chose to call the tool.
@@ -522,16 +724,29 @@ export async function runFlow(
         flow: flow.name,
         node: run.activeNode ?? node.id,
         state: currentFlowState(run),
+        ...captureFlowPin(run),
       });
       run.activeFlow = transition.flow.name;
       run.activeNode = undefined;
+      clearFlowPin(run);
       await ctx.runStore.putRunState(run);
       return runFlow(transition.flow, run, driver, ctx, agent);
     }
 
     if (transition.kind === 'end') {
       const finishedState = currentFlowState(run);
+      const { payload, blocked } = await applyTerminalGates(flow, run, ctx, transition.reason);
       const output = exportFlowState(flow, finishedState);
+      if (blocked) {
+        // No automatic repair: a blocking gate failure records verdicts and stops.
+        // Re-entry after failed-verification is a product decision; the journal
+        // makes a future repair safe, but this path does not re-enter.
+        Object.assign(run.state, output);
+        run.flowFrame = undefined;
+        await ctx.runStore.putRunState(run);
+        ctx.emit({ channel: 'internal', type: 'flow-end', payload });
+        return { kind: 'ended', reason: transition.reason };
+      }
       const park = popFlowPark(run);
       if (park && agent) {
         const parkedFlow = agent.flows?.find((candidate) => candidate.name === park.flow);
@@ -540,21 +755,23 @@ export async function runFlow(
           run.flowFrame = { flow: park.flow, state: park.state };
           run.activeFlow = park.flow;
           run.activeNode = park.node;
+          restoreFlowPin(run, park);
           await ctx.runStore.putRunState(run);
           ctx.emit({
             channel: 'internal',
             type: 'flow-end',
-            payload: { flow: flow.name, reason: transition.reason },
+            payload,
           });
           return runFlow(parkedFlow, run, driver, ctx, agent);
         }
       }
       Object.assign(run.state, output);
       run.flowFrame = undefined;
+      await ctx.runStore.putRunState(run);
       ctx.emit({
         channel: 'internal',
         type: 'flow-end',
-        payload: { flow: flow.name, reason: transition.reason },
+        payload,
       });
       return { kind: 'ended', reason: transition.reason };
     }
@@ -582,7 +799,7 @@ export async function runFlow(
     }
 
     if (transition.kind === 'stay') {
-      if (!hasPendingUserInput(ctx.session)) {
+      if (!hasPendingUserInput(ctx.session, ctx.runState)) {
         await ctx.runStore.putRunState(run);
         return { kind: 'awaitingUser' };
       }
@@ -592,10 +809,7 @@ export async function runFlow(
       continue;
     }
 
-    const target = transition.node;
-    if (!registry.has(target.id)) {
-      registry.set(target.id, target);
-    }
+    const target = resolveGotoTarget(transition.to, registry, flow.name);
 
     const oscillation = bumpOscillation(edgeCounts, node.id, target.id);
     if (oscillation > maxOscillations) {

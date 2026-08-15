@@ -1,18 +1,44 @@
 import type { RunState, StepRecord } from './types.js';
 
 /**
- * Current effect-key scheme. Version 1 puts the active flow in the key namespace.
+ * Current effect-key scheme. Version 2 puts `flow@<digest>` in the key namespace.
  *
- * Before it, `resetCallsites()` rebased the effect ordinal to 0 on every flow entry and
- * the key carried no flow, so two flows in one logical run that called a same-named tool
- * with the same arguments collided — the second replayed the first one's result.
+ * Version 1 put only the flow name in the key. Two versions of the same-named
+ * flow therefore shared a journal: a redefined step could replay the old
+ * version's result. Version 1 journals are still resumable — `effectRunId()`
+ * appends `@digest` only when `effectKeyVersion === 2`, so a v1 journal keeps
+ * resolving even if a digest is later stamped onto the run.
+ *
+ * Before version 1, `resetCallsites()` rebased the effect ordinal to 0 on every
+ * flow entry and the key carried no flow, so two flows in one logical run that
+ * called a same-named tool with the same arguments collided — the second
+ * replayed the first one's result.
  */
-export const EFFECT_KEY_VERSION = 1;
+export const FLOW_NAME_EFFECT_KEY_VERSION = 1;
+export const EFFECT_KEY_VERSION = 2;
+
+export function isResumableEffectKeyVersion(version: number | undefined): boolean {
+  return version === EFFECT_KEY_VERSION || version === FLOW_NAME_EFFECT_KEY_VERSION;
+}
+
+/**
+ * Adopt the current key scheme only when doing so cannot orphan an in-flow v1
+ * journal. A run still inside a flow with recorded steps must keep version 1
+ * until it exits; an empty journal has nothing to mis-key.
+ */
+export function shouldAdoptCurrentEffectKeyVersion(run: RunState, steps: StepRecord[]): boolean {
+  if (run.effectKeyVersion === EFFECT_KEY_VERSION) return false;
+  if (run.activeFlow && steps.length > 0) return false;
+  return true;
+}
 
 /**
  * Refuse to resume a run whose journal predates the flow-scoped key scheme while it is
  * still inside a flow. Its recorded steps were keyed without the flow, so nothing would
  * match and every effect it already performed — a payment, a dispatch — would run again.
+ *
+ * Version 1 (flow name, no digest) is legacy-resumable: those keys still resolve because
+ * `effectRunId()` appends `@digest` only under version 2.
  *
  * Outside a flow the key is unchanged, and a run with nothing journaled has nothing to
  * mis-key; both resume normally and adopt the current scheme.
@@ -20,7 +46,7 @@ export const EFFECT_KEY_VERSION = 1;
 export function assertResumableEffectKeys(run: RunState, steps: StepRecord[]): void {
   if (!run.activeFlow) return;
   if (steps.length === 0) return;
-  if (run.effectKeyVersion === EFFECT_KEY_VERSION) return;
+  if (isResumableEffectKeyVersion(run.effectKeyVersion)) return;
   throw new Error(
     `Run ${run.runId} was journaled under an older effect-key scheme and is still inside ` +
       `flow "${run.activeFlow}". Resuming it would re-execute effects it has already ` +

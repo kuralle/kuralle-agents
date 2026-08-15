@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { action, collect, defineFlow, reply, type Transition } from '../../src/types/flow.js';
@@ -31,7 +30,7 @@ async function seedActiveFlow(
   session.currentAgent = agentId;
   await store.save(session);
   const runStore = new SessionRunStore(store, sessionId);
-  const runState = makeRunState(sessionId, sessionDerivedRunId(sessionId));
+  const runState = makeRunState(sessionId, sessionId);
   runState.activeAgentId = agentId;
   runState.activeFlow = flowName;
   await runStore.initRun(runState);
@@ -139,7 +138,7 @@ describe('R-01 approval identity freezes the displayed operation', () => {
       },
     ]);
     const runStore = new SessionRunStore(store, sessionId);
-    const steps = await runStore.getSteps(sessionDerivedRunId(sessionId));
+    const steps = await runStore.getSteps(sessionId);
     expect(steps.filter((step) => step.kind === 'tool' && step.name === 'dispatch')).toHaveLength(1);
   });
 });
@@ -350,7 +349,7 @@ describe('R-04 nested flows own isolated persisted state frames', () => {
       schema: z.object({ workOrderId: z.string() }),
       required: ['workOrderId'],
       ask: () => 'Which work order?',
-      onComplete: (data) => ({ goto: dispatchAction, data: data as Record<string, unknown> }),
+      onComplete: (data) => ({ goto: dispatchAction.id, data: data as Record<string, unknown> }),
     });
     const dispatch = defineFlow({
       name: 'dispatch',
@@ -431,7 +430,7 @@ describe('R-04 nested flows own isolated persisted state frames', () => {
     expect(controlCalls[0]?.attributes.inputTokens).toBe(13);
     expect(firstTrace.spans.find((span) => span.kind === 'turn')?.attributes.tokensIn).toBe(13);
     const runStore = new SessionRunStore(store, sessionId);
-    const parked = await runStore.getRunState(sessionDerivedRunId(sessionId));
+    const parked = await runStore.getRunState(sessionId);
     expect(parked?.activeFlow).toBe('dispatch');
     expect(parked?.flowFrame?.state.issue).toBeUndefined();
     expect(parked?.flowFrame?.state.urgency).toBeUndefined();
@@ -439,10 +438,11 @@ describe('R-04 nested flows own isolated persisted state frames', () => {
       flow: 'intake',
       node: 'parent-reply',
       state: { issue: 'Bedroom window latch broken', urgency: 'routine' },
+      flowDigest: 'code:intake',
     });
 
     await collectParts(runtime.run({ sessionId, input: 'WO-HEAT', driver }));
-    const completed = await runStore.getRunState(sessionDerivedRunId(sessionId));
+    const completed = await runStore.getRunState(sessionId);
     expect(observedChildStates).toHaveLength(1);
     expect(observedChildStates[0]).not.toHaveProperty('issue');
     expect(observedChildStates[0]).not.toHaveProperty('urgency');

@@ -50,7 +50,7 @@ const collectInfo = collect({
   maxTurns: 8,
   instructions: () =>
     'You are a friendly receptionist collecting contact information from the caller.',
-  onComplete: (data) => ({ goto: confirm, data: data as Record<string, unknown> }),
+  onComplete: (data) => ({ goto: confirm.id, data: data as Record<string, unknown> }),
 });
 
 const startCollection = defineTool({

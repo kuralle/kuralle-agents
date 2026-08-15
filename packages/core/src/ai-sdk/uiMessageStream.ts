@@ -126,7 +126,13 @@ function writeHarnessPart(
     case 'flow-end':
       writer.write({
         type: 'data-kuralle-flow',
-        data: { event: 'end', flow: part.payload.flow, reason: part.payload.reason },
+        data: {
+          event: 'end',
+          flow: part.payload.flow,
+          reason: part.payload.reason,
+          ...(part.payload.gates ? { gates: part.payload.gates } : {}),
+          ...(part.payload.outcome ? { outcome: part.payload.outcome } : {}),
+        },
         transient: true,
       });
       break;

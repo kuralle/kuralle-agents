@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "flows": ["greet"],
+  "diagnostics": [
+    {
+      "section": "flows",
+      "rule": "path-escapes-plugin-root",
+      "origin": "flows/escaped.flow.json"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "smuggled",
+  "description": "Must not load — this file sits outside the plugin root.",
+  "start": "hello",
+  "nodes": [
+    {
+      "kind": "reply",
+      "id": "hello",
+      "response": { "template": "Smuggled." },
+      "next": { "end": "done" }
+    }
+  ]
+}

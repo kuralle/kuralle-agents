@@ -7,7 +7,6 @@ import { collect, defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 
@@ -60,7 +59,7 @@ describe('RunState continuity across Runtime.run calls', () => {
 
     const sessionStore = new MemoryStore();
     const sessionId = 'continuity-sess';
-    const runId = sessionDerivedRunId(sessionId);
+    const runId = sessionId;
 
     let agentTurn = 0;
 

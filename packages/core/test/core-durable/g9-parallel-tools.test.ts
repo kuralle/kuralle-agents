@@ -14,6 +14,8 @@ function withoutReserveSteps(store: RunStore): RunStore {
     getSteps: store.getSteps.bind(store),
     getRunState: store.getRunState.bind(store),
     putRunState: store.putRunState.bind(store),
+    listRuns: store.listRuns.bind(store),
+    deleteRun: store.deleteRun.bind(store),
   };
 }
 

@@ -189,12 +189,7 @@ describe('booking_example', () => {
     const transition = await Promise.resolve(
       pickSlot.decide?.({ choice: '19:00' }, state),
     );
-    const target =
-      typeof transition === 'object' && transition !== null && 'id' in transition
-        ? transition
-        : typeof transition === 'function'
-          ? transition()
-          : transition;
+    const target = transition;
     expect(state.confirmedTime).toBe('19:00');
     expect(target).toBe(confirm);
 

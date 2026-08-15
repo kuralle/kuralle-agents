@@ -25,7 +25,6 @@ import {
 import { MemoryStore } from '@kuralle-agents/core/session';
 import type { SessionStore } from '@kuralle-agents/core/session';
 import { SessionRunStore } from '../../core/dist/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../core/dist/runtime/openRun.js';
 import { NodeFileSystem } from '@kuralle-agents/fs/node/fs';
 import { mcpTools, type McpToolset } from '@kuralle-agents/mcp';
 import { loadAgentPlugin } from '@kuralle-agents/plugins';
@@ -209,7 +208,7 @@ async function runApprovalFlow(
   failures: string[],
 ): Promise<void> {
   const sessionId = `meridian-approve-${Date.now()}`;
-  const runId = sessionDerivedRunId(sessionId);
+  const runId = sessionId;
   const agent = defineAgent({
     id: 'meridian-teller',
     model,

@@ -94,7 +94,7 @@ export function createInsuranceClaimsFlow(opts?: { compactPrompts?: boolean }): 
     next: (turn, state) => {
       const submitted = turn.toolResults.find((r) => r.name === 'submit_claim');
       if (submitted) {
-        return { goto: done, data: submitted.result as Record<string, unknown> };
+        return { goto: done.id, data: submitted.result as Record<string, unknown> };
       }
       return 'stay';
     },
@@ -148,7 +148,7 @@ Ask the caller to confirm everything is correct. Do not ask about injuries, poli
         `Collect property details. Missing: ${missing.join(', ') || 'none'}. ` +
           'Ask for address, property type, damage type, damage description, and estimated value.',
       ),
-    onComplete: (data) => ({ goto: review, data: data as Record<string, unknown> }),
+    onComplete: (data) => ({ goto: review.id, data: data as Record<string, unknown> }),
   });
 
   const collectVehicle = collect({
@@ -158,7 +158,7 @@ Ask the caller to confirm everything is correct. Do not ask about injuries, poli
     maxTurns: 6,
     instructions: (missing) =>
       sop(`Collect vehicle details. Missing: ${missing.join(', ') || 'none'}.`),
-    onComplete: (data) => ({ goto: review, data: data as Record<string, unknown> }),
+    onComplete: (data) => ({ goto: review.id, data: data as Record<string, unknown> }),
   });
 
   const routeClaimTypeSchema = z.object({ path: z.enum(['auto', 'property']) });
@@ -180,7 +180,7 @@ Ask the caller to confirm everything is correct. Do not ask about injuries, poli
     maxTurns: 6,
     instructions: (missing) =>
       sop(`Collect incident details. Missing: ${missing.join(', ') || 'none'}.`),
-    onComplete: (data) => ({ goto: routeClaimType, data: data as Record<string, unknown> }),
+    onComplete: (data) => ({ goto: routeClaimType.id, data: data as Record<string, unknown> }),
   });
 
   const invalidPolicy = reply({
@@ -196,10 +196,10 @@ Ask the caller to confirm everything is correct. Do not ask about injuries, poli
       const policyNumber = String(state.policyNumber ?? '');
       const result = validatePolicy(policyNumber);
       if (!result.valid) {
-        return { goto: invalidPolicy, data: { validationResult: result } };
+        return { goto: invalidPolicy.id, data: { validationResult: result } };
       }
       return {
-        goto: collectIncident,
+        goto: collectIncident.id,
         data: { validationResult: result, plan: result.plan, deductible: result.deductible },
       };
     },
@@ -215,7 +215,7 @@ Ask the caller to confirm everything is correct. Do not ask about injuries, poli
         `Collect policy holder information. Missing: ${missing.join(', ') || 'none'}. ` +
           'Ask for policy number (POL-XXXXXX), full name, and phone number.',
       ),
-    onComplete: (data) => ({ goto: validatePolicyNode, data: data as Record<string, unknown> }),
+    onComplete: (data) => ({ goto: validatePolicyNode.id, data: data as Record<string, unknown> }),
   });
 
   const emergencyClaim = reply({

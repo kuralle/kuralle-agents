@@ -87,6 +87,8 @@ export interface TurnHandleOptions {
   run: () => Promise<import('../types/channel.js').TurnResult>;
   bus: EventBus;
   abortController?: AbortController;
+  /** Settles when the run is opened, not when the turn body finishes. */
+  runId?: Promise<string>;
 }
 
 export function createTurnHandle(options: TurnHandleOptions): TurnHandle {
@@ -115,8 +117,12 @@ export function createTurnHandle(options: TurnHandleOptions): TurnHandle {
   // `resultPromise` itself and its return value is discarded.
   void resultPromise.catch(() => undefined);
 
+  const runId = options.runId ?? resultPromise.then((result) => result.runId ?? '');
+  void runId.catch(() => undefined);
+
   const handle = Object.assign(resultPromise, {
     events: bus.events(),
+    runId,
     toResponseStream(format: 'sse' | 'ndjson' = 'sse'): ReadableStream {
       return createResponseStream(bus.events(), format);
     },

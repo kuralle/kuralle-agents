@@ -70,7 +70,7 @@ export class TextDriver implements ChannelDriver {
       ctx.emit({ channel: 'client', type: 'text-start', payload: { id } });
       ctx.emit({ channel: 'client', type: 'text-delta', payload: { id, delta: blocked } });
       ctx.emit({ channel: 'client', type: 'text-end', payload: { id } });
-      ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
+      ctx.emit({ channel: 'internal', type: 'turn-end', payload: { rendered: 'model' } });
       return { text: blocked, toolResults: [] };
     }
 
@@ -163,7 +163,7 @@ export class TextDriver implements ChannelDriver {
     out.control = spoken.control ?? out.control;
     out.confidence = spoken.confidence;
 
-    ctx.emit({ channel: 'internal', type: 'turn-end', payload: {} });
+    ctx.emit({ channel: 'internal', type: 'turn-end', payload: { rendered: 'model' } });
     return out;
   }
 
@@ -196,7 +196,7 @@ export class TextDriver implements ChannelDriver {
   }
 
   async awaitUser(ctx: RunContext): Promise<UserSignal> {
-    const input = consumeAllPendingUserInput(ctx.session) ?? '';
+    const input = consumeAllPendingUserInput(ctx.session, ctx.runState) ?? '';
     return { type: 'message', input };
   }
 

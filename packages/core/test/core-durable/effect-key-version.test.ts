@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   assertResumableEffectKeys,
   EFFECT_KEY_VERSION,
+  shouldAdoptCurrentEffectKeyVersion,
 } from '../../src/runtime/durable/effectKeyVersion.js';
 import type { RunState, StepRecord } from '../../src/runtime/durable/types.js';
 
@@ -30,6 +31,15 @@ describe('effect key version', () => {
     ).not.toThrow();
   });
 
+  it('allows an in-flow run journaled under the flow-name scheme (legacy-resumable)', () => {
+    expect(() =>
+      assertResumableEffectKeys(
+        run({ activeFlow: 'checkout', effectKeyVersion: 1 }),
+        [step],
+      ),
+    ).not.toThrow();
+  });
+
   it('allows an old run that is not inside a flow', () => {
     // Outside a flow the key is unchanged, so those journals still resolve.
     expect(() => assertResumableEffectKeys(run({}), [step])).not.toThrow();
@@ -38,5 +48,23 @@ describe('effect key version', () => {
   it('allows an in-flow run with nothing journaled yet', () => {
     // Nothing recorded means nothing to mis-key; the run adopts the current scheme.
     expect(() => assertResumableEffectKeys(run({ activeFlow: 'checkout' }), [])).not.toThrow();
+  });
+
+  it('does not adopt v2 while an in-flow v1 journal has steps', () => {
+    expect(
+      shouldAdoptCurrentEffectKeyVersion(run({ activeFlow: 'checkout', effectKeyVersion: 1 }), [
+        step,
+      ]),
+    ).toBe(false);
+  });
+
+  it('adopts v2 when the in-flow journal is empty', () => {
+    expect(
+      shouldAdoptCurrentEffectKeyVersion(run({ activeFlow: 'checkout', effectKeyVersion: 1 }), []),
+    ).toBe(true);
+  });
+
+  it('adopts v2 when the run is not inside a flow', () => {
+    expect(shouldAdoptCurrentEffectKeyVersion(run({ effectKeyVersion: 1 }), [step])).toBe(true);
   });
 });

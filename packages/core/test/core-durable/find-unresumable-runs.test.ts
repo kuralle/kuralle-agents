@@ -3,7 +3,6 @@ import { findUnresumableRuns } from '../../src/runtime/durable/findUnresumableRu
 import { EFFECT_KEY_VERSION } from '../../src/runtime/durable/effectKeyVersion.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { makeRunState, makeTestSession } from './helpers.js';
 import type { RunState, StepRecord } from '../../src/runtime/durable/types.js';
 
@@ -31,7 +30,7 @@ describe('findUnresumableRuns', () => {
     const session = makeTestSession(sessionId);
     await store.save(session);
     const runStore = new SessionRunStore(store, sessionId);
-    const run = makeRunState(sessionId, sessionDerivedRunId(sessionId));
+    const run = makeRunState(sessionId, sessionId);
     mutate(run);
     await runStore.initRun(run);
     if (withStep) await runStore.appendStep(run.runId, step);
@@ -78,6 +77,11 @@ describe('findUnresumableRuns', () => {
     await seed(store, 's-ok', (run) => {
       run.activeFlow = 'checkout';
       run.effectKeyVersion = EFFECT_KEY_VERSION;
+    });
+    // Flow-name scheme (v1) — legacy-resumable after the digest bump.
+    await seed(store, 's-v1', (run) => {
+      run.activeFlow = 'checkout';
+      run.effectKeyVersion = 1;
     });
     // Old scheme but outside a flow — the key is unchanged there.
     await seed(store, 's-no-flow', (run) => {

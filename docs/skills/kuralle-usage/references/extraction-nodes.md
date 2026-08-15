@@ -41,7 +41,7 @@ const collectInfo = collect({
   required: ['name', 'phone', 'reason'],
   maxTurns: 8,
   instructions: () => 'Collect contact information. Ask naturally — one field at a time.',
-  onComplete: (data) => ({ goto: confirm, data: data as Record<string, unknown> }),
+  onComplete: (data) => ({ goto: confirm.id, data: data as Record<string, unknown> }),
 });
 
 const greeting = reply({
@@ -85,6 +85,56 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });
 | `maxTurns` | Safety limit before error/transition (default: 10) |
 | `onComplete` | Returns transition when all required fields collected |
 | `instructions` | Prompt for missing fields: `(missing, state) => string` |
+| `ask` | Deterministic, framework-emitted question for missing fields — the only user-facing copy a collect node produces |
+| `resolvers` | Tier-0 deterministic slot resolvers, run before the model (see below) |
+
+## Deterministic resolvers (tier-0)
+
+`resolvers` resolve fields from the user's turn without a model call. A field resolved deterministically is excluded from the model extraction schema for that turn:
+
+```ts
+collect({
+  id: 'order_details',
+  schema: orderSchema,
+  required: ['size', 'qty'],
+  resolvers: [
+    { field: 'size', kind: 'enum_check', values: ['small', 'medium', 'large'] },
+    { field: 'qty', kind: 'range', min: 1, max: 20 },
+    { field: 'sku', kind: 'jsonpath', path: 'input.sku' },
+  ],
+  onComplete: (data) => ({ goto: 'confirm', data: data as Record<string, unknown> }),
+});
+```
+
+- `enum_check` — the turn names exactly one of `values`.
+- `range` — the turn contains exactly one number inside the bounds.
+- `jsonpath` — read the value from a scope path (`input.*` = flow input, `state.*`) instead of the turn.
+
+An ambiguous match (two enum hits, two in-range numbers) resolves nothing — the field falls back to model extraction. Each merged value records its slot source (`'deterministic'` or `'model'`).
+
+## Extraction provenance guard
+
+Declare `verbatimFields` on a collect node to name the slots the user must supply in their
+own words. A model-extracted value for one of those fields is **dropped**, not merged, when
+the source turn does not contain it. This is the structural backstop against hallucinated
+identifiers — it applies in text mode too, not only voice. An empty source turn (scripted
+merges) skips the guard.
+
+```ts
+collect({
+  id: 'report',
+  schema: z.object({ accountId: z.string(), issue: z.string() }),
+  required: ['accountId', 'issue'],
+  verbatimFields: ['accountId'],
+  onComplete: () => ({ goto: 'raise' }),
+})
+```
+
+Guard only the fields that are quoted rather than normalised. Extraction legitimately
+rewrites what the user said: `next Friday` becomes an ISO date, `four` becomes `4`, a
+spoken complaint becomes a written summary, and a value chosen from a list or button reply
+never appears in the turn text at all. Guarding those drops correct data, and a dropped
+required field keeps the node asking until it exhausts `maxTurns`.
 
 ## Template variables in later nodes
 

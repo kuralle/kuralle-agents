@@ -14,6 +14,7 @@ One tagless primitive (`defineAgent`) derives its behavior from the fields you s
 
 - **Agents** — `defineAgent` with instructions and tools. Behavior is derived from what you populate, not a type flag.
 - **Flows** — node graphs (`reply`, `collect`, `action`, `decide`) where each node returns its next transition. Your SOP becomes a typed state machine you didn't have to hand-write.
+- **Dynamic + durable flows** — a flow is also data: the JSON `FlowDefinition` dialect is validated with repair actions and registered on a live runtime (`runtime.addDynamicFlows`), and `kind: 'flow'` runs journal every step so they resume after a crash. See the [dynamic flows guide](https://agents.kuralle.com/guides/dynamic-flows).
 - **Tools** — `defineTool` with a Zod input schema and an async executor. Every tool effect is logged so a retried turn never double-executes.
 - **Routing / Handoffs** — model-reasoned routing (`routes`/`agents`, derived from agent shape) picks the right specialist without leaking dispatch text to the user. `handoffs` transfer session context between agents.
 - **Runtime** — `createRuntime` wires agents, sessions, and streaming. Pi is the recommended application driver; Core keeps a portable AI SDK loop as its zero-configuration fallback. `runtime.run()` returns a `TurnHandle`: stream events with `handle.events`, await the result, pipe to HTTP with `handle.toUIMessageStreamResponse()` (AI SDK native, for `useChat`), or use `handle.toResponseStream('sse')` for raw `StreamPart` JSON-SSE.

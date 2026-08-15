@@ -108,7 +108,7 @@ const quoteCalculation = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'calculate_quote');
-    if (r?.result) return { goto: quoteResults, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: quoteResults.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -130,7 +130,7 @@ const maritalStatus = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'collect_marital_status');
-    if (r?.result) return { goto: quoteCalculation, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: quoteCalculation.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -149,7 +149,7 @@ const initial = reply({
   }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'collect_age');
-    if (r?.result) return { goto: maritalStatus, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: maritalStatus.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });

@@ -50,6 +50,11 @@ describe('createTurnHandle — a stream-only consumer must not crash the process
     await expect(handle).rejects.toThrow('provider exploded');
   });
 
+  it('still rejects handle.runId for a caller that awaits it', async () => {
+    const handle = failingHandle(new Error('provider exploded'));
+    await expect(handle.runId).rejects.toThrow('provider exploded');
+  });
+
   it('still resolves the turn result for a caller that awaits a successful turn', async () => {
     const bus = createEventBus();
     const result = { output: 'ok' } as unknown as TurnResult;

@@ -11,13 +11,14 @@ import type { Hooks } from '../types/hooks.js';
 import type { Tool, AnyTool } from '../types/effectTool.js';
 import type { TurnResult } from '../types/channel.js';
 import type { StreamPart, TurnHandle } from '../types/stream.js';
-import type { SignalDelivery } from './durable/types.js';
+import { runKind, type InterruptRequest, type RunKind, type SignalDelivery } from './durable/types.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import type { ConversationOutcome, ConversationOutcomeMarkedBy } from '../outcomes/types.js';
 import type { DeploymentTraceContext } from '../types/trace.js';
 import { MemoryStore } from '../session/stores/MemoryStore.js';
 import { TextDriver } from './channels/TextDriver.js';
 import { createRunContext } from './ctx.js';
+import type { FlowGateJudgeProvider } from '../flow/evaluateGates.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
@@ -31,16 +32,33 @@ import { isDegradableRuntimeError } from '../flow/degradableErrors.js';
 import { SAFE_DEGRADED_MESSAGE } from '../flow/degrade.js';
 
 import type { classifyHostTarget, selectHostTarget } from './select.js';
+import type { AuthoringFlowDefinition } from '../flows/definition/authoring.js';
+import type { FlowDefinitionsStore } from '../flows/definition/store.js';
+import type { NlPredicateProvider } from '../flows/authoring/compileNlPredicate.js';
+import {
+  FLOW_CATALOG_NOTE_TAG,
+  LiveFlowCatalog,
+  applyFlowCatalogAnnouncement,
+  findFlowByName,
+  rebaselineFlowCatalogAnnouncement,
+} from '../flows/liveFlowCatalog.js';
+import {
+  agentToolSurface,
+  loadDynamicFlowsIntoCatalog,
+  registerDynamicFlowBundle,
+} from '../flows/addDynamicFlows.js';
 import { adaptHostSelect } from './hostClassifyAdapter.js';
-import { openRun, sessionDerivedRunId } from './openRun.js';
+import { openRun, resolveRunStore, resolveTargetRunId, mintRunId, type OpenRunResult } from './openRun.js';
+import { assertParkedFlowDigest } from './durable/flowPin.js';
 
 function resolveOutOfBandControl(agent: AgentConfig): boolean {
   const hasFlows = (agent.flows?.length ?? 0) > 0;
   return agent.experimental?.outOfBandControl ?? hasFlows;
 }
 import { closeRun } from './closeRun.js';
-import { SessionRunStore } from './durable/SessionRunStore.js';
+import type { RunStore } from './durable/RunStore.js';
 import { loadRecordedSteps } from './durable/replay.js';
+import { DEFAULT_RUN_LEASE_TTL_MS, wrapWithRunLease } from './durable/runLease.js';
 import { markSessionOutcome } from './outcomeMarking.js';
 import { resolveAgentPolicies } from './policies/resolvePolicies.js';
 import type { KnowledgeProviderConfig } from '../types/knowledge.js';
@@ -57,7 +75,7 @@ import { extractionSucceeded } from '../memory/extract/runExtraction.js';
 import { runExtractors } from '../memory/extract/runExtractors.js';
 import type { ExtractedValueStore } from '../memory/extract/store.js';
 import type { Extractor } from '../memory/extract/types.js';
-import { SessionMutex } from './SessionMutex.js';
+import { SessionMutex, RunMutex } from './SessionMutex.js';
 import { compactMessages, type CompactionConfig } from './compaction.js';
 import {
   readLastPromptTokens,
@@ -180,8 +198,23 @@ export interface HarnessConfig {
    * Omitted, tools honour `needsApproval` exactly as before.
    */
   policy?: Policy;
+  /**
+   * Structured judge for flow `gates` of kind `judge`. Absent provider is an
+   * execution error (always blocking, even when the gate is declared advisory).
+   */
+  flowGateJudge?: FlowGateJudgeProvider | LanguageModel;
   /** Read-only observability, configured independently from durable session state. */
   tracing?: TracingConfig;
+  /**
+   * Durable run journal. When omitted, each session uses `SessionRunStore` over
+   * `sessionStore`. A shared adapter (e.g. `PostgresRunStore`) is used as-is.
+   */
+  runStore?: RunStore;
+  /**
+   * Default versioned store for `addDynamicFlows` / `loadDynamicFlows` when the
+   * call does not pass `store`. Live registration still works without one.
+   */
+  flowDefinitionsStore?: FlowDefinitionsStore;
 }
 
 export interface RunOptions {
@@ -201,12 +234,41 @@ export interface RunOptions {
   seedMessages?: ModelMessage[];
   historyDelta?: ModelMessage[];
   driver?: ChannelDriver;
+  /**
+   * Address an existing run in this session. Unknown and cross-session values
+   * fail closed. Omit to open the session's conversation run.
+   */
+  runId?: string;
+  /**
+   * When omitted, opens the session's conversation run. `'flow'` mints a new
+   * headless flow run (server-side id). Caller-supplied `runId` is resume-only
+   * and wins over this field.
+   */
+  kind?: RunKind;
+  /**
+   * Creation-only with `kind: 'flow'`. Sets `activeFlow` on the minted run.
+   * Ignored on resume.
+   */
+  flowName?: string;
   signalDelivery?: SignalDelivery;
   /** Stable key for this inbound user message; duplicate webhook retries are ignored (H2). */
   idempotencyKey?: string;
   abortSignal?: AbortSignal;
   /** Immutable release identity already authorized and pinned by the deployment host. */
   deployment?: DeploymentTraceContext;
+}
+
+export interface RunHandle {
+  runId: string;
+  sessionId: string;
+  kind: RunKind;
+  status: 'running' | 'paused' | 'finished' | 'error' | 'aborted';
+  activeAgentId: string;
+  activeFlow?: string;
+  activeNode?: string;
+  waitingFor?: InterruptRequest;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export class Runtime {
@@ -217,15 +279,24 @@ export class Runtime {
   private readonly terminalHandoffTargets: Set<string>;
   private readonly hooks?: Hooks;
   private readonly activeTurnAborts = new Map<string, AbortController>();
+  private readonly sessionAbortKeys = new Map<string, Set<string>>();
   private readonly sessionMutex = new SessionMutex();
+  private readonly runMutex = new RunMutex();
   private readonly traceStore?: TraceStore;
   private readonly traceSinks: TraceSink[];
   private readonly pendingTraceWrites = new Set<Promise<void>>();
   private readonly pendingExtractions = new Set<Promise<void>>();
   private readonly extractedValueStore: ExtractedValueStore;
+  private readonly runStoreOverride?: RunStore;
+  private readonly leaseHolder = randomUUID();
+  private readonly flowCatalogs = new Map<string, LiveFlowCatalog>();
+  private readonly flowCatalogMutex = new SessionMutex();
 
   constructor(private readonly config: HarnessConfig) {
     this.agentsById = indexAgents(config.agents);
+    for (const agent of this.agentsById.values()) {
+      this.flowCatalogs.set(agent.id, new LiveFlowCatalog(agent.flows ?? []));
+    }
     // Defence in depth: `defineAgent` validates `memory.extract` for callers that use it, but
     // the runtime also accepts raw `AgentConfig` literals (e.g. from a deployment binder) that
     // never went through `defineAgent` — validate again here so those configs fail fast too.
@@ -248,6 +319,11 @@ export class Runtime {
       ? [this.traceStore, ...configuredSinks.filter((sink) => sink !== this.traceStore)]
       : [];
     this.extractedValueStore = resolveExtractedValueStore(config.extractedValueStore);
+    this.runStoreOverride = config.runStore;
+  }
+
+  private runStoreFor(sessionId: string): RunStore {
+    return resolveRunStore(this.sessionStore, sessionId, this.runStoreOverride);
   }
 
   run(opts: RunOptions): TurnHandle {
@@ -266,12 +342,30 @@ export class Runtime {
       : undefined;
     const bus = createEventBus();
     const abortController = new AbortController();
-    this.activeTurnAborts.set(sessionId, abortController);
+    const pendingAbortKey = `pending:${randomUUID()}`;
+    this.registerTurnAbort(sessionId, pendingAbortKey, abortController);
     if (opts.abortSignal) {
       opts.abortSignal.addEventListener('abort', () => abortController.abort(), { once: true });
     }
 
-    const execute = async (): Promise<TurnResult> => {
+    let settleRunId!: (id: string) => void;
+    let failRunId!: (error: unknown) => void;
+    let runIdSettled = false;
+    const runIdPromise = new Promise<string>((resolve, reject) => {
+      settleRunId = (id: string) => {
+        if (runIdSettled) return;
+        runIdSettled = true;
+        resolve(id);
+      };
+      failRunId = (error: unknown) => {
+        if (runIdSettled) return;
+        runIdSettled = true;
+        reject(error);
+      };
+    });
+    void runIdPromise.catch(() => undefined);
+
+    const execute = async (opened: OpenRunResult): Promise<TurnResult> => {
       let runCtx!: import('../types/run-context.js').RunContext;
       // Whether the user has been told anything at all this turn. A terminal handoff with
       // no escalation handler configured used to emit zero text — seven consecutive turns
@@ -294,21 +388,6 @@ export class Runtime {
         void runHookSafely('onStreamPart', () => this.hooks?.onStreamPart?.(runCtx, part));
       };
 
-      const opened = await openRun(this.agentsById, {
-        sessionId,
-        userId: opts.userId,
-        input: opts.input,
-        selection: opts.selection,
-        wake: opts.wake,
-        agentId: opts.agentId,
-        seedMessages: opts.seedMessages,
-        historyDelta: opts.historyDelta,
-        signalDelivery: opts.signalDelivery,
-        idempotencyKey: opts.idempotencyKey,
-        transcriptionModel: this.config.transcriptionModel,
-        defaultAgentId: this.config.defaultAgentId,
-        sessionStore: this.sessionStore,
-      });
       const turnMessageBaseline = opened.runState.messages.length;
       // `appendConversationAudit` writes into the live session during the turn.
       // Stores with a dedicated audit log need only the entries created by this
@@ -432,6 +511,7 @@ export class Runtime {
         fs: openingSurface.resolvedWorkspace?.fs,
         getSkill: openingSurface.getSkill,
         signalDelivery: opts.signalDelivery,
+        flowGateJudge: this.config.flowGateJudge,
       });
 
       // Session retrieval cache (G6): created once per run, persists across
@@ -443,20 +523,43 @@ export class Runtime {
       runCtx.baseInstructions = opened.agent.instructions;
       runCtx.globalTools = openingSurface.globalTools;
       runCtx.agentTools = opened.agent.tools ?? {};
-      runCtx.outOfBandControl = resolveOutOfBandControl(opened.agent);
+      let activeAgent = this.liveAgent(opened.agent);
+      runCtx.outOfBandControl = resolveOutOfBandControl(activeAgent);
       runCtx.skillPrompt = openingSurface.skillPrompt;
       // Restore the live catalog from the persisted run state so a resumed or replayed run
       // keeps the skills it added, the ones it withdrew, and the snapshot of what it already
       // announced — without re-narrating a committed change or re-resolving a withdrawn skill.
       restoreLiveSkillCatalog(openingSurface.skillCatalog, freshRunState.state);
+      const openingFlowCatalog = this.flowCatalogs.get(opened.agent.id);
+      if (
+        openingFlowCatalog &&
+        applyFlowCatalogAnnouncement(openingFlowCatalog, opened.agent.id, freshRunState)
+      ) {
+        freshRunState.updatedAt = Date.now();
+        await opened.runStore.putRunState(freshRunState);
+      }
       runCtx.workingMemoryPrompt = appendGoalsPrompt(
         openingSurface.workingMemoryPrompt,
         opened.session.workingMemory,
       );
       runCtx.workingMemoryTools = openingSurface.workingMemoryTools;
 
+      if (
+        freshRunState.waitingFor &&
+        freshRunState.activeFlow &&
+        freshRunState.flowDigest
+      ) {
+        const parkedFlow = findFlowByName(activeAgent, freshRunState.activeFlow);
+        if (!parkedFlow) {
+          throw new Error(
+            `Active flow "${freshRunState.activeFlow}" not found on agent "${activeAgent.id}"`,
+          );
+        }
+        await assertParkedFlowDigest(freshRunState, parkedFlow);
+      }
+
       await runCtx.resumePendingInterrupt(
-        resolvePendingApprovalTool(opened.agent, runCtx.runState),
+        resolvePendingApprovalTool(activeAgent, runCtx.runState),
       );
 
       await runHookSafely('onStart', () => this.hooks?.onStart?.(runCtx));
@@ -467,7 +570,6 @@ export class Runtime {
 
       const driver = opts.driver ?? this.config.driver ?? new TextDriver();
 
-      let activeAgent = opened.agent;
       let loopResult: HostLoopResult = { kind: 'turnComplete' };
       let handoffCount = 0;
       let terminalOutcome: ConversationOutcome | undefined;
@@ -624,7 +726,15 @@ export class Runtime {
             }
 
             runCtx.runState.activeAgentId = loopResult.to;
-            activeAgent = target;
+            activeAgent = this.liveAgent(target);
+            const targetFlowCatalog = this.flowCatalogs.get(target.id);
+            if (
+              targetFlowCatalog &&
+              applyFlowCatalogAnnouncement(targetFlowCatalog, target.id, runCtx.runState)
+            ) {
+              runCtx.runState.updatedAt = Date.now();
+              await runCtx.runStore.putRunState(runCtx.runState);
+            }
             const targetSurface = await buildAgentToolSurface(target, opened.session, {
               configTools: this.config.tools,
               knowledgeProvider,
@@ -682,7 +792,7 @@ export class Runtime {
                 : target.instructions;
             runCtx.model = targetModel;
             runCtx.controlModel = target.controlModel ?? targetModel;
-            runCtx.outOfBandControl = resolveOutOfBandControl(target);
+            runCtx.outOfBandControl = resolveOutOfBandControl(activeAgent);
             runCtx.limits = targetPolicies.limits;
             runCtx.refinementPolicies = targetPolicies.refinementPolicies;
             runCtx.validationPolicies = targetPolicies.validationPolicies;
@@ -720,7 +830,8 @@ export class Runtime {
           }
 
           if (loopResult.kind === 'ended') {
-            terminalOutcome = 'resolved';
+            terminalOutcome =
+              loopResult.reason === 'failed-verification' ? 'failed-verification' : 'resolved';
             break;
           }
 
@@ -772,7 +883,7 @@ export class Runtime {
           throw error;
         }
       } finally {
-        this.activeTurnAborts.delete(sessionId);
+        this.unregisterTurnAbort(sessionId, opened.runState.runId);
         const activeAgentConfig = this.agentsById.get(runCtx.runState.activeAgentId);
         const extractionConfig = resolveExtractionConfig(activeAgentConfig?.memory);
         const extractors = activeAgentConfig?.memory?.extract;
@@ -790,6 +901,7 @@ export class Runtime {
           ctx: runCtx,
           terminalOutcome,
           outcomeReason: loopResult.kind === 'ended' ? loopResult.reason : undefined,
+          outcomeGates: runCtx.runState.verification?.verdicts,
           extraction:
             extractionConfig && extractors?.length && extractionModel
               ? {
@@ -832,15 +944,71 @@ export class Runtime {
         });
       }
 
-      return { text: collectAssistantText(runCtx.runState.messages), toolResults: [] };
+      return { text: collectAssistantText(runCtx.runState.messages), toolResults: [], runId: opened.runState.runId };
     };
 
     const gated = async (): Promise<TurnResult> => {
-      const release = await this.sessionMutex.acquire(sessionId);
+      const target = await resolveTargetRunId(this.sessionStore, sessionId, {
+        runId: opts.runId,
+        signalDelivery: opts.signalDelivery,
+        kind: opts.kind,
+      });
+      const releaseSession =
+        target.lockKind === 'conversation'
+          ? await this.sessionMutex.acquire(sessionId)
+          : undefined;
+      const addressedRunId =
+        opts.runId ??
+        opts.signalDelivery?.runId ??
+        (opts.signalDelivery ? target.runId : undefined);
+      const releaseAddressedRun = addressedRunId
+        ? await this.runMutex.acquire(addressedRunId)
+        : undefined;
       try {
-        return await execute();
+        const opened = await openRun(this.agentsById, {
+          sessionId,
+          userId: opts.userId,
+          input: opts.input,
+          selection: opts.selection,
+          wake: opts.wake,
+          agentId: opts.agentId,
+          seedMessages: opts.seedMessages,
+          historyDelta: opts.historyDelta,
+          signalDelivery: opts.signalDelivery,
+          idempotencyKey: opts.idempotencyKey,
+          transcriptionModel: this.config.transcriptionModel,
+          defaultAgentId: this.config.defaultAgentId,
+          sessionStore: this.sessionStore,
+          runStore: this.runStoreOverride,
+          runId: addressedRunId ?? opts.runId,
+          kind: opts.kind,
+          flowName: opts.flowName,
+          mint: opts.kind === 'flow' ? () => mintRunId() : undefined,
+          leaseHolder: this.leaseHolder,
+        });
+        opened.runStore = wrapWithRunLease(opened.runStore, {
+          holder: this.leaseHolder,
+          ttlMs: DEFAULT_RUN_LEASE_TTL_MS,
+        });
+        settleRunId(opened.runState.runId);
+        this.unregisterTurnAbort(sessionId, pendingAbortKey);
+        this.registerTurnAbort(sessionId, opened.runState.runId, abortController);
+        const releaseMintedRun =
+          releaseAddressedRun === undefined
+            ? await this.runMutex.acquire(opened.runState.runId)
+            : undefined;
+        try {
+          return await execute(opened);
+        } finally {
+          releaseMintedRun?.();
+        }
+      } catch (error) {
+        failRunId(error);
+        throw error;
       } finally {
-        release();
+        this.unregisterTurnAbort(sessionId, pendingAbortKey);
+        releaseAddressedRun?.();
+        releaseSession?.();
       }
     };
 
@@ -848,6 +1016,7 @@ export class Runtime {
       bus,
       abortController,
       run: gated,
+      runId: runIdPromise,
     });
   }
 
@@ -892,6 +1061,106 @@ export class Runtime {
     return this.sessionStore;
   }
 
+  getRunStore(): RunStore {
+    return resolveRunStore(this.sessionStore, '', this.runStoreOverride);
+  }
+
+  /**
+   * Atomically register a bundle of stored flow definitions on a live agent.
+   *
+   * Persistence is not transactional across rows. On failure the in-memory
+   * catalog rolls back this bundle's registrations; members that already
+   * persisted are best-effort archived so a later `loadDynamicFlows` does not
+   * resurrect them.
+   *
+   * Reusing an existing dynamic name is rejected unless `replace: true`.
+   */
+  async addDynamicFlows(
+    defs: readonly AuthoringFlowDefinition[],
+    opts: {
+      agentId: string;
+      store?: FlowDefinitionsStore;
+      replace?: boolean;
+      compiler?: NlPredicateProvider | LanguageModel;
+    },
+  ): Promise<void> {
+    return this.withFlowCatalogLock(opts.agentId, async () => {
+      const agent = this.requireAgent(opts.agentId);
+      const tools = agentToolSurface(agent, this.config.tools);
+      await registerDynamicFlowBundle({
+        defs,
+        catalog: this.catalogFor(agent),
+        tools: tools.lookup,
+        toolIndex: tools.index,
+        store: opts.store ?? this.config.flowDefinitionsStore,
+        replace: opts.replace,
+        compiler: opts.compiler ?? agent.model,
+      });
+    });
+  }
+
+  /**
+   * Drop a dynamic flow from this runtime's live catalog.
+   *
+   * The store row stays active; a later `loadDynamicFlows` (including boot)
+   * will reload it unless the caller archives the name first.
+   */
+  async removeDynamicFlow(name: string, opts: { agentId: string }): Promise<boolean> {
+    return this.withFlowCatalogLock(opts.agentId, () =>
+      this.catalogFor(this.requireAgent(opts.agentId)).remove(name),
+    );
+  }
+
+  /**
+   * Load `status: 'active'` versions onto the agent's live catalog. Per-row
+   * failures are logged and skipped so one corrupt definition cannot sink boot.
+   */
+  async loadDynamicFlows(opts: { agentId: string; store?: FlowDefinitionsStore }): Promise<void> {
+    return this.withFlowCatalogLock(opts.agentId, async () => {
+      const store = opts.store ?? this.config.flowDefinitionsStore;
+      if (!store) {
+        throw new Error('loadDynamicFlows requires a FlowDefinitionsStore');
+      }
+      const agent = this.requireAgent(opts.agentId);
+      const tools = agentToolSurface(agent, this.config.tools);
+      await loadDynamicFlowsIntoCatalog({
+        catalog: this.catalogFor(agent),
+        store,
+        tools: tools.lookup,
+        toolIndex: tools.index,
+      });
+    });
+  }
+
+  private async withFlowCatalogLock<T>(agentId: string, fn: () => T | Promise<T>): Promise<T> {
+    const release = await this.flowCatalogMutex.acquire(agentId);
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  private requireAgent(agentId: string): AgentConfig {
+    const agent = this.agentsById.get(agentId);
+    if (!agent) {
+      throw new Error(`Unknown agent "${agentId}"`);
+    }
+    return agent;
+  }
+
+  private catalogFor(agent: AgentConfig): LiveFlowCatalog {
+    const existing = this.flowCatalogs.get(agent.id);
+    if (existing) return existing;
+    const created = new LiveFlowCatalog(agent.flows ?? []);
+    this.flowCatalogs.set(agent.id, created);
+    return created;
+  }
+
+  private liveAgent(agent: AgentConfig): AgentConfig {
+    return this.catalogFor(agent).overlay(agent);
+  }
+
   /** Resolves once every in-flight background extraction has settled. */
   async settled(): Promise<void> {
     await Promise.allSettled([...this.pendingExtractions]);
@@ -902,7 +1171,26 @@ export class Runtime {
   }
 
   abortSession(sessionId: string, reason?: string): void {
-    this.activeTurnAborts.get(sessionId)?.abort(reason);
+    const keys = this.sessionAbortKeys.get(sessionId);
+    if (!keys) return;
+    for (const key of [...keys]) {
+      this.activeTurnAborts.get(key)?.abort(reason);
+    }
+  }
+
+  private registerTurnAbort(sessionId: string, key: string, controller: AbortController): void {
+    this.activeTurnAborts.set(key, controller);
+    const keys = this.sessionAbortKeys.get(sessionId) ?? new Set<string>();
+    keys.add(key);
+    this.sessionAbortKeys.set(sessionId, keys);
+  }
+
+  private unregisterTurnAbort(sessionId: string, key: string): void {
+    this.activeTurnAborts.delete(key);
+    const keys = this.sessionAbortKeys.get(sessionId);
+    if (!keys) return;
+    keys.delete(key);
+    if (keys.size === 0) this.sessionAbortKeys.delete(sessionId);
   }
 
   async replayAuditLog(
@@ -1058,6 +1346,12 @@ export class Runtime {
       removeSystemNote(runCtx.runState, SKILL_CATALOG_NOTE_TAG);
     }
 
+    const flowCatalog = this.flowCatalogs.get(agent.id);
+    if (flowCatalog) {
+      rebaselineFlowCatalogAnnouncement(flowCatalog, agent.id, runCtx.runState);
+      removeSystemNote(runCtx.runState, FLOW_CATALOG_NOTE_TAG);
+    }
+
     runCtx.runState.updatedAt = Date.now();
     await runCtx.runStore.putRunState(runCtx.runState);
 
@@ -1104,8 +1398,33 @@ export class Runtime {
     });
   }
 
+  async getRun(runId: string, sessionId?: string): Promise<RunHandle | null> {
+    const scopeId = sessionId ?? runId;
+    const session = await this.sessionStore.get(scopeId);
+    if (!session) {
+      return null;
+    }
+    const runStore = this.runStoreFor(session.id);
+    const runState = await runStore.getRunState(runId);
+    if (!runState || runState.sessionId !== session.id) {
+      return null;
+    }
+    return {
+      runId: runState.runId,
+      sessionId: runState.sessionId,
+      kind: runKind(runState),
+      status: runState.status,
+      activeAgentId: runState.activeAgentId,
+      activeFlow: runState.activeFlow,
+      activeNode: runState.activeNode,
+      waitingFor: runState.waitingFor,
+      createdAt: runState.createdAt,
+      updatedAt: runState.updatedAt,
+    };
+  }
+
   async getConversationLength(sessionId: string): Promise<number> {
-    const runStore = new SessionRunStore(this.sessionStore, sessionId);
+    const runStore = this.runStoreFor(sessionId);
     const runState = await runStore.getRunState(sessionId);
     return runState?.messages.length ?? 0;
   }
@@ -1196,8 +1515,8 @@ export class Runtime {
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
-    const runStore = new SessionRunStore(this.sessionStore, sessionId);
-    const runState = await runStore.getRunState(sessionDerivedRunId(sessionId));
+    const runStore = this.runStoreFor(sessionId);
+    const runState = await runStore.getRunState(sessionId);
     if (!runState) {
       throw new Error(`No run state for session: ${sessionId}`);
     }
@@ -1217,6 +1536,8 @@ export class Runtime {
     runState.waitingFor = undefined;
     runState.activeFlow = undefined;
     runState.activeNode = undefined;
+    runState.flowDigest = undefined;
+    runState.flowRef = undefined;
     delete runState.state[ESCALATION_NOTIFIED_KEY];
     runState.updatedAt = Date.now();
     await runStore.putRunState(runState);
@@ -1267,7 +1588,7 @@ function resolvePendingApprovalTool(
 ): AnyTool | undefined {
   const operation = runState.waitingFor?.operation;
   if (!operation || !runState.activeFlow || !runState.activeNode) return undefined;
-  const flow = agent.flows?.find((candidate) => candidate.name === runState.activeFlow);
+  const flow = findFlowByName(agent, runState.activeFlow);
   const node = flow?.nodes.find((candidate) => candidate.id === runState.activeNode);
   if (node?.kind !== 'reply') return undefined;
   return resolveReplyNode(node, currentFlowState(runState)).localTools?.[operation.toolName];

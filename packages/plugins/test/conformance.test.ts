@@ -10,6 +10,7 @@ interface ExpectedCase {
   rejection?: { section: string; rule: string };
   skills?: string[];
   mcpServers?: string[];
+  flows?: string[];
   diagnostics: Diagnostic[];
 }
 
@@ -75,6 +76,11 @@ describe('Agent Plugins conformance corpus', () => {
           (server) => server.name,
         );
         compareExactSet(serverNames, expected.mcpServers);
+      }
+
+      if (expected.flows !== undefined) {
+        const flowNames = result.plugin.flows.map((flow) => flow.name);
+        compareExactSet(flowNames, expected.flows);
       }
 
       compareDiagnostics([...result.plugin.diagnostics], expected.diagnostics);

@@ -104,7 +104,7 @@ const availabilityNext = (turn: TurnResult, noAvail: ReplyNode) => {
   const r = turn.toolResults.find((t) => t.name === 'check_availability');
   if (!r?.result || typeof r.result !== 'object') return 'stay';
   const data = r.result as Record<string, unknown>;
-  return { goto: data.available ? confirm : noAvail, data };
+  return { goto: (data.available ? confirm : noAvail).id, data };
 };
 
 const end = reply({
@@ -150,7 +150,7 @@ const initial = reply({
   tools: toToolSet({ collect_party_size: collectPartySize }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'collect_party_size');
-    if (r?.result) return { goto: getTime, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: getTime.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });

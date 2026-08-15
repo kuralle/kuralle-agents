@@ -107,7 +107,7 @@ const choosePizza = reply({
     }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'select_pizza_order');
-    if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: confirm.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });
@@ -139,7 +139,7 @@ const chooseSushi = reply({
     }),
   next: (turn) => {
     const r = turn.toolResults.find((t) => t.name === 'select_sushi_order');
-    if (r?.result) return { goto: confirm, data: r.result as Record<string, unknown> };
+    if (r?.result) return { goto: confirm.id, data: r.result as Record<string, unknown> };
     return 'stay';
   },
 });

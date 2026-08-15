@@ -19,6 +19,7 @@ Peers: `@kuralle-agents/core`, `ai@^6`.
 **Key exports:**
 
 - **`createKuralleChatRouter`** — full router: chat, SSE (native default), WebSocket, session, outcome, audit endpoints.
+- **`createStoredFlowsRouter`** — `GET/POST/DELETE /api/stored/flows` catalog, Policy-gated (`stored-flows:read` / `stored-flows:write`). Default-allow when no policy is passed (authless dev-router posture).
 - **`createKuralleSseChatRouter`** — raw JSON-SSE only (explicit legacy wire).
 - **`createOpenAICompatRouter`** — OpenAI-compatible `/v1/chat/completions` endpoint.
 - **`createKuralleRouter`** — standalone router for flow-manager instances.
@@ -132,6 +133,27 @@ Or use `createKuralleSseChatRouter` for a router that always emits raw JSON-SSE 
 | `POST` | `/api/sessions/:id/csat` | Record CSAT score (1–5) |
 | `POST` | `/api/session/:id/compress` | Trigger manual compaction |
 | `GET`  | `/health` | Health check |
+
+## Stored flows (`createStoredFlowsRouter`)
+
+Mounts a catalog of dynamic `FlowDefinition`s next to the chat router:
+
+```ts
+import { createStoredFlowsRouter } from '@kuralle-agents/hono-server';
+
+app.route('/', createStoredFlowsRouter({ runtime, store, agentId: 'support', storedFlowsPolicy }));
+```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/stored/flows` | List stored versions (filterable) |
+| `GET` | `/api/stored/flows/:name` | Active version + version history |
+| `POST` | `/api/stored/flows` | Validate, version, and register (`definition`, optional `dependencies`, `replace`, `authorId`) |
+| `DELETE` | `/api/stored/flows/:name` | Archive the name and drop it from the live catalog |
+
+`store` is any `FlowDefinitionsStore` (Memory, Postgres, Redis). An invalid definition returns **422** with `FlowValidationIssue[]`, each carrying suggested repair actions. Policy decisions are requested as `stored-flows:read` / `stored-flows:write`; omitting `storedFlowsPolicy` is default-allow (the router's authless dev posture — production hosts must pass a Policy), and `ask` is treated as deny (403).
+
+`examples/e2e-kill-resume/` runs a durable flow run over this stack, kills the server mid-flow, and proves the run resumes from its Postgres journal without re-executing effects. See the [dynamic flows guide](https://agents.kuralle.com/guides/dynamic-flows).
 
 ## Widget welcome mode
 

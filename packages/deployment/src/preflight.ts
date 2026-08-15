@@ -1,10 +1,11 @@
 import { satisfies, valid, validRange } from 'semver';
 import { DeploymentError } from './errors.js';
-import type {
-  AgentArtifact,
-  CapabilityRequirement,
-  RuntimeCapability,
-  RuntimeRevision,
+import {
+  isInlineFlowEntry,
+  type AgentArtifact,
+  type CapabilityRequirement,
+  type RuntimeCapability,
+  type RuntimeRevision,
 } from './types.js';
 
 export interface CompatibilityDiagnostic {
@@ -31,7 +32,7 @@ function capabilityRequirements(artifact: AgentArtifact): CapabilityRequirement[
   }
   const references = [
     ...artifact.tools.filter(tool => tool.kind === 'trusted'),
-    ...artifact.flows,
+    ...artifact.flows.filter(flow => !isInlineFlowEntry(flow)),
     ...Object.values(artifact.policies).filter(reference => reference !== undefined),
   ];
   for (const reference of references) {

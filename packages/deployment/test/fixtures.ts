@@ -1,7 +1,28 @@
 import { createArtifact } from '../src/index.js';
-import type { AgentArtifact, ArtifactInputV1 } from '../src/index.js';
+import type { AgentArtifact, ArtifactInputV1, InlineFlowEntry } from '../src/index.js';
 
 const INSTRUCTION_DIGEST = '67a17a57b438ad99d562505d18cf46ab5350b2008bab59087bf66bfb679399ab';
+
+export function refundFlowDefinition(overrides: { description?: string } = {}) {
+  return {
+    name: 'refund',
+    description: overrides.description ?? 'Start a refund.',
+    start: 'say',
+    nodes: [
+      {
+        kind: 'reply' as const,
+        id: 'say',
+        response: { template: 'Refund started' },
+        next: { end: 'done' },
+      },
+    ],
+  };
+}
+
+export function inlineRefundFlow(overrides: { description?: string } = {}): InlineFlowEntry {
+  const definition = refundFlowDefinition(overrides);
+  return { kind: 'inline', id: definition.name, definition };
+}
 
 export function artifactInput(overrides: Partial<ArtifactInputV1> = {}): ArtifactInputV1 {
   return {

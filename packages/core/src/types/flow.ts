@@ -7,6 +7,11 @@ import type { TurnResult } from './channel.js';
 import type { ActionContext } from './run-context.js';
 import type { NodeVerify } from '../flow/verify.js';
 import type { ChoiceOption } from './selection.js';
+import type { CollectResolverSpec, FlowGateSpec } from '../flows/definition/types.js';
+import { assertValidCodeFlow } from '../flows/definition/validate/code-flow.js';
+
+export type { CollectResolverSpec };
+export type { SlotSource, FlowGateSpec } from '../flows/definition/types.js';
 
 export type FlowState = Record<string, unknown>;
 
@@ -25,8 +30,14 @@ export interface Flow {
   instructions?: string;
   context?: ContextStrategy;
   maxOscillations?: number;
+  /** How this flow was produced. Omitted on code-authored `defineFlow` graphs. */
+  origin?: 'definition' | 'code';
+  /** Store version this live flow was published as. Absent on code-authored flows. */
+  versionId?: string;
   /** Explicit state mapping at flow boundaries. The active frame is otherwise isolated. */
   state?: FlowStateBoundary;
+  /** Post-run checks evaluated against the run record when this flow reaches a terminal transition. */
+  gates?: FlowGateSpec[];
   /**
    * Enter this flow directly when routing says it owns the request, instead of
    * offering `enter_flow` and letting the model choose.
@@ -70,8 +81,7 @@ export interface NodeGrounding {
 
 export type Transition =
   | FlowNode
-  | (() => FlowNode)
-  | { goto: FlowNode | (() => FlowNode); data?: Record<string, unknown> }
+  | { goto: string; data?: Record<string, unknown> }
   | { handoff: string; reason?: string }
   | { escalate: string }
   | { end: string }
@@ -119,6 +129,15 @@ export interface CollectNode extends NodeVerification {
   ask?: (missing: string[], state: FlowState) => string;
   choices?: ChoiceOption[];
   maxTurns?: number;
+  /** Deterministic tier-0 slot resolvers. A field resolved here is excluded from the model schema this turn. */
+  resolvers?: CollectResolverSpec[];
+  /** Fields the user must supply in their own words. A model-extracted value for one of
+   *  these is dropped unless it appears in the turn text, which stops the model inventing
+   *  an identifier the user never gave. Declare it only for slots that are quoted rather
+   *  than normalised: extraction legitimately rewrites dates, times, numbers, enums and
+   *  free-text summaries, and a value that arrives from a button or list reply is never
+   *  in the turn text at all. */
+  verbatimFields?: readonly string[];
   onComplete: (data: unknown, state: FlowState) => Transition | Promise<Transition>;
 }
 
@@ -184,5 +203,6 @@ export function confirmGate(node: {
 }
 
 export function defineFlow(flow: Flow): Flow {
+  assertValidCodeFlow(flow);
   return flow;
 }

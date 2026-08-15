@@ -54,7 +54,7 @@ const triage = reply({
   tools: buildToolSet({ appointments: defineTool({ ... }) }),
   next: (turn) =>
     turn.toolResults.some((r) => r.name === 'appointments')
-      ? { goto: appointmentsNode, data: {} }
+      ? { goto: appointmentsNode.id, data: {} }
       : 'stay',
 });
 

@@ -18,6 +18,26 @@ const flowSource = (name: string): string =>
 
 export const CORE_FLOW_SCENARIOS: StressScenario[] = [
   {
+    id: 'dynamic-registration',
+    source: flowSource('dynamic-registration'),
+    prompts: ['Please start a refund'],
+    expectation: { flows: ['refund'], tools: ['enter_flow'] },
+  },
+  {
+    id: 'rehydrate-definition',
+    source: flowSource('rehydrate-definition'),
+    prompts: ['I want to check my order eligibility for account acc-1.'],
+    expectation: { flows: ['eligibility'] },
+  },
+  {
+    id: 'flow-builder',
+    source: flowSource('flow-builder'),
+    prompts: [
+      'build a refund-eligibility flow that collects an account id, checks eligibility with the lookup tool, and replies with the verdict',
+    ],
+    expectation: { tools: ['list_available_tools', 'save_flow'] },
+  },
+  {
     id: 'extraction-node-demo',
     source: flowSource('extraction-node-demo'),
     prompts: [

@@ -3,6 +3,7 @@ export {
   Runtime,
   type HarnessConfig,
   type RunOptions,
+  type RunHandle,
   type TracingConfig,
 } from './Runtime.js';
 export type { RuntimeLike } from './RuntimeLike.js';

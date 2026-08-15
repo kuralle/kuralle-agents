@@ -15,7 +15,9 @@ import {
   getCollectData,
   incrementCollectTurns,
   emitExtractionTelemetry,
+  inferRequiredFields,
   mergeTurnExtraction,
+  mergeExtractionData,
   projectCollectData,
   schemaSatisfied,
   takePendingRecoveryMessage,
@@ -23,6 +25,7 @@ import {
   setCollectData,
   wouldCollectSatisfyAfterToolResults,
 } from './extraction.js';
+import { resolveDeterministicSlots } from './slotResolution.js';
 import { normalizeTransition } from './normalizeTransition.js';
 import type { NormalizedTransition } from './normalizeTransition.js';
 import { currentFlowState } from './flowState.js';
@@ -59,7 +62,7 @@ export async function collectUntilComplete(
   for (;;) {
     if (
       (await schemaSatisfied(node, state)) &&
-      (!hasPendingUserInput(ctx.session) || pendingConsumed)
+      (!hasPendingUserInput(ctx.session, ctx.runState) || pendingConsumed)
     ) {
       const data = await projectCollectData(node, state);
       return normalizeTransition(await node.onComplete(data, state));
@@ -74,7 +77,7 @@ export async function collectUntilComplete(
     // `messages` with nothing pending and `turnInputConsumed` false, so we fall
     // through and extract it.
     let consumedPendingInput = false;
-    if (hasPendingUserInput(ctx.session)) {
+    if (hasPendingUserInput(ctx.session, ctx.runState)) {
       const signal = await driver.awaitUser(ctx);
       appendUserMessage(run, signal.input);
       pendingConsumed = true;
@@ -118,13 +121,47 @@ export async function collectUntilComplete(
       setCollectData(state, node.id, collected);
     }
 
-    const missingBefore = computeMissingFields(node, getCollectData(state, node.id));
-    const submitTool = createExtractionSubmitTool(node, missingBefore, {
+    const missingAtTurnStart = computeMissingFields(node, getCollectData(state, node.id));
+    const userText = peekLatestUserMessage(run) ?? '';
+    const tier0 = resolveDeterministicSlots(node, {
+      userText,
+      state,
+      missing: missingAtTurnStart,
+    });
+    if (Object.keys(tier0.resolved).length > 0) {
+      const next = mergeExtractionData(getCollectData(state, node.id), tier0.resolved);
+      setCollectData(state, node.id, next);
+      emitExtractionTelemetry(node, state, tier0.resolved, ctx.emit, {
+        slotSources: tier0.slotSources,
+      });
+    }
+
+    const missingAfterTier0 = computeMissingFields(node, getCollectData(state, node.id));
+    const ambiguous = new Set(tier0.ambiguous);
+    const modelEligible = missingAfterTier0.filter((field) => !ambiguous.has(field));
+    // A satisfied collect still extracts once when this turn consumed pending input,
+    // so a correction can overwrite slots (G14). Skip the model only when this turn
+    // had nothing left for it: tier 0 filled the remainder, or the leftovers are
+    // ambiguous resolver hits.
+    const correctionPass = consumedPendingInput && missingAtTurnStart.length === 0;
+    const extractionFields = correctionPass
+      ? (node.required ?? inferRequiredFields(node.schema)).filter((field) => !ambiguous.has(field))
+      : modelEligible;
+
+    if (extractionFields.length === 0) {
+      if (await schemaSatisfied(node, state)) {
+        continue;
+      }
+      emitCollectAsk(node, run, ctx);
+      return { kind: 'stay' };
+    }
+
+    const submitTool = createExtractionSubmitTool(node, extractionFields, {
       userMessage: peekLatestUserMessage(run),
     });
-    const resolved = resolveCollectExtractionNode(node, missingBefore, state, submitTool);
+    const resolved = resolveCollectExtractionNode(node, extractionFields, state, submitTool);
     resolved.extractionSatisfied = (toolResults) =>
-      wouldCollectSatisfyAfterToolResults(node, state, toolResults);
+      wouldCollectSatisfyAfterToolResults(node, state, toolResults, userText);
     // Non-speaking extraction: the model's prose is DISCARDED (never emitted or
     // appended), so a collect turn cannot author narration that contradicts flow
     // state. Falls back to runAgentTurn for drivers without runExtraction; its
@@ -134,11 +171,11 @@ export async function collectUntilComplete(
       ? driver.runExtraction(resolved, ctx)
       : driver.runAgentTurn(resolved, ctx));
     await persistTurnUsageFromTurn(ctx, turn);
-    mergeExtractionFromTurn(node, run, turn, ctx);
+    mergeExtractionFromTurn(node, run, turn, ctx, userText);
 
     const missingAfter = computeMissingFields(node, getCollectData(state, node.id));
     const advanced =
-      missingAfter.length < missingBefore.length || await schemaSatisfied(node, state);
+      missingAfter.length < missingAtTurnStart.length || await schemaSatisfied(node, state);
 
     if (
       !advanced &&
@@ -215,14 +252,19 @@ function mergeExtractionFromTurn(
   run: RunState,
   turn: TurnResult,
   ctx: RunContext,
+  sourceText: string,
 ): void {
-  const { merged, incoming } = mergeTurnExtraction(
+  const { merged, incoming, submitted, dropped, slotSources } = mergeTurnExtraction(
     node,
     currentFlowState(run),
     turn.toolResults.map((record) => ({ name: record.name, result: record.result })),
+    { sourceText },
   );
   if (merged && incoming) {
-    emitExtractionTelemetry(node, currentFlowState(run), incoming, ctx.emit);
+    emitExtractionTelemetry(node, currentFlowState(run), submitted ?? incoming, ctx.emit, {
+      dropped,
+      slotSources,
+    });
   }
 }
 

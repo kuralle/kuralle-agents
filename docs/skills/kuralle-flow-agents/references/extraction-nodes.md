@@ -30,7 +30,7 @@ const collectInfo = collect({
   required: ['name', 'phone'],
   maxTurns: 8,
   instructions: () => 'Collect contact information. Ask naturally, one field at a time.',
-  onComplete: (data) => ({ goto: confirm, data: data as Record<string, unknown> }),
+  onComplete: (data) => ({ goto: confirm.id, data: data as Record<string, unknown> }),
 });
 
 const greeting = reply({

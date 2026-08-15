@@ -19,8 +19,10 @@ This skill is a map. Read only the sections you need and follow the checklists.
 | Concept | API |
 |---------|-----|
 | Agent | `defineAgent({ id, instructions, model, tools, globalTools, flows, routes, handoffs, agents })` |
-| Flow | `defineFlow({ name, description, start, nodes, hybrid? })` |
+| Flow | `defineFlow({ name, description, start, nodes, gates? })` — validates the graph, **throws** on structural issues |
 | Nodes | `reply` (optional `toolScope`: `'open'` \| `'base'` \| `'closed'`, default `'open'`), `collect`, `action`, `decide` |
+| Flow JSON dialect | `FlowDefinition` (data, not code) + `validateFlowDefinition`; register live via `runtime.addDynamicFlows(defs, { agentId })` |
+| Durable flow run | `runtime.run({ sessionId, kind: 'flow', flowName })` mints a run; resume via `runtime.run({ sessionId, runId })`; `await handle.runId` |
 | Tools | `defineTool` + `buildToolSet` for model; `tools` for durable `ctx.tool` |
 | Visibility vs auth | `toolScope` = what the model **sees**; `Policy` / `needsApproval` = whether a call may **run** |
 | Runtime | `createRuntime({ agents, defaultAgentId })` |
@@ -54,8 +56,9 @@ Read only what you need:
 - `references/code-examples.md` - code-first examples in core
 
 **Flows and tools:**
-- `references/flows.md` - `defineFlow`, node kinds, returned transitions
-- `references/extraction-nodes.md` - `collect` nodes, Standard Schema, multi-turn gather
+- `references/flows.md` - `defineFlow`, node kinds, returned transitions, definition-time validation, gates
+- `references/flow-definitions.md` - `FlowDefinition` JSON dialect, predicate DSL, `addDynamicFlows`, stored-flows HTTP surface, flow-builder agent, `FlowDriftError`
+- `references/extraction-nodes.md` - `collect` nodes, Standard Schema, multi-turn gather, tier-0 resolvers
 - `references/triage.md` - `routes` + model-reasoned routing without leaks
 - `references/tools.md` - `defineTool`, `tools`, approval pauses
 - `references/llm-solidness-playbook.md` - production hardening checklist
@@ -114,7 +117,7 @@ Rules:
    ```ts
    const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });
    const handle = runtime.run({ input, sessionId });
-   for await (const part of handle.events()) { … }
+   for await (const part of handle.events) { … }
    ```
 
 5) **Enable grounding**
@@ -177,6 +180,7 @@ const runtime = createRuntime({ agents: [agent], defaultAgentId: 'demo' });
 ## Non-negotiables
 
 - SOP lives in flows (`reply`/`collect`/`action`/`decide`), not system prompts.
+- Transition targets are registered nodes referenced by object or `{ goto: '<id>' }` — `defineFlow` throws on inline node objects and transition thunks.
 - Model-reasoned routing when `routes` dispatch.
 - Tools must not speak to users.
 - Flow control via node `next` / returned transitions — not tool prose.

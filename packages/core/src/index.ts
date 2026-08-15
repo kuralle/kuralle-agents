@@ -340,9 +340,15 @@ export {
   createInProcessScheduler,
   createWakeJobRunner,
   createScheduleFollowupTool,
+  createSweepJobRunner,
+  startRunSweeper,
   wakeJob,
   isWakeJob,
+  sweepJob,
+  isSweepJob,
   WAKE_JOB_KIND,
+  SWEEP_JOB_KIND,
+  DEFAULT_SWEEP_INTERVAL_MS,
 } from './scheduler/index.js';
 export type {
   Scheduler,
@@ -452,8 +458,98 @@ export type {
   NodeGrounding,
   FlowStateBoundary,
 } from './types/flow.js';
+export type {
+  JsonSchema,
+  FlowDefinition,
+  FlowNodeDefinition,
+  FlowGateSpec,
+  FlowGateVerdict,
+  FlowVerificationRecord,
+  TransitionRef,
+  Predicate,
+  PathOrLiteral,
+  PredicateContext,
+  MappingConfig,
+  MappingSource,
+  FlowValidationIssue,
+  FlowValidationIssueCode,
+  FlowRegistryIndex,
+  FlowValidationRepairAction,
+  FlowRehydrationDeps,
+  FlowDefinitionVersionStatus,
+  FlowDefinitionVersion,
+  CreateVersionOptions,
+  FlowDefinitionListFilter,
+  FlowDefinitionsStore,
+  AuthoringFlowDefinition,
+  NlPredicate,
+  NlPredicateProvider,
+  NlPredicateProvenance,
+} from './flows/index.js';
+export {
+  evaluatePredicate,
+  derivePredicateLabel,
+  flowDefinitionSchema,
+  flowGateSpecSchema,
+  predicateSchema,
+  validateFlowDefinition,
+  assertValidFlowDefinition,
+  rehydrateFlow,
+  toStorableFlow,
+  resolveMapping,
+  renderScopeTemplate,
+  canonicalJson,
+  flowDigest,
+  digestForLiveFlow,
+  FLOW_DEFINITION_VERSION_STATUSES,
+  FlowDefinitionConflictError,
+  FlowDefinitionNotFoundError,
+  FlowDefinitionNameMismatchError,
+  cloneFlowDefinitionVersion,
+  reviveFlowDefinitionVersion,
+  isArchivedFlowName,
+  matchesFlowDefinitionListFilter,
+  stampNewFlowDefinitionVersion,
+  MemoryFlowDefinitionsStore,
+  LiveFlowCatalog,
+  FlowNameConflictError,
+  FlowCycleError,
+  findFlowByName,
+  FLOW_CATALOG_NOTE_TAG,
+  compileNlPredicate,
+  compileAuthoringPredicates,
+  knownVariablesFromDefinition,
+  isNlPredicate,
+  nlPredicateSchema,
+  authoringPredicateSchema,
+  NL_PREDICATE_COMPILER_VERSION,
+  FLOW_BUILDER_AUTHORING_PLAYBOOK,
+  FLOW_BUILDER_TOOL_NAMES,
+  createFlowBuilderAgent,
+  composeFlowBuilderInstructions,
+  createFlowBuilderTools,
+} from './flows/index.js';
+export type {
+  FlowCatalogEntry,
+  FlowCatalogDelta,
+  PersistedLiveFlowCatalog,
+  CreateFlowBuilderAgentOptions,
+  SaveFlowResult,
+  FlowBuilderCatalogEntry,
+  FlowBuilderHost,
+  FlowBuilderRuntime,
+} from './flows/index.js';
 export { parseConfirmation } from './flow/confirmParse.js';
 export type { ConfirmVerdict } from './flow/confirmParse.js';
+export {
+  evaluateFlowGates,
+  gateFailureIsBlocking,
+  isFlowGateJudgeProvider,
+  asFlowGateJudgeProvider,
+  FLOW_GATE_JUDGE_SYSTEM,
+  flowGateJudgeResultSchema,
+} from './flow/evaluateGates.js';
+export type { FlowGateJudgeProvider } from './flow/evaluateGates.js';
 /** Read the state of the flow a run is currently in. Flow state lives in an isolated
  *  frame, so `runState.state` no longer holds it — this is how a caller inspects an
  *  in-flight flow. Values only reach the root state when the flow declares
@@ -466,6 +562,27 @@ export type {
   UnresumableRun,
   UnresumableReason,
 } from './runtime/durable/findUnresumableRuns.js';
+export {
+  recoverOrphanedRuns,
+  sweepDeadlines,
+} from './runtime/durable/sweep.js';
+export type {
+  SweepRuntime,
+  RecoverOrphanedRunsOptions,
+  RecoverOrphanedRunsReport,
+  SweepDeadlinesOptions,
+} from './runtime/durable/sweep.js';
+export {
+  DEFAULT_RUN_LEASE_TTL_MS,
+  isRunLeaseStale,
+  takeRunLease,
+  clearRunLease,
+} from './runtime/durable/runLease.js';
+export {
+  DEADLINE_EXPIRED_REASON,
+  SWEEPER_ACTOR_ID,
+  deadlineExpiryDelivery,
+} from './runtime/durable/deadlineExpiry.js';
 export type { Route } from './types/route.js';
 export { PART_CHANNEL } from './types/stream.js';
 export type {
@@ -539,6 +656,11 @@ export type {
 export type { ChoiceOption, ResolvedSelection } from './types/selection.js';
 export type {
   RunState,
+  RunKind,
+  RunStatus,
+  RunFilter,
+  RunRef,
+  RunFlowRef,
   StepRecord,
   SignalDelivery,
   SignalActor,
@@ -550,8 +672,17 @@ export type {
   SessionDurableRuns,
   PersistedRun,
 } from './runtime/durable/types.js';
-export { DURABLE_RUNS_KEY } from './runtime/durable/types.js';
-export type { RunStore } from './runtime/durable/RunStore.js';
+export { DURABLE_RUNS_KEY, runKind, runMatchesFilter, toRunRef } from './runtime/durable/types.js';
+export type { RunStore, DeleteRunOptions, StepFinalizePatch } from './runtime/durable/RunStore.js';
+export {
+  LogConflictError,
+  RunNotFoundError,
+  RunNotTerminalError,
+  StepNotFoundError,
+  isTerminalRunStatus,
+} from './runtime/durable/RunStore.js';
+export { FlowDriftError } from './runtime/durable/flowPin.js';
+export type { FlowDriftRecovery } from './runtime/durable/flowPin.js';
 export {
   TextDriver,
   AiSdkModelTurnLoop,
@@ -574,6 +705,7 @@ export {
   Runtime,
   type HarnessConfig,
   type RunOptions,
+  type RunHandle,
   type TracingConfig,
 } from './runtime/Runtime.js';
 export type { RuntimeLike } from './runtime/RuntimeLike.js';

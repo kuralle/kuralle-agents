@@ -27,6 +27,21 @@ describe('test:sql-memory-workers', () => {
     expect(trace.spans).toHaveLength(1);
   });
 
+  it('SqlFlowDefinitionsStore passes shared conformance in workerd DO sqlite', async () => {
+    const bindings = env as unknown as TestMemoryEnv;
+    const stub = bindings.TEST_MEMORY_DO.get(bindings.TEST_MEMORY_DO.idFromName('flow-def-contract'));
+    const response = await stub.fetch('http://do/flow-def-contract');
+    expect(response.ok).toBe(true);
+    const body = (await response.json()) as {
+      total: number;
+      passed: number;
+      failures: { name: string; error: string }[];
+    };
+    expect(body.failures).toEqual([]);
+    expect(body.passed).toBe(body.total);
+    expect(body.total).toBeGreaterThan(0);
+  });
+
   it('exports OTLP HTTP/JSON with fetch in workerd', async () => {
     const bindings = env as unknown as TestMemoryEnv;
     const stub = bindings.TEST_MEMORY_DO.get(bindings.TEST_MEMORY_DO.idFromName('otel-export'));

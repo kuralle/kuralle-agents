@@ -7,7 +7,6 @@ import { closeRun } from '../../src/runtime/closeRun.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { InMemoryExtractedValueStore } from '../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { setupDurableHarness, stubModel, buildCtx } from '../core-durable/helpers.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
@@ -318,11 +317,11 @@ describe('Runtime extraction wiring', () => {
     const longInput = 'x'.repeat(8001);
     await runTurn(runtime, 'retry-sess', longInput);
     const runStore = new SessionRunStore(sessionStore, 'retry-sess');
-    let runState = await runStore.getRunState(sessionDerivedRunId('retry-sess'));
+    let runState = await runStore.getRunState('retry-sess');
     expect(runState?.lastExtractedMessageCount).toBeUndefined();
 
     await runTurn(runtime, 'retry-sess', 'ok');
-    runState = await runStore.getRunState(sessionDerivedRunId('retry-sess'));
+    runState = await runStore.getRunState('retry-sess');
     expect(runState?.lastExtractedMessageCount).toBe(runState?.messages.length);
     expect(attempt).toBe(2);
   });

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  createRuntime,
   defineTool,
+  MemoryStore,
   type AgentConfig,
   type Flow,
+  type StreamPart,
 } from '@kuralle-agents/core';
 import type { SkillStoreLike } from '@kuralle-agents/core/types';
 import {
@@ -26,7 +29,7 @@ import type {
   SkillArtifact,
   ThreadPin,
 } from '../src/index.js';
-import { artifactInput } from './fixtures.js';
+import { artifactInput, inlineRefundFlow } from './fixtures.js';
 
 const CREATED_AT = '2026-08-01T00:00:00.000Z';
 
@@ -441,5 +444,85 @@ describe('tool reference resolution', () => {
       runtime: runtime([]),
       bindings: bindings(),
     })).rejects.toThrow('no client tool resolver is configured for open_camera');
+  });
+});
+
+describe('inline flow binding', () => {
+  it('rehydrates an inline flow onto the bound agent', async () => {
+    const artifact = await createArtifact(artifactInput({
+      flows: [inlineRefundFlow()],
+    }));
+    const bound = await bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    });
+
+    expect(bound.agent.flows?.map(flow => flow.name)).toEqual(['refund']);
+    expect(bound.agent.flows?.[0]?.origin).toBe('definition');
+  });
+
+  it('fails closed when an inline flow names a tool the revision registry lacks', async () => {
+    const artifact = await createArtifact(artifactInput({
+      flows: [{
+        kind: 'inline',
+        id: 'charge',
+        definition: {
+          name: 'charge',
+          description: 'Charge a card',
+          start: 'go',
+          nodes: [{ kind: 'action', id: 'go', tool: 'charge_card', next: { end: 'done' } }],
+        },
+      }],
+    }));
+
+    await expect(bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    })).rejects.toThrow('Unknown tool "charge_card" is not in rehydration deps');
+  });
+
+  it('drives one scripted turn through a bound inline flow', async () => {
+    const artifact = await createArtifact(artifactInput({
+      flows: [inlineRefundFlow()],
+    }));
+    const bound = await bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    });
+    const flow = bound.agent.flows?.[0];
+    if (!flow) throw new Error('expected bound inline flow');
+
+    const parts: StreamPart[] = [];
+    const runtimeHandle = createRuntime({
+      agents: [bound.agent],
+      defaultAgentId: bound.agent.id,
+      defaultModel: bound.agent.model,
+      sessionStore: new MemoryStore(),
+      hostSelect: async () => ({ kind: 'enterFlow' as const, flow }),
+    });
+    const handle = runtimeHandle.run({
+      sessionId: 'inline-flow-turn',
+      input: 'refund please',
+      driver: {
+        async runAgentTurn() {
+          return { text: '', toolResults: [] };
+        },
+        async awaitUser() {
+          return { type: 'message', input: '' };
+        },
+      },
+    });
+    for await (const part of handle.events) parts.push(part);
+    await handle;
+
+    expect(parts.some(part => part.type === 'flow-enter' && part.payload.flow === 'refund')).toBe(true);
+    expect(parts.some(part => part.type === 'text-delta' && part.payload.delta === 'Refund started')).toBe(true);
+    expect(parts.some(part => part.type === 'flow-end' && part.payload.flow === 'refund')).toBe(true);
   });
 });

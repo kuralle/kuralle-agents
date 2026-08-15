@@ -24,7 +24,6 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 
 describe('G14: clearCollectData clears collected slot', () => {
@@ -267,7 +266,7 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
       id: 'review',
       instructions: 'Confirm the appointment day.',
       onConfirm: done,
-      onDecline: () => dateCollect,
+      onDecline: { goto: 'date' },
     });
     const readback = reply({
       id: 'readback',
@@ -329,12 +328,12 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
 
     await runtime.run({ sessionId, input: 'Book Thursday', driver });
     const beforeCorrection = await new SessionRunStore(store, sessionId).getRunState(
-      sessionDerivedRunId(sessionId),
+      sessionId,
     );
     expect(beforeCorrection?.activeNode).toBe('review');
     await runtime.run({ sessionId, input: 'No, make it Tuesday instead', driver });
     const beforeAffirm = await new SessionRunStore(store, sessionId).getRunState(
-      sessionDerivedRunId(sessionId),
+      sessionId,
     );
     expect(beforeAffirm?.activeNode).toBe('review');
     spokenNodes.length = 0;
@@ -342,7 +341,7 @@ describe('G14: confirm-decline correction overwrites stale slot end-to-end', () 
     const result = await third;
 
     const state = await new SessionRunStore(store, sessionId).getRunState(
-      sessionDerivedRunId(sessionId),
+      sessionId,
     );
     expect(state?.activeFlow).toBeUndefined();
     expect(spokenNodes).toEqual(['done']);

@@ -4,7 +4,7 @@ import {
   createArtifact,
   validateArtifact,
 } from '../src/index.js';
-import { artifactInput } from './fixtures.js';
+import { artifactInput, inlineRefundFlow } from './fixtures.js';
 
 describe('canonical agent artifacts', () => {
   it('produces the same digest for equivalent object key insertion orders', async () => {
@@ -90,6 +90,63 @@ describe('canonical agent artifacts', () => {
     await expect(validateArtifact(altered)).rejects.toMatchObject({
       code: 'ARTIFACT_DIGEST_MISMATCH',
       path: 'artifact.digest',
+    });
+  });
+
+  it('accepts an inline flow entry and changes the digest when the definition changes', async () => {
+    const first = await createArtifact(artifactInput({ flows: [inlineRefundFlow()] }));
+    const second = await createArtifact(artifactInput({
+      flows: [inlineRefundFlow({ description: 'Start a refund, revised.' })],
+    }));
+
+    expect(first.flows).toEqual([inlineRefundFlow()]);
+    expect(first.digest).not.toBe(second.digest);
+  });
+
+  it('rejects an inline flow whose definition fails validation, naming the dotted issue path', async () => {
+    await expect(createArtifact(artifactInput({
+      flows: [{
+        kind: 'inline',
+        id: 'refund',
+        definition: {
+          name: 'refund',
+          description: 'bad',
+          start: 'missing',
+          nodes: [{ kind: 'reply', id: 'greet', generate: true, next: { end: 'done' } }],
+        },
+      }],
+    }))).rejects.toMatchObject({
+      code: 'ARTIFACT_INVALID',
+      path: 'artifact.flows[0].definition',
+    });
+
+    try {
+      await createArtifact(artifactInput({
+        flows: [{
+          kind: 'inline',
+          id: 'refund',
+          definition: {
+            name: 'refund',
+            description: 'bad',
+            start: 'missing',
+            nodes: [{ kind: 'reply', id: 'greet', generate: true, next: { end: 'done' } }],
+          },
+        }],
+      }));
+      throw new Error('expected createArtifact to reject');
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'ARTIFACT_INVALID' });
+      expect((error as Error).message).toMatch(/\[missing-start\] start/);
+    }
+  });
+
+  it('rejects unknown fields on an inline flow envelope', async () => {
+    await expect(createArtifact({
+      ...artifactInput({ flows: [inlineRefundFlow()] }),
+      flows: [{ ...inlineRefundFlow(), extra: true } as never],
+    })).rejects.toMatchObject({
+      code: 'ARTIFACT_INVALID',
+      path: 'artifact.flows[0].extra',
     });
   });
 });

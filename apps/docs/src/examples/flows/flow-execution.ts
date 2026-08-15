@@ -28,7 +28,7 @@ const book = action({
     const receipt = (await ctx.tool('bookShipment', { address: state.address })) as { id: string };
     // `data` is merged into flow state on the transition, so `done` and the
     // verify check above both see `trackingId`.
-    return { goto: done, data: { trackingId: receipt.id } };
+    return { goto: done.id, data: { trackingId: receipt.id } };
   },
 });
 
@@ -37,7 +37,7 @@ const getAddress = collect({
   schema: z.object({ address: z.string() }),
   required: ['address'],
   maxTurns: 5,
-  instructions: (missing) => `Ask the customer for: ${missing.join(', ')}`,
+  ask: (missing) => `Which ${missing.join(' and ')} should the shipment go to?`,
   onComplete: () => book,
 });
 

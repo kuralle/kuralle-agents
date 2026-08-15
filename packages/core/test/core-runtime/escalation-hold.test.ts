@@ -5,7 +5,6 @@ import { action, defineFlow } from '../../src/types/flow.js';
 import { createRuntime, HELD_FOR_HUMAN_MESSAGE } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { sessionDerivedRunId } from '../../src/runtime/openRun.js';
 import { defineTool } from '../../src/tools/effect/index.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
@@ -57,7 +56,7 @@ describe('REQ-B7: a held run does not re-run the agent until resumed', () => {
     expect(agentCalls).toBe(1);
     expect(t1.parts.some((p) => p.type === 'handoff' && p.payload.targetAgent === 'human')).toBe(true);
     const runStore = new SessionRunStore(sessionStore, 'h');
-    let rs = (await runStore.getRunState(sessionDerivedRunId('h')))!;
+    let rs = (await runStore.getRunState('h'))!;
     expect(rs.status).toBe('paused');
     expect(rs.waitingFor).toBeUndefined(); // the discriminator: terminal-handoff pause has NO waitingFor
 
@@ -71,14 +70,14 @@ describe('REQ-B7: a held run does not re-run the agent until resumed', () => {
     expect(t2.text).toBe(HELD_FOR_HUMAN_MESSAGE);
     expect(t2.parts.some((p) => p.type === 'done')).toBe(true);
     expect(t2.parts.some((p) => p.type === 'handoff')).toBe(false); // not re-escalated
-    rs = (await runStore.getRunState(sessionDerivedRunId('h')))!;
+    rs = (await runStore.getRunState('h'))!;
     expect(rs.status).toBe('paused'); // still held
     // The held turn still recorded the user's inbound message for the human/resume to see.
     expect(rs.messages.some((m) => m.role === 'user' && String(m.content).includes('carbonara'))).toBe(true);
 
     // Resume hands control back to the bot.
     await runtime.resumeFromEscalation('h', { resolutionSummary: 'Handled offline.' });
-    rs = (await runStore.getRunState(sessionDerivedRunId('h')))!;
+    rs = (await runStore.getRunState('h'))!;
     expect(rs.status).toBe('running');
     expect(rs.waitingFor).toBeUndefined();
 
@@ -136,7 +135,7 @@ describe('REQ-B2: a run parked on approval/suspend is NOT held', () => {
     // Turn 1: enter the flow → action → needsApproval tool suspends.
     await collectParts(runtime.run({ sessionId: 'ap', input: 'go', driver }));
     expect(execCount).toBe(0);
-    const paused = (await runStore.getRunState(sessionDerivedRunId('ap')))!;
+    const paused = (await runStore.getRunState('ap'))!;
     expect(paused.status).toBe('paused');
     expect(paused.waitingFor?.signalName).toBe('__approval'); // waitingFor IS set
 
@@ -148,7 +147,7 @@ describe('REQ-B2: a run parked on approval/suspend is NOT held', () => {
     expect(t2.text).not.toBe(HELD_FOR_HUMAN_MESSAGE); // NOT held
     expect(t2.parts.some((p) => p.type === 'text-delta' && p.payload.delta === HELD_FOR_HUMAN_MESSAGE)).toBe(false);
     expect(execCount).toBe(0); // still pending — the tool has not run
-    const stillPending = (await runStore.getRunState(sessionDerivedRunId('ap')))!;
+    const stillPending = (await runStore.getRunState('ap'))!;
     expect(stillPending.status).toBe('paused');
     expect(stillPending.waitingFor?.signalName).toBe('__approval'); // re-parked on the approval
 
