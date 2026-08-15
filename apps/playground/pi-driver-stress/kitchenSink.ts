@@ -62,7 +62,7 @@ export function buildKitchenSinkAgent(model: LanguageModel): AgentConfig {
   // SkillsCapability tool surface.
   const workspaceFs = new InMemoryFs(OPERATIONS_WORKSPACE_FILES);
   const skillFs = new InMemoryFs(OPERATIONS_SKILL_FILES);
-  const baseSkillStore = fsSkillStore(skillFs);
+  const baseSkillStore = fsSkillStore(skillFs, ['/skills']);
   let checklistReads = 0;
   const guardedSkillStore = {
     list: () => baseSkillStore.list(),
@@ -215,7 +215,7 @@ Read \`/index.md\` with the workspace tool, then follow the matching concept lin
 export function buildOkfAgent(model: LanguageModel): AgentConfig {
   const fs = okfBundleToFs(OKF_FILES);
   const skillFs = new InMemoryFs(OKF_SKILL_FILES);
-  const baseSkillStore = fsSkillStore(skillFs);
+  const baseSkillStore = fsSkillStore(skillFs, ['/skills']);
   let skillBodyLoads = 0;
   const guardedSkillStore = {
     list: () => baseSkillStore.list(),

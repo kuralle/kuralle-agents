@@ -31,9 +31,20 @@ export function fsSkillStore(
   const roots = [...orderedRoots];
   let snapshot = new Map<string, SkillLocation>();
   let refresh: Promise<Map<string, SkillLocation>> | undefined;
+  let warnedNoRoot = false;
+
+  // Discovery re-runs per list(), so warn once per store rather than once per call.
+  const warnNoReadableRoot = (configured: readonly string[]): void => {
+    if (warnedNoRoot) return;
+    warnedNoRoot = true;
+    console.warn(
+      `[skills] No configured skill root exists: ${configured.join(', ')}. ` +
+        `This store can never return a skill — pass the roots your filesystem actually mounts.`,
+    );
+  };
 
   const discover = (): Promise<Map<string, SkillLocation>> => {
-    refresh ??= discoverSkills(fs, roots, opts?.onDiagnostic).then((next) => {
+    refresh ??= discoverSkills(fs, roots, opts?.onDiagnostic, warnNoReadableRoot).then((next) => {
       snapshot = next;
       return next;
     }).finally(() => {
@@ -103,14 +114,20 @@ async function discoverSkills(
   fs: FileSystem,
   roots: readonly string[],
   onDiagnostic?: (diagnostic: SkillDiagnostic) => void,
+  onNoReadableRoot?: (roots: readonly string[]) => void,
 ): Promise<Map<string, SkillLocation>> {
   const skills = new Map<string, SkillLocation>();
+  let readableRoots = 0;
 
   for (const root of roots) {
     let entries: string[];
     try {
       entries = await fs.readdir(root);
+      readableRoots += 1;
     } catch {
+      // One unreadable root is normal when roots are layered — a project overlay may not
+      // exist. Every root unreadable is not: the store can never return a skill, which is
+      // what a moved default root looks like from the caller's side.
       continue;
     }
 
@@ -152,6 +169,10 @@ async function discoverSkills(
         }
       }
     }
+  }
+
+  if (readableRoots === 0 && roots.length > 0) {
+    onNoReadableRoot?.(roots);
   }
 
   return skills;

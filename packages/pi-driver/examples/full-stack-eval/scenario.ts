@@ -183,7 +183,7 @@ export async function buildScenarioAgent(model: LanguageModel): Promise<{
       'After all tools finish, answer in one sentence containing the region, severity, acknowledgement-time target, and playbook codename.',
     ].join(' '),
     workspace: { fs: workspace, readOnly: true },
-    skills: fsSkillStore(workspace),
+    skills: fsSkillStore(workspace, ['/skills']),
     tools: {
       workspace: createFsTool({ fs: workspace, readOnly: true }),
       semantic_search: wrapAiSdkTool('semantic_search', createVectorRetrievalTool({

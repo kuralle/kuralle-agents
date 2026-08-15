@@ -80,6 +80,23 @@ function benchmarkRun(
 }
 
 describe('full-stack evaluation scenario', () => {
+  // The scenario's own tool observations are stubbed, so nothing here would notice the
+  // agent's skill store discovering nothing and load_skill failing at run time. Assert
+  // discovery against the real store: the fixture mounts /skills, so a store left on the
+  // default root finds an empty set.
+  it('discovers the incident-response skill the scenario mounts', async () => {
+    const { agent } = await buildScenarioAgent(TEST_MODEL);
+    const store = agent.skills;
+    if (!store || Array.isArray(store) || typeof store === 'string' || !('list' in store)) {
+      throw new Error('expected a filesystem skill store');
+    }
+
+    expect((await store.list()).map((skill) => skill.name)).toEqual(['incident-response']);
+    expect(await store.loadResource('incident-response', 'references/escalation.md')).toContain(
+      EXPECTED.acknowledgement,
+    );
+  });
+
   it('uses deterministic normalized embeddings', async () => {
     const embedder = new HashingEmbedder();
     const first = await embedder.embed('checkout deployment recovery');

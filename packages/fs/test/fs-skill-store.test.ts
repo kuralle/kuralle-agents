@@ -57,6 +57,34 @@ Do alpha things.
   });
 
   describe('fsSkillStore', () => {
+    it('warns once when no configured root exists, and stays quiet when one does', async () => {
+      const warnings: string[] = [];
+      const original = console.warn;
+      console.warn = (...args: unknown[]) => {
+        warnings.push(args.map(String).join(' '));
+      };
+
+      try {
+        // Skills mounted somewhere the store is not looking. Silently returning [] here is
+        // what let a moved default root break callers unnoticed.
+        const misconfigured = new InMemoryFs({ '/skills/alpha/SKILL.md': validSkill });
+        const missRoot = fsSkillStore(misconfigured);
+        expect(await missRoot.list()).toEqual([]);
+        await missRoot.list();
+        expect(warnings.filter((line) => line.includes('No configured skill root exists'))).toHaveLength(1);
+
+        warnings.length = 0;
+
+        // Layered roots where only the overlay is absent must NOT warn — that is normal.
+        const layered = new InMemoryFs({ '/skills/base/alpha/SKILL.md': validSkill });
+        const partial = fsSkillStore(layered, ['/skills/base', '/skills/project']);
+        expect((await partial.list()).map((skill) => skill.name)).toEqual(['alpha']);
+        expect(warnings.filter((line) => line.includes('No configured skill root exists'))).toHaveLength(0);
+      } finally {
+        console.warn = original;
+      }
+    });
+
     it('lists skills, loads body and resources, and blocks path traversal', async () => {
       const fs = new InMemoryFs({
         '/.agents/skills/alpha/SKILL.md': validSkill,
