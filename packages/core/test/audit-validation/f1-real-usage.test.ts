@@ -17,15 +17,11 @@ import {
 } from '../../src/runtime/turnTokenUsage.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
+import { mockV3GenerateResult } from '../helpers/mockLanguageModelV3Results.js';
 
 function summaryGenerateModel(text: string) {
   return new MockLanguageModelV3({
-    doGenerate: async () => ({
-      content: [{ type: 'text', text }],
-      finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      warnings: [],
-    }),
+    doGenerate: async () => mockV3GenerateResult(text),
   });
 }
 

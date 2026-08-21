@@ -1,3 +1,4 @@
+import type { AiSdkTool } from '@kuralle-agents/core';
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { Retriever, VectorFilter, Reranker } from '@kuralle-agents/rag';
@@ -89,7 +90,9 @@ export type VectorRetrievalToolInput = {
  * decide when to search for relevant knowledge. Uses the Vercel AI SDK
  * `tool()` directly.
  */
-export function createVectorRetrievalTool(options: VectorRetrievalToolOptions) {
+export function createVectorRetrievalTool(
+  options: VectorRetrievalToolOptions,
+): AiSdkTool<VectorRetrievalToolInput, VectorRetrievalToolOutput> {
   const {
     retriever,
     topK: defaultTopK = 10,

@@ -1,6 +1,6 @@
 import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { describe, expect, it } from 'bun:test';
-import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
@@ -10,29 +10,15 @@ import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { EscalationRequest } from '../../src/escalation/types.js';
 import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
+import {
+  mockV3GenerateResult,
+  mockV3StreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 function summaryModel(summary = 'User Jane needs a refund for order #42.') {
   return new MockLanguageModelV3({
-    doGenerate: async () => ({
-      content: [{ type: 'text', text: summary }],
-      finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      warnings: [],
-    }),
-    doStream: async () => ({
-      stream: simulateReadableStream({
-        chunks: [
-          { type: 'text-start', id: 't0' },
-          { type: 'text-delta', id: 't0', delta: '' },
-          { type: 'text-end', id: 't0' },
-          {
-            type: 'finish',
-            finishReason: 'stop',
-            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-          },
-        ],
-      }),
-    }),
+    doGenerate: async () => mockV3GenerateResult(summary),
+    doStream: async () => mockV3StreamResult(''),
   });
 }
 

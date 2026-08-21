@@ -401,7 +401,8 @@ export class PiModelTurnLoop implements ModelTurnLoop {
       return {
         name,
         label: name,
-        description: definition.description ?? name,
+        description:
+          typeof definition.description === 'string' ? definition.description : name,
         parameters: parameters as AgentTool<TSchema>['parameters'],
         executionMode: 'parallel' as const,
         async execute(toolCallId: string) {

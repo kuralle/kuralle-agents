@@ -48,7 +48,7 @@ import type {
 } from '@kuralle-agents/core';
 import type { StreamPart } from '@kuralle-agents/core';
 import { harnessToUIMessageStream } from '@kuralle-agents/core';
-import type { StreamTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
+import type { GenerateTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
 import { BridgeSessionStore } from './BridgeSessionStore.js';
 import { OrchestrationStore } from './OrchestrationStore.js';
@@ -320,7 +320,7 @@ export abstract class KuralleAgent<
    *   5. Handles stream resumability
    */
   async onChatMessage(
-    onFinish: StreamTextOnFinishCallback<ToolSet>,
+    onFinish: GenerateTextOnFinishCallback<ToolSet>,
     options?: OnChatMessageOptions,
   ): Promise<Response> {
     // Extract the latest user input from CF's messages

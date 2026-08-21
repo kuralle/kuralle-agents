@@ -1,5 +1,5 @@
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
-import type { StreamTextOnFinishCallback, ToolSet } from 'ai';
+import type { GenerateTextOnFinishCallback, ToolSet } from 'ai';
 import { KuralleAgent, SqlTraceStore, type HarnessConfig } from '@kuralle-agents/cf-agent';
 import type { SignalActor } from '@kuralle-agents/core';
 import { supportBackendFromEnv, type SupportBackend } from '../src/backend';
@@ -50,7 +50,7 @@ export class SupportAgent extends KuralleAgent<SupportEnv> {
   }
 
   async onChatMessage(
-    onFinish: StreamTextOnFinishCallback<ToolSet>,
+    onFinish: GenerateTextOnFinishCallback<ToolSet>,
     options?: OnChatMessageOptions,
   ): Promise<Response> {
     const userId = this.readIdentity();

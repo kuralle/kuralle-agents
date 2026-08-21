@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
@@ -8,6 +8,11 @@ import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { createPiiInputGuard } from '../../src/processors/builtin/piiGuard.js';
 import { createPromptInjectionGuard } from '../../src/processors/builtin/promptInjectionGuard.js';
 import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
+import {
+  mockV3CompactionPromptTokens,
+  mockV3GenerateResult,
+  mockV3StreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 const PNG_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -23,26 +28,8 @@ const PNG_DATA_URL =
  */
 function replyModel(text = 'noted!') {
   return new MockLanguageModelV3({
-    doStream: async () => ({
-      stream: simulateReadableStream({
-        chunks: [
-          { type: 'text-start', id: 't0' },
-          { type: 'text-delta', id: 't0', delta: text },
-          { type: 'text-end', id: 't0' },
-          {
-            type: 'finish',
-            finishReason: 'stop',
-            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-          },
-        ],
-      }),
-    }),
-    doGenerate: async () => ({
-      content: [{ type: 'text', text: 'summary' }],
-      finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      warnings: [],
-    }),
+    doStream: async () => mockV3StreamResult(text, mockV3CompactionPromptTokens),
+    doGenerate: async () => mockV3GenerateResult('summary', mockV3CompactionPromptTokens),
   });
 }
 

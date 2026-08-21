@@ -75,17 +75,17 @@ export class LLMReranker implements Reranker {
       `Query: ${query}\n\n` +
       `Candidates:\n${candidateBlock}`;
 
-    const { experimental_output } = await generateText({
+    const { output } = await generateText({
       model: this.model,
       system: systemPrompt,
       prompt: userPrompt,
-      experimental_output: Output.object({ schema: scoringSchema }),
+      output: Output.object({ schema: scoringSchema }),
     });
 
-    if (!experimental_output) return results.slice(0, topK);
+    if (!output) return results.slice(0, topK);
 
     const scoreMap = new Map<string, { score: number; reason?: string }>();
-    for (const scored of experimental_output.scored) {
+    for (const scored of output.scored) {
       scoreMap.set(scored.id, {
         score: scored.score,
         reason: scored.reason,

@@ -239,10 +239,12 @@ describe('Runtime extraction wiring', () => {
 
   it('does not surface an unhandled rejection when a non-blocking extraction rejects', async () => {
     const unhandled: unknown[] = [];
+    let watchUnhandled = true;
     const onUnhandled = (reason: unknown) => {
+      if (!watchUnhandled) return;
       unhandled.push(reason);
     };
-    process.on('unhandledRejection', onUnhandled);
+    process.addListener('unhandledRejection', onUnhandled);
 
     try {
       mock.module('ai', () => {
@@ -276,7 +278,7 @@ describe('Runtime extraction wiring', () => {
       await runTurn(runtime, 'reject-sess', 'hello');
       expect(unhandled).toEqual([]);
     } finally {
-      process.off('unhandledRejection', onUnhandled);
+      watchUnhandled = false;
     }
   });
 

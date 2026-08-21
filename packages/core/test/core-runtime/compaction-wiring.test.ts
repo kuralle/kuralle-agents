@@ -8,15 +8,11 @@ import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { StreamPart } from '../../src/types/stream.js';
+import { mockV3GenerateResult } from '../helpers/mockLanguageModelV3Results.js';
 
 function summarizerModel(text = 'Earlier: user Jane discussed an order.') {
   return new MockLanguageModelV3({
-    doGenerate: async () => ({
-      content: [{ type: 'text', text }],
-      finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-      warnings: [],
-    }),
+    doGenerate: async () => mockV3GenerateResult(text),
   });
 }
 

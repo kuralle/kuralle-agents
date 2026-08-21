@@ -169,10 +169,12 @@ describe('parallelSafe as a predicate over raw args', () => {
 describe('parallelSafe predicate: async is a type-system bypass, handled not crashed', () => {
   it('classifies an async predicate serial without leaking an unhandled rejection', async () => {
     const leaked: unknown[] = [];
+    let watchUnhandled = true;
     const onUnhandled = (reason: unknown): void => {
+      if (!watchUnhandled) return;
       leaked.push(reason);
     };
-    process.on('unhandledRejection', onUnhandled);
+    process.addListener('unhandledRejection', onUnhandled);
     try {
       const harness = await setupDurableHarness('async-pred-sess', 'async-pred-run');
       const tools = {
@@ -201,7 +203,7 @@ describe('parallelSafe predicate: async is a type-system bypass, handled not cra
       await new Promise((r) => setTimeout(r, 20));
       expect(leaked).toEqual([]);
     } finally {
-      process.off('unhandledRejection', onUnhandled);
+      watchUnhandled = false;
     }
   });
 });
