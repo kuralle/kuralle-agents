@@ -32,14 +32,14 @@
     "ai": "^6.0.90"
   },
   "peerDependencies": {
-    "agents": ">=0.20.1 <1.0.0",
+    "agents": ">=0.21.0 <1.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@babel/plugin-proposal-decorators": "^8.0.2",
     "@cloudflare/vitest-pool-workers": "^0.19.0",
     "@cloudflare/workers-types": "^5.20260729.1",
-    "agents": "^0.20.1",
+    "agents": "^0.21.0",
     "typescript": "^5.7.0",
     "vitest": "^4.1.10"
   },
