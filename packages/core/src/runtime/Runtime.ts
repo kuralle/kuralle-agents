@@ -102,6 +102,7 @@ import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
 import { addSystemNote, readSystemNote, removeSystemNote } from './systemNotes.js';
+import { loadSanitizedRunState } from './stripSystemRoleMessages.js';
 import { renderSkillCatalogPrompt, SKILL_CATALOG_NOTE_TAG } from '../skills/skillCatalog.js';
 import { needsApprovalPolicy, composePolicies, type Policy } from './policies/toolPolicy.js';
 import {
@@ -435,7 +436,7 @@ export class Runtime {
       });
       const steps = await loadRecordedSteps(opened.runStore, opened.runState.runId);
       const freshRunState =
-        (await opened.runStore.getRunState(opened.runState.runId)) ?? opened.runState;
+        (await loadSanitizedRunState(opened.runStore, opened.runState.runId)) ?? opened.runState;
       // Persist a freshly-resolved SkillResolver snapshot immediately (not deferred to some
       // later save in the turn) so "once per session" holds even for a turn that never hits
       // another `putRunState` call. A cache-hit (nothing changed) skips the write.
@@ -1416,7 +1417,7 @@ export class Runtime {
       return null;
     }
     const runStore = this.runStoreFor(session.id);
-    const runState = await runStore.getRunState(runId);
+    const runState = await loadSanitizedRunState(runStore, runId);
     if (!runState || runState.sessionId !== session.id) {
       return null;
     }
@@ -1436,7 +1437,7 @@ export class Runtime {
 
   async getConversationLength(sessionId: string): Promise<number> {
     const runStore = this.runStoreFor(sessionId);
-    const runState = await runStore.getRunState(sessionId);
+    const runState = await loadSanitizedRunState(runStore, sessionId);
     return runState?.messages.length ?? 0;
   }
 
@@ -1527,7 +1528,7 @@ export class Runtime {
       throw new Error(`Session not found: ${sessionId}`);
     }
     const runStore = this.runStoreFor(sessionId);
-    const runState = await runStore.getRunState(sessionId);
+    const runState = await loadSanitizedRunState(runStore, sessionId);
     if (!runState) {
       throw new Error(`No run state for session: ${sessionId}`);
     }

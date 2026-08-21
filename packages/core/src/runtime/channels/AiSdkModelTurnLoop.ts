@@ -4,6 +4,7 @@ import { applyPromptCache } from '../promptCache.js';
 import { addTurnUsage, languageModelId } from './turnUsage.js';
 import { dispatchModelToolCalls, toolResultMessage } from './executeModelTool.js';
 import { isControlFlowSignal } from '../controlFlowSignal.js';
+import { assertNoSystemRoleInModelMessages } from '../modelMessagesGuard.js';
 import type { TurnIncompletePayload } from '../../types/stream.js';
 
 /** Built-in AI SDK implementation of the inner model/tool loop. */
@@ -41,6 +42,7 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
       let finishReason: string | undefined;
       let ended = false;
       try {
+        assertNoSystemRoleInModelMessages(cached.messages, 'streamText');
         const result = streamText({
           model,
           ...(cached.system ? { system: cached.system } : {}),
@@ -214,6 +216,7 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
       volatileSystemBlocks: input.volatileSystemBlocks,
     });
 
+    assertNoSystemRoleInModelMessages(cached.messages, 'streamText wrapUp');
     const result = streamText({
       model,
       ...(cached.system ? { system: cached.system } : {}),

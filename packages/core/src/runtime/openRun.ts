@@ -22,6 +22,10 @@ import { RunNotFoundError, type RunStore } from './durable/RunStore.js';
 import type { ResolvedSelection } from '../types/selection.js';
 import { resetTurnCount } from './policies/limits.js';
 import { addSystemNote } from './systemNotes.js';
+import {
+  loadSanitizedRunState,
+  rejectSystemRoleInCallerMessages,
+} from './stripSystemRoleMessages.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { stripInternalKeys } from './internalRunState.js';
 import {
@@ -165,8 +169,15 @@ export async function openRun(
   let runId: string;
   let runState: RunState | null;
 
+  if (options.seedMessages?.length) {
+    rejectSystemRoleInCallerMessages(options.seedMessages, 'seedMessages');
+  }
+  if (options.historyDelta?.length) {
+    rejectSystemRoleInCallerMessages(options.historyDelta, 'historyDelta');
+  }
+
   if (addressedRunId !== undefined) {
-    runState = await runStore.getRunState(addressedRunId);
+    runState = await loadSanitizedRunState(runStore, addressedRunId);
     if (!runState || runState.sessionId !== session.id) {
       throw new RunNotFoundError(addressedRunId);
     }
@@ -177,7 +188,7 @@ export async function openRun(
     runState = null;
   } else {
     runId = session.id;
-    runState = await runStore.getRunState(runId);
+    runState = await loadSanitizedRunState(runStore, runId);
   }
 
   if (!runState) {

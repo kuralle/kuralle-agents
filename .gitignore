@@ -81,7 +81,10 @@ kh-*-implementation-notes.md
 .plandesk/*secret*
 .plandesk/*.key
 # Factory transient machine state (see .agents/factory/factory.md)
-runs/*
-# factory.md: the metrics ledger is tracked evidence — routing and lane decisions cite it
-!runs/metrics.jsonl
+**/runs/
+# The repo-root runs/ is re-included only so the metrics ledger can be tracked;
+# factory.md requires it as evidence that routing and lane decisions cite.
+!/runs/
+/runs/*
+!/runs/metrics.jsonl
 .vercel
