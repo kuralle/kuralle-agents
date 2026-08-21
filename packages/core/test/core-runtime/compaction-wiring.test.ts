@@ -1,25 +1,22 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import type { ModelMessage } from 'ai';
+import { MockLanguageModelV3 } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
-import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { StreamPart } from '../../src/types/stream.js';
 
-afterEach(() => {
-  mock.restore();
-});
-
-function mockSummarizer() {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      generateText: async () => ({ text: 'Earlier: user Jane discussed an order.' }),
-    };
+function summarizerModel(text = 'Earlier: user Jane discussed an order.') {
+  return new MockLanguageModelV3({
+    doGenerate: async () => ({
+      content: [{ type: 'text', text }],
+      finishReason: 'stop',
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      warnings: [],
+    }),
   });
 }
 
@@ -43,7 +40,6 @@ async function collectParts(handle: import('../../src/types/stream.js').TurnHand
 
 describe('Runtime compaction wiring', () => {
   it('runs post-turn maintenance compaction when history exceeds the trigger', async () => {
-    mockSummarizer();
     const sessionStore = new MemoryStore();
     const driver: ChannelDriver = {
       async runAgentTurn() {
@@ -55,7 +51,7 @@ describe('Runtime compaction wiring', () => {
     };
 
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', model: summarizerModel() })],
       defaultAgentId: 'a',
       sessionStore,
       compaction: { triggerTokens: 500, keepRecentMessages: 4 },
@@ -82,7 +78,6 @@ describe('Runtime compaction wiring', () => {
   });
 
   it('recovers from a provider context-overflow with one forced compaction + retry', async () => {
-    mockSummarizer();
     const sessionStore = new MemoryStore();
     let calls = 0;
     const driver: ChannelDriver = {
@@ -99,7 +94,7 @@ describe('Runtime compaction wiring', () => {
     };
 
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', model: summarizerModel() })],
       defaultAgentId: 'a',
       sessionStore,
       compaction: { triggerTokens: 1_000_000, keepRecentMessages: 4 },
@@ -125,7 +120,6 @@ describe('Runtime compaction wiring', () => {
   });
 
   it('does not retry overflow twice (second overflow propagates as error)', async () => {
-    mockSummarizer();
     const sessionStore = new MemoryStore();
     let calls = 0;
     const driver: ChannelDriver = {
@@ -139,7 +133,7 @@ describe('Runtime compaction wiring', () => {
     };
 
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', model: summarizerModel() })],
       defaultAgentId: 'a',
       sessionStore,
       compaction: { triggerTokens: 1_000_000, keepRecentMessages: 4 },

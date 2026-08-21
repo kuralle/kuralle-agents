@@ -1,37 +1,48 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
-import { stubModel } from '../core-durable/helpers.js';
 import { createPiiInputGuard } from '../../src/processors/builtin/piiGuard.js';
 import { createPromptInjectionGuard } from '../../src/processors/builtin/promptInjectionGuard.js';
 import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
 
-afterEach(() => {
-  mock.restore();
-});
-
 const PNG_DATA_URL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-/** Guards run inside the real TextDriver — mock the model, not the driver. */
-function mockModelReply(text = 'noted!') {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      streamText: () => ({
-        fullStream: (async function* () {
-          yield Object.assign({ type: 'text-delta' }, { text });
-        })(),
-        finishReason: Promise.resolve('stop'),
-        response: Promise.resolve({ messages: [] }),
-        toolCalls: Promise.resolve([]),
+/**
+ * Guards run inside the real TextDriver — mock the model, not the driver.
+ *
+ * This used to `mock.module('ai', …)`, which is process-global in Bun and cannot be undone:
+ * it silently replaced `generateText` for every test file that ran in the same process, and
+ * ai@7's ESM-only resolution turned that latent leak into a real cross-file failure. Stubbing
+ * the model itself keeps the substitution scoped to the runtime under test, which is what the
+ * comment above always claimed was happening.
+ */
+function replyModel(text = 'noted!') {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: 'text-start', id: 't0' },
+          { type: 'text-delta', id: 't0', delta: text },
+          { type: 'text-end', id: 't0' },
+          {
+            type: 'finish',
+            finishReason: 'stop',
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          },
+        ],
       }),
-      generateText: async () => ({ text: 'summary' }),
-    };
+    }),
+    doGenerate: async () => ({
+      content: [{ type: 'text', text: 'summary' }],
+      finishReason: 'stop',
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      warnings: [],
+    }),
   });
 }
 
@@ -44,14 +55,13 @@ async function collect(handle: TurnHandle) {
 
 describe('input guards on multimodal turns (loop fixes)', () => {
   it('redacts PII in a multimodal caption and persists it — media parts preserved', async () => {
-    mockModelReply();
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
       agents: [
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model: replyModel(),
           guardrails: { input: [createPiiInputGuard()] },
         }),
       ],
@@ -86,13 +96,12 @@ describe('input guards on multimodal turns (loop fixes)', () => {
   });
 
   it('blocks a prompt injection delivered as an image caption', async () => {
-    mockModelReply();
     const runtime = createRuntime({
       agents: [
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model: replyModel(),
           guardrails: { input: [createPromptInjectionGuard()] },
         }),
       ],
@@ -118,14 +127,13 @@ describe('input guards on multimodal turns (loop fixes)', () => {
   });
 
   it('text turns: redaction persists in the durable record AND the session mirror', async () => {
-    mockModelReply();
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
       agents: [
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model: replyModel(),
           guardrails: { input: [createPiiInputGuard()] },
         }),
       ],
@@ -155,10 +163,9 @@ describe('input guards on multimodal turns (loop fixes)', () => {
 
 describe('compaction with multimodal history (loop fixes)', () => {
   it('compacts a history containing file parts without splitting or crashing', async () => {
-    mockModelReply();
     const sessionStore = new MemoryStore();
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', model: replyModel() })],
       defaultAgentId: 'a',
       sessionStore,
       compaction: { triggerTokens: 200, keepRecentMessages: 2 },

@@ -1,5 +1,6 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import type { ModelMessage } from 'ai';
+import { MockLanguageModelV3 } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
@@ -17,9 +18,16 @@ import {
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 
-afterEach(() => {
-  mock.restore();
-});
+function summaryGenerateModel(text: string) {
+  return new MockLanguageModelV3({
+    doGenerate: async () => ({
+      content: [{ type: 'text', text }],
+      finishReason: 'stop',
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      warnings: [],
+    }),
+  });
+}
 
 describe('F1: real token usage budgeting', () => {
   it('TokenAccumulator record() aggregates cumulative totals across turns', () => {
@@ -114,14 +122,6 @@ describe('F1: real token usage budgeting', () => {
       expect(under.beforeTokens).not.toBe(estimated);
     }
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateText: async () => ({ text: 'summary of earlier turns' }),
-      };
-    });
-
     const longHistory: ModelMessage[] = [];
     for (let i = 0; i < 10; i += 1) {
       longHistory.push(
@@ -132,7 +132,7 @@ describe('F1: real token usage budgeting', () => {
 
     const over = await compactMessages({
       messages: longHistory,
-      model: stubModel,
+      model: summaryGenerateModel('summary of earlier turns'),
       config: { triggerTokens: 100, keepRecentMessages: 4 },
       lastPromptTokens: 9_000,
     });

@@ -1,5 +1,6 @@
 import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
@@ -10,17 +11,28 @@ import type { ChannelDriver } from '../../src/types/channel.js';
 import type { EscalationRequest } from '../../src/escalation/types.js';
 import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
 
-afterEach(() => {
-  mock.restore();
-});
-
-function mockSummaryModel(summary = 'User Jane needs a refund for order #42.') {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      generateText: async () => ({ text: summary }),
-    };
+function summaryModel(summary = 'User Jane needs a refund for order #42.') {
+  return new MockLanguageModelV3({
+    doGenerate: async () => ({
+      content: [{ type: 'text', text: summary }],
+      finishReason: 'stop',
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      warnings: [],
+    }),
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: 'text-start', id: 't0' },
+          { type: 'text-delta', id: 't0', delta: '' },
+          { type: 'text-end', id: 't0' },
+          {
+            type: 'finish',
+            finishReason: 'stop',
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          },
+        ],
+      }),
+    }),
   });
 }
 
@@ -35,7 +47,6 @@ async function collectParts(handle: TurnHandle) {
 
 describe('escalation loop', () => {
   it('terminal handoff to human builds the request, calls the handler, records and emits', async () => {
-    mockSummaryModel();
     const sessionStore = new MemoryStore();
     const requests: EscalationRequest[] = [];
 
@@ -53,7 +64,7 @@ describe('escalation loop', () => {
     };
 
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', model: summaryModel() })],
       defaultAgentId: 'a',
       sessionStore,
       escalation: {
@@ -98,7 +109,6 @@ describe('escalation loop', () => {
   });
 
   it('handler errors become a failed outcome without killing the turn', async () => {
-    mockSummaryModel();
     const sessionStore = new MemoryStore();
     const driver: ChannelDriver = {
       async runAgentTurn() {
@@ -110,7 +120,7 @@ describe('escalation loop', () => {
     };
 
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', model: summaryModel() })],
       defaultAgentId: 'a',
       sessionStore,
       escalation: {
@@ -155,7 +165,6 @@ describe('escalation loop', () => {
   });
 
   it('flow escalate() pause fires the handler once (latched against post-resume double-fire)', async () => {
-    mockSummaryModel();
     const sessionStore = new MemoryStore();
     const handled: string[] = [];
 
@@ -181,7 +190,7 @@ describe('escalation loop', () => {
     };
 
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', flows: [flow], model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', flows: [flow], model: summaryModel() })],
       defaultAgentId: 'a',
       sessionStore,
       escalation: {
@@ -205,7 +214,6 @@ describe('escalation loop', () => {
   });
 
   it('resumeFromEscalation appends the resolution note and clears parked state', async () => {
-    mockSummaryModel();
     const sessionStore = new MemoryStore();
     const node = reply({
       id: 'r',
@@ -228,7 +236,7 @@ describe('escalation loop', () => {
     };
 
     const runtime = createRuntime({
-      agents: [defineAgent({ id: 'a', instructions: 'help', flows: [flow], model: stubModel })],
+      agents: [defineAgent({ id: 'a', instructions: 'help', flows: [flow], model: summaryModel() })],
       defaultAgentId: 'a',
       sessionStore,
       escalation: { handler: async () => ({ status: 'queued', queueId: 'q' }) },
