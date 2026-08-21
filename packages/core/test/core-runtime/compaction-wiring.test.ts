@@ -4,6 +4,7 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
+import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { StreamPart } from '../../src/types/stream.js';
@@ -73,11 +74,11 @@ describe('Runtime compaction wiring', () => {
 
     const runStore = new SessionRunStore(sessionStore, 'compact-sess');
     const runState = await runStore.getRunState('compact-sess');
-    expect(runState?.messages[0]?.role).toBe('system');
-    expect(String(runState?.messages[0]?.content)).toContain('Conversation summary');
-    // session mirror stays in sync
+    expect(runState?.messages.some((message) => message.role === 'system')).toBe(false);
+    expect(systemNoteBlocks(runState!).join('\n')).toContain('Conversation summary');
+    // session mirror stays in sync (no system role in the message array)
     const session = await sessionStore.get('compact-sess');
-    expect(session?.messages[0]?.role).toBe('system');
+    expect(session?.messages.some((message) => message.role === 'system')).toBe(false);
   });
 
   it('recovers from a provider context-overflow with one forced compaction + retry', async () => {

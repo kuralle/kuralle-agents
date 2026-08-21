@@ -4,6 +4,7 @@ import { MockLanguageModelV3 } from 'ai/test';
 import { applyContextStrategy } from '../../src/flow/contextStrategy.js';
 import { reduceTransition } from '../../src/flow/reduceTransition.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
+import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
 
 function summaryModel(text: string): MockLanguageModelV3 {
@@ -19,7 +20,7 @@ function summaryModel(text: string): MockLanguageModelV3 {
 }
 
 describe('context strategy', () => {
-  it('reset keeps system messages and the last user message only', async () => {
+  it('reset keeps the last user message only', async () => {
     const { runState } = await setupDurableHarness('ctx-reset-sess', 'ctx-reset-run');
     runState.messages = [
       { role: 'system', content: 'You are helpful.' },
@@ -42,12 +43,11 @@ describe('context strategy', () => {
     });
 
     expect(runState.messages).toEqual([
-      { role: 'system', content: 'You are helpful.' },
       { role: 'user', content: 'second question' },
     ]);
   });
 
-  it('reset_with_summary replaces history with a summary system message', async () => {
+  it('reset_with_summary stores the summary as a run-lifetime system note', async () => {
     const { runState } = await setupDurableHarness('ctx-sum-sess', 'ctx-sum-run');
     runState.messages = [
       { role: 'user', content: 'We discussed billing for ten minutes.' },
@@ -70,12 +70,10 @@ describe('context strategy', () => {
       model: summaryModel('User asked about billing.'),
     });
 
-    expect(runState.messages).toEqual([
-      {
-        role: 'system',
-        content: 'Previous conversation summary: User asked about billing.',
-      },
-    ]);
+    expect(runState.messages).toEqual([]);
+    expect(systemNoteBlocks(runState).join('\n')).toContain(
+      'Previous conversation summary: User asked about billing.',
+    );
   });
 
   it('reduceTransition applies per-node context strategy on enter', async () => {
@@ -109,7 +107,6 @@ describe('context strategy', () => {
     });
 
     expect(runState.messages).toEqual([
-      { role: 'system', content: 'System' },
       { role: 'user', content: 'latest' },
     ]);
     expect(runState.activeNode).toBe('next');

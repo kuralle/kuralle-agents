@@ -39,6 +39,8 @@ export interface OpenRunOptions {
   agentId?: string;
   seedMessages?: ModelMessage[];
   historyDelta?: ModelMessage[];
+  /** See `RunOptions.callerInstructions`. */
+  callerInstructions?: string;
   signalDelivery?: SignalDelivery;
   /** Stable key for this inbound user message; duplicate webhook retries are ignored (H2). */
   idempotencyKey?: string;
@@ -248,6 +250,15 @@ export async function openRun(
         latest.messages = [...latest.messages, ...options.historyDelta!];
       });
     }
+  }
+
+  if (options.callerInstructions?.trim()) {
+    addSystemNote(runState, options.callerInstructions, {
+      lifetime: 'run',
+      tag: 'caller-instructions',
+    });
+    runState.updatedAt = Date.now();
+    await runStore.putRunState(runState);
   }
 
   if (options.selection?.formData) {

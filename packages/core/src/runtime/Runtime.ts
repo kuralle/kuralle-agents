@@ -101,7 +101,7 @@ import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
-import { addSystemNote, removeSystemNote } from './systemNotes.js';
+import { addSystemNote, readSystemNote, removeSystemNote } from './systemNotes.js';
 import { renderSkillCatalogPrompt, SKILL_CATALOG_NOTE_TAG } from '../skills/skillCatalog.js';
 import { needsApprovalPolicy, composePolicies, type Policy } from './policies/toolPolicy.js';
 import {
@@ -233,6 +233,11 @@ export interface RunOptions {
   agentId?: string;
   seedMessages?: ModelMessage[];
   historyDelta?: ModelMessage[];
+  /**
+   * Caller-supplied instructions merged into the system prompt via a run-lifetime
+   * system note — never pushed into the model message array.
+   */
+  callerInstructions?: string;
   driver?: ChannelDriver;
   /**
    * Address an existing run in this session. Unknown and cross-session values
@@ -974,6 +979,7 @@ export class Runtime {
           agentId: opts.agentId,
           seedMessages: opts.seedMessages,
           historyDelta: opts.historyDelta,
+          callerInstructions: opts.callerInstructions,
           signalDelivery: opts.signalDelivery,
           idempotencyKey: opts.idempotencyKey,
           transcriptionModel: this.config.transcriptionModel,
@@ -1315,6 +1321,7 @@ export class Runtime {
       config,
       force,
       lastPromptTokens: readLastPromptTokens(runCtx.runState.state),
+      priorSummary: readSystemNote(runCtx.runState, 'compaction-summary'),
     });
 
     if (!result.compacted) {
@@ -1329,6 +1336,10 @@ export class Runtime {
     }
 
     runCtx.runState.messages = result.messages;
+    addSystemNote(runCtx.runState, result.summary, {
+      lifetime: 'run',
+      tag: 'compaction-summary',
+    });
 
     // Compaction is already rewriting the cached prefix (a new summary message replaces the
     // older ones), so it is the one point in the run where paying to rebase `skillPrompt` to

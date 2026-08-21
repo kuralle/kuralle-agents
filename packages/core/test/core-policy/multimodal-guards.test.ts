@@ -3,6 +3,7 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
+import { systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { stubModel } from '../core-durable/helpers.js';
 import { createPiiInputGuard } from '../../src/processors/builtin/piiGuard.js';
 import { createPromptInjectionGuard } from '../../src/processors/builtin/promptInjectionGuard.js';
@@ -177,9 +178,9 @@ describe('compaction with multimodal history (loop fixes)', () => {
 
     const runStore = new SessionRunStore(sessionStore, 'mm-compact');
     const runState = await runStore.getRunState('mm-compact');
-    expect(runState?.messages[0]?.role).toBe('system');
-    expect(String(runState?.messages[0]?.content)).toContain('Conversation summary');
+    expect(runState?.messages.some((message) => message.role === 'system')).toBe(false);
+    expect(systemNoteBlocks(runState!).join('\n')).toContain('Conversation summary');
     // kept tail still starts at a user message
-    expect(runState?.messages[1]?.role).toBe('user');
+    expect(runState?.messages[0]?.role).toBe('user');
   });
 });

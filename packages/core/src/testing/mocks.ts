@@ -13,6 +13,8 @@ export interface MockRuntimeRunCall {
   input?: UserInputContent;
   agentId?: string;
   seedMessages?: unknown[];
+  historyDelta?: unknown[];
+  callerInstructions?: string;
 }
 
 export interface CreateMockRuntimeOptions {
@@ -91,6 +93,8 @@ export function createMockRuntime(
       input: opts.input,
       agentId: opts.agentId,
       seedMessages: opts.seedMessages,
+      historyDelta: opts.historyDelta,
+      callerInstructions: opts.callerInstructions,
     });
 
     async function* events(): AsyncGenerator<StreamPart> {

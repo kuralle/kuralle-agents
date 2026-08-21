@@ -38,7 +38,10 @@ const DEFAULT_SUMMARY_PROMPT = [
 export type CompactionResult =
   | {
       compacted: true;
+      /** Verbatim retained tail — never includes a compaction summary message. */
       messages: ModelMessage[];
+      /** Summary text for the system-note channel (`addSystemNote`, lifetime `run`). */
+      summary: string;
       beforeTokens: number;
       afterTokens: number;
       summarizedCount: number;
@@ -104,6 +107,8 @@ export interface CompactMessagesOptions {
   abortSignal?: AbortSignal;
   /** Real last-turn prompt tokens when available (replaces chars/4 for threshold). */
   lastPromptTokens?: number;
+  /** Prior compaction summary — folded into the summarizer input so facts chain across rounds. */
+  priorSummary?: string;
 }
 
 /**
@@ -112,7 +117,7 @@ export interface CompactMessagesOptions {
  * pairs are never split across the summary boundary.
  */
 export async function compactMessages(options: CompactMessagesOptions): Promise<CompactionResult> {
-  const { messages, model, config, force, abortSignal, lastPromptTokens } = options;
+  const { messages, model, config, force, abortSignal, lastPromptTokens, priorSummary } = options;
   const triggerTokens = config.triggerTokens ?? DEFAULT_COMPACTION_TRIGGER_TOKENS;
   const keepRecent = config.keepRecentMessages ?? DEFAULT_COMPACTION_KEEP_RECENT;
 
@@ -131,14 +136,26 @@ export async function compactMessages(options: CompactMessagesOptions): Promise<
   }
 
   const older = messages.slice(0, cut);
-  const transcript = renderTranscript(older);
+  const newerTranscript = renderTranscript(older);
+  const prompt = priorSummary
+    ? [
+        'The transcript below begins with a summary of even earlier conversation, followed by newer turns.',
+        'Produce one consolidated summary that preserves all facts from the previous summary and the newer turns.',
+        '',
+        'Previous conversation summary:',
+        priorSummary,
+        '',
+        'Newer turns since that summary:',
+        newerTranscript,
+      ].join('\n')
+    : newerTranscript;
 
   let summary: string;
   try {
     const result = await generateText({
       model,
       system: config.summaryPrompt ?? DEFAULT_SUMMARY_PROMPT,
-      prompt: transcript,
+      prompt,
       abortSignal,
     });
     summary = result.text.trim();
@@ -149,17 +166,14 @@ export async function compactMessages(options: CompactMessagesOptions): Promise<
     return { compacted: false, reason: 'summarizer-error', beforeTokens };
   }
 
-  const summaryMessage: ModelMessage = {
-    role: 'system',
-    content: `[Conversation summary — earlier turns were compacted]\n${summary}`,
-  };
-  const compacted = [summaryMessage, ...messages.slice(cut)];
+  const retained = messages.slice(cut);
 
   return {
     compacted: true,
-    messages: compacted,
+    messages: retained,
+    summary: `[Conversation summary — earlier turns were compacted]\n${summary}`,
     beforeTokens,
-    afterTokens: estimateMessagesTokens(compacted),
+    afterTokens: estimateMessagesTokens(retained),
     summarizedCount: older.length,
   };
 }

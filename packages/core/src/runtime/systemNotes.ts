@@ -69,6 +69,15 @@ export function consumeTurnNotes(run: Pick<RunState, 'state'>): void {
   else run.state[NOTES_KEY] = kept;
 }
 
+/** Read the text of the note carrying `tag`, if any. */
+export function readSystemNote(
+  run: Pick<RunState, 'state'>,
+  tag: string,
+): string | undefined {
+  const note = read(run.state).find((n) => n.tag === tag);
+  return note?.text;
+}
+
 /** Clear everything. Used when a fresh logical run should not inherit the previous one's notes. */
 export function clearSystemNotes(run: Pick<RunState, 'state'>): void {
   delete run.state[NOTES_KEY];

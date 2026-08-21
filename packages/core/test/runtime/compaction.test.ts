@@ -4,7 +4,9 @@ import {
   compactMessages,
   estimateMessagesTokens,
 } from '../../src/runtime/compaction.js';
+import { addSystemNote, systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
 
 afterEach(() => {
   mock.restore();
@@ -60,16 +62,14 @@ describe('compactMessages', () => {
     expect(result.beforeTokens).toBe(before);
     expect(result.afterTokens).toBeLessThan(before);
     expect(result.summarizedCount).toBe(34); // 40 - 6 kept
-    expect(result.messages[0]).toEqual({
-      role: 'system',
-      content:
-        '[Conversation summary — earlier turns were compacted]\nUser is Jane; ordered cake #42; prefers delivery to Colombo.',
-    });
+    expect(result.summary).toContain('[Conversation summary — earlier turns were compacted]');
+    expect(result.summary).toContain('User is Jane');
+    expect(result.messages.some((message) => message.role === 'system')).toBe(false);
     // kept tail starts at a user message
-    expect(result.messages[1]?.role).toBe('user');
-    expect(result.messages).toHaveLength(7); // summary + 6 kept
+    expect(result.messages[0]?.role).toBe('user');
+    expect(result.messages).toHaveLength(6); // 6 kept, no summary prefix
     // the tail is the verbatim original tail
-    expect(result.messages.slice(1)).toEqual(messages.slice(34));
+    expect(result.messages).toEqual(messages.slice(34));
   });
 
   it('extends the cut backward so the kept slice starts at a user message', async () => {
@@ -87,7 +87,7 @@ describe('compactMessages', () => {
     });
     expect(result.compacted).toBe(true);
     if (!result.compacted) return;
-    expect(result.messages[1]?.role).toBe('user');
+    expect(result.messages[0]?.role).toBe('user');
   });
 
   it('force compacts regardless of threshold', async () => {
@@ -142,5 +142,73 @@ describe('compactMessages', () => {
     if (!result.compacted) {
       expect(result.reason).toBe('too-few-messages');
     }
+  });
+
+  it('chains summaries across two compaction rounds', async () => {
+    const capturedPrompts: string[] = [];
+    const distinctiveFact = 'BOOKING-REF-XYZ';
+    mock.module('ai', () => {
+      const actual = require('ai');
+      return {
+        ...actual,
+        generateText: async (opts: { prompt?: string }) => {
+          capturedPrompts.push(opts.prompt ?? '');
+          const input = opts.prompt ?? '';
+          if (input.includes(distinctiveFact)) {
+            return {
+              text: `User Jane; booking ${distinctiveFact}; allergic to peanuts.`,
+            };
+          }
+          return { text: 'User discussed recent order updates.' };
+        },
+      };
+    });
+
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: `My booking reference is ${distinctiveFact} and I am allergic to peanuts.`,
+      },
+      { role: 'assistant', content: 'Noted your booking and allergy.' },
+    ];
+    for (let index = 0; index < 20; index += 1) {
+      messages.push(...turn(index));
+    }
+
+    const round1 = await compactMessages({
+      messages,
+      model: stubModel,
+      config: { triggerTokens: 100, keepRecentMessages: 6 },
+    });
+    expect(round1.compacted).toBe(true);
+    if (!round1.compacted) return;
+    expect(round1.summary).toContain(distinctiveFact);
+
+    const { runState } = await setupDurableHarness('chain-compact-sess', 'chain-compact-run');
+    addSystemNote(runState, round1.summary, { lifetime: 'run', tag: 'compaction-summary' });
+    runState.messages = round1.messages;
+
+    const moreTurns: ModelMessage[] = [];
+    for (let index = 20; index < 30; index += 1) {
+      moreTurns.push(...turn(index));
+    }
+    runState.messages.push(...moreTurns);
+
+    const { readSystemNote } = await import('../../src/runtime/systemNotes.js');
+    const round2 = await compactMessages({
+      messages: runState.messages,
+      model: stubModel,
+      config: { triggerTokens: 100, keepRecentMessages: 6 },
+      priorSummary: readSystemNote(runState, 'compaction-summary'),
+    });
+    expect(round2.compacted).toBe(true);
+    if (!round2.compacted) return;
+
+    addSystemNote(runState, round2.summary, { lifetime: 'run', tag: 'compaction-summary' });
+
+    expect(systemNoteBlocks(runState).join('\n')).toContain(distinctiveFact);
+    expect(capturedPrompts).toHaveLength(2);
+    expect(capturedPrompts[1]).toContain(distinctiveFact);
+    expect(capturedPrompts[1]).toContain('Previous conversation summary');
   });
 });

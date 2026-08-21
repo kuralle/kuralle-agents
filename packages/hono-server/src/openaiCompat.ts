@@ -147,16 +147,20 @@ function resolveAgentId(body: ChatCompletionsRequest, configuredAgentId?: string
   return undefined;
 }
 
-function toModelMessages(
-  messages: OpenAIChatMessage[],
-  systemPromptMode: SystemPromptMode,
-): ModelMessage[] {
+function extractCallerSystemInstructions(messages: OpenAIChatMessage[]): string | undefined {
+  const parts: string[] = [];
+  for (const msg of messages) {
+    if (msg.role !== 'system') continue;
+    const text = messageText(msg.content);
+    if (text) parts.push(text);
+  }
+  return parts.length > 0 ? parts.join('\n\n') : undefined;
+}
+
+function toModelMessages(messages: OpenAIChatMessage[]): ModelMessage[] {
   const out: ModelMessage[] = [];
   for (const msg of messages) {
     if (msg.role === 'system') {
-      if (systemPromptMode === 'agent') continue;
-      const text = messageText(msg.content);
-      if (text) out.push({ role: 'system', content: text });
       continue;
     }
     if (msg.role === 'user') {
@@ -207,10 +211,7 @@ function safeParseJson(raw: string): unknown {
   }
 }
 
-function buildPriorModelMessages(
-  messages: OpenAIChatMessage[],
-  systemPromptMode: SystemPromptMode,
-): ModelMessage[] {
+function buildPriorModelMessages(messages: OpenAIChatMessage[]): ModelMessage[] {
   let lastUserIndex = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i]?.role === 'user' && messageText(messages[i]!.content)) {
@@ -219,14 +220,11 @@ function buildPriorModelMessages(
     }
   }
   if (lastUserIndex <= 0) return [];
-  return toModelMessages(messages.slice(0, lastUserIndex), systemPromptMode);
+  return toModelMessages(messages.slice(0, lastUserIndex));
 }
 
-function buildSeedMessages(
-  messages: OpenAIChatMessage[],
-  systemPromptMode: SystemPromptMode,
-): ModelMessage[] | undefined {
-  const prior = buildPriorModelMessages(messages, systemPromptMode);
+function buildSeedMessages(messages: OpenAIChatMessage[]): ModelMessage[] | undefined {
+  const prior = buildPriorModelMessages(messages);
   return prior.length > 0 ? prior : undefined;
 }
 
@@ -234,11 +232,10 @@ async function resolveHistoryDelta(
   runtime: RuntimeLike,
   sessionId: string,
   messages: OpenAIChatMessage[],
-  systemPromptMode: SystemPromptMode,
   isNewSession: boolean,
 ): Promise<ModelMessage[] | undefined> {
   if (isNewSession) return undefined;
-  const prior = buildPriorModelMessages(messages, systemPromptMode);
+  const prior = buildPriorModelMessages(messages);
   const existingLen = (await runtime.getConversationLength?.(sessionId)) ?? 0;
   if (prior.length <= existingLen) return undefined;
   return prior.slice(existingLen);
@@ -350,6 +347,8 @@ async function handleChatCompletions(
   }
 
   const systemPromptMode = opts.systemPromptMode ?? 'agent';
+  const callerInstructions =
+    systemPromptMode === 'merge' ? extractCallerSystemInstructions(body.messages) : undefined;
   const sessionId = resolveSessionId(c, body, opts.sessionKey);
   const input = extractLatestUserInput(body.messages);
   if (!input) {
@@ -358,12 +357,11 @@ async function handleChatCompletions(
 
   const existingSession = await opts.runtime.getSession(sessionId);
   const isNewSession = !existingSession;
-  const seedMessages = isNewSession ? buildSeedMessages(body.messages, systemPromptMode) : undefined;
+  const seedMessages = isNewSession ? buildSeedMessages(body.messages) : undefined;
   const historyDelta = await resolveHistoryDelta(
     opts.runtime,
     sessionId,
     body.messages,
-    systemPromptMode,
     isNewSession,
   );
   const agentId = resolveAgentId(body, opts.agentId);
@@ -380,6 +378,7 @@ async function handleChatCompletions(
     agentId,
     seedMessages,
     historyDelta,
+    callerInstructions,
   });
 
   if (body.stream === true) {
