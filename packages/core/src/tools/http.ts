@@ -234,7 +234,7 @@ function hasHeader(headers: Record<string, string>, target: string): boolean {
 
 function getIdempotencyKey(options: unknown): string | undefined {
   if (!isRecord(options)) return undefined;
-  const context = options.experimental_context;
+  const context = options.context;
   if (!isRecord(context)) return undefined;
   const key = context.idempotencyKey;
   return typeof key === 'string' && key.length > 0 ? key : undefined;

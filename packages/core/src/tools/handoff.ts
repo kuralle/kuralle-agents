@@ -1,5 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import type { AiSdkTool } from './Tool.js';
 import type { AgentConfig } from '../types/index.js';
 
 export interface HandoffResult {
@@ -13,8 +14,8 @@ export interface HandoffResult {
 
 export function createHandoffTool(
   availableAgents: AgentConfig[],
-  currentAgentId?: string
-) {
+  currentAgentId?: string,
+): AiSdkTool {
   const currentAgent = currentAgentId
     ? availableAgents.find(agent => agent.id === currentAgentId)
     : undefined;
@@ -31,7 +32,7 @@ export function createHandoffTool(
       execute: async () => ({
         error: 'No handoff targets available',
       }),
-    });
+    }) as AiSdkTool;
   }
 
   const agentDescriptions = targets
@@ -61,7 +62,7 @@ export function createHandoffTool(
         summary,
       } satisfies HandoffResult;
     },
-  });
+  }) as AiSdkTool;
 }
 
 export function isHandoffResult(result: unknown): result is HandoffResult {

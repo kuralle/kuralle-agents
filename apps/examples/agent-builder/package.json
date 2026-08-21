@@ -13,8 +13,8 @@
     "simulate": "bun run scripts/simulate.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.90",
-    "@ai-sdk/react": "^3.0.239",
+    "@ai-sdk/openai": "^4.0.0",
+    "@ai-sdk/react": "^4.0.0",
     "@hono/node-server": "^2.0.12",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/deployment": "workspace:*",
@@ -23,7 +23,7 @@
     "hono": "^4.12.32",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

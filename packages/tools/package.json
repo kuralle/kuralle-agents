@@ -21,7 +21,7 @@
     "@kuralle-agents/core": "0.x",
     "@kuralle-agents/rag": "0.x",
     "ai": "^6.0.0",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@kuralle-agents/core": "workspace:*",
@@ -29,7 +29,7 @@
     "@types/node": "^20.11.0",
     "ai": "^6.0.0",
     "typescript": "^5.3.0",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "scripts": {
     "prebuild": "rm -rf dist",

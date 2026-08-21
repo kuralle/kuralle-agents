@@ -17,8 +17,8 @@
     "db:seed": "bun scripts/seed.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.89",
-    "@ai-sdk/react": "3.0.239",
+    "@ai-sdk/openai": "^4.0.0",
+    "@ai-sdk/react": "^4.0.0",
     "@earendil-works/pi-ai": "^0.82.1",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/pi-driver": "workspace:*",
@@ -52,7 +52,7 @@
     "streamdown": "^2.5.0",
     "tailwind-merge": "3.6.0",
     "use-stick-to-bottom": "^1.1.6",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.3.3",

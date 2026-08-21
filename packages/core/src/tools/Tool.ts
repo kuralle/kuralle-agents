@@ -33,12 +33,12 @@ export interface ToolExecutionContext {
   [key: string]: unknown;
 }
 
-export type ToolExecutionOptions = AiToolExecutionOptions;
+export type ToolExecutionOptions = AiToolExecutionOptions<ToolExecutionContext>;
 
 export interface ToolDefinition<TInput = unknown, TResult = unknown> {
   description: string;
   inputSchema: ZodTypeAny;
-  execute: ToolExecuteFunction<TInput, TResult>;
+  execute: ToolExecuteFunction<TInput, TResult, ToolExecutionContext>;
   /** If true (default), failure blocks turn success completion. */
   critical?: boolean;
   /** Action to take on execution error. */
@@ -57,7 +57,7 @@ export interface ToolWithFiller<TInput = unknown, TResult = unknown> extends Too
 type SchemaToolDefinition<TSchema extends ZodTypeAny, TResult = unknown> = {
   description: string;
   inputSchema: TSchema;
-  execute: ToolExecuteFunction<z.infer<TSchema>, TResult>;
+  execute: ToolExecuteFunction<z.infer<TSchema>, TResult, ToolExecutionContext>;
   critical?: boolean;
   errorPolicy?: 'abort' | 'warn' | 'continue';
 };
@@ -77,6 +77,8 @@ export function createTool<TSchema extends ZodTypeAny, TResult = unknown>(
 ): AiSdkTool<z.infer<TSchema>, TResult> & ToolDefinition<z.infer<TSchema>, TResult> {
   const { description, inputSchema, execute } = definition;
   // AI SDK tool() overload resolution fails when INPUT/OUTPUT are deferred wrapper generics.
+  // Still true on ai@7.0.74. @ts-expect-error rather than a cast, deliberately: it expires
+  // loudly when the SDK fixes this, where a cast would silently outlive the reason for it.
   // @ts-expect-error — config is structurally valid; failure is a TypeScript artifact only.
   const t = aiTool({ description, inputSchema: zodSchema(inputSchema), execute });
   return Object.assign(t, definition);

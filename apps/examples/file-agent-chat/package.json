@@ -11,12 +11,12 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.89",
+    "@ai-sdk/openai": "^4.0.0",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/deployment": "workspace:*",
     "@kuralle-agents/hono-server": "workspace:*",
     "ai": "6.0.237",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

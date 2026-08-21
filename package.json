@@ -42,7 +42,7 @@
     "typecheck:examples": "bash scripts/typecheck-apps.sh apps/examples"
   },
   "devDependencies": {
-    "@ai-sdk/openai": "^3.0.89",
+    "@ai-sdk/openai": "^4.0.0",
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
     "@kuralle-agents/core": "workspace:*",
@@ -56,15 +56,15 @@
     "ws": "^8.21.1"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.52",
-    "@ai-sdk/xai": "^3.0.73",
+    "@ai-sdk/google": "^4.0.0",
+    "@ai-sdk/xai": "^4.0.0",
     "@openrouter/ai-sdk-provider": "^2.3.3",
     "wrangler": "^4.115.0"
   },
   "overrides": {
-    "ai": "6.0.237",
-    "@ai-sdk/provider": "3.0.14",
-    "@ai-sdk/provider-utils": "4.0.40",
+    "ai": "7.0.74",
+    "@ai-sdk/provider": "4.0.7",
+    "@ai-sdk/provider-utils": "5.0.28",
     "hono": "4.12.32",
     "@hono/node-server": "2.0.12",
     "body-parser": "2.3.0",
@@ -83,9 +83,9 @@
   },
   "pnpm": {
     "overrides": {
-      "ai": "6.0.237",
-      "@ai-sdk/provider": "3.0.14",
-      "@ai-sdk/provider-utils": "4.0.40",
+      "ai": "7.0.74",
+      "@ai-sdk/provider": "4.0.7",
+      "@ai-sdk/provider-utils": "5.0.28",
       "hono": "4.12.32",
       "@hono/node-server": "2.0.12",
       "body-parser": "2.3.0",

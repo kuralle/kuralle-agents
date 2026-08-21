@@ -22,7 +22,7 @@
     "@kuralle-agents/rag": "0.x"
   },
   "devDependencies": {
-    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai": "^4.0.0",
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/rag": "workspace:*",
     "@types/node": "^20.11.0",
@@ -31,7 +31,7 @@
     "redis": "^4.7.0",
     "tsx": "^4.23.1",
     "typescript": "^5.3.0",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "scripts": {
     "prebuild": "rm -rf dist",

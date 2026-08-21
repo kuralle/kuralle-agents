@@ -14,6 +14,7 @@
  */
 import { z } from 'zod';
 import { tool } from 'ai';
+import type { AiSdkTool } from '../../tools/Tool.js';
 import { lexicalScore } from '../lexicalScore.js';
 import type { MemoryBlockScope } from '../blocks/types.js';
 import type { ExtractedValueStore } from './store.js';
@@ -107,7 +108,9 @@ interface SearchMemoryResult {
   score: number;
 }
 
-export function buildSearchMemoryTool(options: SearchMemoryToolOptions) {
+export function buildSearchMemoryTool(
+  options: SearchMemoryToolOptions,
+): AiSdkTool<Input, { results: SearchMemoryResult[] }> {
   const limit = options.limit ?? DEFAULT_LIMIT;
 
   // One entry per slug. `validateExtractorList` already rejects a duplicate

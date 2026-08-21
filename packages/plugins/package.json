@@ -23,9 +23,9 @@
     "@kuralle-agents/fs": "workspace:*"
   },
   "devDependencies": {
-    "@ai-sdk/google": "^3.0.52",
-    "@ai-sdk/openai": "^3.0.89",
-    "@ai-sdk/xai": "^3.0.73",
+    "@ai-sdk/google": "^4.0.0",
+    "@ai-sdk/openai": "^4.0.0",
+    "@ai-sdk/xai": "^4.0.0",
     "@cloudflare/vitest-pool-workers": "^0.19.0",
     "@kuralle-agents/fs": "workspace:*",
     "@kuralle-agents/mcp": "workspace:*",

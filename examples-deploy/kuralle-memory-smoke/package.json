@@ -5,10 +5,10 @@
   "dependencies": {
     "@kuralle-agents/cf-agent": "^0.21.1",
     "@kuralle-agents/core": "^0.21.1",
-    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/openai": "^4.0.0",
     "agents": "^0.20.1",
     "ai": "^6.0.0",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "wrangler": "^4.115.0"

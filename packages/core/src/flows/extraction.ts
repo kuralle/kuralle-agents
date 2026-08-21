@@ -1,4 +1,4 @@
-import { generateText, Output, type LanguageModel, type ModelMessage, type TelemetrySettings } from 'ai';
+import { generateText, Output, type LanguageModel, type ModelMessage, type TelemetryOptions } from 'ai';
 import { z, type ZodTypeAny } from 'zod';
 
 const DEFAULT_EXTRACTION_PROMPT =
@@ -12,7 +12,7 @@ export interface StructuredExtractionOptions<TSchema extends ZodTypeAny> {
   userMessage: string;
   systemPrompt?: string;
   contextMessages?: ModelMessage[];
-  telemetry?: TelemetrySettings;
+  telemetry?: TelemetryOptions;
   abortSignal?: AbortSignal;
 }
 

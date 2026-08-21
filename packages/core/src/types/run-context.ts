@@ -1,5 +1,5 @@
 import type { Policy } from '../runtime/policies/toolPolicy.js';
-import type { LanguageModel, ModelMessage, TelemetrySettings } from 'ai';
+import type { LanguageModel, ModelMessage, TelemetryOptions } from 'ai';
 import type { Session } from './session.js';
 import type { InputProcessor, OutputProcessor } from './processors.js';
 import type { RunState } from '../runtime/durable/types.js';
@@ -84,7 +84,7 @@ export interface RunContext {
   memoryService?: MemoryService;
   bargeIn?: AbortSignal;
   abortSignal?: AbortSignal;
-  telemetry?: TelemetrySettings;
+  telemetry?: TelemetryOptions;
   /**
    * Ephemeral, per-run-invocation flag: has the current turn's user input been
    * consumed yet by an input-node (collect/decide)? Input-nodes extract/decide

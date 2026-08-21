@@ -13,6 +13,7 @@
  */
 import { z } from 'zod';
 import { tool } from 'ai';
+import type { AiSdkTool } from '../../tools/Tool.js';
 import { scanMemoryWrite } from './safetyScanner.js';
 import {
   type PersistentMemoryStore,
@@ -85,7 +86,7 @@ function removeMatchingEntries(existing: string, match: string): string {
   return kept.join(ENTRY_DELIM).trim();
 }
 
-export function buildMemoryBlockTool(opts: MemoryBlockToolOptions) {
+export function buildMemoryBlockTool(opts: MemoryBlockToolOptions): AiSdkTool<Input, unknown> {
   const charLimit = opts.charLimit ?? DEFAULT_BLOCK_CHAR_LIMIT;
   const scanForInjection = opts.scanForInjection !== false;
 
@@ -207,5 +208,5 @@ export function buildMemoryBlockTool(opts: MemoryBlockToolOptions) {
         limit: charLimit,
       };
     },
-  });
+  }) as AiSdkTool<Input, unknown>;
 }

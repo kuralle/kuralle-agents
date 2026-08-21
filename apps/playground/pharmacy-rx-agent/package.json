@@ -21,7 +21,7 @@
     "@cloudflare/ai-chat": "^0.10.1",
     "agents": "^0.20.1",
     "ai": "latest",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260729.1",

@@ -7,7 +7,7 @@ import type { ToolContext } from '../../types/run-context.js';
  * in the consumer's tree is accepted (avoids cross-instance nominal mismatches).
  */
 interface AiSdkToolLike {
-  description?: string;
+  description?: unknown;
   inputSchema?: unknown;
   execute?: unknown;
 }

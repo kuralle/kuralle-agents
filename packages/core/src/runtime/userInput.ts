@@ -4,6 +4,7 @@ import {
   type TranscriptionModel,
   type FilePart,
   type TextPart,
+  type DataContent,
 } from 'ai';
 
 /**
@@ -35,16 +36,35 @@ function isAudioPart(part: FilePart): boolean {
  * must become a `URL` (fetched via the built-in download) and `data:` URLs must
  * be reduced to their base64 payload. Bytes and `URL`s pass through unchanged.
  */
-function audioSource(data: FilePart['data']): FilePart['data'] {
-  if (typeof data !== 'string') return data;
-  if (data.startsWith('data:')) {
-    const comma = data.indexOf(',');
-    return comma === -1 ? data : data.slice(comma + 1);
+function audioSource(data: FilePart['data']): DataContent | URL {
+  if (typeof data === 'string') {
+    if (data.startsWith('data:')) {
+      const comma = data.indexOf(',');
+      return comma === -1 ? data : data.slice(comma + 1);
+    }
+    if (data.startsWith('http://') || data.startsWith('https://')) {
+      return new URL(data);
+    }
+    return data;
   }
-  if (data.startsWith('http://') || data.startsWith('https://')) {
-    return new URL(data);
+  if (data instanceof URL) return data;
+  if (data instanceof Uint8Array || data instanceof ArrayBuffer) return data;
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(data)) return data;
+  if (typeof data === 'object' && data !== null && 'type' in data) {
+    switch (data.type) {
+      case 'data':
+        return data.data;
+      case 'url':
+        return new URL(data.url);
+      case 'text':
+        return data.text;
+      case 'reference':
+        throw new Error(
+          'Provider file references are not supported for audio transcription',
+        );
+    }
   }
-  return data;
+  throw new Error('Unsupported audio file data shape for transcription');
 }
 
 /** Merge multiple user inputs into one turn (ingress coalescing / mid-turn drain). */

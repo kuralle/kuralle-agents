@@ -39,7 +39,7 @@
   },
   "peerDependencies": {
     "just-bash": "^3.1.0",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "peerDependenciesMeta": {
     "just-bash": {
@@ -54,7 +54,7 @@
     "just-bash": "^3.1.0",
     "typescript": "^5.3.0",
     "vitest": "^4.1.10",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "scripts": {
     "prebuild": "rm -rf dist",

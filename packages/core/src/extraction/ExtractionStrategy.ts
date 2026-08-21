@@ -1,4 +1,4 @@
-import type { LanguageModel, TelemetrySettings } from 'ai';
+import type { LanguageModel, TelemetryOptions } from 'ai';
 import type { ZodTypeAny } from 'zod';
 
 /**
@@ -16,7 +16,7 @@ export interface ExtractionPassParams {
   currentData: Record<string, unknown>;
   systemPrompt?: string;
   model?: LanguageModel;
-  telemetry?: TelemetrySettings;
+  telemetry?: TelemetryOptions;
 }
 
 export interface ExtractionPassResult {
