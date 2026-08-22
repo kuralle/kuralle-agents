@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
@@ -6,39 +6,13 @@ import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { defineTool } from '../../src/tools/effect/index.js';
-import { makeRunState, makeTestSession, stubModel } from '../core-durable/helpers.js';
-
-afterEach(() => {
-  mock.restore();
-});
-
-function stoppedStream(text = 'done') {
-  return {
-    fullStream: (async function* () {
-      if (text) {
-        yield Object.assign({ type: 'text-delta' }, { text });
-      }
-    })(),
-    finishReason: Promise.resolve('stop'),
-    response: Promise.resolve({ messages: [] }),
-    toolCalls: Promise.resolve([]),
-    totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 1, totalTokens: 11 }),
-  };
-}
+import { makeRunState, makeTestSession } from '../core-durable/helpers.js';
+import { mockV3CapturingStreamModel } from '../helpers/mockLanguageModelV3Results.js';
 
 describe('runtime open toolScope', () => {
   it('includes agent.tools on open flow replies via createRuntime', async () => {
-    const seenToolSets: string[][] = [];
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { tools?: Record<string, unknown> }) => {
-          seenToolSets.push(Object.keys(opts.tools ?? {}).sort());
-          return stoppedStream();
-        },
-      };
-    });
+    const seenToolSets: Array<{ tools?: Record<string, unknown> }> = [];
+    const model = mockV3CapturingStreamModel(seenToolSets);
 
     const agentOnly = defineTool({
       name: 'agent_only',
@@ -66,7 +40,7 @@ describe('runtime open toolScope', () => {
     const agent = defineAgent({
       id: 'scope-agent',
       instructions: 'Help.',
-      model: stubModel,
+      model,
       tools: { agent_only: agentOnly },
       globalTools: { global_only: globalOnly },
       flows: [flow],
@@ -89,22 +63,14 @@ describe('runtime open toolScope', () => {
     await runtime.runOnce({ sessionId, input: 'go' });
 
     expect(seenToolSets).toHaveLength(1);
-    expect(seenToolSets[0]).toContain('global_only');
-    expect(seenToolSets[0]).toContain('agent_only');
+    const toolNames = Object.keys(seenToolSets[0]?.tools ?? {}).sort();
+    expect(toolNames).toContain('global_only');
+    expect(toolNames).toContain('agent_only');
   });
 
   it('excludes agent.tools on base and closed scopes via createRuntime', async () => {
-    const seenToolSets: string[][] = [];
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { tools?: Record<string, unknown> }) => {
-          seenToolSets.push(Object.keys(opts.tools ?? {}).sort());
-          return stoppedStream();
-        },
-      };
-    });
+    const seenToolSets: Array<{ tools?: Record<string, unknown> }> = [];
+    const model = mockV3CapturingStreamModel(seenToolSets);
 
     const agentOnly = defineTool({
       name: 'agent_only',
@@ -136,7 +102,7 @@ describe('runtime open toolScope', () => {
       const agent = defineAgent({
         id: `scope-agent-${scope}`,
         instructions: 'Help.',
-        model: stubModel,
+        model,
         tools: { agent_only: agentOnly },
         globalTools: { global_only: globalOnly },
         flows: [flow],
@@ -159,7 +125,7 @@ describe('runtime open toolScope', () => {
       await runtime.runOnce({ sessionId, input: 'go' });
 
       expect(seenToolSets).toHaveLength(1);
-      expect(seenToolSets[0]).not.toContain('agent_only');
+      expect(Object.keys(seenToolSets[0]?.tools ?? {})).not.toContain('agent_only');
     }
   });
 });

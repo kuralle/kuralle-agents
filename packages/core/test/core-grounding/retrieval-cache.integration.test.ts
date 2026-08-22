@@ -1,16 +1,12 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { newSessionId } from '../../src/runtime/openRun.js';
 import { createInMemoryKnowledgeConfig } from '../../src/runtime/grounding/inMemoryKnowledge.js';
-import { stubModel } from '../core-durable/helpers.js';
+import { mockV3StreamTextModel } from '../helpers/mockLanguageModelV3Results.js';
 import type { StreamPart } from '@kuralle-agents/core';
 import type { KnowledgeEmbedderAdapter } from '../../src/types/knowledge.js';
-
-afterEach(() => {
-  mock.restore();
-});
 
 const fakeEmbedder: KnowledgeEmbedderAdapter = {
   embed: async (text: string) => [text.length, (text.match(/[aeiou]/gi) ?? []).length, 1],
@@ -26,25 +22,12 @@ const fakeEmbedder: KnowledgeEmbedderAdapter = {
  */
 describe('Runtime session retrieval cache wiring (G6, run-open → consumer)', () => {
   it('carries a defined cache into auto-retrieve — first turn emits knowledge-cache-miss', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'The return window is 45 days.' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
+    const model = mockV3StreamTextModel('The return window is 45 days.');
 
     const agent = defineAgent({
       id: 'returns',
       instructions: 'Answer using retrieved knowledge only.',
-      model: stubModel,
+      model,
       knowledge: { autoRetrieve: true },
     });
 
@@ -52,7 +35,7 @@ describe('Runtime session retrieval cache wiring (G6, run-open → consumer)', (
       agents: [agent],
       defaultAgentId: 'returns',
       sessionStore: new MemoryStore(),
-      defaultModel: stubModel,
+      defaultModel: model,
       knowledge: createInMemoryKnowledgeConfig(
         [{ id: 'returns', text: "Acme's return window is 45 days.", score: 0.99 }],
         { embedder: fakeEmbedder },

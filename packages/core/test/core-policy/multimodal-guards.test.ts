@@ -20,7 +20,7 @@ const PNG_DATA_URL =
 /**
  * Guards run inside the real TextDriver — mock the model, not the driver.
  *
- * This used to `mock.module('ai', …)`, which is process-global in Bun and cannot be undone:
+ * This used to mock the entire `ai` package via Bun's module mock, which is process-global and cannot be undone:
  * it silently replaced `generateText` for every test file that ran in the same process, and
  * ai@7's ESM-only resolution turned that latent leak into a real cross-file failure. Stubbing
  * the model itself keeps the substitution scoped to the runtime under test, which is what the

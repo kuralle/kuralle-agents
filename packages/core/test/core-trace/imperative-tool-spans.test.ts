@@ -11,6 +11,11 @@ import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { setupDurableHarness, makeTestSession, makeRunState, stubModel } from '../core-durable/helpers.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
+import {
+  mockV3MultiStepStreamModel,
+  mockV3StreamResult,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 describe('imperative ctx.tool spans', () => {
   it('action node ctx.tool calls produce imperative tool spans', async () => {
@@ -83,10 +88,14 @@ describe('imperative ctx.tool spans', () => {
       start: ask,
       nodes: [ask],
     });
+    const model = mockV3MultiStepStreamModel([
+      () => mockV3ToolCallStreamResult('lookup', 'call-1', '{}', 5),
+      () => mockV3StreamResult('Done', 5),
+    ]);
     const agent = defineAgent({
       id: 'model-tool-agent',
       instructions: 'Use lookup',
-      model: stubModel,
+      model,
       tools: { lookup },
       flows: [flow],
     });
@@ -98,39 +107,6 @@ describe('imperative ctx.tool spans', () => {
     const runState = makeRunState(sessionId, sessionId);
     runState.activeAgentId = agent.id;
     await runStore.initRun(runState);
-
-    let modelCall = 0;
-    const { mock, afterEach } = await import('bun:test');
-    afterEach(() => mock.restore());
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          modelCall += 1;
-          if (modelCall === 1) {
-            return {
-              fullStream: (async function* () {})(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                { toolName: 'lookup', toolCallId: 'call-1', input: {} },
-              ]),
-              totalUsage: Promise.resolve({ inputTokens: 5, outputTokens: 1, totalTokens: 6 }),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Done' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-            totalUsage: Promise.resolve({ inputTokens: 5, outputTokens: 1, totalTokens: 6 }),
-          };
-        },
-      };
-    });
 
     const runtime = createRuntime({
       agents: [agent],

@@ -1,4 +1,4 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { reply } from '../../src/types/flow.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
@@ -12,12 +12,10 @@ import { defineTool, buildToolSet, CoreToolExecutor } from '../../src/tools/effe
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { AnyTool } from '../../src/types/effectTool.js';
+import type { LanguageModel } from 'ai';
 import type { ResolvedNode } from '../../src/types/channel.js';
 import type { RunContext } from '../../src/types/run-context.js';
-
-afterEach(() => {
-  mock.restore();
-});
+import { mockV3CapturingStreamModel } from '../helpers/mockLanguageModelV3Results.js';
 
 function stubTool(name: string): AnyTool {
   return defineTool({
@@ -136,30 +134,7 @@ describe('node toolScope (REQ-1..REQ-4)', () => {
 });
 
 describe('extraction as closed (REQ-5)', () => {
-  function captureTools(): { calls: Array<{ tools?: unknown }>; restore: () => void } {
-    const calls: Array<{ tools?: unknown }> = [];
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { tools?: unknown }) => {
-          calls.push({ tools: opts.tools });
-          return {
-            fullStream: (async function* () {})(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
-    return {
-      calls,
-      restore: () => mock.restore(),
-    };
-  }
-
-  async function extractionResolved(): Promise<{
+  async function extractionResolved(model: LanguageModel = stubModel): Promise<{
     resolved: ResolvedNode;
     ctx: RunContext;
     submitName: string;
@@ -187,6 +162,7 @@ describe('extraction as closed (REQ-5)', () => {
       'extract-scope',
       'extract-scope-run',
     );
+    runState.messages = [{ role: 'user', content: 'My name is Riley' }];
     const agentOnly = stubTool('agent_only');
     const globalOnly = stubTool('global_only');
     const ctx = await createRunContext({
@@ -197,7 +173,7 @@ describe('extraction as closed (REQ-5)', () => {
       toolExecutor: new CoreToolExecutor({
         tools: { submit_intake_data: submit, agent_only: agentOnly, global_only: globalOnly },
       }),
-      model: stubModel,
+      model,
       emit: () => {},
     });
     ctx.globalTools = { global_only: globalOnly };
@@ -205,29 +181,29 @@ describe('extraction as closed (REQ-5)', () => {
   }
 
   it('runExtraction resolves exactly the submit tool', async () => {
-    const capture = captureTools();
-    const { resolved, ctx, submitName } = await extractionResolved();
+    const captured: Array<{ tools?: Record<string, unknown> }> = [];
+    const model = mockV3CapturingStreamModel(captured);
+    const { resolved, ctx, submitName } = await extractionResolved(model);
     const driver = new TextDriver({
       toolDefs: { agent_only: stubTool('agent_only') },
     });
     await driver.runExtraction(resolved, ctx);
-    expect(capture.calls.length).toBeGreaterThan(0);
-    const names = Object.keys((capture.calls[0]?.tools as Record<string, unknown>) ?? {});
+    expect(captured.length).toBeGreaterThan(0);
+    const names = Object.keys(captured[0]?.tools ?? {});
     expect(names).toEqual([submitName]);
-    capture.restore();
   });
 
   it('runAgentTurn fallback resolves the identical closed set', async () => {
-    const capture = captureTools();
-    const { resolved, ctx, submitName } = await extractionResolved();
+    const captured: Array<{ tools?: Record<string, unknown> }> = [];
+    const model = mockV3CapturingStreamModel(captured);
+    const { resolved, ctx, submitName } = await extractionResolved(model);
     const driver = new TextDriver({
       toolDefs: { agent_only: stubTool('agent_only') },
     });
     await driver.runAgentTurn(resolved, ctx);
-    expect(capture.calls.length).toBeGreaterThan(0);
-    const names = Object.keys((capture.calls[0]?.tools as Record<string, unknown>) ?? {});
+    expect(captured.length).toBeGreaterThan(0);
+    const names = Object.keys(captured[0]?.tools ?? {});
     expect(names).toEqual([submitName]);
-    capture.restore();
   });
 });
 

@@ -4,6 +4,7 @@
 // RD-04: filler mitigation is prompt-level; runtime still treats any text as answered
 //   (RD-08 semantic adequacy deferred).
 import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { reply, defineFlow } from '../../src/types/flow.js';
 import { hostLoop } from '../../src/runtime/hostLoop.js';
@@ -17,10 +18,29 @@ import { buildAgentReplyNode } from '../../src/runtime/agentReply.js';
 import { buildHostControlTools } from '../../src/runtime/hostControlTools.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 
-function flowAgent() {
+function emptyStreamModel(): MockLanguageModelV3 {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          {
+            type: 'finish' as const,
+            finishReason: { unified: 'stop' as const, raw: undefined },
+            usage: {
+              inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+              outputTokens: { total: 0, text: 0, reasoning: undefined },
+            },
+          },
+        ],
+      }),
+    }),
+  });
+}
+
+function flowAgent(model = stubModel) {
   const end = reply({ id: 'book-start', instructions: 'x', next: () => ({ end: 'ok' }) });
   const flow = defineFlow({ name: 'book', description: 'Book an appointment', start: end, nodes: [end] });
-  return defineAgent({ id: 'host', instructions: 'Answer the user', flows: [flow], model: stubModel });
+  return defineAgent({ id: 'host', instructions: 'Answer the user', flows: [flow], model });
 }
 
 function fakeDriver(turn: { text: string; control?: TurnControl }): ChannelDriver {
@@ -35,7 +55,11 @@ function fakeDriver(turn: { text: string; control?: TurnControl }): ChannelDrive
   } as ChannelDriver;
 }
 
-async function makeCtx(slug: string, emit: (p: StreamPart) => void = () => {}) {
+async function makeCtx(
+  slug: string,
+  emit: (p: StreamPart) => void = () => {},
+  model = stubModel,
+) {
   const { session, runStore, runState } = await setupDurableHarness(slug, slug);
   runState.messages = [{ role: 'user', content: 'I want to book an appointment' }];
   const ctx = await createRunContext({
@@ -44,7 +68,7 @@ async function makeCtx(slug: string, emit: (p: StreamPart) => void = () => {}) {
     runStore,
     steps: [],
     toolExecutor: new CoreToolExecutor({ tools: {} }),
-    model: stubModel,
+    model,
     emit,
   });
   return { ctx, runState };
@@ -185,30 +209,16 @@ describe('routing guard debt fixes', () => {
   });
 
   it('RD-01: guard runs EXACTLY ONCE on an empty STREAMING turn (single owner)', async () => {
-    const { mock, afterEach } = await import('bun:test');
-    afterEach(() => mock.restore());
     // Empty streaming turn → the driver (TextDriver) emits nothing and hostLoop
     // runs the guard. The guard must NOT also fire inside the streaming gate
     // (the two-owner double-call this fix removed).
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {})(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
-    const agent = flowAgent();
+    const agent = flowAgent(emptyStreamModel());
     let classifyCalls = 0;
     const classify = async (): Promise<HostGuardVerdict> => {
       classifyCalls += 1;
       return { action: 'enterFlow', flowName: 'book', confidence: 1 };
     };
-    const { ctx, runState } = await makeCtx('rd01-stream');
+    const { ctx, runState } = await makeCtx('rd01-stream', () => {}, emptyStreamModel());
 
     await hostLoop({ agent, run: runState, driver: new TextDriver(), ctx, classify });
 

@@ -1,10 +1,11 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import { mockV3CapturingStreamModel } from '../helpers/mockLanguageModelV3Results.js';
 import {
   buildMemoryService,
   resetMissingUserIdWarningsForTests,
@@ -14,40 +15,23 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { factsExtractor } from '../../src/memory/extract/builtin/factsExtractor.js';
 import { InMemoryExtractedValueStore } from '../../src/memory/extract/InMemoryExtractedValueStore.js';
 
-afterEach(() => {
-  mock.restore();
-  resetMissingUserIdWarningsForTests();
-});
+function systemFromCapture(captured: Record<string, unknown>[]): string {
+  const system = captured[0]?.system;
+  if (typeof system === 'string') return system;
+  if (Array.isArray(system)) {
+    return system
+      .map((message: { content?: unknown }) =>
+        typeof message?.content === 'string' ? message.content : '',
+      )
+      .join('\n\n');
+  }
+  return '';
+}
 
 describe('memory preload via extracted facts', () => {
   it('preloads prior extracted facts into gather context when userId is present', async () => {
-    let capturedSystem = '';
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { system?: unknown }) => {
-          capturedSystem =
-            typeof opts.system === 'string'
-              ? opts.system
-              : Array.isArray(opts.system)
-                ? opts.system
-                    .map((m: { content?: unknown }) =>
-                      typeof m?.content === 'string' ? m.content : '',
-                    )
-                    .join('\n\n')
-                : '';
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Got it.' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const captured: Record<string, unknown>[] = [];
+    const model = mockV3CapturingStreamModel(captured, 'Got it.');
 
     const store = new InMemoryExtractedValueStore();
     await store.save(
@@ -77,7 +61,7 @@ describe('memory preload via extracted facts', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model,
       memoryService: v2Memory,
       emit: () => {},
     });
@@ -87,10 +71,11 @@ describe('memory preload via extracted facts', () => {
 
     const node = reply({ id: 'answer', instructions: 'Answer using memory.' });
     await new TextDriver().runAgentTurn(resolveReplyNode(node, runState.state), ctx);
-    expect(capturedSystem).toContain('teal');
+    expect(systemFromCapture(captured)).toContain('teal');
   });
 
   it('skips preload without userId and warns', async () => {
+    resetMissingUserIdWarningsForTests();
     const store = new InMemoryExtractedValueStore();
     await store.save(
       {
@@ -118,7 +103,7 @@ describe('memory preload via extracted facts', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3CapturingStreamModel([], 'ok'),
       memoryService: v2Memory,
       emit: () => {},
     });

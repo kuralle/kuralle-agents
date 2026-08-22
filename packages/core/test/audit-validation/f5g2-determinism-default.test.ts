@@ -1,6 +1,5 @@
 // F5/G2: flow agents default outOfBandControl ON; answering agents stay OFF; classifier sees conversation context.
-import { describe, expect, it, mock, afterEach } from 'bun:test';
-import type { LanguageModel } from 'ai';
+import { describe, expect, it } from 'bun:test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
@@ -14,6 +13,10 @@ import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import type { RunContext } from '../../src/types/run-context.js';
+import {
+  mockV3GenerateObjectModel,
+  type GenerateObjectCall,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 const stubDriver: ChannelDriver = {
   async runAgentTurn() {
@@ -23,8 +26,6 @@ const stubDriver: ChannelDriver = {
     return { type: 'message', input: 'x' };
   },
 };
-
-afterEach(() => mock.restore());
 
 function minimalFlow(name = 'intake') {
   const done = reply({ id: 'done', instructions: 'Thanks.', next: () => ({ end: 'done' }) });
@@ -97,25 +98,16 @@ describe('F5/G2: determinism defaults and routing context', () => {
   });
 
   it('routing classifier receives multi-message context when history has prior turns', async () => {
-    let capturedPrompt = '';
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async (opts: { prompt?: string }) => {
-          capturedPrompt = opts.prompt ?? '';
-          return {
-            object: {
-              action: 'enterFlow',
-              flowName: 'home-insurance',
-              agentId: null,
-              reason: 'home policy continuation',
-              confidence: 0.95,
-            },
-          };
-        },
-      };
-    });
+    const calls: GenerateObjectCall[] = [];
+    const routingModel = mockV3GenerateObjectModel(async () => ({
+      object: {
+        action: 'enterFlow',
+        flowName: 'home-insurance',
+        agentId: null,
+        reason: 'home policy continuation',
+        confidence: 0.95,
+      },
+    }), calls);
 
     const end = reply({ id: 'end', instructions: 'done', next: () => ({ end: 'ok' }) });
     const home = defineFlow({
@@ -151,10 +143,11 @@ describe('F5/G2: determinism defaults and routing context', () => {
         ],
       },
       run: runState,
-      model: {} as LanguageModel,
+      model: routingModel,
       allowKeep: true,
     });
 
+    const capturedPrompt = calls[0]?.promptText ?? '';
     expect(capturedPrompt).toContain('Recent conversation:');
     expect(capturedPrompt).toContain('home insurance');
     expect(capturedPrompt).toContain('and the home one too');
@@ -163,21 +156,15 @@ describe('F5/G2: determinism defaults and routing context', () => {
   });
 
   it('pivot during a reply node is recognized and parked via pushFlowPark', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: {
-            action: 'enterFlow',
-            flowName: 'billing',
-            agentId: null,
-            reason: 'billing',
-            confidence: 0.95,
-          },
-        }),
-      };
-    });
+    const routingModel = mockV3GenerateObjectModel(async () => ({
+      object: {
+        action: 'enterFlow',
+        flowName: 'billing',
+        agentId: null,
+        reason: 'billing',
+        confidence: 0.95,
+      },
+    }));
 
     const greet = reply({ id: 'greet', instructions: 'Welcome! How can I help?' });
     const intake = defineFlow({
@@ -196,7 +183,7 @@ describe('F5/G2: determinism defaults and routing context', () => {
 
     const agent = defineAgent({
       id: 'router',
-      model: stubModel,
+      model: routingModel,
       flows: [intake, billing],
       routes: [{ flow: 'billing', when: 'billing invoice payment' }],
     });
@@ -213,7 +200,7 @@ describe('F5/G2: determinism defaults and routing context', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: stubModel,
+      model: routingModel,
       emit: () => {},
       outOfBandControl: true,
     });

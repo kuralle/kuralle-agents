@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
+import type { LanguageModel } from 'ai';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { reply, defineFlow } from '../../src/types/flow.js';
 import { hostLoop } from '../../src/runtime/hostLoop.js';
@@ -11,6 +13,55 @@ import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { buildAgentReplyNode } from '../../src/runtime/agentReply.js';
 import { resolveHostControl } from '../../src/runtime/hostControlGuard.js';
+import {
+  mockV3StreamTextModel,
+} from '../helpers/mockLanguageModelV3Results.js';
+
+function emptyStreamModel(): MockLanguageModelV3 {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          {
+            type: 'finish' as const,
+            finishReason: { unified: 'stop' as const, raw: undefined },
+            usage: {
+              inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+              outputTokens: { total: 0, text: 0, reasoning: undefined },
+            },
+          },
+        ],
+      }),
+    }),
+  });
+}
+
+function slowTailStreamModel(): MockLanguageModelV3 {
+  return new MockLanguageModelV3({
+    doStream: async () => ({
+      stream: new ReadableStream({
+        async start(controller) {
+          controller.enqueue({ type: 'text-start', id: 't0' });
+          controller.enqueue({ type: 'text-delta', id: 't0', delta: 'One' });
+          controller.enqueue({ type: 'text-end', id: 't0' });
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          controller.enqueue({ type: 'text-start', id: 't1' });
+          controller.enqueue({ type: 'text-delta', id: 't1', delta: ' two' });
+          controller.enqueue({ type: 'text-end', id: 't1' });
+          controller.enqueue({
+            type: 'finish',
+            finishReason: { unified: 'stop', raw: undefined },
+            usage: {
+              inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+              outputTokens: { total: 2, text: 2, reasoning: undefined },
+            },
+          });
+          controller.close();
+        },
+      }),
+    }),
+  });
+}
 
 describe('derived host routing', () => {
   it('answering keep turn does not call classifier when no host targets need guard-only path', async () => {
@@ -145,36 +196,17 @@ describe('derived host routing', () => {
 // chosen `keep`; a disagreeing guard must not hijack that answer (doing so
 // mis-routed Q&A turns into flows — observed in the live smoke).
 describe('guard does not override a substantive answer', () => {
-  function mockStreamText(text: string) {
-    return async () => {
-      const { mock } = await import('bun:test');
-      mock.module('ai', () => {
-        const actual = require('ai');
-        return {
-          ...actual,
-          streamText: () => ({
-            fullStream: (async function* () {
-              if (text) yield Object.assign({ type: 'text-delta' }, { text });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          }),
-        };
-      });
-    };
-  }
-
-  async function runWithGuard(answerText: string) {
+  async function runWithGuard(model: LanguageModel) {
     const parts: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness();
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session,
       runState,
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model,
       emit: (p) => parts.push(p),
     });
     const node = reply({ id: 'greet', instructions: 'Say hello' });
@@ -188,25 +220,17 @@ describe('guard does not override a substantive answer', () => {
   }
 
   it('keeps the answer and does not cancel when the model answered (relaxed)', async () => {
-    const { mock, afterEach } = await import('bun:test');
-    afterEach(() => mock.restore());
-    await mockStreamText('Hello, the deadline is March 31.')();
-
-    const { result, parts } = await runWithGuard('Hello, the deadline is March 31.');
+    const { result, parts } = await runWithGuard(mockV3StreamTextModel('Hello, the deadline is March 31.'));
     expect(result.control).toBeUndefined();
     expect(result.text).toContain('March 31');
     expect(parts.some((p) => p.type === 'text-cancel')).toBe(false);
   });
 
   it('emits nothing and returns no control on an empty turn (hostLoop owns the guard)', async () => {
-    const { mock, afterEach } = await import('bun:test');
-    afterEach(() => mock.restore());
-    await mockStreamText('')();
-
+    const { result, parts } = await runWithGuard(emptyStreamModel());
     // speakWithHostControl no longer consults the guard — it emits nothing on an
     // empty turn and returns no control; hostLoop runs the guard (see
     // routing-debt-bugs.test.ts "empty turn calls classifier once and routes").
-    const { result, parts } = await runWithGuard('');
     expect(result.control).toBeUndefined();
     expect(result.text).toBe('');
     expect(parts.some((p) => p.type === 'text-delta')).toBe(false);
@@ -217,35 +241,17 @@ describe('guard does not override a substantive answer', () => {
 // remainder live — TTFT ≈ guard latency, NOT full-source completion.
 describe('strict dispatch flush-on-keep', () => {
   it('emits the first token at guard latency, not after the slow tail of the source', async () => {
-    const { mock, afterEach } = await import('bun:test');
-    afterEach(() => mock.restore());
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'One' });
-            await new Promise((r) => setTimeout(r, 400)); // slow tail
-            yield Object.assign({ type: 'text-delta' }, { text: ' two' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
-
     const events: { type: string; at: number }[] = [];
     const start = Date.now();
     const { session, runStore, runState } = await setupDurableHarness('strict-flush', 'strict-flush');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session,
       runStore,
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: slowTailStreamModel(),
       emit: (p) => events.push({ type: p.type, at: Date.now() - start }),
     });
     const node = reply({ id: 'g', instructions: 'hi' });
@@ -265,29 +271,16 @@ describe('strict dispatch flush-on-keep', () => {
   });
 
   it('strict empty turn emits NO text and returns no control (no leak; hostLoop guards)', async () => {
-    const { mock, afterEach } = await import('bun:test');
-    afterEach(() => mock.restore());
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {})(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
     const events: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness('strict-route', 'strict-route');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session,
       runStore,
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: emptyStreamModel(),
       emit: (p) => events.push(p),
     });
     const node = reply({ id: 'g', instructions: 'hi' });
@@ -306,30 +299,15 @@ describe('strict dispatch flush-on-keep', () => {
   });
 
   it('strict answered turn flushes the answer with no control', async () => {
-    const { mock, afterEach } = await import('bun:test');
-    afterEach(() => mock.restore());
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'Substantive answer.' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
     const { session, runStore, runState } = await setupDurableHarness('strict-lazy', 'strict-lazy');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session,
       runStore,
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel('Substantive answer.'),
       emit: () => {},
     });
     const node = reply({ id: 'g', instructions: 'hi' });

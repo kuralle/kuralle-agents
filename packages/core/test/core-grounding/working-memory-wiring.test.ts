@@ -1,10 +1,11 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import { mockV3CapturingStreamModel } from '../helpers/mockLanguageModelV3Results.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { InMemoryPersistentMemoryStore } from '../../src/memory/blocks/InMemoryPersistentMemoryStore.js';
 import {
@@ -18,9 +19,18 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-afterEach(() => {
-  mock.restore();
-});
+function systemFromCapture(captured: Record<string, unknown>[]): string {
+  const system = captured[0]?.system;
+  if (typeof system === 'string') return system;
+  if (Array.isArray(system)) {
+    return system
+      .map((message: { content?: unknown }) =>
+        typeof message?.content === 'string' ? message.content : '',
+      )
+      .join('\n\n');
+  }
+  return '';
+}
 
 describe('working memory wiring', () => {
   it('seeds empty blocks from template without persisting on read', async () => {
@@ -94,33 +104,8 @@ describe('working memory wiring', () => {
   });
 
   it('injects working memory into the reply system prompt', async () => {
-    let capturedSystem = '';
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { system?: unknown }) => {
-          capturedSystem =
-            typeof opts.system === 'string'
-              ? opts.system
-              : Array.isArray(opts.system)
-                ? opts.system
-                    .map((m: { content?: unknown }) =>
-                      typeof m?.content === 'string' ? m.content : '',
-                    )
-                    .join('\n\n')
-                : '';
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Noted.' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const captured: Record<string, unknown>[] = [];
+    const model = mockV3CapturingStreamModel(captured, 'Noted.');
 
     const store = new InMemoryPersistentMemoryStore();
     await store.saveBlock(
@@ -137,6 +122,7 @@ describe('working memory wiring', () => {
 
     const { session, runStore, runState } = await setupDurableHarness('wm-sess', 'wm-run');
     session.userId = 'user-9';
+    runState.messages = [{ role: 'user', content: 'What do you know about me?' }];
 
     const wired = await wireWorkingMemory(agent, session);
     const toolExecutor = new CoreToolExecutor({
@@ -149,13 +135,14 @@ describe('working memory wiring', () => {
       runStore,
       steps: [],
       toolExecutor,
-      model: stubModel,
+      model,
       emit: () => {},
     });
     ctx.workingMemoryPrompt = wired?.promptSection;
 
     const node = reply({ id: 'answer', instructions: 'Answer using working memory.' });
     await new TextDriver().runAgentTurn(resolveReplyNode(node, runState.state), ctx);
+    const capturedSystem = systemFromCapture(captured);
     expect(capturedSystem).toContain('prefers email contact');
     expect(capturedSystem).toContain('## Working memory');
   });

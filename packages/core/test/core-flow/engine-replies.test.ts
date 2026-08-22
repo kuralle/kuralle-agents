@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { rehydrateFlow } from '../../src/flows/definition/rehydrate.js';
 import { runFlow } from '../../src/flow/runFlow.js';
@@ -10,7 +11,8 @@ import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
 import type { StreamPart } from '../../src/types/stream.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import { mockV3ReplyModel, mockV3StreamResult } from '../helpers/mockLanguageModelV3Results.js';
 
 const AUTHORED = 'Your refund of $40 is confirmed.';
 
@@ -59,7 +61,7 @@ async function runReplyFlow(args: {
     runStore,
     steps: [],
     toolExecutor: new CoreToolExecutor({ tools: {} }),
-    model: stubModel,
+    model: mockV3ReplyModel(),
     emit: (part) => parts.push(part),
   });
   const result = await runFlow(args.flow, runState, args.driver, ctx);
@@ -216,21 +218,13 @@ describe('engine-rendered authored replies', () => {
 });
 
 describe('engine-rendered replies through Runtime', () => {
-  afterEach(() => {
-    mock.restore();
-  });
-
   it('authored reply: provider spy is 0 and the node span is rendered=engine', async () => {
     let streamCalls = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCalls += 1;
-          throw new Error(`streamText must not run for authored replies (call ${streamCalls})`);
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doStream: async () => {
+        streamCalls += 1;
+        throw new Error(`streamText must not run for authored replies (call ${streamCalls})`);
+      },
     });
 
     const say = reply({
@@ -243,7 +237,7 @@ describe('engine-rendered replies through Runtime', () => {
     const agent = defineAgent({
       id: 'clerk',
       instructions: 'Help.',
-      model: stubModel,
+      model,
       flows: [flow],
     });
     const runtime = createRuntime({
@@ -268,23 +262,11 @@ describe('engine-rendered replies through Runtime', () => {
 
   it('generated reply: provider spy is >0 and the node span is rendered=model', async () => {
     let streamCalls = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCalls += 1;
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Thanks.' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-            totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 4, totalTokens: 14 }),
-          };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doStream: async () => {
+        streamCalls += 1;
+        return mockV3StreamResult('Thanks.');
+      },
     });
 
     const say = reply({
@@ -296,7 +278,7 @@ describe('engine-rendered replies through Runtime', () => {
     const agent = defineAgent({
       id: 'clerk',
       instructions: 'Help.',
-      model: stubModel,
+      model,
       flows: [flow],
     });
     const runtime = createRuntime({

@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { reply, collect, defineFlow } from '../../src/types/flow.js';
 import { runFlow } from '../../src/flow/runFlow.js';
@@ -7,8 +7,7 @@ import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
-
-const stubModel = {} as import('ai').LanguageModel;
+import { mockV3CapturingStreamModel } from '../helpers/mockLanguageModelV3Results.js';
 
 function flattenSystem(system: unknown): string {
   if (typeof system === 'string') return system;
@@ -25,30 +24,10 @@ function flattenSystem(system: unknown): string {
   return '';
 }
 
-function captureStream(captured: Record<string, unknown>[]) {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      streamText: (args: Record<string, unknown>) => {
-        captured.push(args);
-        return {
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'ok' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        };
-      },
-    };
-  });
-}
-
 describe('agent base layer', () => {
   it('composes base instructions + exposes global tools in a speaking turn', async () => {
     const captured: Record<string, unknown>[] = [];
-    captureStream(captured);
+    const model = mockV3CapturingStreamModel(captured);
 
     const greet = reply({ id: 'greet', instructions: 'NODE_GREET_RULE', next: () => ({ end: 'done' }) });
     const flow = defineFlow({ name: 'b', description: 'x', start: greet, nodes: [greet] });
@@ -60,9 +39,10 @@ describe('agent base layer', () => {
     });
 
     const { session, runStore, runState } = await setupDurableHarness('base-1', 'base-run-1');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session, runStore, runState, steps: [],
-      toolExecutor: new CoreToolExecutor({ tools: {} }), model: stubModel, emit: () => {},
+      toolExecutor: new CoreToolExecutor({ tools: {} }), model, emit: () => {},
     });
     ctx.baseInstructions = 'BASE_PERSONA_SAFETY';
     ctx.globalTools = { faq_lookup: faq };
@@ -77,7 +57,7 @@ describe('agent base layer', () => {
 
   it('collect extraction sees base instructions but NOT global tools (safety invariant)', async () => {
     const captured: Record<string, unknown>[] = [];
-    captureStream(captured);
+    const model = mockV3CapturingStreamModel(captured);
 
     const ask = collect({
       id: 'name',
@@ -95,7 +75,7 @@ describe('agent base layer', () => {
     runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session, runStore, runState, steps: [],
-      toolExecutor: new CoreToolExecutor({ tools: {} }), model: stubModel, emit: () => {},
+      toolExecutor: new CoreToolExecutor({ tools: {} }), model, emit: () => {},
     });
     ctx.baseInstructions = 'BASE_PERSONA_SAFETY';
     ctx.globalTools = { faq_lookup: faq };

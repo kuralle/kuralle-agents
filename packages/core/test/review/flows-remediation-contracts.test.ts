@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
@@ -10,8 +11,10 @@ import type { ChannelDriver } from '../../src/types/channel.js';
 import type { StreamPart, TurnHandle } from '../../src/types/stream.js';
 import type { HostSelection } from '../../src/runtime/select.js';
 import { makeRunState, makeTestSession, stubModel } from '../core-durable/helpers.js';
-
-afterEach(() => mock.restore());
+import {
+  mockV3GenerateObjectModel,
+  mockV3GenerateResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 async function collectParts(handle: TurnHandle): Promise<StreamPart[]> {
   const parts: StreamPart[] = [];
@@ -213,37 +216,29 @@ describe('R-03 verification precedes every transition reduction', () => {
   }
 
   it('blocks and permits a nested switchFlow reduction through the public runtime', async () => {
-    let routeCalls = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          routeCalls += 1;
-          return {
-            object:
-              routeCalls === 1
-                ? {
-                    action: 'enterFlow',
-                    flowName: 'child',
-                    agentId: null,
-                    reason: 'nested request',
-                    confidence: 1,
-                  }
-                : {
-                    action: 'keep',
-                    flowName: null,
-                    agentId: null,
-                    reason: 'nested request handled',
-                    confidence: 1,
-                  },
-            usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
-          };
-        },
-      };
-    });
-
     for (const approved of [false, true]) {
+      let routeCalls = 0;
+      const routeModel = mockV3GenerateObjectModel(async () => {
+        routeCalls += 1;
+        return {
+          object:
+            routeCalls === 1
+              ? {
+                  action: 'enterFlow',
+                  flowName: 'child',
+                  agentId: null,
+                  reason: 'nested request',
+                  confidence: 1,
+                }
+              : {
+                  action: 'keep',
+                  flowName: null,
+                  agentId: null,
+                  reason: 'nested request handled',
+                  confidence: 1,
+                },
+        };
+      });
       routeCalls = 0;
       const childEnd = action({
         id: 'child-end',
@@ -274,7 +269,7 @@ describe('R-03 verification precedes every transition reduction', () => {
       });
       const agent = defineAgent({
         id: 'switch-agent',
-        model: stubModel,
+        model: routeModel,
         flows: [parent, child],
         experimental: { outOfBandControl: true },
       });
@@ -284,7 +279,7 @@ describe('R-03 verification precedes every transition reduction', () => {
       const runtime = createRuntime({
         agents: [agent],
         defaultAgentId: agent.id,
-        defaultModel: stubModel,
+        defaultModel: routeModel,
         sessionStore: store,
       });
       const parts = await collectParts(
@@ -302,33 +297,27 @@ describe('R-03 verification precedes every transition reduction', () => {
 describe('R-04 nested flows own isolated persisted state frames', () => {
   it('keeps parent issue/urgency private, persists both frames, and restores only explicit output', async () => {
     let routeCalls = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          routeCalls += 1;
-          return {
-            object:
-              routeCalls === 1
-                ? {
-                    action: 'enterFlow',
-                    flowName: 'dispatch',
-                    agentId: null,
-                    reason: 'dispatch the heating order',
-                    confidence: 1,
-                  }
-                : {
-                    action: 'keep',
-                    flowName: null,
-                    agentId: null,
-                    reason: 'nested request handled',
-                    confidence: 1,
-                  },
-            usage: { inputTokens: 13, outputTokens: 3, totalTokens: 16 },
-          };
-        },
-      };
+    const routeModel = new MockLanguageModelV3({
+      doGenerate: async () => {
+        routeCalls += 1;
+        const object =
+          routeCalls === 1
+            ? {
+                action: 'enterFlow',
+                flowName: 'dispatch',
+                agentId: null,
+                reason: 'dispatch the heating order',
+                confidence: 1,
+              }
+            : {
+                action: 'keep',
+                flowName: null,
+                agentId: null,
+                reason: 'nested request handled',
+                confidence: 1,
+              };
+        return mockV3GenerateResult(JSON.stringify(object), 13);
+      },
     });
 
     const observedChildStates: Array<Record<string, unknown>> = [];
@@ -381,7 +370,7 @@ describe('R-04 nested flows own isolated persisted state frames', () => {
     });
     const agent = defineAgent({
       id: 'frame-agent',
-      model: stubModel,
+      model: routeModel,
       flows: [parent, dispatch],
       experimental: { outOfBandControl: true },
     });
@@ -391,7 +380,7 @@ describe('R-04 nested flows own isolated persisted state frames', () => {
     const runtime = createRuntime({
       agents: [agent],
       defaultAgentId: agent.id,
-      defaultModel: stubModel,
+      defaultModel: routeModel,
       sessionStore: store,
     });
     const driver: ChannelDriver = {
@@ -464,28 +453,24 @@ describe('R-07 control-model calls preserve abort signals', () => {
     const started = new Promise<void>((resolve) => {
       markStarted = resolve;
     });
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: (options: { abortSignal?: AbortSignal }) => {
-          receivedSignal = options.abortSignal;
-          markStarted();
-          return new Promise((_resolve, reject) => {
-            const fail = () => reject(new DOMException('cancelled', 'AbortError'));
-            if (options.abortSignal?.aborted) fail();
-            else options.abortSignal?.addEventListener('abort', fail, { once: true });
-          });
-        },
-      };
+    const routingModel = new MockLanguageModelV3({
+      doGenerate: async (options) => {
+        receivedSignal = options.abortSignal;
+        markStarted();
+        return new Promise((_resolve, reject) => {
+          const fail = () => reject(new DOMException('cancelled', 'AbortError'));
+          if (options.abortSignal?.aborted) fail();
+          else options.abortSignal?.addEventListener('abort', fail, { once: true });
+        });
+      },
     });
 
-    const router = defineAgent({ id: 'router', model: stubModel, handoffs: ['worker'] });
+    const router = defineAgent({ id: 'router', model: routingModel, handoffs: ['worker'] });
     const worker = defineAgent({ id: 'worker', model: stubModel });
     const runtime = createRuntime({
       agents: [router, worker],
       defaultAgentId: router.id,
-      defaultModel: stubModel,
+      defaultModel: routingModel,
     });
     const controller = new AbortController();
     const handle = runtime.run({

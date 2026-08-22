@@ -1,4 +1,4 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import type { ModelMessage } from 'ai';
 import {
   compactMessages,
@@ -7,26 +7,16 @@ import {
 import { addSystemNote, systemNoteBlocks } from '../../src/runtime/systemNotes.js';
 import { stubModel } from '../core-durable/helpers.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
-
-afterEach(() => {
-  mock.restore();
-});
+import {
+  mockV3FailingSummarizerModel,
+  mockV3SummarizerModel,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 function turn(index: number, padding = 400): ModelMessage[] {
   return [
     { role: 'user', content: `question ${index} ${'x'.repeat(padding)}` },
     { role: 'assistant', content: `answer ${index} ${'y'.repeat(padding)}` },
   ];
-}
-
-function mockSummarizer(summary = 'User is Jane; ordered cake #42; prefers delivery to Colombo.') {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      generateText: async () => ({ text: summary }),
-    };
-  });
 }
 
 describe('compactMessages', () => {
@@ -44,7 +34,7 @@ describe('compactMessages', () => {
   });
 
   it('compacts older messages into a leading system summary, keeping the recent tail', async () => {
-    mockSummarizer();
+    const model = mockV3SummarizerModel('User is Jane; ordered cake #42; prefers delivery to Colombo.');
     const messages: ModelMessage[] = [];
     for (let index = 0; index < 20; index += 1) {
       messages.push(...turn(index));
@@ -53,7 +43,7 @@ describe('compactMessages', () => {
 
     const result = await compactMessages({
       messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 100, keepRecentMessages: 6 },
     });
 
@@ -73,7 +63,7 @@ describe('compactMessages', () => {
   });
 
   it('extends the cut backward so the kept slice starts at a user message', async () => {
-    mockSummarizer();
+    const model = mockV3SummarizerModel('User is Jane; ordered cake #42; prefers delivery to Colombo.');
     const messages: ModelMessage[] = [];
     for (let index = 0; index < 10; index += 1) {
       messages.push(...turn(index));
@@ -82,7 +72,7 @@ describe('compactMessages', () => {
     // the cut must walk back to the preceding user message.
     const result = await compactMessages({
       messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 100, keepRecentMessages: 5 },
     });
     expect(result.compacted).toBe(true);
@@ -91,14 +81,14 @@ describe('compactMessages', () => {
   });
 
   it('force compacts regardless of threshold', async () => {
-    mockSummarizer();
+    const model = mockV3SummarizerModel('User is Jane; ordered cake #42; prefers delivery to Colombo.');
     const messages: ModelMessage[] = [];
     for (let index = 0; index < 10; index += 1) {
       messages.push(...turn(index, 10));
     }
     const result = await compactMessages({
       messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 1_000_000, keepRecentMessages: 4 },
       force: true,
     });
@@ -106,22 +96,14 @@ describe('compactMessages', () => {
   });
 
   it('fails closed (no compaction) when the summarizer errors', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateText: async () => {
-          throw new Error('provider down');
-        },
-      };
-    });
+    const model = mockV3FailingSummarizerModel();
     const messages: ModelMessage[] = [];
     for (let index = 0; index < 10; index += 1) {
       messages.push(...turn(index));
     }
     const result = await compactMessages({
       messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 100 },
     });
     expect(result.compacted).toBe(false);
@@ -131,11 +113,11 @@ describe('compactMessages', () => {
   });
 
   it('skips when there is not enough history to fold', async () => {
-    mockSummarizer();
+    const model = mockV3SummarizerModel('User is Jane; ordered cake #42; prefers delivery to Colombo.');
     const messages = turn(1, 10_000); // huge single turn — over threshold but nothing to fold
     const result = await compactMessages({
       messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 100, keepRecentMessages: 12 },
     });
     expect(result.compacted).toBe(false);
@@ -147,21 +129,12 @@ describe('compactMessages', () => {
   it('chains summaries across two compaction rounds', async () => {
     const capturedPrompts: string[] = [];
     const distinctiveFact = 'BOOKING-REF-XYZ';
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateText: async (opts: { prompt?: string }) => {
-          capturedPrompts.push(opts.prompt ?? '');
-          const input = opts.prompt ?? '';
-          if (input.includes(distinctiveFact)) {
-            return {
-              text: `User Jane; booking ${distinctiveFact}; allergic to peanuts.`,
-            };
-          }
-          return { text: 'User discussed recent order updates.' };
-        },
-      };
+    const model = mockV3SummarizerModel(async ({ promptText }) => {
+      capturedPrompts.push(promptText);
+      if (promptText.includes(distinctiveFact)) {
+        return `User Jane; booking ${distinctiveFact}; allergic to peanuts.`;
+      }
+      return 'User discussed recent order updates.';
     });
 
     const messages: ModelMessage[] = [
@@ -177,7 +150,7 @@ describe('compactMessages', () => {
 
     const round1 = await compactMessages({
       messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 100, keepRecentMessages: 6 },
     });
     expect(round1.compacted).toBe(true);
@@ -197,7 +170,7 @@ describe('compactMessages', () => {
     const { readSystemNote } = await import('../../src/runtime/systemNotes.js');
     const round2 = await compactMessages({
       messages: runState.messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 100, keepRecentMessages: 6 },
       priorSummary: readSystemNote(runState, 'compaction-summary'),
     });

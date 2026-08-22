@@ -1,12 +1,10 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
-import type { LanguageModel } from 'ai';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import { decide } from '../../src/types/flow.js';
 import {
   CHOICE_NONE,
   buildChoiceEnumSchema,
-  isChoiceFieldSchema,
-  isConstrainedChoiceEnumSchema,
   matchChoiceFromInput,
 } from '../../src/flow/choiceMatch.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
@@ -15,10 +13,10 @@ import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { selectHostTarget } from '../../src/runtime/select.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
-
-afterEach(() => {
-  mock.restore();
-});
+import {
+  mockV3GenerateObjectModel,
+  mockV3GenerateResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 function choiceDecideNode() {
   const node = decide({
@@ -39,6 +37,22 @@ function choiceDecideNode() {
   return node;
 }
 
+function llmGuardModel(onCall: () => void): MockLanguageModelV3 {
+  return new MockLanguageModelV3({
+    doGenerate: async () => {
+      onCall();
+      throw new Error('LLM should not run');
+    },
+  });
+}
+
+function jsonSchemaEnum(responseFormat: unknown): string[] | undefined {
+  if (!responseFormat || typeof responseFormat !== 'object') return undefined;
+  const schema = (responseFormat as { schema?: { properties?: { choice?: { enum?: string[] } } } })
+    .schema;
+  return schema?.properties?.choice?.enum;
+}
+
 describe('H4 choice-decide constrained enum + code-first', () => {
   it('buildChoiceEnumSchema rejects ids outside the closed enum', () => {
     const schema = buildChoiceEnumSchema([
@@ -51,16 +65,8 @@ describe('H4 choice-decide constrained enum + code-first', () => {
   });
 
   it('generateObject receives the closed enum schema for choice-decides', async () => {
-    let capturedSchema: unknown;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async ({ schema }: { schema: unknown }) => {
-          capturedSchema = schema;
-          return { object: { choice: CHOICE_NONE } };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => mockV3GenerateResult(JSON.stringify({ choice: CHOICE_NONE })),
     });
 
     const { session, runStore, runState } = await setupDurableHarness('enum-schema', 'enum-schema-run');
@@ -71,30 +77,23 @@ describe('H4 choice-decide constrained enum + code-first', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as LanguageModel,
+      model,
       emit: () => {},
     });
 
     await new TextDriver().runStructured(choiceDecideNode(), ctx);
 
-    expect(isConstrainedChoiceEnumSchema(capturedSchema)).toBe(true);
-    const parsed = (capturedSchema as ReturnType<typeof buildChoiceEnumSchema>).safeParse({
-      choice: 'not-a-real-id',
-    });
-    expect(parsed.success).toBe(false);
+    const enumValues = jsonSchemaEnum(model.doGenerateCalls[0]?.responseFormat);
+    expect(enumValues).toContain('checkout');
+    expect(enumValues).toContain('more');
+    expect(enumValues).toContain(CHOICE_NONE);
+    expect(enumValues).not.toContain('not-a-real-id');
   });
 
   it('exact id match skips generateObject', async () => {
     let llmCalled = false;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          llmCalled = true;
-          throw new Error('LLM should not run on exact match');
-        },
-      };
+    const model = llmGuardModel(() => {
+      llmCalled = true;
     });
 
     const { session, runStore, runState } = await setupDurableHarness('code-first-id', 'code-first-id-run');
@@ -105,7 +104,7 @@ describe('H4 choice-decide constrained enum + code-first', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as LanguageModel,
+      model,
       emit: () => {},
     });
 
@@ -116,15 +115,8 @@ describe('H4 choice-decide constrained enum + code-first', () => {
 
   it('exact label match skips generateObject', async () => {
     let llmCalled = false;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          llmCalled = true;
-          throw new Error('LLM should not run on label match');
-        },
-      };
+    const model = llmGuardModel(() => {
+      llmCalled = true;
     });
 
     const { session, runStore, runState } = await setupDurableHarness('code-first-label', 'code-first-label-run');
@@ -135,7 +127,7 @@ describe('H4 choice-decide constrained enum + code-first', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as LanguageModel,
+      model,
       emit: () => {},
     });
 
@@ -146,15 +138,9 @@ describe('H4 choice-decide constrained enum + code-first', () => {
 
   it('ambiguous input falls through to constrained generateObject', async () => {
     let llmCalled = false;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          llmCalled = true;
-          return { object: { choice: 'checkout' } };
-        },
-      };
+    const model = mockV3GenerateObjectModel(async () => {
+      llmCalled = true;
+      return { object: { choice: 'checkout' } };
     });
 
     const { session, runStore, runState } = await setupDurableHarness('ambig', 'ambig-run');
@@ -165,7 +151,7 @@ describe('H4 choice-decide constrained enum + code-first', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as LanguageModel,
+      model,
       emit: () => {},
     });
 
@@ -175,13 +161,7 @@ describe('H4 choice-decide constrained enum + code-first', () => {
   });
 
   it('__none from the model maps to stay via decide', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({ object: { choice: CHOICE_NONE } }),
-      };
-    });
+    const model = mockV3GenerateObjectModel(async () => ({ object: { choice: CHOICE_NONE } }));
 
     const node = choiceDecideNode();
     const { session, runStore, runState } = await setupDurableHarness('none-stay', 'none-stay-run');
@@ -192,7 +172,7 @@ describe('H4 choice-decide constrained enum + code-first', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as LanguageModel,
+      model,
       emit: () => {},
     });
 
@@ -202,16 +182,8 @@ describe('H4 choice-decide constrained enum + code-first', () => {
   });
 
   it('custom non-choice schema keeps legacy unconstrained generateObject', async () => {
-    let capturedSchema: unknown;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async ({ schema }: { schema: unknown }) => {
-          capturedSchema = schema;
-          return { object: { action: 'hold' } };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => mockV3GenerateResult(JSON.stringify({ action: 'hold' })),
     });
 
     const node = decide({
@@ -223,40 +195,35 @@ describe('H4 choice-decide constrained enum + code-first', () => {
     node.choices = [{ id: 'hold', label: 'Hold' }];
 
     const { session, runStore, runState } = await setupDurableHarness('custom-schema', 'custom-schema-run');
+    runState.messages = [{ role: 'user', content: 'hold please' }];
     const ctx = await createRunContext({
       session,
       runState,
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: {} as LanguageModel,
+      model,
       emit: () => {},
     });
 
     await new TextDriver().runStructured(node, ctx);
-    expect(isChoiceFieldSchema(capturedSchema)).toBe(false);
+    const responseFormat = model.doGenerateCalls[0]?.responseFormat as
+      | { schema?: { properties?: { action?: unknown; choice?: unknown } } }
+      | undefined;
+    expect(responseFormat?.schema?.properties?.action).toBeDefined();
+    expect(responseFormat?.schema?.properties?.choice).toBeUndefined();
   });
 
   it('classifyHostTarget always uses generateObject (no lexical routing)', async () => {
-    let llmCalled = false;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          llmCalled = true;
-          return {
-            object: {
-              action: 'enterFlow',
-              flowName: 'billing',
-              agentId: null,
-              reason: 'billing',
-              confidence: 0.9,
-            },
-          };
-        },
-      };
-    });
+    const model = mockV3GenerateObjectModel(async () => ({
+      object: {
+        action: 'enterFlow',
+        flowName: 'billing',
+        agentId: null,
+        reason: 'billing',
+        confidence: 0.9,
+      },
+    }));
 
     const end = reply({ id: 'end', instructions: 'done', next: () => ({ end: 'ok' }) });
     const billing = defineFlow({
@@ -283,29 +250,25 @@ describe('H4 choice-decide constrained enum + code-first', () => {
         routes: [{ flow: 'billing', when: 'billing invoice payment' }],
       },
       run: runState,
-      model: {} as LanguageModel,
+      model,
       allowKeep: true,
     });
 
-    expect(llmCalled).toBe(true);
+    expect(model.doGenerateCalls.length).toBeGreaterThan(0);
     expect(result.action).toBe('enterFlow');
     expect(result.flowName).toBe('billing');
   });
 
   it('selectHostTarget calls generateObject for routing decisions', async () => {
-    let llmCalled = false;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          llmCalled = true;
-          return {
-            object: { action: 'keep', flowName: null, agentId: null, reason: null },
-          };
-        },
-      };
-    });
+    const model = mockV3GenerateObjectModel(async () => ({
+      object: {
+        action: 'keep',
+        flowName: null,
+        agentId: null,
+        reason: null,
+        confidence: null,
+      },
+    }));
 
     const end = reply({ id: 'end', instructions: 'done', next: () => ({ end: 'ok' }) });
     const billing = defineFlow({
@@ -334,10 +297,10 @@ describe('H4 choice-decide constrained enum + code-first', () => {
         ],
       },
       run: runState,
-      model: {} as LanguageModel,
+      model,
     });
 
-    expect(llmCalled).toBe(true);
+    expect(model.doGenerateCalls.length).toBeGreaterThan(0);
   });
 });
 

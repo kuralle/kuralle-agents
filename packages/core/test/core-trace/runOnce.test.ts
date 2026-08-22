@@ -1,32 +1,75 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { simulateReadableStream } from 'ai/test';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
-import { stubModel } from '../core-durable/helpers.js';
 import { z } from 'zod';
+import {
+  mockV3MultiStepStreamModel,
+  mockV3StreamResult,
+  mockV3StreamTextModel,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
-afterEach(() => {
-  mock.restore();
-});
+function streamUsage(inputTokens: number, outputTokens: number) {
+  return {
+    inputTokens: {
+      total: inputTokens,
+      noCache: inputTokens,
+      cacheRead: undefined,
+      cacheWrite: undefined,
+    },
+    outputTokens: {
+      total: outputTokens,
+      text: outputTokens,
+      reasoning: undefined,
+    },
+  };
+}
+
+function mockV3ToolCallStreamWithUsage(
+  toolName: string,
+  toolCallId: string,
+  input: string,
+  inputTokens: number,
+  outputTokens: number,
+) {
+  return {
+    stream: simulateReadableStream({
+      chunks: [
+        { type: 'stream-start' as const, warnings: [] },
+        { type: 'tool-call' as const, toolCallId, toolName, input },
+        {
+          type: 'finish' as const,
+          finishReason: { unified: 'tool-calls' as const, raw: undefined },
+          usage: streamUsage(inputTokens, outputTokens),
+        },
+      ],
+    }),
+  };
+}
+
+function mockV3StreamWithUsage(text: string, inputTokens: number, outputTokens: number) {
+  return {
+    stream: simulateReadableStream({
+      chunks: [
+        { type: 'text-start' as const, id: 't0' },
+        { type: 'text-delta' as const, id: 't0', delta: text },
+        { type: 'text-end' as const, id: 't0' },
+        {
+          type: 'finish' as const,
+          finishReason: { unified: 'stop' as const, raw: undefined },
+          usage: streamUsage(inputTokens, outputTokens),
+        },
+      ],
+    }),
+  };
+}
 
 describe('Runtime.runOnce', () => {
   it('returns a single-run text trace', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'Grounded answer.' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
-
-    const agent = defineAgent({ id: 'support', instructions: 'Help the user.', model: stubModel });
+    const model = mockV3StreamTextModel('Grounded answer.');
+    const agent = defineAgent({ id: 'support', instructions: 'Help the user.', model });
     const runtime = createRuntime({
       agents: [agent],
       defaultAgentId: agent.id,
@@ -48,34 +91,15 @@ describe('Runtime.runOnce', () => {
   });
 
   it('records a tool call, result, and nested tool span', async () => {
-    let modelCall = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          modelCall += 1;
-          if (modelCall === 1) {
-            return {
-              fullStream: (async function* () {})(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                { toolName: 'last_invoice', toolCallId: 'call-1', input: { customerId: 'c-7' } },
-              ]),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Invoice total: $42.' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () =>
+        mockV3ToolCallStreamResult(
+          'last_invoice',
+          'call-1',
+          JSON.stringify({ customerId: 'c-7' }),
+        ),
+      () => mockV3StreamResult('Invoice total: $42.'),
+    ]);
 
     const lastInvoice = defineTool({
       name: 'last_invoice',
@@ -86,7 +110,7 @@ describe('Runtime.runOnce', () => {
     const agent = defineAgent({
       id: 'billing',
       instructions: 'Use billing tools.',
-      model: stubModel,
+      model,
       tools: { last_invoice: lastInvoice },
     });
     const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });
@@ -107,44 +131,10 @@ describe('Runtime.runOnce', () => {
   });
 
   it('reports summed turn cost but only the final tool-loop prompt as context tokens', async () => {
-    let modelCall = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          modelCall += 1;
-          if (modelCall === 1) {
-            return {
-              fullStream: (async function* () {})(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                { toolName: 'lookup', toolCallId: 'call-usage', input: {} },
-              ]),
-              totalUsage: Promise.resolve({
-                inputTokens: 100,
-                outputTokens: 10,
-                totalTokens: 110,
-              }),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Done.' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-            totalUsage: Promise.resolve({
-              inputTokens: 150,
-              outputTokens: 20,
-              totalTokens: 170,
-            }),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => mockV3ToolCallStreamWithUsage('lookup', 'call-usage', '{}', 100, 10),
+      () => mockV3StreamWithUsage('Done.', 150, 20),
+    ]);
 
     const lookup = defineTool({
       name: 'lookup',
@@ -155,7 +145,7 @@ describe('Runtime.runOnce', () => {
     const agent = defineAgent({
       id: 'usage',
       instructions: 'Use the lookup tool.',
-      model: stubModel,
+      model,
       tools: { lookup },
     });
     const runtime = createRuntime({ agents: [agent], defaultAgentId: agent.id });

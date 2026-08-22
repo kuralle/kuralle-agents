@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { z } from 'zod';
-import { streamText, tool } from 'ai';
+import { tool } from 'ai';
 import { AiSdkModelTurnLoop } from '../../src/runtime/channels/AiSdkModelTurnLoop.ts';
 import { createEventBus, createTurnHandle } from '../../src/events/TurnHandle.ts';
 import type { ModelTurnLoopInput, ModelTurnLoopState } from '../../src/runtime/channels/ModelTurnLoop.ts';
@@ -125,30 +125,23 @@ async function runLoop(purpose: 'speaking' | 'extraction', maxSteps: number) {
 }
 
 /**
- * These three need the REAL `streamText`, and inside the shared `bun test` process they cannot
- * have it.
+ * These need the REAL `streamText`, and now they get it.
  *
- * Eighty files in this suite call `mock.module('ai', …)`. Bun applies module mocks
- * process-wide and never lifts them, and several of those files sort ahead of this one, so by
- * the time these run `streamText` is whichever stub was installed last. It cannot be fixed from
- * the test side either: `AiSdkModelTurnLoop` imports `'ai'` itself, so restoring the module here
- * would not change what the code under test already resolved.
+ * They used to be skipped: this suite mocked the whole `ai` package via Bun's module mock in
+ * dozens of files, Bun applies module mocks process-wide and never lifts them, and several of
+ * those files sorted ahead of this one — so by the time these ran, `streamText` was whichever
+ * stub was installed last. The file detected the stub and skipped, because a suite that is red
+ * for an unrelated file's mock teaches nobody anything.
  *
- * So the file detects the stub and skips rather than failing — a red suite that is red for an
- * unrelated file's mock teaches nobody anything. To actually run them:
- *
- *     bun run test:turn-loop
- *
- * which executes this file in its own process where no other file has mocked `ai`. That script
- * is the real guard; the skip only keeps the shared suite honest about what it did not cover.
+ * Every one of those module mocks is now a scoped `MockLanguageModelV3` passed as the agent's
+ * model, so nothing replaces `streamText` process-wide any more and these run in the shared
+ * suite. If a global `mock.module('ai', …)` is ever reintroduced, these fail loudly rather than
+ * skipping quietly — which is the outcome to want.
  */
-const streamTextIsMocked = !/native code|streamText/.test(String(streamText).slice(0, 200));
-
-const maybe = streamTextIsMocked ? it.skip : it;
 
 describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
 
-  maybe('still answers when the budget runs out mid tool chain', async () => {
+  it('still answers when the budget runs out mid tool chain', async () => {
     const { text, toolLessCalls, toolCalls } = await runLoop('speaking', 3);
 
     expect(toolCalls).toBe(3); // the whole budget went to tools
@@ -156,7 +149,7 @@ describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
     expect(text).toBe('Here is what I did.');
   });
 
-  maybe('does not force prose on the silent extraction path', async () => {
+  it('does not force prose on the silent extraction path', async () => {
     // Typed extraction is deliberately mute. A wrap-up here would put stray text on a path
     // whose entire purpose is to produce none.
     const { text, toolLessCalls } = await runLoop('extraction', 3);
@@ -165,7 +158,7 @@ describe('AiSdkModelTurnLoop — exhausting the step budget', () => {
     expect(text).toBe('');
   });
 
-  maybe('does not add a wrap-up when the model stopped on its own', async () => {
+  it('does not add a wrap-up when the model stopped on its own', async () => {
     // A budget of 1 with a model that speaks immediately: `finishReason` is `stop`, so the
     // loop exits deliberately, no extra call is made, and no `turn-incomplete` is emitted —
     // `stop` is a completed turn, not an abnormal one.
@@ -302,7 +295,7 @@ describe('AiSdkModelTurnLoop — abnormal finish reasons', () => {
     };
   }
 
-  maybe('length: emits turn-incomplete, records state.incomplete, does not wrap up', async () => {
+  it('length: emits turn-incomplete, records state.incomplete, does not wrap up', async () => {
     const { turnIncomplete, incomplete, callCount, text } = await runAbnormalReasonLoop(
       'length',
       'with-text',
@@ -316,7 +309,7 @@ describe('AiSdkModelTurnLoop — abnormal finish reasons', () => {
     expect(text).toBe('truncated mid-sen');
   });
 
-  maybe(
+  it(
     'content-filter: emits turn-incomplete with its own reason, does not wrap up',
     async () => {
       const { turnIncomplete, incomplete, callCount, text } = await runAbnormalReasonLoop(

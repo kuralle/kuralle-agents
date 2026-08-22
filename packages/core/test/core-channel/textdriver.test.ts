@@ -1,62 +1,36 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { decide, reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { defineTool, CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { createEventBus, createTurnHandle } from '../../src/events/TurnHandle.js';
-import {
-  setupDurableHarness,
-  stubModel,
-} from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import type { RunState } from '../../src/runtime/durable/types.js';
 import type { StreamPart } from '../../src/types/stream.js';
 import type { ValidationCapability } from '../../src/capabilities/ValidationCapability.js';
 import { z } from 'zod';
+import { buildChoiceEnumSchema, isConstrainedChoiceEnumSchema } from '../../src/flow/choiceMatch.js';
+import {
+  mockV3GenerateObjectModel,
+  mockV3MultiStepStreamModel,
+  mockV3StreamResult,
+  mockV3StreamTextModel,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 const TEXT_LIFECYCLE = new Set(['text-start', 'text-delta', 'text-end', 'text-cancel']);
 
-function mockMultiChunkStream(chunks: string[]) {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      streamText: () => ({
-        fullStream: (async function* () {
-          for (const text of chunks) {
-            yield Object.assign({ type: 'text-delta' }, { text });
-          }
-        })(),
-        finishReason: Promise.resolve('stop'),
-        response: Promise.resolve({ messages: [] }),
-        toolCalls: Promise.resolve([]),
-      }),
-    };
-  });
+function withUserMessage(runState: RunState) {
+  runState.messages = [{ role: 'user', content: 'hello' }];
 }
-
-afterEach(() => {
-  mock.restore();
-});
 
 describe('TextDriver unit', () => {
   it('streams text-delta events and returns TurnResult', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'Hello' });
-            yield Object.assign({ type: 'text-delta' }, { text: ' world' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
+    const model = mockV3StreamTextModel(['Hello', ' world']);
 
     const { session, runStore, runState } = await setupDurableHarness();
+    withUserMessage(runState);
     const parts: StreamPart[] = [];
     const toolExecutor = new CoreToolExecutor({ tools: {} });
 
@@ -66,7 +40,7 @@ describe('TextDriver unit', () => {
       runStore,
       steps: [],
       toolExecutor,
-      model: stubModel,
+      model,
       emit: (p) => parts.push(p),
     });
 
@@ -92,45 +66,24 @@ describe('TextDriver unit', () => {
       },
     });
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCall += 1;
-          if (streamCall === 1) {
-            return {
-              fullStream: (async function* () {
-                yield Object.assign({ type: 'text-delta' }, { text: 'Calling tool' });
-              })(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({
-                messages: [
-                  {
-                    role: 'assistant',
-                    content: [{ type: 'text', text: 'Calling tool' }],
-                  },
-                ],
-              }),
-              toolCalls: Promise.resolve([
-                { toolName: 'echo', toolCallId: 'call-1', input: { value: 'test' } },
-              ]),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: ' Done' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => {
+        streamCall += 1;
+        return mockV3ToolCallStreamResult(
+          'echo',
+          'call-1',
+          JSON.stringify({ value: 'test' }),
+        );
+      },
+      () => {
+        streamCall += 1;
+        return mockV3StreamResult(' Done');
+      },
+    ]);
 
     const toolExecutor = new CoreToolExecutor({ tools: { echo: echoTool } });
     const { session, runStore, runState } = await setupDurableHarness();
+    withUserMessage(runState);
 
     const ctx = await createRunContext({
       session,
@@ -138,7 +91,7 @@ describe('TextDriver unit', () => {
       runStore,
       steps: [],
       toolExecutor,
-      model: stubModel,
+      model,
       emit: () => {},
     });
 
@@ -156,23 +109,11 @@ describe('TextDriver unit', () => {
   });
 
   it('TurnHandle awaits result, iterates events, and exposes toResponseStream', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'Hi' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
+    const model = mockV3StreamTextModel('Hi');
 
     const bus = createEventBus();
     const { session, runStore, runState } = await setupDurableHarness();
+    withUserMessage(runState);
     const toolExecutor = new CoreToolExecutor({ tools: {} });
 
     const handle = createTurnHandle({
@@ -184,7 +125,7 @@ describe('TextDriver unit', () => {
           runStore,
           steps: [],
           toolExecutor,
-          model: stubModel,
+          model,
           emit: (p) => bus.emit(p),
         });
         const driver = new TextDriver();
@@ -210,17 +151,18 @@ describe('TextDriver unit', () => {
   describe('S1-03 speakGated streaming', () => {
     it('REQ-1: ungated reply streams >1 text-delta with first before turn-end', async () => {
       const chunks = ['Hello', ' world', '. How', ' are you?'];
-      mockMultiChunkStream(chunks);
+      const model = mockV3StreamTextModel(chunks);
 
       const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
+      withUserMessage(runState);
       const ctx = await createRunContext({
         session,
         runState,
         runStore,
         steps: [],
         toolExecutor: new CoreToolExecutor({ tools: {} }),
-        model: stubModel,
+        model,
         emit: (p) => parts.push(p),
       });
 
@@ -240,7 +182,7 @@ describe('TextDriver unit', () => {
 
     it('REQ-3: turn-mode node buffers to one lifecycle message', async () => {
       const chunks = ['First ', 'second ', 'third'];
-      mockMultiChunkStream(chunks);
+      const model = mockV3StreamTextModel(chunks);
 
       const turnPolicy: ValidationCapability = {
         name: 'turn-buffer',
@@ -249,13 +191,14 @@ describe('TextDriver unit', () => {
 
       const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
+      withUserMessage(runState);
       const ctx = await createRunContext({
         session,
         runState,
         runStore,
         steps: [],
         toolExecutor: new CoreToolExecutor({ tools: {} }),
-        model: stubModel,
+        model,
         validationPolicies: [turnPolicy],
         emit: (p) => parts.push(p),
       });
@@ -271,7 +214,7 @@ describe('TextDriver unit', () => {
 
     it('REQ-3: turn-mode block never emits model partials', async () => {
       const leaked = 'LEAKED-SECRET';
-      mockMultiChunkStream([leaked.slice(0, 6), leaked.slice(6)]);
+      const model = mockV3StreamTextModel([leaked.slice(0, 6), leaked.slice(6)]);
 
       const blockPolicy: ValidationCapability = {
         name: 'block-all',
@@ -287,13 +230,14 @@ describe('TextDriver unit', () => {
 
       const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
+      withUserMessage(runState);
       const ctx = await createRunContext({
         session,
         runState,
         runStore,
         steps: [],
         toolExecutor: new CoreToolExecutor({ tools: {} }),
-        model: stubModel,
+        model,
         validationPolicies: [blockPolicy],
         emit: (p) => parts.push(p),
       });
@@ -311,30 +255,18 @@ describe('TextDriver unit', () => {
     });
 
     it('REQ-12: runExtraction emits zero text lifecycle events', async () => {
-      mock.module('ai', () => {
-        const actual = require('ai');
-        return {
-          ...actual,
-          streamText: () => ({
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'would speak' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          }),
-        };
-      });
+      const model = mockV3StreamTextModel('would speak');
 
       const parts: StreamPart[] = [];
       const { session, runStore, runState } = await setupDurableHarness();
+      withUserMessage(runState);
       const ctx = await createRunContext({
         session,
         runState,
         runStore,
         steps: [],
         toolExecutor: new CoreToolExecutor({ tools: {} }),
-        model: stubModel,
+        model,
         emit: (p) => parts.push(p),
       });
 
@@ -346,30 +278,6 @@ describe('TextDriver unit', () => {
   });
 
   it('runStructured uses a closed enum schema for choice-decides', async () => {
-    let capturedSchema: unknown;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async ({ schema }: { schema: unknown }) => {
-          capturedSchema = schema;
-          return { object: { choice: 'checkout' } };
-        },
-      };
-    });
-
-    const { session, runStore, runState } = await setupDurableHarness();
-    runState.messages = [{ role: 'user', content: 'something unrelated entirely' }];
-    const ctx = await createRunContext({
-      session,
-      runState,
-      runStore,
-      steps: [],
-      toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
-      emit: () => {},
-    });
-
     const node = decide({
       id: 'cart',
       instructions: 'Review the cart',
@@ -380,14 +288,24 @@ describe('TextDriver unit', () => {
       { id: 'checkout', label: 'Checkout' },
       { id: 'more', label: 'Add another gift' },
     ];
+    const choiceSchema = buildChoiceEnumSchema(node.choices);
+    expect(isConstrainedChoiceEnumSchema(choiceSchema)).toBe(true);
+    expect(choiceSchema.safeParse({ choice: 'bogus' }).success).toBe(false);
+
+    const model = mockV3GenerateObjectModel(async () => ({ object: { choice: 'checkout' } }));
+
+    const { session, runStore, runState } = await setupDurableHarness();
+    runState.messages = [{ role: 'user', content: 'something unrelated entirely' }];
+    const ctx = await createRunContext({
+      session,
+      runState,
+      runStore,
+      steps: [],
+      toolExecutor: new CoreToolExecutor({ tools: {} }),
+      model,
+      emit: () => {},
+    });
 
     await new TextDriver().runStructured(node, ctx);
-
-    const { isConstrainedChoiceEnumSchema } = await import('../../src/flow/choiceMatch.js');
-    expect(isConstrainedChoiceEnumSchema(capturedSchema)).toBe(true);
-    const parsed = (capturedSchema as import('zod').ZodObject<{ choice: import('zod').ZodEnum<[string, ...string[]]> }>).safeParse({
-      choice: 'bogus',
-    });
-    expect(parsed.success).toBe(false);
   });
 });

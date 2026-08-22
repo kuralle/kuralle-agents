@@ -1,5 +1,5 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
-import type { LanguageModel } from 'ai';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import { decide, reply } from '../../src/types/flow.js';
 import { defineFlow } from '../../src/types/flow.js';
@@ -10,13 +10,13 @@ import { selectHostTarget } from '../../src/runtime/select.js';
 import { hostLoop } from '../../src/runtime/hostLoop.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
+import {
+  mockV3GenerateResult,
+  mockV3StreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
-afterEach(() => {
-  mock.restore();
-});
-
-function taggedModel(tag: string): LanguageModel {
-  return { provider: tag } as LanguageModel;
+function taggedModel(tag: string): MockLanguageModelV3 {
+  return new MockLanguageModelV3({ provider: tag, modelId: tag });
 }
 
 describe('control model channel (H2)', () => {
@@ -56,21 +56,12 @@ describe('control model channel (H2)', () => {
 
   it('runStructured (decide) uses controlModel at temperature 0', async () => {
     const speaker = taggedModel('speaker');
-    const control = taggedModel('control');
-    let captured: { model?: LanguageModel; temperature?: number } = {};
-
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async (opts: { model?: LanguageModel; temperature?: number }) => {
-          captured = opts;
-          return { object: { choice: 'a' } };
-        },
-      };
+    const control = new MockLanguageModelV3({
+      doGenerate: async () => mockV3GenerateResult(JSON.stringify({ choice: 'a' })),
     });
 
     const { session, runStore, runState } = await setupDurableHarness('ctrl-decide', 'ctrl-decide-run');
+    runState.messages = [{ role: 'user', content: 'pick one' }];
     const ctx = await createRunContext({
       session,
       runState,
@@ -90,34 +81,19 @@ describe('control model channel (H2)', () => {
     });
 
     await new TextDriver().runStructured(node, ctx);
-    expect(captured.model).toBe(control);
-    expect(captured.temperature).toBe(0);
+    expect(control.doGenerateCalls).toHaveLength(1);
+    expect(speaker.doGenerateCalls).toHaveLength(0);
+    expect(control.doGenerateCalls[0]?.temperature).toBe(0);
   });
 
   it('runSilentExtraction uses controlModel at temperature 0', async () => {
     const speaker = taggedModel('speaker');
-    const control = taggedModel('control');
-    let captured: { model?: LanguageModel; temperature?: number } = {};
-
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { model?: LanguageModel; temperature?: number }) => {
-          captured = opts;
-          return {
-            fullStream: (async function* () {
-              /* no text-delta — extraction never speaks */
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
+    const control = new MockLanguageModelV3({
+      doStream: async () => mockV3StreamResult(''),
     });
 
     const { session, runStore, runState } = await setupDurableHarness('ctrl-extract', 'ctrl-extract-run');
+    runState.messages = [{ role: 'user', content: 'extract fields' }];
     const ctx = await createRunContext({
       session,
       runState,
@@ -131,25 +107,23 @@ describe('control model channel (H2)', () => {
 
     const node = reply({ id: 'collect-step', instructions: 'Extract fields' });
     await new TextDriver().runExtraction(resolveReplyNode(node, {}), ctx);
-    expect(captured.model).toBe(control);
-    expect(captured.temperature).toBe(0);
+    expect(control.doStreamCalls).toHaveLength(1);
+    expect(speaker.doStreamCalls).toHaveLength(0);
+    expect(control.doStreamCalls[0]?.temperature).toBe(0);
   });
 
   it('selectHostTarget uses the passed model at temperature 0', async () => {
-    const control = taggedModel('control');
-    let captured: { model?: LanguageModel; temperature?: number } = {};
-
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async (opts: { model?: LanguageModel; temperature?: number }) => {
-          captured = opts;
-          return {
-            object: { action: 'keep', flowName: null, agentId: null, reason: null },
-          };
-        },
-      };
+    const control = new MockLanguageModelV3({
+      doGenerate: async () =>
+        mockV3GenerateResult(
+          JSON.stringify({
+            action: 'keep',
+            flowName: null,
+            agentId: null,
+            reason: null,
+            confidence: null,
+          }),
+        ),
     });
 
     const end = reply({ id: 'end', instructions: 'done', next: () => ({ end: 'ok' }) });
@@ -175,14 +149,14 @@ describe('control model channel (H2)', () => {
       model: control,
     });
 
-    expect(captured.model).toBe(control);
-    expect(captured.temperature).toBe(0);
+    expect(control.doGenerateCalls).toHaveLength(1);
+    expect(control.doGenerateCalls[0]?.temperature).toBe(0);
   });
 
   it('hostLoop passes ctx.controlModel to the selector', async () => {
     const speaker = taggedModel('speaker');
     const control = taggedModel('control');
-    let selectModel: LanguageModel | undefined;
+    let selectModel: import('ai').LanguageModel | undefined;
 
     const end = reply({ id: 'end', instructions: 'done', next: () => ({ end: 'ok' }) });
     const flow = defineFlow({
@@ -231,29 +205,13 @@ describe('control model channel (H2)', () => {
   });
 
   it('runAgentTurn (speaker) uses ctx.model without forcing temperature 0', async () => {
-    const speaker = taggedModel('speaker');
-    const control = taggedModel('control');
-    let captured: { model?: LanguageModel; temperature?: number } = {};
-
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { model?: LanguageModel; temperature?: number }) => {
-          captured = opts;
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Hi' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
+    const speaker = new MockLanguageModelV3({
+      doStream: async () => mockV3StreamResult('Hi'),
     });
+    const control = taggedModel('control');
 
     const { session, runStore, runState } = await setupDurableHarness('ctrl-speaker', 'ctrl-speaker-run');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session,
       runState,
@@ -268,7 +226,8 @@ describe('control model channel (H2)', () => {
     const node = reply({ id: 'greet', instructions: 'Say hello' });
     await new TextDriver().runAgentTurn(resolveReplyNode(node, {}), ctx);
 
-    expect(captured.model).toBe(speaker);
-    expect(captured.temperature).toBeUndefined();
+    expect(speaker.doStreamCalls).toHaveLength(1);
+    expect(control.doStreamCalls).toHaveLength(0);
+    expect(speaker.doStreamCalls[0]?.temperature).toBeUndefined();
   });
 });

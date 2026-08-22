@@ -1,4 +1,4 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
@@ -11,29 +11,12 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { OutputProcessor } from '../../src/types/processors.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
-
-afterEach(() => {
-  mock.restore();
-});
+import { mockV3StreamTextModel } from '../helpers/mockLanguageModelV3Results.js';
 
 describe('guardrails', () => {
   it('redacts assistant text before emit and before message persistence', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'Email me at user@example.com please.' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
-
     const { session, runStore, runState } = await setupDurableHarness('redact-sess', 'redact-run');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const emitted: string[] = [];
     const ctx = await createRunContext({
       session,
@@ -41,7 +24,7 @@ describe('guardrails', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel('Email me at user@example.com please.'),
       outputProcessors: [{
         id: 'email-redact',
         process: ({ text }) => ({
@@ -66,21 +49,6 @@ describe('guardrails', () => {
   });
 
   it('output processor modifies text before emit', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'secret-token-12345' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        }),
-      };
-    });
-
     const scrubber: OutputProcessor = {
       id: 'scrub',
       process: ({ text }) => ({
@@ -90,6 +58,7 @@ describe('guardrails', () => {
     };
 
     const { session, runStore, runState } = await setupDurableHarness('out-proc', 'out-proc-run');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const emitted: string[] = [];
     const ctx = await createRunContext({
       session,
@@ -97,7 +66,7 @@ describe('guardrails', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel('secret-token-12345'),
       outputProcessors: [scrubber],
       emit: (part) => {
         if (part.type === 'text-delta') {

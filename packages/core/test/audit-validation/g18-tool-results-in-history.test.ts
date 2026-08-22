@@ -1,4 +1,4 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
@@ -12,6 +12,11 @@ import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { reply } from '../../src/types/flow.js';
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
+import {
+  mockV3MultiStepStreamModel,
+  mockV3StreamResult,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 const secret = 'ZQ-7731-POLICY';
 
@@ -56,9 +61,6 @@ function hasToolRoleOrCall(messages: ModelMessage[]): boolean {
   });
 }
 
-afterEach(() => {
-  mock.restore();
-});
 
 describe('G18: free-conversation tool results in history', () => {
   it('runFreeConversation persists toolMessages before final assistant text', async () => {
@@ -136,52 +138,20 @@ describe('G18: free-conversation tool results in history', () => {
       execute: async () => ({ policyCode: secret }),
     });
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCall += 1;
-          if (streamCall === 1) {
-            return {
-              fullStream: (async function* () {
-                yield Object.assign({ type: 'text-delta' }, { text: 'Looking up' });
-              })(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({
-                messages: [
-                  {
-                    role: 'assistant',
-                    content: [
-                      {
-                        type: 'tool-call',
-                        toolCallId: 'call-1',
-                        toolName: 'lookup_policy',
-                        input: {},
-                      },
-                    ],
-                  },
-                ],
-              }),
-              toolCalls: Promise.resolve([
-                { toolName: 'lookup_policy', toolCallId: 'call-1', input: {} },
-              ]),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: `Code is ${secret}` });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => {
+        streamCall += 1;
+        return mockV3ToolCallStreamResult('lookup_policy', 'call-1', '{}');
+      },
+      () => {
+        streamCall += 1;
+        return mockV3StreamResult(`Code is ${secret}`);
+      },
+    ]);
 
     const toolExecutor = new CoreToolExecutor({ tools: { lookup_policy: echoTool } });
     const { session, runStore, runState } = await setupDurableHarness('g18-driver', 'g18-driver');
+    runState.messages = [{ role: 'user', content: 'What is my policy code?' }];
 
     const ctx = await createRunContext({
       session,
@@ -189,7 +159,7 @@ describe('G18: free-conversation tool results in history', () => {
       runStore,
       steps: [],
       toolExecutor,
-      model: stubModel,
+      model,
       emit: () => {},
     });
 

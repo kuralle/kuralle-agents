@@ -1,10 +1,15 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import {
+  mockV3FailingSummarizerModel,
+  mockV3GenerateObjectModel,
+  mockV3ReplyModel,
+} from '../helpers/mockLanguageModelV3Results.js';
 import { createPromptInjectionGuard } from '../../src/processors/builtin/promptInjectionGuard.js';
 import {
   createPiiInputGuard,
@@ -15,10 +20,6 @@ import { createModerationGuard } from '../../src/processors/builtin/moderationGu
 import { createGroundingValidator } from '../../src/capabilities/validators/groundingValidator.js';
 import type { StreamPart } from '../../src/types/stream.js';
 import type { ToolCallRecord } from '../../src/types/session.js';
-
-afterEach(() => {
-  mock.restore();
-});
 
 describe('redactPii', () => {
   it('redacts a Luhn-valid card number with separators', () => {
@@ -127,47 +128,27 @@ describe('prompt injection guard', () => {
 
 describe('moderation guard', () => {
   it('blocks when the classifier flags', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: { flagged: true, category: 'violence or threats of violence', rationale: 'threat' },
-        }),
-      };
+    const guard = createModerationGuard({
+      model: mockV3GenerateObjectModel(async () => ({
+        object: { flagged: true, category: 'violence or threats of violence', rationale: 'threat' },
+      })),
     });
-    const guard = createModerationGuard({ model: stubModel });
     const result = await guard.process({ input: 'bad stuff', messages: [], context: {} });
     expect(result.action).toBe('block');
     expect(result.reason).toContain('violence');
   });
 
   it('fails open on classifier error by default', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          throw new Error('provider down');
-        },
-      };
-    });
-    const guard = createModerationGuard({ model: stubModel });
+    const guard = createModerationGuard({ model: mockV3FailingSummarizerModel('provider down') });
     const result = await guard.process({ input: 'hello', messages: [], context: {} });
     expect(result.action).toBe('allow');
   });
 
   it('fails closed when onError is block', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          throw new Error('provider down');
-        },
-      };
+    const guard = createModerationGuard({
+      model: mockV3FailingSummarizerModel('provider down'),
+      onError: 'block',
     });
-    const guard = createModerationGuard({ model: stubModel, onError: 'block' });
     const result = await guard.process({ input: 'hello', messages: [], context: {} });
     expect(result.action).toBe('block');
   });
@@ -195,21 +176,16 @@ describe('grounding validator', () => {
   }
 
   it('rewrites an ungrounded claim', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: {
-            verdict: 'ungrounded',
-            rewrittenOutput: 'I can place that order for you — shall I proceed?',
-            rationale: 'claimed order placed without create-order evidence',
-            confidence: 0.9,
-          },
-        }),
-      };
+    const validator = createGroundingValidator({
+      model: mockV3GenerateObjectModel(async () => ({
+        object: {
+          verdict: 'ungrounded',
+          rewrittenOutput: 'I can place that order for you — shall I proceed?',
+          rationale: 'claimed order placed without create-order evidence',
+          confidence: 0.9,
+        },
+      })),
     });
-    const validator = createGroundingValidator({ model: stubModel });
     const decision = await validator.validate(validateInput('Your order has been placed!'));
     expect(decision.decision).toBe('rewrite');
     if (decision.decision === 'rewrite') {
@@ -218,46 +194,29 @@ describe('grounding validator', () => {
   });
 
   it('continues on grounded output', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: { verdict: 'grounded', rewrittenOutput: null, rationale: null, confidence: 0.95 },
-        }),
-      };
+    const validator = createGroundingValidator({
+      model: mockV3GenerateObjectModel(async () => ({
+        object: { verdict: 'grounded', rewrittenOutput: null, rationale: null, confidence: 0.95 },
+      })),
     });
-    const validator = createGroundingValidator({ model: stubModel });
     const decision = await validator.validate(validateInput('Returns are accepted within 30 days.'));
     expect(decision.decision).toBe('continue');
   });
 
   it('blocks when ungrounded with no rewrite', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: { verdict: 'ungrounded', rewrittenOutput: null, rationale: 'bad', confidence: 0.8 },
-        }),
-      };
+    const validator = createGroundingValidator({
+      model: mockV3GenerateObjectModel(async () => ({
+        object: { verdict: 'ungrounded', rewrittenOutput: null, rationale: 'bad', confidence: 0.8 },
+      })),
     });
-    const validator = createGroundingValidator({ model: stubModel });
     const decision = await validator.validate(validateInput('Order placed!'));
     expect(decision.decision).toBe('block');
   });
 
   it('fails open when the judge errors', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          throw new Error('judge down');
-        },
-      };
+    const validator = createGroundingValidator({
+      model: mockV3FailingSummarizerModel('judge down'),
     });
-    const validator = createGroundingValidator({ model: stubModel });
     const decision = await validator.validate(validateInput('Hello'));
     expect(decision.decision).toBe('continue');
     expect(decision.confidence).toBe(0.5);
@@ -277,7 +236,7 @@ describe('safety-blocked stream emission', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       inputProcessors: [createPromptInjectionGuard()],
       emit: (part) => parts.push(part),
     });

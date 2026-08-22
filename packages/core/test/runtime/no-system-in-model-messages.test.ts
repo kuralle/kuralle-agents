@@ -1,32 +1,14 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
-import type { ModelMessage } from 'ai';
-import { MockLanguageModelV3 } from 'ai/test';
+import { describe, expect, it } from 'bun:test';
+import type { LanguageModel, ModelMessage } from 'ai';
 import { compactMessages } from '../../src/runtime/compaction.js';
 import { applyContextStrategy } from '../../src/flow/contextStrategy.js';
-import { AiSdkModelTurnLoop } from '../../src/runtime/channels/AiSdkModelTurnLoop.js';
-import { createRunContext } from '../../src/runtime/ctx.js';
-import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import {
   assertNoSystemRoleInModelMessages,
   hasSystemRoleInModelMessages,
 } from '../../src/runtime/modelMessagesGuard.js';
 import { defineFlow, reply } from '../../src/types/flow.js';
 import { setupDurableHarness } from '../core-durable/helpers.js';
-import { stubModel } from '../core-durable/helpers.js';
-
-afterEach(() => {
-  mock.restore();
-});
-
-function mockSummarizer(summary = 'User is Jane; ordered cake #42.') {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      generateText: async () => ({ text: summary }),
-    };
-  });
-}
+import { mockV3SummarizerModel } from '../helpers/mockLanguageModelV3Results.js';
 
 function turn(index: number, padding = 400): ModelMessage[] {
   return [
@@ -35,21 +17,9 @@ function turn(index: number, padding = 400): ModelMessage[] {
   ];
 }
 
-function summaryModel(text: string): MockLanguageModelV3 {
-  return new MockLanguageModelV3({
-    doGenerate: async () =>
-      ({
-        content: [{ type: 'text', text }],
-        finishReason: 'stop',
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-        warnings: [],
-      }) as never,
-  });
-}
-
 describe('no system role in model message array', () => {
   it('compactMessages never returns role system in messages', async () => {
-    mockSummarizer();
+    const model = mockV3SummarizerModel('User is Jane; ordered cake #42.');
     const messages: ModelMessage[] = [];
     for (let index = 0; index < 20; index += 1) {
       messages.push(...turn(index));
@@ -57,7 +27,7 @@ describe('no system role in model message array', () => {
 
     const result = await compactMessages({
       messages,
-      model: stubModel,
+      model,
       config: { triggerTokens: 100, keepRecentMessages: 6 },
     });
 
@@ -85,7 +55,7 @@ describe('no system role in model message array', () => {
         nodes: [start],
         context: 'reset_with_summary',
       }),
-      model: summaryModel('User asked about billing.'),
+      model: mockV3SummarizerModel('User asked about billing.'),
     });
 
     expect(hasSystemRoleInModelMessages(runState.messages)).toBe(false);
@@ -111,7 +81,7 @@ describe('no system role in model message array', () => {
         start,
         nodes: [start],
       }),
-      model: {} as import('ai').LanguageModel,
+      model: {} as LanguageModel,
     });
 
     expect(hasSystemRoleInModelMessages(runState.messages)).toBe(false);

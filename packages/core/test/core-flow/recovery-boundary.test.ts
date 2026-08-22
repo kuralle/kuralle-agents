@@ -1,4 +1,5 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import { action, defineFlow, reply } from '../../src/types/flow.js';
 import { runFlow } from '../../src/flow/runFlow.js';
@@ -6,14 +7,15 @@ import { createRunContext } from '../../src/runtime/ctx.js';
 import { CoreToolExecutor, defineTool, ToolValidationError } from '../../src/tools/effect/index.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import {
+  mockV3ReplyModel,
+  mockV3StreamResult,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 import { SuspendError } from '../../src/runtime/durable/RunStore.js';
 import { SAFE_DEGRADED_MESSAGE } from '../../src/flow/degrade.js';
 import type { StreamPart } from '../../src/types/stream.js';
-
-afterEach(() => {
-  mock.restore();
-});
 
 describe('W1 recovery boundary', () => {
   it('action node throw completes runFlow without throwing (error event + graceful end)', async () => {
@@ -47,7 +49,7 @@ describe('W1 recovery boundary', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: (part) => parts.push(part),
     });
 
@@ -94,7 +96,7 @@ describe('W1 recovery boundary', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
 
@@ -114,45 +116,26 @@ describe('W1 recovery boundary', () => {
       execute: async (args) => args,
     });
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCall += 1;
-          if (streamCall === 1) {
-            return {
-              fullStream: (async function* () {
-                yield Object.assign({ type: 'text-delta' }, { text: 'Looking up' });
-              })(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                { toolName: 'faq_lookup', toolCallId: 'bad-1', input: undefined },
-              ]),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: ' Sorry about that.' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doStream: async () => {
+        streamCall += 1;
+        if (streamCall === 1) {
+          return mockV3ToolCallStreamResult('faq_lookup', 'bad-1', '');
+        }
+        return mockV3StreamResult(' Sorry about that.');
+      },
     });
 
     const parts: StreamPart[] = [];
     const { session, runStore, runState } = await setupDurableHarness('w1-bad-args-sess', 'w1-bad-args-run');
+    runState.messages = [{ role: 'user', content: 'Look up the FAQ' }];
     const ctx = await createRunContext({
       session,
       runState,
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: { faq_lookup: strictTool } }),
-      model: stubModel,
+      model,
       emit: (part) => parts.push(part),
     });
 
@@ -198,7 +181,7 @@ describe('W1 recovery boundary', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: (part) => parts.push(part),
     });
 
@@ -239,7 +222,7 @@ describe('W1 recovery boundary', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
 
@@ -258,7 +241,7 @@ describe('W1 recovery boundary', () => {
       runStore,
       steps: await runStore.getSteps(runState.runId),
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
 
