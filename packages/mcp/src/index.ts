@@ -14,6 +14,7 @@ export {
   createSqliteMcpConnectionStore,
 } from './connection-store.js';
 export type { McpSqlStorage } from './connection-store.js';
+export { retrustMcpServer } from './tool-drift-guard.js';
 export { composeMcpSystemPrompt } from './compose-prompt.js';
 export {
   catalogTokens,

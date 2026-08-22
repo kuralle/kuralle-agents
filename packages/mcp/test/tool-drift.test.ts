@@ -15,6 +15,19 @@ const orderIdSchema = z.object({ orderId: z.string() });
 const accountSchema = z.object({ accountNumber: z.string() });
 const echoSchema = z.object({ message: z.string() });
 
+/**
+ * A changed tool is quarantined, not removed: the name stays so the model can explain the gap,
+ * but the server's drifted description and schema must never reach it. Asserting only that the
+ * tool is absent would pass against a projection that silently leaked the drifted text under a
+ * different key, so assert the payload, not just the presence.
+ */
+function expectQuarantined(tool: unknown, mustNotContain: string): void {
+  expect(tool).toBeDefined();
+  const t = tool as { description?: string; input?: unknown };
+  expect(t.description).toContain('quarantined');
+  expect(JSON.stringify({ d: t.description, i: t.input })).not.toContain(mustNotContain);
+}
+
 describe('MCP tool drift guard', () => {
   it('withholds a tool whose description changed and names it in the diagnostic', async () => {
     const store = createMemoryMcpConnectionStore();
@@ -41,7 +54,7 @@ describe('MCP tool drift guard', () => {
     });
 
     try {
-      expect(tools['pay__refund']).toBeUndefined();
+      expectQuarantined(tools['pay__refund'], 'HIJACK');
       const drift = diagnostics.find(
         (d) => d.rule === 'tool-drift' && d.message.includes('withheld'),
       );
@@ -80,7 +93,7 @@ describe('MCP tool drift guard', () => {
     });
 
     try {
-      expect(tools['pay__refund']).toBeUndefined();
+      expectQuarantined(tools['pay__refund'], 'HIJACK');
       expect(
         diagnostics.some((d) => d.rule === 'tool-drift' && d.message.includes('refund')),
       ).toBe(true);
@@ -113,7 +126,8 @@ describe('MCP tool drift guard', () => {
       onDiagnostic: (d) => diagnostics.push(d),
     });
 
-    expect(filtered).toHaveLength(0);
+    expect(filtered.trusted).toHaveLength(0);
+    expect(filtered.quarantined).toEqual(['constructor']);
     expect(diagnostics.some((d) => d.message.includes('constructor'))).toBe(true);
   });
 
@@ -149,6 +163,7 @@ describe('MCP tool drift guard', () => {
     try {
       expect(tools['stub__echo']).toBeDefined();
       // Absent because the server stopped publishing it, not because anything withheld it.
+      // A removed tool is genuinely gone, so there is no quarantine entry to carry a message.
       expect(tools['stub__refund']).toBeUndefined();
       // The assertions above hold even for a guard that does nothing, since a removed tool is
       // not in the live listing either. The removal diagnostic is what proves the guard ran and
@@ -349,7 +364,7 @@ describe('MCP tool drift baseline, established once', () => {
     });
 
     try {
-      expect(tools['stub__refund']).toBeUndefined();
+      expectQuarantined(tools['stub__refund'], 'HIJACKED');
       expect(diagnostics.some((d) => d.rule === 'tool-drift' && d.message.includes('refund'))).toBe(
         true,
       );
@@ -372,6 +387,7 @@ describe('MCP tool drift baseline, established once', () => {
 
     // Guarding the drifted listing against the stored-catalogue baseline withholds it.
     const guarded = await guardListingAgainstDrift('s', driftedAtUpgrade, fromStored, undefined);
-    expect(guarded.map((t) => t.name)).toEqual([]);
+    expect(guarded.trusted.map((t) => t.name)).toEqual([]);
+    expect(guarded.quarantined).toEqual(['a']);
   });
 });

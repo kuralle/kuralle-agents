@@ -4,6 +4,7 @@
 import {
   defineTool,
   fingerprintToolCatalog,
+  toolDeniedResult,
   type AnyTool,
   type Session,
   type ToolContext,
@@ -508,7 +509,11 @@ export async function mcpToolsImpl(
       live.toolFingerprints,
       opts,
     );
-    projectInto(serverName, live, { tools: guarded, fromCache: listing.fromCache });
+    projectInto(serverName, live, {
+      tools: guarded.trusted,
+      fromCache: listing.fromCache,
+      quarantined: guarded.quarantined,
+    });
 
     if (listing.fromCache) {
       // Cached listings are checked against the server after the map is already usable.
@@ -542,6 +547,8 @@ export async function mcpToolsImpl(
 interface ResolvedListing {
   tools: readonly PersistedTool[];
   fromCache: boolean;
+  /** Remote names whose definition drifted; projected as quarantine entries, not as themselves. */
+  quarantined?: readonly string[];
 }
 
 /**
@@ -618,7 +625,11 @@ async function reconcileServer(args: {
       live.toolFingerprints,
       opts,
     );
-    project(serverName, live, { tools: guarded, fromCache: false });
+    project(serverName, live, {
+      tools: guarded.trusted,
+      fromCache: false,
+      quarantined: guarded.quarantined,
+    });
   }
 
   if (opts?.storage && isRemoteConfig(live.config)) {
@@ -644,6 +655,32 @@ interface ServerProjection {
  * that collide only after sanitizing, so the guard has to see across servers, not just
  * within one.
  */
+/**
+ * A stand-in for a tool whose pinned definition moved.
+ *
+ * The name is kept so the model can see the capability still exists and say why it cannot use
+ * it. Everything the server controls is dropped: the description is ours, the schema is empty,
+ * and `execute` never reaches the server. That is the whole point — the drifted description is
+ * the attack, so it must not reach the prompt, and neither must a widened schema.
+ */
+function quarantineTool(qualified: string, serverName: string, remoteName: string): AnyTool {
+  return defineTool({
+    name: qualified,
+    description:
+      `Unavailable. The MCP server "${serverName}" changed this tool's definition after it was ` +
+      'trusted, so it is quarantined pending review. Tell the user it is unavailable and why; do ' +
+      'not attempt to work around it.',
+    input: remoteMcpInputSchema({ type: 'object', properties: {} }),
+    replay: true,
+    execute: async () =>
+      toolDeniedResult(
+        qualified,
+        `MCP tool-drift guard (server "${serverName}")`,
+        `the definition of "${remoteName}" changed since it was trusted; an operator must re-trust the server`,
+      ),
+  });
+}
+
 function projectServerTools(args: {
   serverName: string;
   live: LiveServer;
@@ -664,6 +701,16 @@ function projectServerTools(args: {
   const projected = listed.filter((remoteTool) =>
     toolAllowed(mcpToolName(serverName, remoteTool.name), opts?.tools),
   );
+
+  // Quarantine entries are projected before the trusted loop so `taken` collision handling and
+  // the published set treat them like any other entry.
+  for (const remoteName of listing.quarantined ?? []) {
+    const qualified = mcpToolName(serverName, remoteName);
+    if (!toolAllowed(qualified, opts?.tools) || taken[qualified] || tools[qualified]) {
+      continue;
+    }
+    tools[qualified] = quarantineTool(qualified, serverName, remoteName);
+  }
   const disclosureMode = resolveDisclosureMode(
     serverName,
     projected,

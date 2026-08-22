@@ -383,6 +383,10 @@ export {
   confirmGate,
 } from './authoring/index.js';
 export { defineTool } from './types/effectTool.js';
+// Control results are the one place a tool returns text the model reads. `__denied` is
+// load-bearing inside core (flow/extraction.ts), so a package producing one must use this
+// helper rather than hand-rolling the shape and drifting from it.
+export { toolDeniedResult, toolErrorResult, type ToolDeniedResult } from './tools/controlResults.js';
 export { fsErrorCode } from './types/filesystem.js';
 export { createFsTool } from './tools/fs/createFsTool.js';
 export type { CreateFsToolOptions, GrepHit } from './tools/fs/createFsTool.js';

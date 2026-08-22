@@ -367,9 +367,27 @@ reconcile alike — the fresh catalogue is fingerprinted and compared against th
 
 | Drift | What happens |
 |-------|--------------|
-| `description` or `inputSchema` **changed** | the tool is withheld from the map, and a `tool-drift` diagnostic names it |
-| a tool was **added** | withheld — nobody reviewed it — with the same diagnostic |
+| `description` or `inputSchema` **changed** | the tool is **quarantined**: it keeps its name, but its description is replaced with ours, its schema is emptied, and calling it is refused with a readable reason |
+| a tool was **added** | withheld entirely — the model never knew it, so there is nothing to explain |
 | a tool was **removed** | logged and ignored; the capability is simply gone |
+
+A changed tool is quarantined rather than removed so the model can tell the user *why* a capability
+it previously had is unavailable, instead of watching it vanish. Everything the server controls is
+dropped on the way through — the drifted description is the attack, so it never reaches the prompt,
+and neither does a widened schema.
+
+**Re-trusting.** `retrustMcpServer(store, serverName)` clears the recorded baseline, so the next
+connect re-establishes it from what the server currently publishes:
+
+```ts
+import { retrustMcpServer } from '@kuralle-agents/mcp';
+
+await retrustMcpServer(store, 'docs'); // → true when a row was found
+```
+
+This is the only sanctioned way back. `save()` deliberately cannot replace a baseline — both stores
+drop an incoming one when they already hold it, which is what stops a compromised catalogue from
+becoming the trusted one by being written again.
 
 The whole server is never refused. Refusing it would fail closed on the two harmless cases and turn
 a vendor's routine deploy into your outage.

@@ -235,12 +235,21 @@ describe('MCP session recovery and tool drift guard', () => {
 
     try {
       expect(tools['pay__echo']).toBeDefined();
-      expect(tools['pay__refund']).toBeUndefined();
+      // Quarantined, not removed: present under its own name but carrying our description and no
+      // schema. The property under test is that a session expiry cannot launder a drifted
+      // catalogue past the guard — so assert the payload, not merely the key.
+      const quarantined = () => {
+        const t = tools['pay__refund'] as { description?: string; input?: unknown } | undefined;
+        expect(t).toBeDefined();
+        expect(t!.description).toContain('quarantined');
+        expect(JSON.stringify({ d: t!.description, i: t!.input })).not.toContain('HIJACK');
+      };
+      quarantined();
 
       stub.session!.expire();
       await reconciled;
 
-      expect(tools['pay__refund']).toBeUndefined();
+      quarantined();
       expect(
         diagnostics.some((d) => d.rule === 'tool-drift' && d.message.includes('refund')),
       ).toBe(true);
