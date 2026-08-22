@@ -135,7 +135,7 @@ async function runLoop(purpose: 'speaking' | 'extraction', maxSteps: number) {
  *
  * Every one of those module mocks is now a scoped `MockLanguageModelV3` passed as the agent's
  * model, so nothing replaces `streamText` process-wide any more and these run in the shared
- * suite. If a global `mock.module('ai', …)` is ever reintroduced, these fail loudly rather than
+ * suite. If a process-global module mock of `ai` is ever reintroduced, these fail loudly rather than
  * skipping quietly — which is the outcome to want.
  */
 
