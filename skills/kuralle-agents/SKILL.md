@@ -53,7 +53,6 @@ skill goes stale between releases. Use this source order:
 5. Runnable examples in `packages/core/examples/`, `apps/examples/`, and
    `examples-deploy/`. Run one before you claim a feature works.
 6. `CLAUDE.md` at the repository root for build, test, and release commands.
-7. `docs/research/` as proposed intent, not shipped behavior.
 
 Inside this monorepo, `packages/core/guides/` is generated from
 `apps/docs/src/content/docs/guides/`. Edit the `apps/docs` source, then run

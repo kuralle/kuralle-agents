@@ -19,4 +19,4 @@ compatibility, capability versions, tenant identity, workspace provisioning, and
 identity before execution.
 
 See [the file-authored agents guide](https://agents.kuralle.com/guides/file-authored-agents) and
-[RFC 0003](../../rfcs/0003-agent-revisions-and-production-deployment.md).
+the [deployment guide](https://agents.kuralle.com/guides/deployment).

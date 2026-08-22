@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * LIVE-API claim verification for the durability audit + docs/agentic-voice-framework-gaps.md.
+ * LIVE-API claim verification for the durability audit.
  *
  * Every check below builds a REAL Kuralle runtime, drives it with a REAL provider
  * (OpenAI gpt-4.1-mini, forced), and asserts on the deterministic *mechanism* the

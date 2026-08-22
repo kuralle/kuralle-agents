@@ -29,7 +29,7 @@ routing, and durable tool execution. Monorepo on Bun workspaces, built on the Ve
   directories. Flow runs are durable: `RunOptions.kind: 'flow'` mints a run with its own
   journal (`TurnHandle.runId`), digest-pinned against redefinition (`FlowDriftError`), with
   crash recovery + deadline sweeping over `RunStore` backends (Postgres, DO SQLite).
-  See `/guides/dynamic-flows` and `docs/research/dynamic-durable-flows-port.md`.
+  See the [dynamic flows guide](https://agents.kuralle.com/guides/dynamic-flows).
 - **Runtime** — `createRuntime(...)` → `Runtime`; `runtime.run({ input, sessionId })` →
   `TurnHandle` (`.events` AsyncIterable, awaitable result,
   `toResponseStream('sse' | 'ndjson')`). Orchestrates sessions, history, handoffs, streaming,
@@ -137,7 +137,7 @@ E2E tests: see `packages/e2e-tests/README.md`.
   `globalThis.AI_SDK_DEFAULT_PROVIDER ?? gateway`, so `model: 'openai/gpt-4.1-mini'` goes to the
   **Vercel AI Gateway** and fails with a billing error even when `OPENAI_API_KEY` is valid — the
   provider key is never consulted. Always pass a configured provider instance
-  (`createOpenAI({ apiKey })('gpt-4.1-mini')`), which is what `liveModel()` does. See RFC 0001 §4.4.
+  (`createOpenAI({ apiKey })('gpt-4.1-mini')`), which is what `liveModel()` does.
 - **`packages/core/guides/` is generated — never hand-edit it.** It is built from
   `apps/docs/src/content/docs/guides/` by `scripts/sync-package-guides.ts` and ships to npm,
   so consumers read it at `node_modules/@kuralle-agents/core/guides/`. It used to be a
@@ -157,7 +157,6 @@ E2E tests: see `packages/e2e-tests/README.md`.
 - `README.md` — onboarding · `apps/docs/` — the documentation site (Astro Starlight)
 - `skills/kuralle-agents/` — the skill for coding agents building on Kuralle
   (`npx skills add kuralle/kuralle-agents --skill kuralle-agents`)
-- `docs/research/` — primary sources behind current RFCs
 - `CONTRIBUTING.md` — monorepo dev/build/publish workflow
 
 <!-- plandesk:start -->

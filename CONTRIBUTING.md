@@ -151,6 +151,6 @@ Use `pnpm publish -r` (not `changeset publish`) to correctly replace `workspace:
    quarantine a typed adapter in one boundary file. RFC-0002 is the failure case: two public stream
    unions were hidden behind `as HarnessStreamPart` / `as StreamPart`, so emitted knowledge events
    bypassed the public contract. DeepAgents' versioned protocol plus one named adapter is the
-   acceptable pattern; see `docs/peer-patterns-stream-and-composition.md` §4.
+   acceptable pattern.
 
 Full rules: `skills/kuralle-agents/references/`
