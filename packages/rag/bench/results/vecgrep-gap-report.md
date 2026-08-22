@@ -32,7 +32,7 @@
 
 ## Live deployment verification (2026-06-10, spike tests — torn down after capture)
 
-Raw JSON: `vecgrep-gap-deploy.json`. Sources: `examples-deploy/kuralle-rag-smoke` (CF Worker + DO) and `examples-deploy/kuralle-rag-smoke-fly` (Bun container, sin, shared-cpu-1x 256MB, auto-stop).
+Raw JSON: `vecgrep-gap-deploy.json`. Sources: `examples-deploy/kuralle-rag-smoke` (CF Worker + DO) and `examples-deploy/kuralle-rag-smoke-fly` (Bun container, sin, shared-cpu-1x 256MB, auto-stop). Those deploy smokes were removed from the repository after this run; recover them from git history if you need to reproduce the measurement.
 
 | Claim | Live result |
 |---|---|

@@ -50,8 +50,8 @@ skill goes stale between releases. Use this source order:
    and shown on npm. The fastest answer to "what is this package for".
 4. Source and exported types in `packages/core/src/`. Authoritative when a guide
    and the code disagree — report the disagreement rather than picking one.
-5. Runnable examples in `packages/core/examples/`, `apps/examples/`, and
-   `examples-deploy/`. Run one before you claim a feature works.
+5. Runnable examples in `packages/core/examples/` and `apps/examples/`. Run one
+   before you claim a feature works.
 6. `CLAUDE.md` at the repository root for build, test, and release commands.
 
 Inside this monorepo, `packages/core/guides/` is generated from
