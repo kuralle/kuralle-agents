@@ -27,7 +27,7 @@ work to execution.
 - "Write an ADR", "record an architecture decision", "why we chose X over Y",
   "capture what we settled in the meeting" → the
   [short form](#the-short-form--a-decision-record), not an RFC. It lands as a
-  `Decision:` document on the board rather than a file in the repo, so it is
+  `Decision:` document on the board rather than a file in `docs/adr/`, so it is
   linkable to the tasks it governs and commentable by whoever lives with it.
 - **The threshold.** An RFC earns its cost when the change is substantial or
   contended: it alters a public surface, is hard to reverse, spans several areas,

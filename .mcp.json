@@ -3,10 +3,7 @@
     "plandesk": {
       "type": "http",
       "url": "http://127.0.0.1:7526/mcp/",
-      "headersHelper": "d=\"$PWD\"; while [ \"$d\" != \"/\" ] && [ ! -f \"$d/.plandesk/token\" ]; do d=\"${d%/*}\"; [ -n \"$d\" ] || d=\"/\"; done; printf '{\"Authorization\":\"Bearer %s\"}' \"${PLANDESK_MCP_TOKEN:-$(cat \"$d/.plandesk/token\" 2>/dev/null)}\"",
-      "headers": {
-        "x-plandesk-workspace-id": "MIkqU4vJYn4CH06LX3LF4TQQMn9arNBG"
-      }
+      "headersHelper": "d=\"$PWD\"; while [ \"$d\" != \"/\" ] && [ ! -f \"$d/.plandesk/token\" ]; do d=\"${d%/*}\"; [ -n \"$d\" ] || d=\"/\"; done; printf '{\"Authorization\":\"Bearer %s\"}' \"${PLANDESK_MCP_TOKEN:-$(cat \"$d/.plandesk/token\" 2>/dev/null)}\""
     }
   }
 }
