@@ -1,5 +1,5 @@
 ---
-"@kuralle-agents/core": minor
+"@kuralle-agents/core": patch
 ---
 
 **Breaking:** `CompactionResult` from `compactMessages` no longer embeds the compaction summary in `messages`.

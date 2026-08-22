@@ -2,6 +2,14 @@
 
 The runtime and primitives for building conversational AI agents with structured flows, routing, and durable tool execution.
 
+> **0.23.1 requires `ai@^7`.** This release moves every `@kuralle-agents/*` package from the AI SDK v6
+> peer range to `^7.0.0`. It ships as a patch, so `^0.23.0` picks it up automatically — if you pin
+> `ai@6` you will see a peer-resolution error on install, and if you do not pin `ai` at all you will
+> silently move to v7. Upgrade `ai` alongside it.
+>
+> Also breaking: `CompactionResult` from `compactMessages` no longer embeds the compaction summary in
+> `messages`. Read `result.summary` instead, and note `afterTokens` now counts only the retained tail.
+
 ## Install
 
 ```bash
