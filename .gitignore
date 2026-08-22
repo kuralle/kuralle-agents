@@ -57,6 +57,7 @@ dump.rdb
 
 # session/process docs — kept locally, not shipped public
 HANDOFF.md
+SESSION-HANDOFF.md
 implementation-notes.md
 # ...except sprint-OS handoffs, which are tracked build-branch artifacts (read-me-first for the next sprint session)
 !sprints/**/HANDOFF.md
