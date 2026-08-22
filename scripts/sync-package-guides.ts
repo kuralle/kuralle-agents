@@ -15,18 +15,12 @@
  */
 import { readdir, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import { mdxToMarkdown } from '../apps/docs/src/lib/mdxToMarkdown.ts';
 
 const REPO = resolve(import.meta.dir, '..');
 const SRC = join(REPO, 'apps/docs/src/content/docs/guides');
 const OUT = join(REPO, 'packages/core/guides');
 const SITE = 'https://agents.kuralle.com';
-
-const ASIDE_LABEL: Record<string, string> = {
-  note: 'Note',
-  tip: 'Tip',
-  caution: 'Caution',
-  danger: 'Danger',
-};
 
 interface Frontmatter {
   title: string;
@@ -48,143 +42,18 @@ function parseFrontmatter(src: string): { fm: Frontmatter; body: string } {
   };
 }
 
-/** Marks every line that sits inside a fenced code block, so no rewrite touches code. */
-function fenceMask(lines: string[]): boolean[] {
-  const mask: boolean[] = [];
-  let fence: string | null = null;
-  for (const line of lines) {
-    const open = /^\s*(`{3,}|~{3,})/.exec(line);
-    if (fence === null && open) {
-      fence = open[1][0];
-      mask.push(true);
-      continue;
-    }
-    if (fence !== null && open && open[1][0] === fence) {
-      fence = null;
-      mask.push(true);
-      continue;
-    }
-    mask.push(fence !== null);
-  }
-  return mask;
-}
-
-/** `import x from '../../../examples/a/b.ts?raw'` → { x: absolute path } */
-function collectRawImports(lines: string[], mask: boolean[]): Map<string, string> {
-  const raws = new Map<string, string>();
-  lines.forEach((line, i) => {
-    if (mask[i]) return;
-    const m = /^import\s+(\w+)\s+from\s+'([^']+)\?raw';?\s*$/.exec(line);
-    if (m) raws.set(m[1], resolve(SRC, m[2]));
-  });
-  return raws;
-}
-
-function isStrippableImport(line: string): boolean {
-  return (
-    /^import\s+\{[^}]*\}\s+from\s+'@astrojs\/starlight\/components';?\s*$/.test(line) ||
-    /^import\s+\w+\s+from\s+'[^']+\?raw';?\s*$/.test(line)
-  );
-}
-
-function rewriteLinks(line: string): string {
-  return line
-    .replace(
-      /\]\(\/guides\/([a-z0-9-]+)\/?(#[^)]*)?\)/g,
-      (_m, page, anchor) => `](./${page}.md${anchor ?? ''})`,
-    )
-    .replace(/\]\((\/[^)]*)\)/g, (_m, path) => `](${SITE}${path})`);
-}
-
-function blockquote(text: string): string[] {
-  return text.split('\n').map((l) => (l.trim() === '' ? '>' : `> ${l}`));
-}
-
 async function transform(file: string): Promise<string> {
-  const raw = await readFile(join(SRC, file), 'utf8');
-  const { fm, body } = parseFrontmatter(raw);
-  const lines = body.split('\n');
-  const mask = fenceMask(lines);
-  const rawImports = collectRawImports(lines, mask);
-
-  const out: string[] = [`# ${fm.title}`, ''];
-  if (fm.description) out.push(fm.description, '');
-
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-
-    if (mask[i]) {
-      out.push(line);
-      i += 1;
-      continue;
-    }
-
-    if (isStrippableImport(line)) {
-      i += 1;
-      continue;
-    }
-
-    // <Code code={x} lang="ts" title="a.ts" /> → the file's contents, inlined.
-    const code = /^<Code\s+code=\{(\w+)\}\s+lang="([^"]+)"(?:\s+title="([^"]+)")?\s*\/>\s*$/.exec(
-      line,
-    );
-    if (code) {
-      const path = rawImports.get(code[1]);
-      if (!path) throw new Error(`${file}: <Code> references unknown import ${code[1]}`);
-      const source = (await readFile(path, 'utf8')).trimEnd();
-      if (code[3]) out.push(`\`${code[3]}\`:`, '');
-      out.push('```' + code[2], source, '```');
-      i += 1;
-      continue;
-    }
-
-    // <Aside …>…</Aside> → a blockquote, so the callout survives as plain Markdown.
-    const aside = /^<Aside(?:\s+type="(\w+)")?(?:\s+title="((?:[^"\\]|\\.)*)")?\s*>\s*(.*)$/.exec(
-      line,
-    );
-    if (aside) {
-      const label = aside[2] ?? ASIDE_LABEL[aside[1] ?? 'note'] ?? 'Note';
-      const inner: string[] = [];
-      const rest = aside[3];
-      const closeOnSame = rest.indexOf('</Aside>');
-      if (closeOnSame >= 0) {
-        inner.push(rest.slice(0, closeOnSame));
-        i += 1;
-      } else {
-        if (rest.trim()) inner.push(rest);
-        i += 1;
-        while (i < lines.length && !lines[i].includes('</Aside>')) {
-          inner.push(lines[i]);
-          i += 1;
-        }
-        if (i >= lines.length) throw new Error(`${file}: unclosed <Aside>`);
-        const tail = lines[i].slice(0, lines[i].indexOf('</Aside>'));
-        if (tail.trim()) inner.push(tail);
-        i += 1;
-      }
-      const text = inner.map(rewriteLinks).join('\n').trim();
-      out.push(...blockquote(`**${label}**${text ? `\n\n${text}` : ''}`), '');
-      continue;
-    }
-
-    // <Steps>/<Tabs> are layout only; <TabItem label="X"> becomes a heading.
-    if (/^<\/?(Steps|Tabs)>\s*$/.test(line) || /^<\/TabItem>\s*$/.test(line)) {
-      i += 1;
-      continue;
-    }
-    const tab = /^<TabItem\s+label="([^"]+)"\s*>\s*$/.exec(line);
-    if (tab) {
-      out.push(`#### ${tab[1]}`, '');
-      i += 1;
-      continue;
-    }
-
-    out.push(rewriteLinks(line));
-    i += 1;
-  }
-
-  return out.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+  const { fm, body } = parseFrontmatter(await readFile(join(SRC, file), 'utf8'));
+  return mdxToMarkdown({
+    title: fm.title,
+    description: fm.description,
+    body,
+    baseDir: SRC,
+    site: SITE,
+    // The packaged copy sits in one flat directory, so a link to another guide
+    // is a sibling file rather than a URL.
+    relativeGuideLinks: true,
+  });
 }
 
 const READING_ORDER = [
