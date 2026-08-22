@@ -21,7 +21,7 @@ Both contain the same canonical artifact, capability hashes, and content-address
 factories provide credentials, model instances, authentication, durable stores, and trusted runtime
 capabilities; those values are intentionally never serialized into the artifact.
 
-See [File-authored agent deployment](../../docs/guides/file-agent-deployment.md).
+See [File-authored agents](https://agents.kuralle.com/guides/file-authored-agents).
 
 ## Hosted runtimes (default after connect)
 

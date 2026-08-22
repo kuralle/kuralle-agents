@@ -18,5 +18,5 @@ a pin; an existing pin never follows a later release. The binder verifies artifa
 compatibility, capability versions, tenant identity, workspace provisioning, and deployment trace
 identity before execution.
 
-See [the deployment guide](../../docs/guides/file-agent-deployment.md) and
+See [the file-authored agents guide](https://agents.kuralle.com/guides/file-authored-agents) and
 [RFC 0003](../../rfcs/0003-agent-revisions-and-production-deployment.md).
