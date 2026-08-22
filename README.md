@@ -119,7 +119,19 @@ More examples: `packages/core/examples/agents/` — form-filler, transfer-agent,
 
 ## Documentation
 
-- [Documentation site](apps/docs) — guides, API reference, concepts
+- [agents.kuralle.com](https://agents.kuralle.com) — guides, API reference, concepts
+- `node_modules/@kuralle-agents/core/guides/` — the same guides, matching the version you installed
 - [CONTRIBUTING.md](CONTRIBUTING.md) — monorepo dev setup, build, test, publish
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [LICENSE](LICENSE)
+
+### Coding agents
+
+Install the Kuralle skill into Claude Code, Cursor, OpenCode, Codex, and other agents:
+
+```bash
+npx skills add kuralle/kuralle-agents --skill kuralle-agents
+```
+
+It routes to the right guide, maps the packages, and carries verified signatures for
+`defineAgent`, `defineTool`, `defineFlow`, and `createRuntime`. Source: [`skills/kuralle-agents/`](skills/kuralle-agents).

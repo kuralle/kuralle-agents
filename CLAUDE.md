@@ -101,7 +101,7 @@ E2E tests: see `packages/e2e-tests/README.md`.
    (`text-delta`, tool events, `done`).
 3. Add a runnable example under `packages/core/examples/` — and **run it live**, not just
    typecheck it.
-4. Update the docs (`apps/docs/`, package READMEs, `docs/skills/`) in the same change,
+4. Update the docs (`apps/docs/`, package READMEs, `skills/`) in the same change,
    then run `bun run docs:sync-guides` — `packages/core/guides/` is generated from
    `apps/docs/` and ships in the npm tarball.
 
@@ -155,7 +155,8 @@ E2E tests: see `packages/e2e-tests/README.md`.
 ## Key docs
 
 - `README.md` — onboarding · `apps/docs/` — the documentation site (Astro Starlight)
-- `docs/skills/kuralle-agents/` — the skill for coding agents building on Kuralle
+- `skills/kuralle-agents/` — the skill for coding agents building on Kuralle
+  (`npx skills add kuralle/kuralle-agents --skill kuralle-agents`)
 - `docs/research/` — primary sources behind current RFCs
 - `CONTRIBUTING.md` — monorepo dev/build/publish workflow
 

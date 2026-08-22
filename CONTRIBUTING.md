@@ -72,7 +72,7 @@ npx tsx examples/flows/patient-intake.ts
 | `packages/` | Published packages (`@kuralle-agents/*`) |
 | `apps/` | Apps and playgrounds |
 | `apps/playground/` | Local test apps |
-| `docs/skills/` | IDE/coding-agent skill files |
+| `skills/` | Coding-agent skill, installable with `npx skills` |
 
 ---
 
@@ -83,7 +83,7 @@ npx tsx examples/flows/patient-intake.ts
 3. Update `Runtime`, `FlowManager`, or drivers as needed.
 4. Add an example in `packages/core/examples/`.
 5. If config-driven, update `@kuralle-agents/config` loader (`runtimeLoader.ts`).
-6. Update `docs/skills/` and any relevant guides.
+6. Update `skills/kuralle-agents/` and any relevant guides.
 7. Rebuild the package and run examples to verify.
 
 ---
@@ -153,4 +153,4 @@ Use `pnpm publish -r` (not `changeset publish`) to correctly replace `workspace:
    bypassed the public contract. DeepAgents' versioned protocol plus one named adapter is the
    acceptable pattern; see `docs/peer-patterns-stream-and-composition.md` §4.
 
-Full rules: `docs/skills/kuralle-usage/rules/`
+Full rules: `skills/kuralle-agents/references/`
