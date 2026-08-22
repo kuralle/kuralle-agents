@@ -3,6 +3,7 @@ import { streamSSE } from 'hono/streaming';
 import type { ModelMessage } from 'ai';
 import type { StreamPart, RuntimeLike, TurnHandle } from '@kuralle-agents/core';
 import crypto from 'node:crypto';
+import { runInputErrorBody, runInputErrorStatus } from './runInputErrors.js';
 
 type SystemPromptMode = 'agent' | 'merge';
 
@@ -371,15 +372,28 @@ async function handleChatCompletions(
   const created = Math.floor(Date.now() / 1000);
   const includeUsage = body.stream_options?.include_usage === true;
 
-  const handle = opts.runtime.run({
-    sessionId,
-    input,
-    userId: typeof body.user === 'string' ? body.user : undefined,
-    agentId,
-    seedMessages,
-    historyDelta,
-    callerInstructions,
-  });
+  let handle: TurnHandle;
+  try {
+    handle = opts.runtime.run({
+      sessionId,
+      input,
+      userId: typeof body.user === 'string' ? body.user : undefined,
+      agentId,
+      seedMessages,
+      historyDelta,
+      callerInstructions,
+    });
+    await handle.runId;
+  } catch (error) {
+    return openAIError(
+      c,
+      runInputErrorStatus(error),
+      runInputErrorBody(error).error,
+      'invalid_request_error',
+      'invalid_value',
+      'messages',
+    );
+  }
 
   if (body.stream === true) {
     return streamSSE(c, async (stream) => {
@@ -468,26 +482,37 @@ async function handleChatCompletions(
     });
   }
 
-  const { text, toolCalls, finishReason } = await collectTurn(handle, clientToolSet);
-  const usage = estimateUsage(body.messages, text);
-  return c.json({
-    id: completionId,
-    object: 'chat.completion',
-    created,
-    model: modelName,
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: 'assistant',
-          content: text || null,
-          ...(toolCalls.length > 0 ? { tool_calls: toolCalls.map(toolCallToOpenAI) } : {}),
+  try {
+    const { text, toolCalls, finishReason } = await collectTurn(handle, clientToolSet);
+    const usage = estimateUsage(body.messages, text);
+    return c.json({
+      id: completionId,
+      object: 'chat.completion',
+      created,
+      model: modelName,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: text || null,
+            ...(toolCalls.length > 0 ? { tool_calls: toolCalls.map(toolCallToOpenAI) } : {}),
+          },
+          finish_reason: finishReason,
         },
-        finish_reason: finishReason,
-      },
-    ],
-    usage,
-  });
+      ],
+      usage,
+    });
+  } catch (error) {
+    return openAIError(
+      c,
+      runInputErrorStatus(error),
+      runInputErrorBody(error).error,
+      'invalid_request_error',
+      'invalid_value',
+      'messages',
+    );
+  }
 }
 
 function createChatCompletionsApp(opts: CreateOpenAICompatRouterOptions): Hono {

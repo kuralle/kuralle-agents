@@ -1,4 +1,5 @@
 import type { ModelMessage } from 'ai';
+import type { Session } from '../types/session.js';
 import type { RunState } from './durable/types.js';
 import type { RunStore } from './durable/RunStore.js';
 import { addSystemNote, readSystemNote, type NoteLifetime } from './systemNotes.js';
@@ -89,6 +90,26 @@ export function sanitizeRunStateMessages(runState: RunState): boolean {
   return true;
 }
 
+/**
+ * A caller supplied a message array the runtime refuses. Carries a `name` tag rather than
+ * relying on `instanceof`, which breaks when a consumer resolves two copies of core — the
+ * same reason `FlowDriftError` is tagged. Transports map this to 400, not 500.
+ */
+export class InvalidCallerMessagesError extends Error {
+  readonly name = 'InvalidCallerMessagesError';
+  readonly field: 'seedMessages' | 'historyDelta';
+  readonly index: number;
+
+  constructor(field: 'seedMessages' | 'historyDelta', index: number) {
+    super(
+      `${field} must not contain role: 'system' messages (index ${index}); ` +
+        'use callerInstructions or system notes instead',
+    );
+    this.field = field;
+    this.index = index;
+  }
+}
+
 /** Caller-supplied message arrays must not seed system-role entries into the transcript. */
 export function rejectSystemRoleInCallerMessages(
   messages: readonly ModelMessage[],
@@ -96,15 +117,32 @@ export function rejectSystemRoleInCallerMessages(
 ): void {
   for (let index = 0; index < messages.length; index += 1) {
     if (messages[index]?.role === 'system') {
-      throw new Error(
-        `${context} must not contain role: 'system' messages (index ${index}); ` +
-          'use callerInstructions or system notes instead',
-      );
+      throw new InvalidCallerMessagesError(context, index);
     }
   }
 }
 
-/** Load run state and lazily strip legacy system-role messages, persisting when changed. */
+/**
+ * Strip legacy `role: 'system'` entries from a session transcript on read.
+ * Text is dropped here — run state already routes it into system notes for
+ * model calls, and mirroring it in the client transcript would duplicate context
+ * if a consumer round-tripped messages back in.
+ */
+export function sanitizeSessionMessages(session: Pick<Session, 'messages'>): boolean {
+  const systemIndices: number[] = [];
+  for (let index = 0; index < session.messages.length; index += 1) {
+    if (session.messages[index]?.role === 'system') {
+      systemIndices.push(index);
+    }
+  }
+  if (systemIndices.length === 0) {
+    return false;
+  }
+  session.messages = session.messages.filter((message) => message.role !== 'system');
+  return true;
+}
+
+/** Load run state and strip legacy system-role messages in memory (no write). */
 export async function loadSanitizedRunState(
   runStore: RunStore,
   runId: string,
@@ -113,9 +151,6 @@ export async function loadSanitizedRunState(
   if (!runState) {
     return null;
   }
-  if (sanitizeRunStateMessages(runState)) {
-    runState.updatedAt = Date.now();
-    await runStore.putRunState(runState);
-  }
+  sanitizeRunStateMessages(runState);
   return runState;
 }

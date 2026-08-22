@@ -162,19 +162,19 @@ export async function openRun(
     assertKnownFlow(agentsById, options);
   }
 
-  const session = await loadOrCreateSession(options);
-  const runStore = resolveRunStore(options.sessionStore, session.id, options.runStore);
-  const addressedRunId = resolveAddressedRunId(options, session);
-
-  let runId: string;
-  let runState: RunState | null;
-
   if (options.seedMessages?.length) {
     rejectSystemRoleInCallerMessages(options.seedMessages, 'seedMessages');
   }
   if (options.historyDelta?.length) {
     rejectSystemRoleInCallerMessages(options.historyDelta, 'historyDelta');
   }
+
+  const session = await loadOrCreateSession(options);
+  const runStore = resolveRunStore(options.sessionStore, session.id, options.runStore);
+  const addressedRunId = resolveAddressedRunId(options, session);
+
+  let runId: string;
+  let runState: RunState | null;
 
   if (addressedRunId !== undefined) {
     runState = await loadSanitizedRunState(runStore, addressedRunId);

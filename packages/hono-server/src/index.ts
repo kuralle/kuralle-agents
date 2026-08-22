@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { Context, Handler } from 'hono';
 import { harnessToUIMessageStream, userInputToText } from '@kuralle-agents/core';
+import { runInputErrorBody, runInputErrorStatus } from './runInputErrors.js';
 import type {
   ConversationOutcome,
   CsatRecord,
@@ -467,7 +468,7 @@ export const createKuralleChatRouter = ({
         timestamp: new Date().toISOString(),
       } satisfies ChatResponse);
     } catch (error) {
-      return c.json({ error: (error as Error).message }, 500);
+      return c.json(runInputErrorBody(error), runInputErrorStatus(error));
     }
   });
 

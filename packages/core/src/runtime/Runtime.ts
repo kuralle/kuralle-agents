@@ -103,7 +103,7 @@ import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
 import { runHookSafely } from './runHookSafely.js';
 import { addSystemNote, readSystemNote, removeSystemNote } from './systemNotes.js';
-import { loadSanitizedRunState } from './stripSystemRoleMessages.js';
+import { loadSanitizedRunState, sanitizeSessionMessages } from './stripSystemRoleMessages.js';
 import { renderSkillCatalogPrompt, SKILL_CATALOG_NOTE_TAG } from '../skills/skillCatalog.js';
 import { needsApprovalPolicy, composePolicies, type Policy } from './policies/toolPolicy.js';
 import {
@@ -1051,7 +1051,12 @@ export class Runtime {
   }
 
   async getSession(sessionId: string): Promise<Session | null> {
-    return this.sessionStore.get(sessionId);
+    const session = await this.sessionStore.get(sessionId);
+    if (!session) {
+      return null;
+    }
+    sanitizeSessionMessages(session);
+    return session;
   }
 
   async getTrace(traceId: string): Promise<AgentTrace | null> {
