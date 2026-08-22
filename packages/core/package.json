@@ -12,9 +12,10 @@
     "access": "public"
   },
   "files": [
+    "CHANGELOG.md",
+    "README.md",
     "dist",
-    "guides",
-    "README.md"
+    "guides"
   ],
   "type": "module",
   "main": "dist/index.js",

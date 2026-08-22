@@ -26,9 +26,10 @@
     "prepublishOnly": "tsc -p tsconfig.json"
   },
   "files": [
+    "CHANGELOG.md",
+    "README.md",
     "dist",
-    "fixtures",
-    "README.md"
+    "fixtures"
   ],
   "devDependencies": {
     "@types/node": "^20.11.0",

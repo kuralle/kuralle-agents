@@ -12,8 +12,9 @@
     }
   },
   "files": [
-    "dist",
-    "README.md"
+    "CHANGELOG.md",
+    "README.md",
+    "dist"
   ],
   "scripts": {
     "prebuild": "rm -rf dist",

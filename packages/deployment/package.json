@@ -27,8 +27,9 @@
     }
   },
   "files": [
-    "dist",
+    "CHANGELOG.md",
     "README.md",
+    "dist",
     "templates"
   ],
   "scripts": {

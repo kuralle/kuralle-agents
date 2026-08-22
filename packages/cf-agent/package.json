@@ -12,6 +12,7 @@
     }
   },
   "files": [
+    "CHANGELOG.md",
     "dist"
   ],
   "scripts": {
