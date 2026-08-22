@@ -167,7 +167,7 @@ agents/
     routes.ts                   ← → routes + routing            (triage agents)
     retrieval.ts                ← → AgentConfig.knowledge       (vector retrieval)
     memory.ts                   ← → AgentConfig.memory
-    policies.ts                 ← → AgentConfig.guardrails + refine + validate
+    phases.ts                   ← → AgentConfig.guardrails + refine + validate
     skills/<name>/SKILL.md      ← → skills (already the shipped format)
     knowledge/**/*.md           ← OKF bundle, mounted into the workspace FS (grep/cat, no index)
     workspace/**                ← seed files copied into the workspace at build
@@ -176,12 +176,19 @@ agents/
 
 A directory is an agent **iff** it contains `agent.md`. One marker, no precedence rule needed.
 
-`policies.ts` is the single agent-level composition point, following an earlier decision. It returns the three
+`phases.ts` is the single agent-level composition point, following an earlier decision. It returns the three
 distinct phase contracts together; the runtime keeps their fixed order:
 
 ```
 guardrails.input → refine → model/tool execution → guardrails.output → validate
 ```
+
+It was called `policies.ts` until 2026-08-22. Renamed because `Policy` is already taken by the
+shipped tool-approval seam (`AgentConfig.policy`, `runtime/policies/toolPolicy.ts`) — two unrelated
+concepts one character apart. The shipped name stays; the unbuilt one moved. `guardrails.ts` was
+considered and rejected: it names one of the three contracts this module returns, and
+`types/guardrails.ts` already exists.
+
 
 Project `hooks.ts` remains separate because it configures the operational `HarnessConfig.hooks`
 surface around the whole run, not an individual agent. The build targets the actual five-method
