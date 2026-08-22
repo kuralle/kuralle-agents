@@ -24,8 +24,11 @@ skill goes stale between releases. Use this source order:
    for package-specific depth.
 2. <https://agents.kuralle.com> — the same guides for the latest release. Use
    these when no package is installed yet, or to check what a newer version adds.
-   There is no per-page `.md`: `…/guides/observability.md` returns 404. To fetch
-   documentation as markdown, use the generated sets instead:
+   Append `.md` to any page path for its Markdown source —
+   `…/guides/observability.md` — which is the cheapest way to read one page.
+   (Served by `apps/docs/src/pages/[...slug].md.ts`; live from the first docs
+   deploy after commit `9aa6ca7`. If it 404s, the site has not redeployed yet.)
+   To read many pages at once, use the generated sets:
 
    | URL | Size | Contents |
    |---|---|---|
@@ -37,7 +40,12 @@ skill goes stale between releases. Use this source order:
    | `/llms-full.txt` | ~1.3 MB | Whole site |
 
    Prefer `/_llms-txt/guides.txt` over `llms-full.txt`: same guide content, a
-   fifth of the tokens, none of the generated API dump.
+   fifth of the tokens, none of the generated API dump. For a single page,
+   prefer `<page>.md` over any of them.
+
+   The served `.md` and the packaged `guides/*.md` come from one transform
+   (`apps/docs/src/lib/mdxToMarkdown.ts`) and differ only in link style —
+   absolute URLs when served, sibling `./page.md` links when packaged.
 3. The package `README.md` — installed at `node_modules/@kuralle-agents/<pkg>/`
    and shown on npm. The fastest answer to "what is this package for".
 4. Source and exported types in `packages/core/src/`. Authoritative when a guide
