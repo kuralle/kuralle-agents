@@ -19,7 +19,7 @@
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/deployment": "workspace:*",
     "@kuralle-agents/hono-server": "workspace:*",
-    "ai": "^6.0.0",
+    "ai": "^7.0.0",
     "hono": "^4.12.32",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

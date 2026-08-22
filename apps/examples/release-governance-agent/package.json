@@ -17,7 +17,7 @@
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/fs": "workspace:*",
     "@kuralle-agents/pi-driver": "workspace:*",
-    "ai": "6.0.237",
+    "ai": "^7.0.0",
     "dotenv": "^16.6.1",
     "zod": "^4.1.8"
   },

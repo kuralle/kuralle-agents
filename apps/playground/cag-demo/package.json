@@ -20,7 +20,7 @@
     "@kuralle-agents/tools": "workspace:*",
     "@hono/node-server": "latest",
     "@hono/node-ws": "latest",
-    "ai": "latest",
+    "ai": "^7.0.0",
     "dotenv": "^16.4.5",
     "hono": "latest",
     "zod": "^4.1.8"

@@ -21,7 +21,7 @@
     "@kuralle-agents/core": "workspace:*",
     "@kuralle-agents/eval": "workspace:*",
     "@vercel/sandbox": "^2.9.0",
-    "ai": "^6.0.0",
+    "ai": "^7.0.0",
     "dotenv": "^16.4.0",
     "zod": "^4.1.8"
   },
