@@ -13,6 +13,7 @@ import { syncPendingUserInput } from './channels/inputBuffer.js';
 import { runHookSafely } from './runHookSafely.js';
 import type { ExtractionConfig } from '../types/grounding.js';
 import { runExtractionAtClose } from '../memory/extract/runExtraction.js';
+import { consumeTurnNotes } from './systemNotes.js';
 
 export interface CloseRunExtractionOptions {
   config: ExtractionConfig;
@@ -39,6 +40,11 @@ export interface CloseRunOptions {
 export async function closeRun(options: CloseRunOptions): Promise<void> {
   const { session, runState, runStore, sessionStore, hooks, ctx } = options;
 
+  // Turn boundary: every model composition for this runtime.run() has finished
+  // (reply, extraction, flow handoffs). Drop `turn`-lifetime notes here so they
+  // do not leak into the next user turn; persist with the closing write so crash
+  // recovery does not replay a note that was already composed.
+  consumeTurnNotes(runState);
   runState.updatedAt = Date.now();
   if (options.terminalOutcome) {
     runState.status = 'finished';

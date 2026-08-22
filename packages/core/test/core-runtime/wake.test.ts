@@ -63,13 +63,10 @@ describe('wake turns', () => {
 
     const runStore = new SessionRunStore(sessionStore, 'wake-sess');
     const runState = await runStore.getRunState('wake-sess');
-    // The wake reaches the model as a system NOTE folded into the prompt, not as a message.
-    // A wake is an instruction, not a turn anybody took — and AI SDK 7 rejects system
-    // messages inside `messages`. The assistant's proactive reply is the transcript record.
+    // Turn-lifetime wake notes are consumed at the turn boundary; they informed this
+    // turn's prompt but must not persist for the next one.
     const wakeNote = systemNoteBlocks(runState!).find((b) => b.includes('[Scheduled wake:'));
-    expect(wakeNote).toBeDefined();
-    expect(String(wakeNote)).toContain('cart abandoned for 2 hours');
-    expect(String(wakeNote)).toContain('c-1');
+    expect(wakeNote).toBeUndefined();
     expect(runState?.messages.some((m) => m.role === 'system')).toBe(false);
     // no fabricated user message
     const userMessages = runState?.messages.filter((m) => m.role === 'user') ?? [];
