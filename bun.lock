@@ -28,7 +28,7 @@
     },
     "apps/examples/agent-builder": {
       "name": "@kuralle-examples/agent-builder",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@ai-sdk/react": "^4.0.0",
@@ -53,7 +53,7 @@
     },
     "apps/examples/agentic-commerce-assistant": {
       "name": "@kuralle-examples/agentic-commerce-assistant",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -92,7 +92,7 @@
     },
     "apps/examples/content-agent": {
       "name": "@kuralle-examples/content-agent",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@earendil-works/pi-ai": "^0.82.1",
@@ -110,7 +110,7 @@
     },
     "apps/examples/customer-support-agent": {
       "name": "@kuralle-examples/customer-support-agent",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -144,7 +144,7 @@
     },
     "apps/examples/file-agent-chat": {
       "name": "@kuralle-examples/file-agent-chat",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@kuralle-agents/core": "workspace:*",
@@ -160,7 +160,7 @@
     },
     "apps/examples/healthcare": {
       "name": "@kuralle-examples/healthcare",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@earendil-works/pi-ai": "^0.82.1",
@@ -177,7 +177,7 @@
     },
     "apps/examples/hotel-receptionist": {
       "name": "@kuralle-examples/hotel-receptionist",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@earendil-works/pi-ai": "^0.82.1",
@@ -194,7 +194,7 @@
     },
     "apps/examples/marketing-team": {
       "name": "@kuralle-examples/marketing-team",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@ai-sdk/react": "^4.0.0",
@@ -258,7 +258,7 @@
     },
     "apps/examples/pharmacy-rx-agent": {
       "name": "@kuralle-examples/pharmacy-rx-agent",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -288,7 +288,7 @@
     },
     "apps/examples/postgres-hacker-starter": {
       "name": "@kuralle-examples/postgres-hacker-starter",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@ai-sdk/react": "^4.0.0",
@@ -339,7 +339,7 @@
     },
     "apps/examples/release-governance-agent": {
       "name": "@kuralle-examples/release-governance-agent",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@earendil-works/pi-ai": "^0.82.1",
@@ -454,7 +454,7 @@
     },
     "apps/playground/pharmacy-rx-agent": {
       "name": "pharmacy-rx-agent",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "dependencies": {
         "@ai-sdk/openai": "latest",
         "@cloudflare/ai-chat": "^0.10.1",
@@ -474,7 +474,7 @@
     },
     "apps/playground/pi-driver-stress": {
       "name": "pi-driver-stress",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@earendil-works/pi-ai": "0.82.1",
@@ -521,7 +521,7 @@
     },
     "packages/analytics-sdk": {
       "name": "@kuralle-agents/analytics-sdk",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "zod": "^4.1.8",
       },
@@ -539,7 +539,7 @@
     },
     "packages/build": {
       "name": "@kuralle-agents/build",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/deployment": "workspace:*",
@@ -556,7 +556,7 @@
     },
     "packages/cf-agent": {
       "name": "@kuralle-agents/cf-agent",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@cloudflare/ai-chat": "^0.10.1",
         "@kuralle-agents/core": "workspace:*",
@@ -580,7 +580,7 @@
     },
     "packages/cli": {
       "name": "@kuralle-agents/cli",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "bin": {
         "kuralle": "./dist/cli.js",
       },
@@ -616,7 +616,7 @@
     },
     "packages/commerce": {
       "name": "@kuralle-agents/commerce",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -634,7 +634,7 @@
     },
     "packages/core": {
       "name": "@kuralle-agents/core",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@ai-sdk/otel": "^1.0.76",
         "@opentelemetry/api": "^1.9.0",
@@ -661,7 +661,7 @@
     },
     "packages/create-kuralle-agents": {
       "name": "create-kuralle-agents",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "bin": {
         "create-kuralle-agents": "dist/index.js",
       },
@@ -677,7 +677,7 @@
     },
     "packages/deployment": {
       "name": "@kuralle-agents/deployment",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/fs": "workspace:*",
@@ -696,7 +696,7 @@
     },
     "packages/e2e-tests": {
       "name": "@kuralle-agents/e2e-tests",
-      "version": "0.12.8",
+      "version": "0.12.9",
       "dependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@kuralle-agents/analytics-sdk": "workspace:*",
@@ -714,7 +714,7 @@
     },
     "packages/engagement": {
       "name": "@kuralle-agents/engagement",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
@@ -730,7 +730,7 @@
     },
     "packages/eval": {
       "name": "@kuralle-agents/eval",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@types/node": "^20.11.0",
         "typescript": "^5.3.0",
@@ -738,7 +738,7 @@
     },
     "packages/fs": {
       "name": "@kuralle-agents/fs",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -762,7 +762,7 @@
     },
     "packages/hono-server": {
       "name": "@kuralle-agents/hono-server",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@hono/node-server": "^2.0.12",
         "@kuralle-agents/deployment": "workspace:*",
@@ -789,7 +789,7 @@
     },
     "packages/http-client": {
       "name": "@kuralle-agents/http-client",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@types/node": "^22.13.4",
         "typescript": "^5.8.2",
@@ -797,7 +797,7 @@
     },
     "packages/lancedb-store": {
       "name": "@kuralle-agents/lancedb-store",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@lancedb/lancedb": "^0.13.0",
@@ -811,7 +811,7 @@
     },
     "packages/mcp": {
       "name": "@kuralle-agents/mcp",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/plugins": "workspace:*",
@@ -830,7 +830,7 @@
     },
     "packages/messaging": {
       "name": "@kuralle-agents/messaging",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "hono": "^4.7.4",
@@ -842,7 +842,7 @@
     },
     "packages/messaging-meta": {
       "name": "@kuralle-agents/messaging-meta",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/http-client": "workspace:*",
         "@kuralle-agents/messaging": "workspace:*",
@@ -868,7 +868,7 @@
     },
     "packages/pi-driver": {
       "name": "@kuralle-agents/pi-driver",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@earendil-works/pi-agent-core": "0.82.1",
         "@earendil-works/pi-ai": "0.82.1",
@@ -891,7 +891,7 @@
     },
     "packages/plugins": {
       "name": "@kuralle-agents/plugins",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/fs": "workspace:*",
@@ -912,7 +912,7 @@
     },
     "packages/postgres-store": {
       "name": "@kuralle-agents/postgres-store",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/deployment": "workspace:*",
       },
@@ -933,7 +933,7 @@
     },
     "packages/rag": {
       "name": "@kuralle-agents/rag",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
@@ -955,7 +955,7 @@
     },
     "packages/rag-loaders": {
       "name": "@kuralle-agents/rag-loaders",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -979,7 +979,7 @@
     },
     "packages/redis-store": {
       "name": "@kuralle-agents/redis-store",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@ai-sdk/openai": "^4.0.0",
         "@kuralle-agents/core": "workspace:*",
@@ -999,7 +999,7 @@
     },
     "packages/tools": {
       "name": "@kuralle-agents/tools",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@kuralle-agents/core": "workspace:*",
         "@kuralle-agents/rag": "workspace:*",
@@ -1017,14 +1017,14 @@
     },
     "packages/trace-ui": {
       "name": "@kuralle-agents/trace-ui",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
       },
     },
     "packages/upstash-store": {
       "name": "@kuralle-agents/upstash-store",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -1036,7 +1036,7 @@
     },
     "packages/vectorize-store": {
       "name": "@kuralle-agents/vectorize-store",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "devDependencies": {
         "@kuralle-agents/rag": "workspace:*",
         "@types/node": "^20.11.0",
@@ -1048,7 +1048,7 @@
     },
     "packages/widget": {
       "name": "@kuralle-agents/widget",
-      "version": "0.23.0",
+      "version": "0.23.1",
       "dependencies": {
         "nanoid": "^5.0.9",
       },
