@@ -47,6 +47,27 @@ const SERVER = {
 };
 
 describe('the SQLite connection store', () => {
+  it('adds the tool_fingerprints column to a table created before it existed', () => {
+    const db = new Database(':memory:');
+    db.run(OLD_SCHEMA);
+    db.run('ALTER TABLE mcp_servers ADD COLUMN tools TEXT');
+    db.run(
+      "INSERT INTO mcp_servers (id, name, type, url) VALUES ('stub', 'stub', 'streamable-http', 'https://stub.invalid/mcp')",
+    );
+
+    const store = createSqliteMcpConnectionStore(sqlStorage(db));
+
+    const columns = db
+      .query('PRAGMA table_info(mcp_servers)')
+      .all() as Array<{ name: string }>;
+    expect(columns.map((column) => column.name)).toContain('tool_fingerprints');
+
+    return store.list().then((rows) => {
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.toolFingerprints).toBeUndefined();
+    });
+  });
+
   it('adds the tools column to a table created before it existed', () => {
     const db = new Database(':memory:');
     db.run(OLD_SCHEMA);
@@ -66,6 +87,20 @@ describe('the SQLite connection store', () => {
       expect(rows).toHaveLength(1);
       expect(rows[0]!.tools).toBeUndefined();
     });
+  });
+
+  it('round-trips a cached listing and trust baseline through storage', async () => {
+    const db = new Database(':memory:');
+    const store = createSqliteMcpConnectionStore(sqlStorage(db));
+
+    await store.save({
+      ...SERVER,
+      toolFingerprints: { echo: 'digest-echo' },
+    });
+    const [row] = await store.list();
+
+    expect(row!.tools).toEqual(SERVER.tools);
+    expect(row!.toolFingerprints).toEqual({ echo: 'digest-echo' });
   });
 
   it('round-trips a cached listing through storage', async () => {
@@ -105,5 +140,41 @@ describe('the SQLite connection store', () => {
     const sqlite = createSqliteMcpConnectionStore(sqlStorage(db));
     await sqlite.save(smuggled);
     expect(JSON.stringify(await sqlite.list())).not.toContain('LEAK');
+  });
+});
+
+describe('SQLite baseline immutability', () => {
+  /**
+   * Production (Durable Objects) uses the SQLite store; the memory store's equivalent test
+   * would stay green if the COALESCE clause were dropped or written backwards. This pins the
+   * backend that actually ships.
+   */
+  it('save() cannot replace a recorded tool_fingerprints, but remove() then save() can', async () => {
+    const db = new Database(':memory:');
+    const store = createSqliteMcpConnectionStore(sqlStorage(db));
+
+    const row = {
+      id: 'stub',
+      name: 'stub',
+      type: 'streamable-http' as const,
+      url: 'https://example.test/mcp',
+      tools: [{ name: 'a', description: 'original' }],
+    };
+    const trusted = { a: 'trusted-digest' };
+    const attacker = { a: 'attacker-digest' };
+
+    await store.save({ ...row, toolFingerprints: trusted });
+    expect((await store.list())[0]!.toolFingerprints).toEqual(trusted);
+
+    await store.save({ ...row, toolFingerprints: attacker });
+    expect((await store.list())[0]!.toolFingerprints).toEqual(trusted);
+
+    // A save carrying no baseline must not erase the recorded one either.
+    await store.save(row);
+    expect((await store.list())[0]!.toolFingerprints).toEqual(trusted);
+
+    await store.remove('stub');
+    await store.save({ ...row, toolFingerprints: attacker });
+    expect((await store.list())[0]!.toolFingerprints).toEqual(attacker);
   });
 });

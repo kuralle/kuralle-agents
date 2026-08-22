@@ -3,6 +3,7 @@
 
 import {
   defineTool,
+  fingerprintToolCatalog,
   type AnyTool,
   type Session,
   type ToolContext,
@@ -22,6 +23,7 @@ import {
 } from './disclosure.js';
 import { remoteMcpInputSchema } from './schema.js';
 import { resolveAllowedHosts } from './ssrf.js';
+import { guardListingAgainstDrift } from './tool-drift-guard.js';
 import { fnv1a32, mcpToolName, rawMcpToolName } from './tool-name.js';
 import type {
   ConnectedMcpServer,
@@ -125,6 +127,31 @@ function isRemoteConfig(
 }
 
 /**
+ * The trust baseline for a stored server, resolved when the row is loaded — before any
+ * listing is projected.
+ *
+ * A row written before drift detection shipped has `tools` but no `toolFingerprints`, because
+ * the column is added as NULL by `ALTER TABLE`. Deriving the baseline from that stored
+ * catalogue is what makes the upgrade safe: it is the last listing this deployment actually
+ * served to a model, so a server that drifted before we started looking is caught on the first
+ * projection rather than being enshrined as trusted.
+ *
+ * Deriving it at persist time instead is too late — the guard has already run by then, so the
+ * drifted catalogue reaches the model for one turn.
+ */
+async function resolveTrustBaseline(
+  row: Pick<PersistedServer, 'tools' | 'toolFingerprints'>,
+): Promise<Record<string, string> | undefined> {
+  if (row.toolFingerprints) {
+    return row.toolFingerprints;
+  }
+  if (row.tools && row.tools.length > 0) {
+    return fingerprintToolCatalog(row.tools);
+  }
+  return undefined;
+}
+
+/**
  * Records the server *and* the catalogue it just published, so the next wake can build a
  * tool map without a `tools/list` round trip. The listing is public metadata — the same
  * text the model is shown — and the credential rule is untouched: `headers` and resolved
@@ -134,15 +161,23 @@ async function persistRemoteServer(
   store: McpConnectionStore,
   config: Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }>,
   tools: readonly PersistedTool[],
-): Promise<void> {
+  knownBaseline: Record<string, string> | undefined,
+): Promise<Record<string, string>> {
+  // `knownBaseline` is whatever `resolveTrustBaseline` established when the row was loaded.
+  // Only a server with no stored row at all reaches the fallback, which is genuine
+  // trust-on-first-use. Both stores also refuse to replace a baseline they already hold, so
+  // this is belt and braces rather than the only guard.
+  const toolFingerprints = knownBaseline ?? (await fingerprintToolCatalog(tools));
   const row: PersistedServer = {
     id: config.name,
     name: config.name,
     type: config.type,
     url: config.url,
     tools,
+    toolFingerprints,
   };
   await store.save(row);
+  return toolFingerprints;
 }
 
 /**
@@ -221,6 +256,8 @@ interface ServerSeed {
   config: McpServerConfig;
   /** Persisted `tools/list` result, when this call is a wake rather than a cold start. */
   cachedTools?: readonly PersistedTool[];
+  /** Trust baseline established on first persist; reconcile must not rewrite it. */
+  toolFingerprints?: Record<string, string>;
 }
 
 interface LiveServer {
@@ -230,6 +267,8 @@ interface LiveServer {
   unavailable: boolean;
   /** Present only when this server's tools were projected from a persisted listing. */
   cachedTools?: readonly PersistedTool[];
+  /** Trusted tool catalogue fingerprints; absent until the first persist for this server. */
+  toolFingerprints?: Record<string, string>;
   /**
    * Remote tool names the server is currently known to publish. Reconciliation narrows it,
    * so a turn still holding a pre-reconciliation tool map calls a withdrawn tool and gets a
@@ -290,9 +329,11 @@ export async function rebuildMcpToolsFromStorage(
       });
       continue;
     }
+    const baseline = await resolveTrustBaseline(row);
     toConnect.push({
       config,
       ...(row.tools && row.tools.length > 0 ? { cachedTools: row.tools } : {}),
+      ...(baseline ? { toolFingerprints: baseline } : {}),
     });
   }
 
@@ -340,6 +381,9 @@ export async function mcpToolsImpl(
     });
   }
 
+  const persistedRows =
+    opts?.storage !== undefined ? await opts.storage.list() : ([] as readonly PersistedServer[]);
+
   for (const [index, config] of servers.entries()) {
     const projectedName = projectedNames[index]!;
     const allowedHosts = resolveAllowedHosts(
@@ -380,11 +424,16 @@ export async function mcpToolsImpl(
     }
 
     const cachedTools = seeds[index]!.cachedTools;
+    const storedRow = persistedRows.find((row) => row.name === config.name);
+    const toolFingerprints =
+      seeds[index]!.toolFingerprints ??
+      (storedRow ? await resolveTrustBaseline(storedRow) : undefined);
     liveByServer.set(projectedName, {
       connection: connected.server,
       config,
       unavailable: false,
       ...(cachedTools ? { cachedTools } : {}),
+      ...(toolFingerprints ? { toolFingerprints } : {}),
       published: new Set<string>(),
     });
     closers.push(connected.server.close);
@@ -453,7 +502,13 @@ export async function mcpToolsImpl(
       continue;
     }
 
-    projectInto(serverName, live, listing);
+    const guarded = await guardListingAgainstDrift(
+      serverName,
+      listing.tools,
+      live.toolFingerprints,
+      opts,
+    );
+    projectInto(serverName, live, { tools: guarded, fromCache: listing.fromCache });
 
     if (listing.fromCache) {
       // Cached listings are checked against the server after the map is already usable.
@@ -468,7 +523,12 @@ export async function mcpToolsImpl(
         }),
       );
     } else if (opts?.storage && isRemoteConfig(live.config)) {
-      await persistRemoteServer(opts.storage, live.config, listing.tools);
+      live.toolFingerprints = await persistRemoteServer(
+        opts.storage,
+        live.config,
+        listing.tools,
+        live.toolFingerprints,
+      );
     }
   }
 
@@ -552,11 +612,19 @@ async function reconcileServer(args: {
   live.cachedTools = fresh;
 
   if (changed) {
-    project(serverName, live, { tools: fresh, fromCache: false });
+    const guarded = await guardListingAgainstDrift(
+      serverName,
+      fresh,
+      live.toolFingerprints,
+      opts,
+    );
+    project(serverName, live, { tools: guarded, fromCache: false });
   }
 
   if (opts?.storage && isRemoteConfig(live.config)) {
-    await persistRemoteServer(opts.storage, live.config, fresh).catch(() => undefined);
+    await persistRemoteServer(opts.storage, live.config, fresh, live.toolFingerprints).catch(
+      () => undefined,
+    );
   }
 }
 

@@ -334,7 +334,7 @@ Await `reconciled` when you would rather pay the round trip than risk one stale 
 
 ### What persists, and what never does
 
-A `PersistedServer` row holds exactly five fields:
+A `PersistedServer` row holds exactly six fields:
 
 | Field | Example |
 |-------|---------|
@@ -343,6 +343,7 @@ A `PersistedServer` row holds exactly five fields:
 | `type` | `"streamable-http"` |
 | `url` | `"https://mcp.example.com/mcp"` |
 | `tools` | `PersistedTool[]` — `[{ name: "search", description: "…", inputSchema: { … } }]` |
+| `toolFingerprints` | `Record<string, string>` — the trust baseline, one digest per tool |
 
 No function, socket, `fetch` override, auth resolver, token, or configured header is ever written.
 The store is a one-wake capability seed, not a config source.
@@ -351,6 +352,39 @@ The store is a one-wake capability seed, not a config source.
 authenticates to the server. A stored listing that no longer parses is dropped rather than thrown:
 it is a cache, so losing it costs one `tools/list` on the next wake, where throwing would strand a
 Durable Object that could reconnect perfectly well.
+
+### Tool drift — the rug pull, and what stops it
+
+`tools` and `toolFingerprints` look similar and are opposites. `tools` is a **cache**, refreshed on
+every reconcile so a wake can project without a round trip. `toolFingerprints` is a **trust
+baseline**, recorded once and never rewritten — because a baseline that follows the server is a
+baseline that follows an attacker.
+
+A remote server can change a tool's `description` or `inputSchema` after you trusted it. Those
+strings are what the model reads, so a server that redefines `issue_refund` after the fact changes
+what every prompt naming that tool actually asks for. On each listing — cold start and background
+reconcile alike — the fresh catalogue is fingerprinted and compared against the baseline, per tool:
+
+| Drift | What happens |
+|-------|--------------|
+| `description` or `inputSchema` **changed** | the tool is withheld from the map, and a `tool-drift` diagnostic names it |
+| a tool was **added** | withheld — nobody reviewed it — with the same diagnostic |
+| a tool was **removed** | logged and ignored; the capability is simply gone |
+
+The whole server is never refused. Refusing it would fail closed on the two harmless cases and turn
+a vendor's routine deploy into your outage.
+
+**This requires `storage`.** With no store there is no baseline, so there is nothing to compare and
+the guard does not apply — an in-process run with no persistence has no notion of "what we trusted
+last time". This is not a setting you can turn off; it is what having no history means.
+
+**Upgrading.** A row written before this shipped has `tools` but no `toolFingerprints`. The baseline
+is then derived from that stored catalogue — the last listing you actually served to a model —
+rather than from whatever the server answers at upgrade time, so a server that drifted before you
+started looking is caught on the first projection.
+
+**Re-trusting.** `save()` alone cannot replace a baseline; both stores keep the first one recorded.
+Re-trusting a server is deliberately two steps, `remove(id)` then `save(row)`. There is no UI for it.
 
 A cached listing dies with the row it belongs to. If the supplied config's `type` or `url` no longer
 matches what was persisted, the whole row is refused with a `connection-failure` diagnostic — a

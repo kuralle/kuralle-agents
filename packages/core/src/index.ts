@@ -682,6 +682,11 @@ export {
   isTerminalRunStatus,
 } from './runtime/durable/RunStore.js';
 export { FlowDriftError } from './runtime/durable/flowPin.js';
+export {
+  detectToolCatalogDrift,
+  fingerprintToolCatalog,
+} from './mcp/toolDrift.js';
+export type { McpToolCatalogEntry } from './mcp/toolDrift.js';
 export { InvalidCallerMessagesError } from './runtime/stripSystemRoleMessages.js';
 export type { FlowDriftRecovery } from './runtime/durable/flowPin.js';
 export {

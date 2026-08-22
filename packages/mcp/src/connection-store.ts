@@ -26,6 +26,15 @@ export interface PersistedServer {
   url: string;
   /** Last known `tools/list` result, so a wake can project before it re-lists. */
   tools?: readonly PersistedTool[];
+  /**
+   * Trust baseline for remote tool drift detection. Written once when absent; reconcile refreshes
+   * `tools` but must never rewrite this — both stores below drop an incoming baseline when one is
+   * already recorded, so a compromised catalogue cannot become the trusted one by being saved again.
+   *
+   * That also means `save()` alone cannot re-trust a server. Re-trusting is deliberately a two-step
+   * operator action: `remove(id)` then `save(row)`. There is no UI for it yet.
+   */
+  toolFingerprints?: Record<string, string>;
 }
 
 export interface McpConnectionStore {
@@ -34,7 +43,7 @@ export interface McpConnectionStore {
   remove(id: string): Promise<void>;
 }
 
-const PERSISTED_KEYS = ['id', 'name', 'type', 'url', 'tools'] as const;
+const PERSISTED_KEYS = ['id', 'name', 'type', 'url', 'tools', 'toolFingerprints'] as const;
 
 /**
  * Rebuilds the row from named fields rather than copying the caller's object, so a field
@@ -60,6 +69,9 @@ function assertPersistedShape(server: PersistedServer): PersistedServer {
       return persisted;
     });
   }
+  if (server.toolFingerprints !== undefined) {
+    row.toolFingerprints = { ...server.toolFingerprints };
+  }
   for (const key of Object.keys(row)) {
     if (!(PERSISTED_KEYS as readonly string[]).includes(key)) {
       throw new Error(`McpConnectionStore: unexpected field "${key}"`);
@@ -80,6 +92,14 @@ export function createMemoryMcpConnectionStore(): McpConnectionStore {
     },
     async save(server) {
       const row = assertPersistedShape(server);
+      const existing = rows.get(row.id);
+      // Once a baseline is recorded it stands, whatever the caller passes — the same rule the
+      // SQLite store enforces with COALESCE. Preserving it only when the incoming value is
+      // undefined would let a caller replace a trusted baseline here but not on Cloudflare,
+      // which is a security property differing by backend.
+      if (existing?.toolFingerprints !== undefined) {
+        row.toolFingerprints = existing.toolFingerprints;
+      }
       rows.set(row.id, row);
     },
     async remove(id) {
@@ -94,7 +114,8 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('streamable-http', 'sse')),
   url TEXT NOT NULL,
-  tools TEXT
+  tools TEXT,
+  tool_fingerprints TEXT
 );
 `;
 
@@ -112,11 +133,42 @@ function ensureToolsColumn(sql: McpSqlStorage): void {
   sql.exec('ALTER TABLE mcp_servers ADD COLUMN tools TEXT');
 }
 
+function ensureToolFingerprintsColumn(sql: McpSqlStorage): void {
+  const columns = [...sql.exec('PRAGMA table_info(mcp_servers)')];
+  if (columns.some((column) => String(column.name) === 'tool_fingerprints')) {
+    return;
+  }
+  sql.exec('ALTER TABLE mcp_servers ADD COLUMN tool_fingerprints TEXT');
+}
+
 /**
  * A stored listing that no longer parses is dropped, not thrown. It is a cache: losing it
  * costs one `tools/list` on the next wake, while throwing would strand a Durable Object
  * that could otherwise reconnect perfectly well.
  */
+function decodeToolFingerprints(value: unknown): Record<string, string> | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return undefined;
+  }
+  const fingerprints: Record<string, string> = {};
+  for (const [name, digest] of Object.entries(parsed)) {
+    if (typeof digest !== 'string') {
+      return undefined;
+    }
+    fingerprints[name] = digest;
+  }
+  return fingerprints;
+}
+
 function decodeTools(value: unknown): PersistedTool[] | undefined {
   if (typeof value !== 'string' || value.length === 0) {
     return undefined;
@@ -146,35 +198,43 @@ function decodeTools(value: unknown): PersistedTool[] | undefined {
 
 function rowToPersisted(record: Record<string, unknown>): PersistedServer {
   const tools = decodeTools(record.tools);
+  const toolFingerprints = decodeToolFingerprints(record.tool_fingerprints);
   return assertPersistedShape({
     id: String(record.id),
     name: String(record.name),
     type: record.type as PersistedServer['type'],
     url: String(record.url),
     ...(tools ? { tools } : {}),
+    ...(toolFingerprints ? { toolFingerprints } : {}),
   });
 }
 
 export function createSqliteMcpConnectionStore(sql: McpSqlStorage): McpConnectionStore {
   sql.exec(SQLITE_SCHEMA);
   ensureToolsColumn(sql);
+  ensureToolFingerprintsColumn(sql);
 
   return {
     async list() {
-      const records = [...sql.exec('SELECT id, name, type, url, tools FROM mcp_servers')];
+      const records = [
+        ...sql.exec('SELECT id, name, type, url, tools, tool_fingerprints FROM mcp_servers'),
+      ];
       return records.map(rowToPersisted);
     },
     async save(server) {
       const row = assertPersistedShape(server);
       sql.exec(
-        `INSERT INTO mcp_servers (id, name, type, url, tools) VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO mcp_servers (id, name, type, url, tools, tool_fingerprints)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type,
-           url = excluded.url, tools = excluded.tools`,
+           url = excluded.url, tools = excluded.tools,
+           tool_fingerprints = COALESCE(mcp_servers.tool_fingerprints, excluded.tool_fingerprints)`,
         row.id,
         row.name,
         row.type,
         row.url,
         row.tools === undefined ? null : JSON.stringify(row.tools),
+        row.toolFingerprints === undefined ? null : JSON.stringify(row.toolFingerprints),
       );
     },
     async remove(id) {
