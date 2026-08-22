@@ -25,7 +25,9 @@ const flow = defineFlow({
 
 Attach the flow to an agent with `defineAgent({ flows: [flow] })`.
 
-`defineFlow` validates the graph structurally and throws with the full issue list: a transition that returns a thunk (`() => node`) or a node object not registered in `nodes` is rejected (`inline-transition-target`), as are unreachable nodes and a `start` missing from `nodes`. The same validator backs the JSON dialect — see [Dynamic Flows](./dynamic-flows.md).
+`defineFlow` validates what it can see statically and throws with the full issue list: an inline node object used as a transition target is rejected (`inline-transition-target`), as is a `start` missing from `nodes`.
+
+The check stops at the edge of a function body. A `next` or `onComplete` that *returns* a node — `onComplete: () => confirm` — is opaque at definition time, so a target absent from `nodes` and a node nothing routes to both pass validation and fail later, at the transition. Register every node in `nodes` and prefer `{ goto: 'nodeId' }` over a returned reference when you want the id checked against the graph. The same validator backs the JSON dialect — see [Dynamic Flows](./dynamic-flows.md).
 
 ## Node kinds
 
@@ -46,6 +48,8 @@ const confirm = reply({
 `next` is optional. When present it's called after the model responds (unless the turn produced a handoff or end control signal) and returns the next transition; omit it to stay on the node.
 
 For transactional outcomes that must not be model-authored — "your order is placed", a refund confirmation — set `response: (state) => string` instead of letting the model speak. The engine emits that text verbatim, with no model call, and marks the turn `rendered: 'engine'` in the trace.
+
+`instructions` stays required on the node even then. It is never used on a turn that `response` renders, so give it a one-line description of the node's job and do not spend effort on it.
 
 ### `collect`
 

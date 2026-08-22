@@ -123,11 +123,16 @@ defineFlow({
 })
 ```
 
-`defineFlow` validates the graph at definition time and throws with the full
-issue list. It rejects a transition target that is a thunk (`() => node`) or a
-node object missing from `nodes` (`inline-transition-target`), unreachable
-nodes, and a `start` missing from `nodes`. An inline target has no stable
-identity for a parked run to resume against.
+`defineFlow` validates what it can see statically and throws with the full issue
+list: an inline node object used as a transition target
+(`inline-transition-target`), and a `start` missing from `nodes`. An inline
+target has no stable identity for a parked run to resume against.
+
+Verified against 0.23.2, the check does **not** reach inside function bodies. A
+target returned from `onComplete: () => saveOrder` where `saveOrder` is absent
+from `nodes` passes definition time and fails at the transition, and so does a
+node nothing routes to. Register every node, and prefer `{ goto: 'nodeId' }`
+when you want the id checked.
 
 | Builder | Job |
 |---|---|
@@ -139,7 +144,8 @@ identity for a parked run to resume against.
 
 `reply` accepts `response: (state) => string` for transactional text that must
 not be model-authored. The engine emits it verbatim with no model call and marks
-the turn `rendered: 'engine'`.
+the turn `rendered: 'engine'`. `instructions` stays required on the node even
+then — it is unused on a rendered turn, so keep it to one line.
 
 `collect` re-enters until every `required` field is filled, up to `maxTurns`
 (default 10). The user-facing question is the deterministic `ask(missing, state)`
@@ -289,7 +295,14 @@ Do not confuse `TurnHandle` with `RunHandle` — `RunHandle` is the run descript
 | `text-cancel` | Partial message retracted by a gate | `payload.id`, `payload.reason` |
 | `tool-call` | Before a tool executes | `payload.toolName`, `payload.args` |
 | `tool-result` | After a tool executes | `payload.toolName`, `payload.result` |
-| `done` | Turn complete | `payload.sessionId` |
+| `error` | The turn failed | `payload` |
+| `done` | Turn ended — successfully or not | `payload.sessionId` |
+
+A failed turn emits `model-call-start → error → model-call-end → error → done`.
+The `for await` loop drains that and completes without throwing, so handling
+only `text-delta` and `done` prints a session id on a turn that entirely failed.
+`await handle` is the error boundary — a failed turn throws there and nowhere
+else.
 
 Save `payload.sessionId` from `done` and pass it back to continue the session.
 The runtime assigns one on the first turn.

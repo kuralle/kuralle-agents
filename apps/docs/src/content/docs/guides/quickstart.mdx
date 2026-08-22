@@ -95,9 +95,32 @@ The `handle.events` async iterable emits `StreamPart` events. The most common:
 | `text-cancel` | Partial message retracted (gate block) | `part.payload.id: string`, `part.payload.reason: string` |
 | `tool-call` | Before a tool executes | `part.payload.toolName`, `part.payload.args` |
 | `tool-result` | After a tool executes | `part.payload.toolName`, `part.payload.result` |
-| `done` | Turn complete | `part.payload.sessionId` |
+| `error` | The turn failed | `part.payload` |
+| `done` | Turn ended — successfully **or not** | `part.payload.sessionId` |
 
 Save `part.payload.sessionId` and pass it back on subsequent turns to continue in the same session.
+
+<Aside type="caution" title="`done` is not success, and the loop does not throw">
+A failed turn emits `model-call-start → error → model-call-end → error → done`. The
+`for await` loop drains it and completes normally, so a client that handles only `text-delta`
+and `done` prints a session id and looks like it worked.
+
+`await handle` is where a failed turn throws — it is the error boundary, not a formality.
+Handle `error` parts if you want the reason inline, and always await the handle:
+
+```typescript
+async function main() {
+  const handle = runtime.run({ input: 'Use echo to say "hello"' });
+  for await (const part of handle.events) {
+    if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+    if (part.type === 'error') console.error('\n[error]', part.payload);
+  }
+  await handle; // throws if the turn failed
+}
+
+main().catch((err) => { console.error(err); process.exit(1); });
+```
+</Aside>
 
 ## Session continuity
 

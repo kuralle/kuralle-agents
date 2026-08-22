@@ -112,5 +112,9 @@ const triage = defineAgent({
 const runtime = createRuntime({
   agents: [triage, billingAgent, supportAgent],
   defaultAgentId: 'triage',
+  // A pure dispatcher declares no `model` of its own, and the runtime's model
+  // gate reads `agent.model ?? defaultModel` — it does not fall back to
+  // `routing.model`. Without this line every turn throws before classifying.
+  defaultModel: openai('gpt-4o-mini'),
 });
 ```
