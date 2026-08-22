@@ -2,7 +2,7 @@
   "name": "pi-driver-stress",
   "private": true,
   "license": "Apache-2.0",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "scripts": {
     "run": "bun run run.ts",
