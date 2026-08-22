@@ -11,7 +11,7 @@
  *   - APICallError exposes `statusCode`, `responseBody`, `cause`, `url`.
  *   - During `streamText`, errors surface BOTH ways: as a thrown
  *     exception around the iterator AND as `chunk.type === 'error'`
- *     parts inside `fullStream`. Callers must handle both.
+ *     parts inside `stream`. Callers must handle both.
  *
  * Provider-specific overflow signatures (researched against current docs +
  * gh search across 10 production codebases that ship their own classifier):

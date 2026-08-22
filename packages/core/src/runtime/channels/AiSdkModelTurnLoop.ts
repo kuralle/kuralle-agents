@@ -1,4 +1,4 @@
-import { streamText, type LanguageModelUsage, type ModelMessage } from 'ai';
+import { streamText, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
 import type { ModelTurnLoop, ModelTurnLoopInput, ModelTurnLoopState } from './ModelTurnLoop.js';
 import { applyPromptCache } from '../promptCache.js';
 import { addTurnUsage, languageModelId } from './turnUsage.js';
@@ -6,6 +6,14 @@ import { dispatchModelToolCalls, toolResultMessage } from './executeModelTool.js
 import { isControlFlowSignal } from '../controlFlowSignal.js';
 import { assertNoSystemRoleInModelMessages } from '../modelMessagesGuard.js';
 import type { TurnIncompletePayload } from '../../types/stream.js';
+
+/** Sorted tool names for stable provider prompt-cache hashing. */
+export function deriveToolOrder(tools: ToolSet | undefined): readonly string[] | undefined {
+  if (!tools) return undefined;
+  const names = Object.keys(tools);
+  if (names.length === 0) return undefined;
+  return names.slice().sort();
+}
 
 /** Built-in AI SDK implementation of the inner model/tool loop. */
 export class AiSdkModelTurnLoop implements ModelTurnLoop {
@@ -43,17 +51,19 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
       let ended = false;
       try {
         assertNoSystemRoleInModelMessages(cached.messages, 'streamText');
+        const modelTools = cached.tools ?? input.tools;
         const result = streamText({
           model,
           ...(cached.system ? { system: cached.system } : {}),
           messages: cached.messages,
-          tools: cached.tools ?? input.tools,
+          tools: modelTools,
+          toolOrder: deriveToolOrder(modelTools),
           ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
           abortSignal: ctx.abortSignal,
           ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
         });
 
-        for await (const part of result.fullStream) {
+        for await (const part of result.stream) {
           if (part.type === 'text-delta') {
             if (part.text) stepHadText = true;
             emitToken(part.text);
@@ -67,11 +77,9 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
         }
 
         finishReason = await result.finishReason;
-        const response = await result.response;
-        if (result.totalUsage) {
-          stepUsage = await result.totalUsage;
-          if (stepUsage) state.usage = addTurnUsage(state.usage, stepUsage);
-        }
+        const response = (await result.finalStep).response;
+        stepUsage = await result.usage;
+        if (stepUsage) state.usage = addTurnUsage(state.usage, stepUsage);
 
         ctx.emit({
           channel: 'internal',
@@ -226,7 +234,7 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
       ...(cached.providerOptions ? { providerOptions: cached.providerOptions } : {}),
     });
 
-    for await (const part of result.fullStream) {
+    for await (const part of result.stream) {
       if (part.type === 'text-delta') emitToken(part.text);
       if (part.type === 'error') {
         const error = (part as { error?: unknown }).error;
@@ -236,7 +244,7 @@ export class AiSdkModelTurnLoop implements ModelTurnLoop {
       }
     }
 
-    const usage = await result.totalUsage;
+    const usage = await result.usage;
     if (usage) state.usage = addTurnUsage(state.usage, usage);
     ctx.emit({
       channel: 'internal',
