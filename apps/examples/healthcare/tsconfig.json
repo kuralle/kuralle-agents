@@ -10,5 +10,5 @@
     "isolatedModules": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "../_shared/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts"]
 }
