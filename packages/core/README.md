@@ -161,6 +161,24 @@ Endpoints may include `/v1/traces`; otherwise the sink appends it. For self-host
 Langfuse, pass its OTLP base URL as `endpoint`. Native span attributes, including
 turn `ttftMs`, are exported with the `kuralle.` prefix (`kuralle.ttftMs`).
 
+### AI SDK OpenTelemetry (v7)
+
+Kuralle's native trace store (above) is independent from the Vercel AI SDK's
+OpenTelemetry integration (`@ai-sdk/otel`). In AI SDK v7, telemetry is **opt-out**
+once an integration is registered — Kuralle **does not** call `registerTelemetry`
+at import time, so existing deployments stay silent until you opt in.
+
+Two equivalent opt-in paths:
+
+1. Call `registerAiSdkOpenTelemetry({ tracer })` before `createRuntime`, then set
+   `aiSdkTelemetry: { enabled: true }` on the harness (registers if not already
+   done and passes per-call `telemetry` options where wired).
+2. Set only `aiSdkTelemetry: { enabled: true, tracer }` — registration happens at
+   runtime construction.
+
+Omit both (default) and model calls emit no AI SDK spans. The `tracer` belongs on
+the integration constructor, not on per-call `TelemetryOptions`.
+
 ## Flows
 
 A flow is a node graph that enforces a multi-step procedure without embedding a 600-line SOP in a system prompt.

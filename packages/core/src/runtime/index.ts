@@ -6,6 +6,10 @@ export {
   type RunHandle,
   type TracingConfig,
 } from './Runtime.js';
+export {
+  registerAiSdkOpenTelemetry,
+  type AiSdkTelemetryConfig,
+} from '../telemetry/aiSdkOtel.js';
 export type { RuntimeLike } from './RuntimeLike.js';
 export { TraceRecorder, runOnce, type TraceRecorderOptions } from './TraceRecorder.js';
 export type { AgentSpan, AgentTrace, SpanKind } from '../types/trace.js';

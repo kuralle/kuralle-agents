@@ -7,6 +7,7 @@ import { Aside, Code } from '@astrojs/starlight/components';
 import groundingEvalExample from '../../../examples/observability/grounding-eval.ts?raw';
 import tracingConfigExample from '../../../examples/observability/tracing-config.ts?raw';
 import otelExportExample from '../../../examples/observability/otel-export.ts?raw';
+import aiSdkTelemetryExample from '../../../examples/observability/ai-sdk-telemetry.ts?raw';
 import redisTraceStoreExample from '../../../examples/observability/redis-trace-store.ts?raw';
 import postgresTraceStoreExample from '../../../examples/observability/postgres-trace-store.ts?raw';
 import traceUiEmbedExample from '../../../examples/observability/trace-ui-embed.ts?raw';
@@ -138,6 +139,27 @@ export class SupportAgent extends KuralleAgent<Env> {
 </Aside>
 
 `langfuseSink` is `otelSink` pre-configured for Langfuse's OTLP endpoint (`https://cloud.langfuse.com/api/public/otel` by default) with Basic auth built from `publicKey`/`secretKey`. Pass `endpoint` to point at a self-hosted Langfuse instance. Both sinks batch writes (`batchSize`, default `32`) and expose `flush()`.
+
+## AI SDK OpenTelemetry (v7)
+
+Kuralle's native tracing (above) is separate from the Vercel AI SDK's OpenTelemetry
+integration moved to `@ai-sdk/otel` in v7. Once registered, the SDK traces **by
+default** unless a call passes `telemetry: { isEnabled: false }`. Kuralle does
+**not** register an integration at import time — silence by default, spans by
+request.
+
+Opt in with `registerAiSdkOpenTelemetry({ tracer })` and/or
+`HarnessConfig.aiSdkTelemetry: { enabled: true }`. Pass the `tracer` to the
+integration constructor, not per-call telemetry options (v7 removed `tracer` from
+`TelemetryOptions`).
+
+<Code code={aiSdkTelemetryExample} lang="typescript" title="ai-sdk-telemetry.ts" />
+
+<Aside type="caution">
+  Do not register `@ai-sdk/otel` unconditionally on upgrade — that would start
+  billing every deployment that never asked for LLM spans. Kuralle's native
+  `tracing` config is unchanged and remains independent of AI SDK span emission.
+</Aside>
 
 ## Embedding the trace viewer
 

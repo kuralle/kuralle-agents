@@ -97,6 +97,7 @@ import type { HandoffInputFilter } from './handoffFilters.js';
 import { runOnce as recordRunOnce } from './TraceRecorder.js';
 import { TraceRecorder } from './TraceRecorder.js';
 import type { AgentSpan, AgentTrace } from '../types/trace.js';
+import { ensureAiSdkTelemetryRegistered, resolveAiSdkTelemetryOptions, type AiSdkTelemetryConfig } from '../telemetry/aiSdkOtel.js';
 import { MemoryTraceStore } from '../tracing/MemoryTraceStore.js';
 import { mutateSessionWithRetry } from '../session/utils.js';
 import { isTraceStore, type TraceSink, type TraceStore } from '../tracing/TraceStore.js';
@@ -206,6 +207,12 @@ export interface HarnessConfig {
   flowGateJudge?: FlowGateJudgeProvider | LanguageModel;
   /** Read-only observability, configured independently from durable session state. */
   tracing?: TracingConfig;
+  /**
+   * Opt-in AI SDK OpenTelemetry (`@ai-sdk/otel`). Omitted or disabled: Kuralle does
+   * not register an integration and model calls emit no SDK spans. Enabled: registers
+   * once at runtime construction and passes per-call `telemetry` options where wired.
+   */
+  aiSdkTelemetry?: AiSdkTelemetryConfig | boolean;
   /**
    * Durable run journal. When omitted, each session uses `SessionRunStore` over
    * `sessionStore`. A shared adapter (e.g. `PostgresRunStore`) is used as-is.
@@ -326,6 +333,7 @@ export class Runtime {
       : [];
     this.extractedValueStore = resolveExtractedValueStore(config.extractedValueStore);
     this.runStoreOverride = config.runStore;
+    ensureAiSdkTelemetryRegistered(config.aiSdkTelemetry);
   }
 
   private runStoreFor(sessionId: string): RunStore {
@@ -518,6 +526,7 @@ export class Runtime {
         getSkill: openingSurface.getSkill,
         signalDelivery: opts.signalDelivery,
         flowGateJudge: this.config.flowGateJudge,
+        telemetry: resolveAiSdkTelemetryOptions(this.config.aiSdkTelemetry, 'kuralle.run'),
       });
 
       // Session retrieval cache (G6): created once per run, persists across

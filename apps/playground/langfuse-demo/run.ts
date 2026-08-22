@@ -6,7 +6,8 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { config } from 'dotenv';
-import { createRuntime, MemoryStore } from '@kuralle-agents/core';
+import { trace } from '@opentelemetry/api';
+import { createRuntime, MemoryStore, registerAiSdkOpenTelemetry } from '@kuralle-agents/core';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 import { loadPlaygroundEnv, resolvePlaygroundModel } from '../_shared/runtime/model.js';
@@ -16,14 +17,21 @@ import { buildAgents } from './agents.js';
 const currentDir = dirname(fileURLToPath(import.meta.url));
 config({ path: join(currentDir, '../../.env') });
 
+loadPlaygroundEnv(import.meta.url);
+
 if (process.env.LANGFUSE_SECRET_KEY) {
   const sdk = new NodeSDK({ spanProcessors: [new LangfuseSpanProcessor()] });
   sdk.start();
+  registerAiSdkOpenTelemetry({ tracer: trace.getTracer('kuralle-langfuse-demo') });
   console.log('Langfuse telemetry initialized\n');
+
+  process.on('beforeExit', () => {
+    void sdk.shutdown();
+  });
 }
 
-loadPlaygroundEnv(import.meta.url);
 const { model } = resolvePlaygroundModel();
+
 const agents = buildAgents(model);
 
 const runtime = createRuntime({
@@ -32,6 +40,7 @@ const runtime = createRuntime({
   defaultModel: model,
   sessionStore: new MemoryStore(),
   tools: mergeHarnessTools(agents),
+  aiSdkTelemetry: process.env.LANGFUSE_SECRET_KEY ? { enabled: true } : undefined,
 });
 
 const conversation = [
@@ -60,6 +69,10 @@ async function runDemo() {
     }
     await handle;
     console.log('');
+  }
+
+  if (process.env.LANGFUSE_SECRET_KEY) {
+    console.log('\nLangfuse spans flushed.');
   }
 
   console.log('\nDemo complete.');

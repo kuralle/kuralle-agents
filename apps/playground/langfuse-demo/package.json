@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-sdk/google": "latest",
     "@ai-sdk/openai": "latest",
+    "@ai-sdk/otel": "^1.0.76",
     "@kuralle-playground/shared": "workspace:*",
     "@kuralle-agents/core": "workspace:*",
     "@langfuse/otel": "^5.9.1",

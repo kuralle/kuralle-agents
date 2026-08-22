@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.0",
+    "@ai-sdk/otel": "^1.0.76",
     "@ai-sdk/xai": "^4.0.0",
     "@openrouter/ai-sdk-provider": "^2.3.3",
     "wrangler": "^4.115.0"

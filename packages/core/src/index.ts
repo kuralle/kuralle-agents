@@ -708,6 +708,10 @@ export {
   type RunHandle,
   type TracingConfig,
 } from './runtime/Runtime.js';
+export {
+  registerAiSdkOpenTelemetry,
+  type AiSdkTelemetryConfig,
+} from './telemetry/aiSdkOtel.js';
 export type { RuntimeLike } from './runtime/RuntimeLike.js';
 export {
   userInputToText,

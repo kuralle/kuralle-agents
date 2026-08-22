@@ -32,7 +32,7 @@ export async function extractStructuredFields<TSchema extends ZodTypeAny>(
     system: systemPrompt?.trim() || DEFAULT_EXTRACTION_PROMPT,
     messages,
     abortSignal,
-    experimental_telemetry: telemetry,
+    telemetry,
   });
 
   return output as StructuredExtractionOutput<TSchema>;

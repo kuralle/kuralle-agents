@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { LanguageModel, ModelMessage } from 'ai';
+import type { LanguageModel, ModelMessage, TelemetryOptions } from 'ai';
 import type { Session } from '../types/session.js';
 import type {
   EffectToolExecutor,
@@ -106,6 +106,7 @@ export interface CtxDeps {
   skillActivations?: SkillActivation[];
   skillCatalog?: LiveSkillCatalog;
   flowGateJudge?: FlowGateJudgeProvider | LanguageModel;
+  telemetry?: TelemetryOptions;
 }
 
 function publicInterrupt(request: InterruptRequest): HitlInterrupt {
@@ -595,6 +596,7 @@ function makeCtx(deps: CtxDeps): RunContext {
     abortSignal: deps.abortSignal,
     turnInputConsumed: false,
     flowGateJudge: deps.flowGateJudge,
+    telemetry: deps.telemetry,
     // Rebase durable effect callsites to 0. Called at flow entry so a flow's
     // effects (and any suspend/resume callsite) are anchored to the flow itself —
     // identical whether the flow was entered fresh after an answering turn (which
