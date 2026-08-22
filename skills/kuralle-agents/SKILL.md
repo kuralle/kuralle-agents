@@ -24,6 +24,20 @@ skill goes stale between releases. Use this source order:
    for package-specific depth.
 2. <https://agents.kuralle.com> — the same guides for the latest release. Use
    these when no package is installed yet, or to check what a newer version adds.
+   There is no per-page `.md`: `…/guides/observability.md` returns 404. To fetch
+   documentation as markdown, use the generated sets instead:
+
+   | URL | Size | Contents |
+   |---|---|---|
+   | `/llms.txt` | ~1 KB | Index of the sets below |
+   | `/_llms-txt/guides.txt` | ~270 KB | **All 27 guides.** The one to fetch. |
+   | `/_llms-txt/examples.txt` | ~19 KB | Runnable examples and integration labs |
+   | `/_llms-txt/api-reference.txt` | ~840 KB | Generated API reference |
+   | `/llms-small.txt` | ~1.1 MB | Abridged whole site |
+   | `/llms-full.txt` | ~1.3 MB | Whole site |
+
+   Prefer `/_llms-txt/guides.txt` over `llms-full.txt`: same guide content, a
+   fifth of the tokens, none of the generated API dump.
 3. The package `README.md` — installed at `node_modules/@kuralle-agents/<pkg>/`
    and shown on npm. The fastest answer to "what is this package for".
 4. Source and exported types in `packages/core/src/`. Authoritative when a guide
@@ -64,9 +78,11 @@ missing. Do not document proposed behavior as shipped.
 | Compile an agent folder into an immutable artifact | [file-authored-agents](https://agents.kuralle.com/guides/file-authored-agents) |
 | Store agent definitions in Postgres | [agent-definitions-database](https://agents.kuralle.com/guides/agent-definitions-database) |
 | Let end users build agents from a form | [agent-builder-react](https://agents.kuralle.com/guides/agent-builder-react) |
+| Build a chat UI, or stream a turn to a browser | [references/clients.md](references/clients.md) |
+| Embed a chat widget on any page | [references/clients.md](references/clients.md) |
 | Ship to Node, Bun, Cloudflare, or Vercel | [deployment](https://agents.kuralle.com/guides/deployment) |
 | Reach a running agent from a terminal | [cli](https://agents.kuralle.com/guides/cli) |
-| Read traces and export telemetry | [observability](https://agents.kuralle.com/guides/observability) |
+| Trace a turn, export to OTLP or Langfuse, score an eval | [observability](https://agents.kuralle.com/guides/observability) |
 | Reply on WhatsApp, Messenger, or Instagram | [engagement](https://agents.kuralle.com/guides/engagement) |
 | Swap the model/tool loop for Pi | [pi-driver](https://agents.kuralle.com/guides/pi-driver) |
 
@@ -124,7 +140,9 @@ you populate: add `flows` for a procedure, `routes` plus `routing` for triage,
 
 For exact field lists and signatures, read
 [references/api-shapes.md](references/api-shapes.md). For which package supplies
-which capability, read [references/packages.md](references/packages.md).
+which capability, read [references/packages.md](references/packages.md). For web
+UIs, streaming, uploads, and the embeddable widget, read
+[references/clients.md](references/clients.md).
 
 ## Design rules
 

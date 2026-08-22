@@ -188,11 +188,60 @@ createRuntime({
   defaultWorkingMemoryStore?: PersistentMemoryStore,
   extractedValueStore?: ExtractedValueStore,
   trackGoals?: boolean,                  // default off
+  tracing?: TracingConfig,               // read-only observability, independent of session state
+  aiSdkTelemetry?: AiSdkTelemetryConfig | boolean,   // opt-in @ai-sdk/otel spans
+  flowGateJudge?: FlowGateJudgeProvider | LanguageModel,  // for flow `gates` of kind `judge`
 })
 ```
 
+`flowGateJudge` has no default. A `judge` gate with no provider is an execution
+error, and it blocks even when the gate is declared advisory.
+
 Set `policy` on `HarnessConfig` for a runtime default, and on `AgentConfig` when
 one agent needs its own — which is what a delegated read-only worker needs.
+
+## Tracing
+
+`packages/core/src/runtime/Runtime.ts` reads `tracing` at construction;
+`@kuralle-agents/core/tracing` exports the store types, and
+`@kuralle-agents/core/tracing/testing` the test doubles.
+
+```typescript
+createRuntime({
+  // …
+  tracing: {
+    enabled?: boolean,          // false disables collection entirely
+    store?: TraceStore,         // where spans land
+    sinks?: TraceSink[],        // additional consumers; a sink that is also a store can serve as `store`
+    sampling?: number | ((ctx: { sessionId: string; input?: unknown }) => boolean),
+    redact?: (span: AgentSpan) => AgentSpan | null,   // return null to drop the span
+  },
+});
+```
+
+`sampling` is a rate or a predicate, not a config object. `redact` is a function
+run per span: return a modified span, or `null` to drop it.
+
+Tracing is read-only observability configured independently of durable session
+state — turning it off changes what you can see, never what the agent does.
+
+Store backends follow the same split as sessions: in-memory for development,
+Postgres or Redis on a server, `SqlTraceStore` from `@kuralle-agents/cf-agent`
+on Durable Objects. Read traces with `kuralle trace` (add `--store` for
+persisted ones) or embed `@kuralle-agents/trace-ui`.
+
+`aiSdkTelemetry` is separate and opt-in. Omitted or disabled, Kuralle registers
+no `@ai-sdk/otel` integration and model calls emit no SDK spans. Enabled, it
+registers once at runtime construction. Export to OTLP or Langfuse is configured
+on top of that — see
+[observability](https://agents.kuralle.com/guides/observability).
+
+For evaluation rather than production tracing, `runtime.runOnce(opts)` runs one
+turn and resolves to an `AgentTrace` you can assert against — the same options
+as `run`, but you get the trace instead of a stream. `runOnce` is also exported
+standalone from `@kuralle-agents/core`. For multi-turn evaluation, `core`
+exports `EvalRunner`, `simulateConversation`, `createJudge`, and
+`runSimulationSuite`.
 
 ## `runtime.run` and `TurnHandle`
 
