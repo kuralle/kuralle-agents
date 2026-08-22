@@ -20,8 +20,14 @@ interface McpHibernationEnv {
  * The complete set of keys a persisted server row may carry. Declared here, in the test,
  * on purpose: a whitelist maintained next to the implementation drifts with it and stops
  * catching the field somebody adds later. Anything outside this set fails.
+ *
+ * `toolFingerprints` is admitted deliberately: it is a map of tool name to a digest of that
+ * tool's public catalogue metadata (description, input schema, title) — the same class of
+ * data as `tools`, and never anything that authenticates to the server. Adding a key here is
+ * meant to be a decision, not a formality; if a new field could carry a credential, the
+ * answer is to stop persisting it, not to widen this list.
  */
-const ALLOWED_ROW_KEYS = ['id', 'name', 'type', 'url', 'tools'] as const;
+const ALLOWED_ROW_KEYS = ['id', 'name', 'type', 'url', 'tools', 'toolFingerprints'] as const;
 
 /** Values the DO is told to use as a credential. Neither may reach storage. */
 const SENTINEL_BEARER = 'SENTINEL_BEARER_MUST_NOT_PERSIST';
