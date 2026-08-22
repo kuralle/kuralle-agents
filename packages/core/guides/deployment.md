@@ -1,0 +1,269 @@
+# Deployment
+
+Deploy Kuralle agents to Hono/Node, Cloudflare Workers, or serverless platforms.
+
+Kuralle agents run anywhere that runs Node.js, Bun, or Cloudflare Workers. The runtime has no external process dependencies — serve it with whatever HTTP framework you prefer.
+
+To compile instructions, skills, references, workspace seeds, and code capabilities from a folder,
+follow [File-authored Agents](./file-authored-agents.md).
+
+If agent definitions live in an existing Postgres, Prisma, or Drizzle application—or the runtime is
+on Cloudflare while Hono and Neon remain your backend—see [Agent Definitions in Your Database](./agent-definitions-database.md).
+
+## Hono (Node.js or Bun)
+
+`@kuralle-agents/hono-server` mounts a full set of endpoints onto a Hono app with one call.
+
+```bash
+npm install @kuralle-agents/hono-server hono @hono/node-server @hono/node-ws
+```
+
+`server.ts`:
+
+```typescript
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import { createNodeWebSocket } from '@hono/node-ws';
+import { createRuntime, defineAgent } from '@kuralle-agents/core';
+import { createKuralleChatRouter } from '@kuralle-agents/hono-server';
+import { openai } from '@ai-sdk/openai';
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+
+const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
+
+const app = new Hono();
+const { upgradeWebSocket, injectWebSocket } = createNodeWebSocket({ app });
+app.route('/', createKuralleChatRouter({ runtime, upgradeWebSocket }));
+
+const server = serve({ fetch: app.fetch, port: 3000 });
+injectWebSocket(server);
+```
+
+**Bun** doesn't need `@hono/node-server` or `createNodeWebSocket`. Use Bun's built-in WebSocket upgrade instead:
+
+```typescript
+import { upgradeWebSocket } from 'hono/bun';
+
+const app = new Hono();
+app.route('/', createKuralleChatRouter({ runtime, upgradeWebSocket }));
+
+export default app;
+```
+
+## WhatsApp & messaging webhooks
+
+To deploy a bot on WhatsApp / Instagram (rather than the web chat endpoints), mount `createMessagingRouter` from `engagement()` instead — it exposes the Meta webhook at `/{platform}/webhook`. A self-hostable reference that boots on Bun or Node with a real WhatsApp Cloud API number (bring your own token, no Embedded Signup) and an optional Redis `WindowStore`:
+
+```bash
+# bring-your-own number/token — set WHATSAPP_* env, then:
+bun run packages/messaging-meta/examples/whatsapp-server/server.ts
+# webhook: https://<host>/messaging/whatsapp/webhook
+```
+
+See `packages/messaging-meta/examples/whatsapp-server/README.md` and the [Engagement guide](./engagement.md).
+
+## Endpoints
+
+`createKuralleChatRouter` mounts these routes:
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/chat` | Single-turn JSON response |
+| `POST` | `/api/chat/sse` | AI SDK `UIMessageStream` (default, `useChat`-compatible). `?format=raw` for legacy `StreamPart` JSON-SSE |
+| `POST` | `/api/chat/stream` | Chunked text stream |
+| `GET` | `/agents/chat/:sessionId` | WebSocket widget endpoint |
+| `GET` | `/ws/:sessionId` | WebSocket turn endpoint |
+| `GET` | `/api/session/:id` | Fetch session |
+| `DELETE` | `/api/session/:id` | Delete session |
+| `GET` | `/health` | Health check |
+
+## Cloudflare Workers
+
+`@kuralle-agents/cf-agent` runs Kuralle agents on Cloudflare Workers with Durable Objects. Subclass `KuralleAgent`, implement two methods, and Cloudflare handles SQLite persistence, multi-client sync, and stream resumability.
+
+```bash
+npm install @kuralle-agents/cf-agent agents zod
+```
+
+```typescript
+import { KuralleAgent } from '@kuralle-agents/cf-agent';
+import { defineAgent } from '@kuralle-agents/core';
+import { createOpenAI } from '@ai-sdk/openai';
+import { routeAgentRequest } from 'agents';
+
+interface Env {
+  OPENAI_API_KEY: string;
+  SupportAgent: DurableObjectNamespace;
+}
+
+export class SupportAgent extends KuralleAgent<Env> {
+  protected getAgents() {
+    const openai = createOpenAI({ apiKey: this.env.OPENAI_API_KEY });
+    return [
+      defineAgent({
+        id: 'support',
+        instructions: 'You are a helpful support agent.',
+        model: openai('gpt-4o-mini'),
+      }),
+    ];
+  }
+
+  protected getDefaultAgentId() {
+    return 'support';
+  }
+}
+
+export default {
+  async fetch(request: Request, env: Env) {
+    return (await routeAgentRequest(request, env, { cors: true }))
+      ?? new Response('Not found', { status: 404 });
+  },
+} satisfies ExportedHandler<Env>;
+```
+
+Declare the Durable Object in `wrangler.jsonc`:
+
+```jsonc
+{
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "SupportAgent", "class_name": "SupportAgent" }]
+  },
+  "exports": {
+    "SupportAgent": { "type": "durable-object", "storage": "sqlite" }
+  }
+}
+```
+
+Cloudflare recommends declarative `exports` for new Agent classes. If an existing Worker already has
+a `migrations` history, preserve it and add sequential migrations instead of rewriting deployed
+history.
+
+The public native endpoint is `/agents/support-agent/{instance}`. One instance name resolves to one Durable Object and therefore one single-writer session boundary. Authenticate and authorize that instance name at your Worker boundary; do not accept an arbitrary tenant id merely because it matches the URL shape.
+
+Flows, tools, derived routing, the [Pi driver](./pi-driver.md#cloudflare-durable-objects), and persistent [`SqlFileSystem`](./workspace.md#on-cloudflare-a-persistent-workspace-inside-a-cf-agent) work through this same `KuralleAgent` runtime.
+
+## Drive a deployed agent from the CLI
+
+Kuralle's CLI can save either the completion-oriented HTTP endpoint or the native Cloudflare Agents transport:
+
+```bash
+# Next.js, Hono, or a Worker exposing POST /api/chat
+kuralle connect https://my-agent.example.com
+
+# Native Cloudflare Agents WebSocket protocol
+kuralle connect https://my-agent.workers.dev \
+  --transport cloudflare \
+  --agent-name support-agent
+
+kuralle chat --session customer-42
+```
+
+The hosted runtime owns credentials, state, tools, and workspaces. The CLI stores only the non-secret server/transport selection. Provide a bearer token with `KURALLE_TOKEN`; see [CLI & Devtools](./cli.md#hosted-runtimes).
+
+## The deployment thread route
+
+`POST /v1/agents/:agentEntityId/threads/:threadId/messages` serves an AI SDK
+`UIMessageStream` by default — the same wire every Kuralle runtime speaks — so
+`useChat` consumes it with no bridge code:
+
+```ts
+const transport = new DefaultChatTransport({
+  api: `/v1/agents/${agentId}/threads/${threadId}/messages`,
+  headers: () => ({ authorization: `Bearer ${token}`, 'idempotency-key': key.current }),
+});
+const { messages, sendMessage } = useChat<KuralleUIMessage>({ id: threadId, transport });
+```
+
+Append `?format=raw` for the named-event `StreamPart` SSE, the same negotiation
+`/api/chat/sse` and `/api/flow/sse` already use. That form is for non-browser
+consumers — CLIs, webhooks, custom transports.
+
+> **Transient parts never reach `message.parts`**
+>
+> `data-kuralle-node`, `-flow`, `-control` and `-flow-*` are written with
+> `transient: true`, so they arrive via `useChat({ onData })` and are dropped from
+> message history. Reading them off `message.parts` produces a panel that renders
+> nothing. The persistent parts — `-handoff`, `-interactive`, `-safety`,
+> `-outcome` — do stay in `message.parts`.
+
+## HTTP streaming
+
+### Web (`useChat`, default)
+
+`POST /api/chat/sse` returns a native AI SDK `UIMessageStream`. A React client uses `useChat` with no bridge:
+
+```tsx
+import { useChat } from '@ai-sdk/react';
+import type { KuralleUIMessage } from '@kuralle-agents/core';
+
+const { messages } = useChat<KuralleUIMessage>({ api: '/api/chat/sse' });
+```
+
+Kuralle flow/safety/interactive events arrive as `data-kuralle-*` parts — read persistent parts from `message.parts`, transient telemetry from `useChat({ onData })`. See an earlier decision for the full mapping table.
+
+### Proxies and buffering
+
+The runtime sets `Cache-Control: no-cache, no-transform`, `Content-Encoding: identity` and
+`X-Accel-Buffering: no` on every streamed turn. Leave them alone — they are what stops an
+intermediary collecting the whole turn and delivering it in one frame.
+
+This is worth knowing about because the failure looks like a slow model rather than a broken proxy:
+the server streams correctly, the client shows a spinner for the entire turn, and then everything
+appears at once. It is also easy to mis-diagnose. A plain `curl` sends no `Accept-Encoding`, so it
+measures a healthy stream while a browser — which always negotiates encoding — sees nothing until
+the end. If you are checking whether streaming works, use `curl --compressed`, or measure in the
+browser.
+
+A Next.js `rewrites()` proxy in front of the server is the common case that trips this.
+
+### Raw JSON-SSE (`?format=raw`)
+
+Non-UI consumers that parsed `StreamPart` JSON from 0.4.x append `?format=raw`:
+
+```bash
+curl -N -X POST 'http://localhost:3000/api/chat/sse?format=raw' \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"hello"}'
+```
+
+Or use `createKuralleSseChatRouter` for a router that always emits raw JSON-SSE.
+
+### Direct `TurnHandle` piping
+
+Without `createKuralleChatRouter`, return a native stream for web clients:
+
+```typescript
+app.post('/chat', async (c) => {
+  const { input, sessionId } = await c.req.json();
+  const handle = runtime.run({ input, sessionId });
+  return handle.toUIMessageStreamResponse({ sessionId });
+});
+```
+
+For raw `StreamPart` JSON-SSE (curl, custom transports):
+
+```typescript
+return new Response(handle.toResponseStream('sse'), {
+  headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
+});
+```
+
+`createKuralleChatRouter` wires the native default on `/api/chat/sse` and also mounts sessions, WebSocket, and the full endpoint set.
+
+> **Note**
+>
+> For production, pair the Hono server or CF agent with a durable `SessionStore`. See [Sessions & State](./sessions.md).
+
+## Production references
+
+- [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) — the same application on Next.js/Vercel and a Pi-powered `KuralleAgent` Durable Object, with hosted CLI access.
+- [Postgres Hacker Starter](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/postgres-hacker-starter) — Next.js/Hono, signed identity, Postgres sessions and memory, pgvector retrieval, and approvals.
+- [Examples](https://agents.kuralle.com/examples/) — every runnable production system and deployment lab.

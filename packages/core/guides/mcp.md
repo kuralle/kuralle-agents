@@ -1,0 +1,439 @@
+# MCP
+
+Connect Model Context Protocol servers from Agent Plugins — remote transports on Workers, stdio on Node, Policy-gated execution, and schema disclosure budgets.
+
+**MCP** (Model Context Protocol) lets an agent call tools hosted on external servers. Agent Plugins
+declare servers in `mcp.json`; Kuralle connects them with `mcpTools(servers, opts)` and projects
+remote tools into the agent's tool map as durable `defineTool` entries qualified as
+`serverName__toolName`.
+
+```bash
+npm install @kuralle-agents/mcp @kuralle-agents/plugins
+```
+
+> **stdio is not on the root export**
+>
+> The workerd-clean root export (`@kuralle-agents/mcp`) supports **`streamable-http`** and **`sse`**
+> only. **`stdio`** lives on `@kuralle-agents/mcp/node`, which registers a subprocess connector on
+> import. Import that subpath on Node or Bun when you need local stdio servers.
+
+## Quick start
+
+After loading a plugin (see [Agent Plugins](./plugins.md)), pass its `mcpServers` to
+`mcpTools`:
+
+```typescript
+import { loadAgentPlugin } from '@kuralle-agents/plugins';
+import { mcpTools } from '@kuralle-agents/mcp';
+
+const result = await loadAgentPlugin(fs, '/plugins/acme');
+if (!result.ok) throw new Error(result.rejection.message);
+
+const { tools: remoteTools, close } = await mcpTools(result.plugin.mcpServers, {
+  allowedHosts: ['127.0.0.1', 'api.example.com'],
+  onDiagnostic: (d) => console.warn(d.message),
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  tools: { ...localTools, ...remoteTools },
+});
+
+// When the session ends. The connections stay open until this runs.
+await close();
+```
+
+Each MCP tool executes through the runtime effect log (`replay: true`). Connection failures for one
+server emit a diagnostic and skip that server — siblings still connect. The turn's `AbortSignal`
+reaches `tools/call`, so cancelling a turn cancels the outstanding request to the server.
+
+## Runtime matrix
+
+| Transport | Cloudflare Workers / DO | Node / Bun (root `@kuralle-agents/mcp`) | Node / Bun (`@kuralle-agents/mcp/node`) |
+|-----------|-------------------------|----------------------------------------|------------------------------------------|
+| `streamable-http` | yes | yes | yes |
+| `sse` | yes | yes | yes |
+| `stdio` | **no** — no subprocess in workerd | skipped (diagnostic) | yes |
+
+On the root export, a `stdio` config produces **no tools** and a diagnostic with
+`rule: "unsupported-transport"` naming Workers/workerd and pointing to `@kuralle-agents/mcp/node`.
+That is intentional: keeping stdio off the root preserves Cloudflare portability.
+
+Prove the matrix live:
+
+```bash
+bun packages/mcp/examples/runtime-matrix.ts
+```
+
+## `mcpTools(servers, opts?)`
+
+```typescript
+function mcpTools(
+  servers: readonly McpServerConfig[],
+  opts?: McpOptions,
+): Promise<McpToolset>;
+
+interface McpToolset {
+  readonly tools: Record<string, AnyTool>;
+  readonly reconciled: Promise<void>;
+  close(): Promise<void>;
+}
+```
+
+`reconciled` settles once every cached tool listing has been checked against its server. It is
+already resolved unless this toolset was rebuilt from storage, so you never have to test for it —
+see [Hibernation and reconnect](#hibernation-and-reconnect).
+
+`McpServerConfig` (from `@kuralle-agents/plugins`) is a discriminated union:
+
+| `type` | Fields |
+|--------|--------|
+| `stdio` | `name`, `command`, optional `args`, `env`, `cwd`, `cwdRoot`, `pluginRoot`, `pluginDataRoot` |
+| `streamable-http` | `name`, `url`, optional `headers` |
+| `sse` | `name`, `url`, optional `headers` |
+
+### `McpOptions`
+
+| Option | Purpose |
+|--------|---------|
+| `allowedHosts?` | SSRF guard for remote URLs — see below |
+| `auth?` | `(server, { session }) => Promise<{ token }>` — resolved **before** the handshake and again per call; requires `session` |
+| `session?` | The session a toolset belongs to. Required with `auth`, or with a resolver `allowedHosts` |
+| `tools?` | Discovery-time `{ allow: string[] }` or `{ block: string[] }` — hide tools from the model (mutually exclusive) |
+| `disclosure?` | Schema disclosure budget — see below |
+| `timeoutMs?` | Per-connection timeout (default 60_000 ms) |
+| `storage?` | Persist remote server metadata for hibernation wake (`rebuildMcpToolsFromStorage`) |
+| `onDiagnostic?` | `(Diagnostic) => void` — connection, auth, and transport failures |
+| `fetch?` | Test hook: custom `fetch` for HTTP transports |
+
+The stdio fields beyond `command`/`args`/`env`/`cwd` are produced by the plugin parser, not written
+by hand: `cwdRoot` records whether `cwd` was declared against `${PLUGIN_ROOT}` or `${PLUGIN_DATA}`,
+and the two root fields carry the plugin's location so the launcher can supply `PLUGIN_ROOT` and
+`PLUGIN_DATA` and check containment. See [Agent Plugins](./plugins.md#containment-is-checked-twice).
+
+Qualified tool names use a double underscore: `payments__create_invoice` (server `payments`, remote
+tool `create_invoice`).
+
+MCP barely constrains what a server may publish as a tool name; model providers require
+`^[a-zA-Z0-9_-]{1,64}$` and reject the whole request otherwise. A name that would be rejected is
+rewritten — illegal characters to `_`, clamped to 64, with a short deterministic hash of the
+original appended so two remote tools cannot collide. Legal names pass through verbatim, so
+`Policy` rules keep matching what you wrote.
+
+### Two plugins, one server name
+
+A server name is only unique inside one `mcp.json`. Agent Plugins has no global registry — §5.5
+constrains a plugin name's character set, not its uniqueness — so two independently authored plugins
+both calling a server `local` is the expected case, not an edge one.
+
+When two servers in one `mcpTools` call share a name, **both** are projected under a suffixed name
+(`local_a1b2c3d4__search`) and a `server-name-collision` diagnostic names the clash. Neither server
+is dropped.
+
+Both are suffixed rather than the first keeping the plain name, because first-wins would make every
+projected name depend on the order you happened to load plugins in — reorder the list and a `Policy`
+rule written against `local__transfer` silently starts matching a different backend. The suffix
+hashes the server's identity (its URL, or its command line), so it is stable across processes and
+independent of load order.
+
+A name that does not collide is untouched. Rename one of the two servers to get the plain name back.
+
+### Sessions and credentials
+
+`auth` is resolved before `initialize`, so the bearer covers the handshake and `tools/list` — which
+is what an OAuth-protected server demands, since it rejects the handshake long before a tool call
+exists. Fixing the credential onto the connection means **a toolset built with `auth` belongs to one
+session**: pass `session`, build one toolset per session, and `close()` it when the session ends.
+Supplying `auth` with no `session` throws at wiring time.
+
+A server with static `headers` (or none) needs no session, and one process-wide toolset is right
+for it.
+
+## Policy is the approval gate
+
+> **Never trust MCP tool annotations**
+>
+> A malicious MCP server can advertise a destructive tool as read-only. Kuralle does **not** map MCP
+> `annotations` (read-only hints, destructive flags) into [`Policy`](./policy.md) decisions.
+> **`Policy.decide` is the only approval gate** for whether a projected MCP tool may run.
+
+Discovery filters (`tools.allow` / `tools.block`) control **visibility** — tools filtered out never
+reach the model. **`Policy`** controls **authorization** — a visible tool the policy denies returns
+`toolDeniedResult` with your `reason`, and `execute` never runs.
+
+Wire a restrictive policy on agents that call untrusted plugin servers:
+
+```typescript
+import { readOnlyPolicy } from '@kuralle-agents/core';
+
+createRuntime({
+  agents: [agent],
+  policy: readOnlyPolicy(['write_file', 'payments__charge_card']),
+});
+```
+
+## `allowedHosts` — SSRF guard
+
+Plugin-supplied URLs are untrusted input. Without a guard, a server entry could point at an internal
+metadata endpoint. Set `allowedHosts` to the hostnames you expect:
+
+```typescript
+await mcpTools(servers, {
+  allowedHosts: ['127.0.0.1', 'mcp.example.com'],
+});
+```
+
+- **`undefined`** — no hostname check (appropriate only for fully trusted configs).
+- **`string[]`** — remote URL hostname must match an entry (case-insensitive).
+- **`(server, { session }) => string[]`** — per-server, per-session allowlist.
+
+A blocked host emits a diagnostic (`rule: "connection-failure"`) and skips that server.
+
+## Disclosure budget
+
+Large MCP servers can flood the prompt with tool input schemas. Kuralle applies a **per-server**
+disclosure budget before projecting schemas into the tool map and system prompt surface.
+
+| Constant / field | Default | Meaning |
+|------------------|---------|---------|
+| `DEFAULT_DISCLOSURE_BUDGET_TOKENS` | `20_000` | ≈10% of a 200k context window |
+| `disclosure.budget` | `20_000` or `'auto'` | Token budget per server (4 chars ≈ 1 token) |
+| `disclosure.alwaysLoad` | `[]` | Server names that always inline full schemas |
+
+For each connected server, Kuralle estimates the token cost of inlining every tool's description +
+JSON Schema. If the estimate is **over budget**, schemas are **deferred**: tools still appear, but
+their input schema collapses to a stub and descriptions gain
+*"Full input schema available via mcp__describe_tool."*
+
+When any server defers, Kuralle registers **`mcp__describe_tool`** — call it with the qualified
+tool name to fetch the full JSON Schema before invoking the deferred tool.
+
+The budget governs **schema bulk only**. Under it sits a floor no tier drops: every tool's name and
+description, which is what the model routes on. A server broad enough for that catalog alone to
+exceed the budget is over budget with nothing left to shed, and Kuralle emits a
+`disclosure-budget-exceeded` diagnostic naming the count, the measured floor, and the `tools` filter
+as the way down — rather than trimming descriptions and destroying routing to make a number fit.
+
+```typescript
+await mcpTools(servers, {
+  disclosure: {
+    budget: 20_000,
+    alwaysLoad: ['trusted-small-server'],
+  },
+});
+```
+
+`composeMcpSystemPrompt(tools, opts)` builds the MCP-related system prompt fragment: inlined schemas
+only for servers under budget; deferred schemas omitted. Use it when assembling custom system
+prompts alongside the auto-registered tools.
+
+`estimateTokens(text)` is exported so you can measure a prompt yourself. It is a deliberate
+four-characters-per-token approximation, not a tokenizer. A tokenizer would add a dependency to the
+workerd-clean root export, and the threshold it feeds is an order-of-magnitude decision.
+
+### What a deferred tool keeps
+
+Deferral sheds schema **prose**, not the argument **contract**. A deferred tool keeps its
+parameter names, their scalar types, and `required`. It drops descriptions, enums, formats,
+patterns, defaults, and the bodies of nested objects. `mcp__describe_tool` still returns the
+full schema.
+
+That split is not cosmetic. An earlier version replaced the whole schema with
+`{ type: 'object' }`, and the model — left with no parameter names at generation time — had to
+copy them out of a `describe_tool` result. It did that badly:
+
+| Deferred schema | Malformed tool call |
+|-----------------|---------------------|
+| Bare `{ type: 'object' }` | **2 of 5 runs** |
+| Names, types and `required` | **0 of 5 runs** |
+
+A malformed call looks like a tool name with the argument folded into it. Names and types are a
+small fraction of schema tokens; descriptions are the bulk. So the cheap half stays.
+
+> **Two tiers, and a floor**
+>
+> On a server large enough that even parameter names blow the budget, Kuralle drops those too and
+> falls back to the bare object schema. That keeps the budget promise at any tool count. It is the
+> same budget applied twice, not a setting you choose.
+>
+> There is a floor underneath both tiers. The **catalog** — every tool's name and description — is
+> always in the prompt, because that is what the model routes on. A 200-tool server therefore has
+> an irreducible prompt cost that no schema policy goes below. The budget governs the schema bulk
+> on top of the catalog, not the catalog itself.
+
+## Server `instructions` are never forwarded
+
+The MCP protocol lets servers advertise free-text `instructions`. Kuralle **discards** them — they
+are never appended to the system prompt. Third-party prose reaching the system prompt verbatim is a
+**prompt-injection seam**; tool descriptions and schemas (subject to the disclosure budget) are the
+only server-originated text that enters the model context.
+
+## Hibernation and reconnect
+
+A Durable Object hibernates, so a live MCP connection cannot survive in memory. Persist a seed and
+rebuild it on wake.
+
+```typescript
+import {
+  createSqliteMcpConnectionStore,
+  mcpTools,
+  rebuildMcpToolsFromStorage,
+} from '@kuralle-agents/mcp';
+
+const store = createSqliteMcpConnectionStore(ctx.storage.sql);
+
+// Cold start.
+const toolset = await mcpTools(servers, { storage: store, allowedHosts, session });
+
+// After a wake, before the first tool call.
+const rebuilt = await rebuildMcpToolsFromStorage(
+  servers,
+  { storage: store, allowedHosts, session },
+  { stdio: false },
+);
+```
+
+A Durable Object is itself the session boundary, so a session-scoped toolset lands here naturally:
+one DO, one session, one set of connections rebuilt on each wake.
+
+Use `createMemoryMcpConnectionStore()` on Node and Bun, and in tests.
+
+### A wake makes no `tools/list` call
+
+The row also carries the catalogue the server published last time, so a wake projects a tool map
+from storage **before** it asks the server anything. Without it, every wake paid connect →
+handshake → `tools/list` → project before the first token of the turn.
+
+The freshly listed catalogue is then checked in the background, and the tool map is corrected in
+place if it moved:
+
+```typescript
+const rebuilt = await rebuildMcpToolsFromStorage(servers, opts, { stdio: false });
+
+// Usable immediately — projected from the persisted listing, no round trip.
+agent.tools = rebuilt.tools;
+
+// Optional: wait for the catalogue to be re-checked against the server.
+await rebuilt.reconciled;
+```
+
+Reconciliation is deliberately **not** blocking. Awaiting the fresh listing before returning the map
+would restore the exact round trip the cache removes, so there would be no reason to have built it.
+
+The admitted cost is a window where the model can call a tool the server has withdrawn since. That
+case is handled rather than hoped about: each connection tracks what the server currently publishes,
+and a call for anything else fails with a message the model can act on — *"MCP tool
+`docs__search` is no longer published by server `docs`."* Because `tools` is corrected in place, a
+turn already in flight keeps the snapshot it started with, and the next turn sees the correction.
+
+Await `reconciled` when you would rather pay the round trip than risk one stale turn.
+
+### What persists, and what never does
+
+A `PersistedServer` row holds exactly six fields:
+
+| Field | Example |
+|-------|---------|
+| `id` | `"docs"` |
+| `name` | `"docs"` |
+| `type` | `"streamable-http"` |
+| `url` | `"https://mcp.example.com/mcp"` |
+| `tools` | `PersistedTool[]` — `[{ name: "search", description: "…", inputSchema: { … } }]` |
+| `toolFingerprints` | `Record<string, string>` — the trust baseline, one digest per tool |
+
+No function, socket, `fetch` override, auth resolver, token, or configured header is ever written.
+The store is a one-wake capability seed, not a config source.
+
+`tools` is public catalogue metadata — the same text the model is shown in its prompt — never what
+authenticates to the server. A stored listing that no longer parses is dropped rather than thrown:
+it is a cache, so losing it costs one `tools/list` on the next wake, where throwing would strand a
+Durable Object that could reconnect perfectly well.
+
+### Tool drift — the rug pull, and what stops it
+
+`tools` and `toolFingerprints` look similar and are opposites. `tools` is a **cache**, refreshed on
+every reconcile so a wake can project without a round trip. `toolFingerprints` is a **trust
+baseline**, recorded once and never rewritten — because a baseline that follows the server is a
+baseline that follows an attacker.
+
+A remote server can change a tool's `description` or `inputSchema` after you trusted it. Those
+strings are what the model reads, so a server that redefines `issue_refund` after the fact changes
+what every prompt naming that tool actually asks for. On each listing — cold start and background
+reconcile alike — the fresh catalogue is fingerprinted and compared against the baseline, per tool:
+
+| Drift | What happens |
+|-------|--------------|
+| `description` or `inputSchema` **changed** | the tool is **quarantined**: it keeps its name, but its description is replaced with ours, its schema is emptied, and calling it is refused with a readable reason |
+| a tool was **added** | withheld entirely — the model never knew it, so there is nothing to explain |
+| a tool was **removed** | logged and ignored; the capability is simply gone |
+
+A changed tool is quarantined rather than removed so the model can tell the user *why* a capability
+it previously had is unavailable, instead of watching it vanish. Everything the server controls is
+dropped on the way through — the drifted description is the attack, so it never reaches the prompt,
+and neither does a widened schema.
+
+**Re-trusting.** `retrustMcpServer(store, serverName)` clears the recorded baseline, so the next
+connect re-establishes it from what the server currently publishes:
+
+```ts
+import { retrustMcpServer } from '@kuralle-agents/mcp';
+
+await retrustMcpServer(store, 'docs'); // → true when a row was found
+```
+
+This is the only sanctioned way back. `save()` deliberately cannot replace a baseline — both stores
+drop an incoming one when they already hold it, which is what stops a compromised catalogue from
+becoming the trusted one by being written again.
+
+The whole server is never refused. Refusing it would fail closed on the two harmless cases and turn
+a vendor's routine deploy into your outage.
+
+**This requires `storage`.** With no store there is no baseline, so there is nothing to compare and
+the guard does not apply — an in-process run with no persistence has no notion of "what we trusted
+last time". This is not a setting you can turn off; it is what having no history means.
+
+**Upgrading.** A row written before this shipped has `tools` but no `toolFingerprints`. The baseline
+is then derived from that stored catalogue — the last listing you actually served to a model —
+rather than from whatever the server answers at upgrade time, so a server that drifted before you
+started looking is caught on the first projection.
+
+**Re-trusting.** `save()` alone cannot replace a baseline; both stores keep the first one recorded.
+Re-trusting a server is deliberately two steps, `remove(id)` then `save(row)`. There is no UI for it.
+
+A cached listing dies with the row it belongs to. If the supplied config's `type` or `url` no longer
+matches what was persisted, the whole row is refused with a `connection-failure` diagnostic — a
+different endpoint is a different catalogue, whatever the entry is still called.
+
+A Durable Object created before the `tools` column existed is migrated on the next
+`createSqliteMcpConnectionStore` call; no manual step is needed.
+
+Configured `headers` stay out **on purpose**, even though they arrive legitimately through
+`mcp.json`. A plugin file may carry a plaintext secret, and copying that into durable storage would
+widen its blast radius from process memory to a database. You supply the config again on wake; the
+store records only *which* servers were connected.
+
+`createSqliteMcpConnectionStore` takes any object matching `McpSqlStorage`, a structural shape that
+a real Durable Object `ctx.storage.sql` satisfies:
+
+```typescript
+interface McpSqlStorage {
+  exec(query: string, ...bindings: unknown[]): Iterable<Record<string, unknown>>;
+}
+```
+
+> **A wake is not a cold start**
+>
+> `rebuildMcpToolsFromStorage` does **not** fall back to the `servers` you pass when the store is
+> empty. A wake rebuilds what was persisted; a cold start is `mcpTools`. Collapsing the two would mean
+> a completely broken store still produced a working tool map, which makes the persistence path
+> impossible to test.
+
+Only remote transports persist. A `stdio` server never reaches a Worker, so it never produces a row.
+
+## Related
+
+- [Agent Plugins](./plugins.md) — `mcp.json` layout and five failure widths
+- [Tool Policy](./policy.md) — govern MCP tool execution
+- [Skills](./skills.md) — plugin `skills/` use the same progressive disclosure model
+- [Durable Execution](./durable-execution.md) — MCP tools replay through the effect log

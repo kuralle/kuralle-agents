@@ -1,0 +1,277 @@
+# Durable Execution
+
+How Kuralle records effects and replays them for exactly-once tool execution and durable pause/resume.
+
+Every run in Kuralle is **deterministically replayable**. The runtime does not re-run a conversation from scratch when it resumes — it records each side effect (tool call, clock read, pause) in an append-only log and, on re-entry, *replays* those records instead of executing them again.
+
+This is the same model used by durable workflow engines like Temporal and DBOS. It is what gives Kuralle two guarantees:
+
+- **Exactly-once-modulo-idempotency** — a payment tool won't charge twice if a turn retries, provided the effect honors an idempotency key (auto-derived by default).
+- **Durable pause/resume** — a run can suspend for human approval (or any external signal) and resume later, even in a different process, without losing its place.
+
+> **Note**
+>
+> You get this for free. Any tool wired through `tools` is logged and replayed; any `ctx.approve()` / `ctx.signal()` call suspends durably. The rules below matter only when you write `action` node logic.
+
+## The effect log
+
+A run is stored as two things:
+
+- **`RunState`** — the mutable snapshot: status (`running` / `paused` / `finished` / `error` / `aborted`), the active agent, active flow and node, the flow `state` bag, the message history, and `waitingFor` (set while suspended).
+- **`StepRecord[]`** — the append-only log. Each record holds an `index`, an idempotency `key`, a `kind` (`tool` / `approval` / `signal` / `now` / `uuid`), a `status` (`running` while pending, `finished` or `error` when done), and either a `result` or an `error`.
+
+By default both live inside the session under a `durableRuns` key (the built-in `SessionRunStore`), so durability is inherited from whichever [`SessionStore`](./sessions.md) you configured — Memory in development, Redis or Postgres in production. Pass `runStore` on the harness config to journal runs in a dedicated store instead: `PostgresRunStore` from `@kuralle-agents/postgres-store`, or `SqlRunStore` on Durable Object SQLite from `@kuralle-agents/cf-agent`.
+
+A run comes in two kinds. The **conversation run** is the session's default — one per session, opened by every plain `runtime.run({ input, sessionId })`; the run *is* the conversation. A **flow run** (`kind: 'flow'`) is one durable execution of a flow with its own server-minted run id, journal, and lifecycle — see [Durable flow runs](#durable-flow-runs).
+
+## Replay: record once, replay forever
+
+Every durable effect funnels through one decision:
+
+```typescript
+// Conceptually, for each effect:
+const recorded = findStepByKey(steps, key);
+if (recorded?.status === 'finished') {
+  return recorded.result;                   // cached — do NOT re-run
+}
+if (recorded?.status === 'error' || recorded?.error) {
+  throw recorded.error;                     // errors replay too
+}
+appendStep({ key, kind, status: 'running' }); // intent BEFORE execute
+const result = await execute();
+finalizeStep(key, { status: 'finished', result });
+return result;
+```
+
+A `running` step means a crash happened between execute and finalize — the effect re-runs on resume. External side effects must honor the tool's idempotency key so a re-run dedups at the boundary.
+
+On the **first** pass an effect runs and its outcome is appended to the log. On **every** subsequent pass — a retry, a resume after a pause, or a later turn — the recorded outcome is returned without touching the outside world.
+
+The `RunContext` exposes five durable effects, all built on this mechanism:
+
+| Effect | Purpose |
+|---|---|
+| `ctx.tool(name, args)` | Run an effect tool, logged and replayed |
+| `ctx.approve(req)` | Suspend for human approval (a built-in signal) |
+| `ctx.signal(name)` | Suspend until an external signal is delivered |
+| `ctx.now()` | Deterministic wall-clock read |
+| `ctx.uuid()` | Deterministic id generation |
+
+Inside `action` nodes, these are available on the `ctx` argument (`ctx.tool`, `ctx.approve`, `ctx.signal`, `ctx.now`, `ctx.uuid`, `ctx.emit`).
+
+## Idempotency keys
+
+Each effect's key is a hash of `{ logicalRunId, callsite, payload }`, where the **`callsite` is the effect's ordinal position in the run** — the first effect is `0`, the second `1`, and so on. This is what makes replay align: the Nth effect this pass must match the Nth effect recorded last pass.
+
+By default every durable tool gets an auto-derived key: `idempotencyKey(logicalRunId, callsite, { name, args })`. Override with `idempotencyKey?: (args) => string` on `defineTool` when args are not a stable identity (e.g. a nonce).
+
+Inbound user messages accept an optional `idempotencyKey` on `runtime.run({ ... })` so webhook retries do not duplicate the turn.
+
+> **Caution**
+>
+> **Effects must run in the same order on every replay.** Branching flow-control logic on a non-replayed value (`Date.now()`, `Math.random()`, an un-logged external read) can change the effect order and misalign the log. That is exactly why `ctx.now()` and `ctx.uuid()` exist — use them instead of `Date.now()` / `randomUUID()` in `action` node logic.
+
+## Pause and resume
+
+`ctx.approve()` and `ctx.signal()` suspend the run durably:
+
+1. If a matching record already exists (you are resuming *past* the pause), its payload is returned and execution continues.
+2. Otherwise the runtime sets `waitingFor`, flips status to `paused`, persists the run, emits a `paused` stream part, and throws a `SuspendError`. The host loop catches it and ends the turn cleanly — the run is now frozen on disk.
+
+To resume, deliver a signal on a later run:
+
+```typescript
+runtime.run({
+  sessionId,
+  signalDelivery: { signalId: 'sup-123', name: '__approval', payload: { approved: true, by: 'supervisor' } },
+});
+```
+
+`recordSignalDelivery` validates the name against `waitingFor`, dedupes by `signalId`, appends the payload as a record, and clears `waitingFor`. The run then re-executes from the top — but now the approval is in the log, so the previously-suspending `ctx.approve()` returns the delivered payload and execution flows past it. (`ctx.approve()` is just a signal named `__approval`.)
+
+The same holds for a tool declared `needsApproval: true`, whether the call comes from a flow `action` node or from the model itself: the approval pause happens before `execute` runs, so an unapproved tool never executes.
+
+`needsApproval: true` is the shorthand for a policy that returns `ask` for that tool. When you need a rule the boolean cannot express — a read-only worker, an allowlist, a threshold that depends on the call's arguments — see [Tool Policy](./policy.md).
+
+A suspend travels as an exception, but it is **not** a tool failure. It is never reported to the model as one, never shown to the user as an error, and never journaled as an error. When one call in a parallel batch suspends, the runtime lets the rest of the batch settle first and only then propagates — an abandoned sibling would leave its step `running` and re-execute on resume, since an in-flight promise cannot be cancelled.
+
+### When approval is denied
+
+A denial is the opposite of a suspend: a suspend defers the decision, a denial resolves it. The tool never runs either way, but what happens next depends on who asked for the call.
+
+**The model asked.** There is no author code to catch anything, so the model receives a result and the turn continues:
+
+```json
+{ "__denied": true, "toolName": "issue_refund", "deniedBy": "supervisor",
+  "message": "The \"issue_refund\" action was not approved by supervisor. Tell the user it was declined; do not retry it." }
+```
+
+The agent can then tell the user the request was declined. Nothing is emitted as an error, because nothing malfunctioned. `__denied` rather than `error: true` keeps it distinguishable from a genuine tool failure.
+
+**A flow `action` node asked.** `ctx.tool` throws `ToolApprovalDeniedError` and it propagates out of the flow, because the node's author chose to call that tool and is in a position to handle it. Catch it, or avoid it entirely by branching on `ctx.approve()` yourself:
+
+```typescript
+const decision = await ctx.approve({ title: 'Approve refund' });
+if (!decision.approved) return { kind: 'handoff', to: 'human', reason: 'declined' };
+```
+
+Either way a denial is never degraded into "something went wrong on my side" — that message is for malfunctions, and a human saying no is not one.
+
+## Durable flow runs
+
+A flow run is minted with `kind: 'flow'`:
+
+```typescript
+const handle = runtime.run({
+  sessionId,
+  kind: 'flow',
+  flowName: 'refund',
+  input: 'Refund order #814 to the original card.',
+});
+const runId = await handle.runId;
+```
+
+`TurnHandle.runId` resolves as soon as the run is opened — before the turn body finishes — so the caller can persist the id it must resume with even if the turn later throws. Everything after that addresses the run explicitly:
+
+```typescript
+runtime.run({ sessionId, runId });                  // re-enter (e.g. after a crash)
+runtime.run({ sessionId, runId, signalDelivery });  // resolve its pending approval
+await runtime.getRun(runId, sessionId);             // status, activeFlow, activeNode, waitingFor
+```
+
+Addressing is fail-closed: an unknown `runId`, or one belonging to a different session, is rejected. A caller-supplied `runId` is resume-only and wins over `kind` — you cannot mint and resume in the same call. `flowName` applies only at creation and is ignored on resume.
+
+On entry the run **pins the digest** of the flow it entered. Resuming a parked run against a changed definition throws `FlowDriftError` (with `recovery: ['restart', 'abandon']`) instead of silently executing a different graph — see [Dynamic Flows](./dynamic-flows.md#durability-parked-runs-pin-their-digest).
+
+### Leases, crash recovery, and deadline sweeps
+
+Every open run takes an **execution lease** (`leaseHolder` / `leaseExpiresAt`, default TTL 30s), renewed at persist points during the turn and cleared at close. A `running` run whose lease has expired marks a crashed replica; a missing lease is idle, not stale. Three primitives turn that into recovery:
+
+| Function | What it does |
+|---|---|
+| `recoverOrphanedRuns(runtime)` | Re-enters `running` runs whose lease is stale, through the same fail-closed `run({ sessionId, runId })` resume path; live leases are skipped |
+| `sweepDeadlines(runtime)` | Delivers a structured deny (`reason: 'deadline-expired'`) to `paused` runs whose `waitingFor.deadline` has passed |
+| `startRunSweeper(scheduler, opts?)` | Enqueues the recurring sweep job; pair it with `createSweepJobRunner(runtime)` as that scheduler's executor, which runs both sweeps on each tick |
+
+Run **exactly one sweeper per RunStore**. The run mutex is in-process only — two schedulers against the same store race recoveries of the same orphan.
+
+The live proof is `packages/hono-server/examples/e2e-kill-resume`: a Postgres-backed server registers a flow over HTTP, parks mid-collect, is SIGKILLed and restarted, resumes the same run — and the charge tool fires exactly once.
+
+## Example: a refund flow with an approval gate
+
+The `action` node collects an amount, pauses for a supervisor decision, and runs the refund tool exactly once on approval.
+
+`approval-flow.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent, defineFlow, action, collect, reply, defineTool } from '@kuralle-agents/core';
+import { z } from 'zod';
+
+const processRefund = defineTool({
+  name: 'processRefund',
+  description: 'Issue a refund to the customer',
+  input: z.object({ amount: z.number() }),
+  execute: async ({ amount }) => ({ refunded: amount }),
+});
+
+const confirmed = reply({
+  id: 'confirmed',
+  instructions: 'Tell the customer the refund was approved and processed, then end.',
+  next: () => ({ end: 'refunded' }),
+});
+
+const declined = reply({
+  id: 'declined',
+  instructions: 'Tell the customer the refund was declined by a supervisor, then end.',
+  next: () => ({ end: 'declined' }),
+});
+
+// An `action` node runs no model turn. It pauses for human approval — a durable
+// signal that survives a process restart — then runs the refund tool exactly once.
+const issueRefund = action({
+  id: 'issue_refund',
+  run: async (state, ctx) => {
+    const amount = Number(state.amount);
+
+    // Suspends the run: status -> 'paused', a SuspendError unwinds the turn,
+    // and the run is persisted. It resumes only when an `__approval` signal is
+    // delivered via runtime.run({ signalDelivery }).
+    const decision = await ctx.approve({
+      title: `Approve $${amount} refund?`,
+      description: `Customer requested a refund of $${amount}.`,
+    });
+
+    if (!decision.approved) {
+      return declined;
+    }
+
+    // Recorded in the effect log. If the run resumes after this point, the
+    // recorded result is replayed instead of charging the customer twice.
+    const receipt = await ctx.tool('processRefund', { amount });
+    return { goto: confirmed.id, data: { receipt } };
+  },
+});
+
+const collectAmount = collect({
+  id: 'collect_amount',
+  schema: z.object({ amount: z.number() }),
+  required: ['amount'],
+  ask: (missing) => `What ${missing.join(' and ')} should the refund be for?`,
+  onComplete: () => issueRefund,
+});
+
+export const refundAgent = defineAgent({
+  id: 'refunds',
+  instructions: 'You process customer refund requests.',
+  model: openai('gpt-4o-mini'),
+  tools: { processRefund },
+  flows: [
+    defineFlow({
+      name: 'refund',
+      description: 'Collect a refund amount, get supervisor approval, then refund',
+      start: collectAmount,
+      nodes: [collectAmount, issueRefund, confirmed, declined],
+    }),
+  ],
+});
+```
+
+## Deployment matrix
+
+| Backend | Concurrency | Guarantee |
+|---|---|---|
+| Cloudflare Durable Objects | Single-writer per session (one DO thread) | Intent-before-execute journal; version is a cheap backstop |
+| Memory / Redis / Postgres | Multi-writer — CAS on `session.version` | Stale writers get `StaleWriteError`; retry or reload |
+| Parallel-safe tools (`parallelSafe: true`) | Same turn, `Promise.all` | `reserveSteps` pre-assigns journal ordinals; read-only / `replay: false` tools qualify |
+
+## Parallel tool calls from action nodes
+
+`ctx.tool` reserves its journal ordinal when the call starts, so an action node can use ordinary
+`Promise.all` without manually coordinating indices:
+
+```typescript
+const [inventory, shipping, tax] = await Promise.all([
+  ctx.tool('lookup_inventory', { sku }),
+  ctx.tool('quote_shipping', { address, sku }),
+  ctx.tool('calculate_tax', { address, price }),
+]);
+```
+
+Each effect is recorded exactly once and is replayed from its own journal record on resume. The
+built-in `SessionRunStore` uses `reserveSteps` for atomic reservations; custom stores may omit that
+optional method and Kuralle serializes pending appends within the current context. If you supply
+explicit `callsite` and `index` options yourself, reserve the callsites first with
+`ctx.reserveCallsites(count)` and provide distinct journal indices.
+
+## Two sharp edges
+
+- **Errors are frozen, not retried.** A failed effect's error is recorded and **re-thrown on every replay** — a resumed run will not get a second attempt. Put retry logic *inside* the tool's `execute`, or start a fresh logical step (different args produce a different key).
+- **The log grows with the session.** Steps accumulate in the session for the life of the conversation. For long-lived sessions with many tool calls, account for this when choosing a `SessionStore` and its retention.
+
+## Related
+
+- [Tools](./tools.md) — how `tools` wires the durable executor.
+- [Flow Execution Model](./flow-execution.md) — `action` nodes, where you call `ctx.approve` / `ctx.tool` directly.
+- [Dynamic Flows](./dynamic-flows.md) — JSON flow definitions, versioning, and the digest a flow run pins.
+- [Sessions & State](./sessions.md) — the backend that persists the run log.

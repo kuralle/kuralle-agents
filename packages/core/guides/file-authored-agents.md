@@ -1,0 +1,128 @@
+# File-authored Agents
+
+Compile an agent folder into an immutable deployment and chat with it through the Kuralle CLI.
+
+A file-authored agent keeps its declarative behavior in a folder and compiles that folder into an
+immutable, content-addressed Agent Artifact. Production execution binds the artifact to a Runtime
+Revision and pins that exact pair to the conversation thread.
+
+The runnable example is in
+[`examples-deploy/kuralle-file-agent-chat`](https://github.com/kuralle/kuralle-agents/tree/main/examples-deploy/kuralle-file-agent-chat).
+It uses `gpt-4.1-mini` and exercises the generated Node server through `kuralle chat`.
+
+## Author the folder
+
+```text
+agent/
+  instructions.md
+  agent.json
+  flows/
+    refund.flow.json
+  skills/
+    explain-artifact/
+      SKILL.md
+      references/details.md
+  references/architecture.md
+  workspace/README.md
+```
+
+`instructions.md` is required. `agent.json` contains serializable identity, model, and limit fields.
+`flows/*.flow.json` files are declarative `FlowDefinition` graphs. The compiler validates each one
+strictly and embeds it inline in the artifact — a bad flow fails the build and names the dotted
+issue path. TypeScript modules under `flows/` still compile to capability references resolved from
+the host runtime. References become a read-only mount, while the workspace seed is copied once into
+each thread's private workspace. Skill bodies and resources remain progressively loaded content.
+
+> **This is not an Agent Plugin**
+>
+> The `skills/` directory here looks identical to the one in an
+> [Agent Plugin](./plugins.md), and the two are easy to confuse. This folder defines **the agent**
+> — its instructions, model, and limits — and is compiled ahead of time into an immutable artifact you
+> publish. A plugin defines a **capability bundle someone else published**, carries no model or
+> policy, and is loaded at runtime by `loadAgentPlugin`.
+>
+> Because you author this folder, the compiler rejects a bad build outright. Because you do not author
+> a plugin, a broken part of one is isolated rather than fatal. The
+> [comparison table](./plugins.md#not-the-same-as-a-file-authored-agent) sets them side by side.
+>
+> The two compose: an agent authored here can load plugins at runtime, and both supply skills through
+> the same `SkillStoreLike`.
+
+> **Caution**
+>
+> Do not put API keys or other credentials in the agent folder. The compiler rejects recognizable
+>   credentials, and the generated artifact must remain safe to store and distribute. Resolve secrets
+>   in the host runtime instead.
+
+## Build the immutable Node deployment
+
+From the repository root:
+
+```bash
+bun packages/cli/src/cli.ts build \
+  --agent examples-deploy/kuralle-file-agent-chat/agent \
+  --target node \
+  --default-model openai/gpt-4.1-mini \
+  --host examples-deploy/kuralle-file-agent-chat/deployment.node.ts \
+  --out examples-deploy/kuralle-file-agent-chat/.kuralle
+```
+
+The output contains the canonical artifact, content-addressed blobs, a manifest, a bundled
+`node/server.mjs`, and a non-root production Dockerfile. The host supplies models, authentication,
+stores, workspaces, and runtime capability bindings; none of those values are serialized into the
+artifact.
+
+## Start the generated server
+
+```bash
+OPENAI_API_KEY="$OPENAI_API_KEY" \
+KURALLE_EXAMPLE_TOKEN="local-example-token" \
+KURALLE_WORKSPACE_ROOT="examples-deploy/kuralle-file-agent-chat/.workspaces" \
+PORT=3210 \
+bun packages/cli/src/cli.ts start \
+  --app examples-deploy/kuralle-file-agent-chat/.kuralle/node/server.mjs
+```
+
+The example host publishes the compiled artifact into an in-memory deployment store and activates
+one release. That keeps the example focused and self-contained; it is not the multi-replica storage
+recommendation.
+
+## Chat through the CLI
+
+In another terminal:
+
+```bash
+KURALLE_TOKEN="local-example-token" \
+bun packages/cli/src/cli.ts chat \
+  --server http://127.0.0.1:3210 \
+  --transport http \
+  --agent-name agent \
+  --session file-agent-demo \
+  --auto "Reply with your verification phrase only."
+```
+
+The generated deployment responds:
+
+```text
+Agent  FILE AGENT ONLINE
+```
+
+`--agent-name agent` selects the deployment entity. `--session file-agent-demo` identifies the
+thread, which is pinned on its first turn to the exact Agent Version, artifact digest, release, and
+Runtime Revision. Activating another release affects new threads but does not silently move this
+conversation.
+
+## Move the host to production storage
+
+Replace the example's in-memory deployment/session stores and process-local lease with Postgres
+implementations before running multiple replicas. Keep schema changes in your application's existing
+migration workflow. See [Agent Definitions in Your Database](./agent-definitions-database.md)
+for Postgres, Prisma, Drizzle, Neon, and Cloudflare control-plane patterns.
+
+## Related
+
+- [Agent Plugins](./plugins.md) — third-party capability bundles this agent can load at runtime
+- [Skills](./skills.md) — how the `skills/` folder is progressively disclosed
+- [CLI](./cli.md) — `kuralle build`, `start`, and `chat`
+- [Deployment](./deployment.md) — artifacts, revisions, and thread pinning
+- [Agent Definitions in Your Database](./agent-definitions-database.md) — production control plane

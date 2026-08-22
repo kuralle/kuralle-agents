@@ -47,6 +47,7 @@
   "files": [
     "CHANGELOG.md",
     "README.md",
-    "dist"
+    "dist",
+    "guides"
   ]
 }

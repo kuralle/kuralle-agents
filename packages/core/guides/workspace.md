@@ -1,0 +1,269 @@
+# Workspace (Filesystem, Shell & Skills)
+
+Give an agent a portable filesystem — read/write files, run a shell, load SKILL.md skills, consume Open Knowledge Format bundles, and persist it all across restarts on Node or Cloudflare.
+
+A **workspace** gives an agent a portable filesystem it can explore and edit — plus, optionally, a
+shell to run commands. It's the substrate that skills, Open Knowledge Format bundles, and a durable
+scratch area all mount on. The filesystem is a single interface with swappable backends, so the same
+agent code runs in-memory for tests, on disk for Node, or on Durable-Object SQLite for Cloudflare.
+
+```bash
+npm install @kuralle-agents/fs @kuralle-agents/core
+```
+
+## Quick start
+
+Attach a `FileSystem` to `AgentConfig.workspace`. The runtime auto-registers a durable `workspace`
+tool (read-only by default) so the model can `ls`, `read`, and `grep` the files.
+
+```typescript
+import { defineAgent, createRuntime } from '@kuralle-agents/core';
+import { InMemoryFs } from '@kuralle-agents/fs';
+
+const fs = new InMemoryFs({
+  '/kb/hours.md': '# Hours\nOpen 9-5, Mon-Fri.',
+  '/kb/returns.md': '# Returns\n30-day window, original method.',
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'Answer from the knowledge base. Use the workspace tool to find and read files.',
+  workspace: fs, // auto-registers the read-only `workspace` tool
+});
+```
+
+## The `workspace` tool
+
+`AgentConfig.workspace` accepts a `FileSystem` (read-only), a workspace definition, or a per-session resolver. The model
+sees one tool named `workspace` with these ops:
+
+| Op | Purpose |
+|----|---------|
+| `ls` | List a directory |
+| `read` / `cat` | Read a file (`offset`/`limit` for windows) |
+| `grep` | Regex search across files (`g`/`i`/`m`/`s` flags) |
+| `find` | Glob match under a root |
+| `write` | Write a file (throws `EROFS` when read-only) |
+| `edit` | Find/replace within a file |
+
+Output is **capped** — reads truncate at 2000 lines / 50KB (use `offset`/`limit`), grep at 200 hits,
+each line at 500 chars — and truncation is flagged with `truncated: true`. `edit` throws on an
+ambiguous match; pass `replaceAll: true` for multi-match replaces. Tools return **data only**.
+
+> **Executor write access is not model write access**
+>
+> The workspace defaults to **read-only**. `{ fs, readOnly: false }` lets trusted action/tool code write through `ctx.fs`, while the model still receives a read-only `workspace` tool. Add `modelWritable: true` only when the application intentionally gives the model write/edit operations. Mount-level read-only wrappers remain authoritative.
+
+Resolve the workspace at turn time when each tenant or session needs a different filesystem:
+
+```typescript
+const agent = defineAgent({
+  id: 'case-worker',
+  model,
+  workspace: ({ session }) => ({
+    fs: workspaceForSession(session.id),
+    readOnly: false,
+    modelWritable: true,
+    instructions: 'Immutable policy is under /policy. Write only under /cases.',
+  }),
+});
+```
+
+The resolver receives the authoritative persisted `Session` and agent id. Use it to choose a pre-authorized substrate; do not let a user message supply an arbitrary host path.
+
+## Skills on the filesystem
+
+Skills can live on the workspace as `SKILL.md` folders (the [agentskills.io](https://agentskills.io)
+spec — the same format Claude, Mastra, and flue use). `fsSkillStore` discovers them and plugs into
+`AgentConfig.skills` with zero extra wiring — progressive disclosure (metadata in the prompt, body
+loaded on demand) is handled for you. See the [Skills guide](./skills.md) for the disclosure model.
+
+Third-party [Agent Plugins](./plugins.md) ship the same `skills/` layout inside a fixed bundle
+(`plugin.json` + optional [MCP](./mcp.md) servers). Load with `loadAgentPlugin` instead of
+pointing `fsSkillStore` at individual paths when you want manifest validation and partial-failure
+isolation across skills and MCP.
+
+```typescript
+import { defineAgent } from '@kuralle-agents/core';
+import { InMemoryFs, fsSkillStore } from '@kuralle-agents/fs';
+
+const fs = new InMemoryFs({
+  '/.agents/skills/refunds/SKILL.md':
+    '---\nname: refunds\ndescription: Handle refund requests.\n---\n\n# Refunds\n...',
+  '/.agents/skills/refunds/references/policy.md': '# Policy\n30-day window applies.',
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  workspace: fs,
+  skills: fsSkillStore(fs), // discovers /.agents/skills by default
+});
+```
+
+For layered skills, pass roots from broadest to narrowest:
+
+```typescript
+const skills = fsSkillStore(fs, ['/.agents/skills/shared', '/.agents/skills/project']);
+```
+
+If both roots declare the same frontmatter `name`, the later root supplies that skill's metadata,
+body, and resources.
+
+## Shell (run commands)
+
+Attach a `Shell` alongside the `FileSystem` and the runtime exposes a durable `bash` tool. Three
+backends cover the platforms:
+
+```typescript
+import { defineAgent } from '@kuralle-agents/core';
+import { virtualShell } from '@kuralle-agents/fs/shell';       // just-bash over an in-memory fs (Node / CF container)
+import { nodeShell } from '@kuralle-agents/fs/node';           // real host shell (env-allowlisted, process-tree kill)
+import { cloudflareShell } from '@kuralle-agents/fs/cloudflare'; // wraps a @cloudflare/sandbox Durable Object
+
+const { fs, shell } = virtualShell({ initialFiles: { '/data/orders.txt': 'ORD-1\nORD-2\nORD-3\n' } });
+
+const agent = defineAgent({
+  id: 'analyst',
+  model,
+  workspace: { fs, shell, readOnly: false },
+  tools: { /* bash is registered on the executor; expose it here or per node when you want the model to run commands */ },
+});
+```
+
+> **Caution**
+>
+> A shell is **never auto-exposed** to the model — opt in per node or via `agent.tools`. `bash` returns
+> a recoverable exit-124 result on timeout rather than throwing. `virtualShell` runs `just-bash` and is
+> **not** on the root export (it isn't workerd-clean); the Cloudflare-edge shell is `cloudflareShell`.
+
+> **Tip**
+>
+> `just-bash` is an **optional peer dependency** — it is not installed by default. Only `virtualShell`
+> needs it: `npm install just-bash`. The filesystem, skills, OKF, and persistence never pull it, so an
+> fs-only install (and any Cloudflare Worker) stays lean.
+
+## Open Knowledge Format (OKF)
+
+An [OKF v0.1](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) bundle is *just
+markdown + YAML frontmatter + files* — knowledge concepts (tables, metrics, runbooks) that cross-link
+into a graph. Because it's a directory of files, a kuralle workspace **is** an OKF consumption agent
+with no adapter: the model navigates `index.md` → concept → bundle-relative links via `read`/`grep`.
+
+```typescript
+import { okfBundleToFs, listOkfConcepts } from '@kuralle-agents/fs';
+
+const fs = okfBundleToFs({
+  '/index.md': '# Sales\n* [Orders](/tables/orders.md) - one row per order.',
+  '/tables/orders.md': '---\ntype: BigQuery Table\ntitle: Orders\n---\n# Schema\n...',
+});
+
+const concepts = await listOkfConcepts(fs); // [{ id, type, title, description, links }]
+const agent = defineAgent({ id: 'analyst', model, workspace: fs });
+```
+
+`parseOkfConcept`, `listOkfConcepts`, and `okfBundleToFs` follow the spec's permissive consumption
+model — only `type` is required; unknown fields and broken links are tolerated.
+
+## Persistence — pick a backend by platform
+
+`InMemoryFs` is ephemeral. For a workspace that survives restarts — so files, skills, and the durable
+tool journal agree across process boundaries — use `SqlFileSystem`, a drop-in `FileSystem` over any
+SQL handle (+ optional blob store for large files). Pass the handle your platform gives you:
+
+```typescript
+// Node — built-in node:sqlite (Node >= 22.5)
+import { nodeSqlFileSystem } from '@kuralle-agents/fs/node';
+const fs = nodeSqlFileSystem('/data/agent.db');
+
+// Serverless / edge (Vercel) — hosted SQLite (Turso / libSQL) over a zero-dependency
+// fetch-only backend: no @libsql/client, no native binary, no bundler banner.
+import { sqlFileSystem, libsqlHttpBackend } from '@kuralle-agents/fs';
+const fs = sqlFileSystem(libsqlHttpBackend({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN }));
+
+// Bun / anything — wrap the SQLite handle in a 3-line SqlBackend
+import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
+import { Database } from 'bun:sqlite';
+const db = new Database('/data/agent.db');
+const backend: SqlBackend = {
+  query: (s, ...p) => db.query(s).all(...p) as never,
+  run: (s, ...p) => { db.query(s).run(...p); },
+};
+const fs = sqlFileSystem(backend);
+```
+
+Everything above still works — `workspace`, `bash`, `fsSkillStore`, OKF — now durably:
+
+```typescript
+const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkillStore(fs) });
+```
+
+| Platform | Factory | Storage |
+|----------|---------|---------|
+| Cloudflare (DO) | `sqlFileSystem(ctx.storage.sql)` | Durable Object SQLite (+ R2 for large files) |
+| Cloudflare (D1) | `sqlFileSystem(env.DB)` | D1 |
+| Node | `nodeSqlFileSystem(path)` | `node:sqlite` file |
+| Serverless / edge (Vercel) | `sqlFileSystem(libsqlHttpBackend({url,authToken}))` | Turso / libSQL over `fetch` (zero-dep) |
+| Bun / custom | `sqlFileSystem(backend)` | any `SqlBackend` |
+
+Nothing is enforced — a workspace is opt-in, and the backend is entirely yours: in-memory, on-disk
+SQLite, DO SQLite, D1, hosted libSQL, or any `SqlBackend`. `@kuralle-agents/fs` has no `@libsql/client`
+dependency; the fetch-only `libsqlHttpBackend` needs only `fetch`.
+
+`SqlFileSystem` is a verified drop-in for `InMemoryFs` (identical behavior and error codes) and runs
+on real Cloudflare workerd over a Durable Object's `ctx.storage.sql`. Files above `inlineThreshold`
+(default 1.5MB) spill to the `BlobStore` (R2); everything else stores inline.
+
+### On Cloudflare: a persistent workspace inside a cf-agent
+
+`@kuralle-agents/cf-agent`'s `KuralleAgent` extends Cloudflare's `AIChatAgent` — it *is* a CF Agents
+Durable Object, not a custom one. Give the agent a `SqlFileSystem` over its own `ctx.storage.sql`
+in `getAgents()`, and its files persist in the same DO across turns and restarts:
+
+```typescript
+import { KuralleAgent } from '@kuralle-agents/cf-agent';
+import { sqlFileSystem } from '@kuralle-agents/fs';
+import { defineAgent } from '@kuralle-agents/core';
+
+export class WorkspaceAgent extends KuralleAgent<Env> {
+  protected getAgents() {
+    const fs = sqlFileSystem(this.ctx.storage.sql); // persistent, on this agent's DO SQLite
+    return [
+      defineAgent({
+        id: 'workspace-agent',
+        model,
+        instructions: 'You have a persistent workspace. Use the workspace tool to read/write files.',
+        workspace: { fs, readOnly: false, modelWritable: true },
+      }),
+    ];
+  }
+  protected getDefaultAgentId() { return 'workspace-agent'; }
+}
+```
+
+See the [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) for per-session mounts on a production-shaped `KuralleAgent`, and the focused [Cloudflare filesystem lab](https://github.com/kuralle/kuralle-agents/tree/main/apps/playground/fs-demo-cf) for direct persistence checks. For large files, pass `{ blobs: r2BlobStore(env.BUCKET) }`; for D1 instead of DO SQLite, use `sqlFileSystem(env.DB)`.
+
+## Composite workspaces
+
+Federate several backends behind one filesystem with `CompositeFileSystem` — longest path-prefix
+wins, and `cp`/`mv` work across mounts. Mark a mount read-only with a `readOnly: true` property.
+
+```typescript
+import { CompositeFileSystem, InMemoryFs } from '@kuralle-agents/fs';
+
+const fs = new CompositeFileSystem({
+  mounts: {
+    '/docs': Object.assign(new InMemoryFs({ '/handbook.md': '# Handbook' }), { readOnly: true }),
+    '/scratch': new InMemoryFs(),
+  },
+});
+```
+
+## See also
+
+- [Skills](./skills.md) — the progressive-disclosure model that `fsSkillStore` feeds.
+- [Durable Execution](./durable-execution.md) — fs and shell tools execute fresh (`replay: false`)
+  rather than replaying a cached result; a persistent `SqlFileSystem` keeps the fs and the journal in sync.
+- [Tools](./tools.md) — how the `workspace` and `bash` tools fit the durable tool model.
+- [Examples](https://agents.kuralle.com/examples/) — complete workspace systems and focused persistence labs.

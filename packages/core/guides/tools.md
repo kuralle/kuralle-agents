@@ -1,0 +1,250 @@
+# Tools
+
+Define deterministic tools with Zod-typed inputs and durable execution.
+
+Tools give agents the ability to call external functions. `defineTool` wraps a typed `execute` function with a Zod input schema so the model knows what to pass and what to expect back.
+
+## Defining a tool
+
+```typescript
+import { z } from 'zod';
+import { defineTool } from '@kuralle-agents/core';
+
+const echo = defineTool({
+  name: 'echo',
+  description: 'Echo back the provided text',
+  input: z.object({ text: z.string() }),
+  execute: async ({ text }) => ({ echoed: text }),
+});
+```
+
+`name` and `description` go directly into the model's tool schema. Keep descriptions accurate — the model uses them to decide when to call the tool.
+
+`input` is a Zod object schema. Kuralle validates the model's arguments against it before calling `execute`.
+
+`execute` receives the validated input and returns any value. The return value is serialized and passed back to the model as the tool result.
+
+## Wiring a tool to an agent
+
+Pass your effect tools as a single `tools` record on the agent. The runtime makes them model-visible (deriving the AI SDK `ToolSet` for you) *and* registers the executors so calls — whether the model issues them or a flow node calls them by name — route through the effect log for exactly-once replay.
+
+```typescript
+import { defineAgent } from '@kuralle-agents/core';
+
+const tools = { echo };
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'Use the echo tool when asked.',
+  model: openai('gpt-4o-mini'),
+  tools,
+});
+```
+
+> **Note**
+>
+> You author each tool once with `defineTool` and pass it in `tools` — no separate model-visible map. The model-facing entry is derived internally and is schema-only, so execution always runs through the runtime's effect log — never the AI SDK directly — and replays on retry.
+
+## What `buildToolSet` does
+
+`defineTool` returns a Kuralle **effect tool** — `{ name, description, input, execute }`, where `input` is a Standard Schema and `execute` is your durable handler. The model, however, speaks the [Vercel AI SDK](https://sdk.vercel.ai/) tool format, so the runtime derives an AI SDK `ToolSet` from your `tools` record automatically — you don't call anything to make a tool model-visible.
+
+`buildToolSet` is that bridge, exported for the cases where you need the `ToolSet` yourself — most commonly a **flow node's** `tools` field (which takes an AI SDK `ToolSet`):
+
+```typescript
+import { buildToolSet } from '@kuralle-agents/core';
+
+buildToolSet({ echo, lookup_order })
+// → an AI SDK ToolSet: each entry has the tool's name, description, and
+//   inputSchema — the shape the model needs to know a tool exists and how to call it.
+```
+
+It copies each tool's `name`, `description`, and `input` schema into the `ToolSet`. It deliberately does **not** copy `execute` — the AI SDK entry is schema-only; the actual execution runs through the runtime, which routes every model-issued call through the durable effect log for exactly-once replay.
+
+## Durable execution
+
+Every tool call is keyed in an append-only effect log. The runtime checks that key before calling `execute` — if the call already ran, it returns the logged result without calling `execute` again.
+
+This means a payment tool won't charge twice if the turn fails mid-execution, and a booking tool won't double-book a slot.
+
+## Parallel execution
+
+By default, tools in the same model turn run one at a time through the durable effect log. Mark a tool `parallelSafe: true` to let it run concurrently with other parallel-safe tools called in the same turn — safe for independent reads, not for tools that mutate shared state:
+
+```typescript
+const get_weather = defineTool({
+  name: 'get_weather',
+  description: 'Current weather for a city',
+  parallelSafe: true,
+  input: z.object({ city: z.string() }),
+  execute: async ({ city }) => fetchWeather(city),
+});
+```
+
+`parallelSafe` also accepts a **predicate over the arguments**, for a tool whose safety depends on
+what it was asked to do — a read mode and a write mode behind one name:
+
+```typescript
+const storage = defineTool({
+  name: 'storage',
+  description: 'Read or write a key',
+  // Evaluated on the RAW model arguments, before schema validation, so it must be total.
+  // Any throw or non-boolean return fails closed to serial.
+  parallelSafe: (args) => (args as { op?: string }).op === 'read',
+  input: z.object({ op: z.enum(['read', 'write']), key: z.string() }),
+  execute: async ({ op, key }) => (op === 'read' ? read(key) : write(key)),
+});
+```
+
+The model cannot influence the decision either way — the predicate is yours, and it runs before
+anything the model supplied has been validated.
+
+`replay: false` does **not** imply parallel-safe. They are unrelated properties: one means "do not
+journal this step", the other means "safe to run concurrently with siblings". Declare `parallelSafe`
+explicitly. The runtime pre-assigns journal ordinals for the batch (`reserveSteps`) so replay stays
+aligned no matter which parallel call finishes first, and results are appended to the transcript in
+**source order** rather than completion order, so a replayed run rebuilds the same layout.
+
+A batch is bounded at **8 concurrent calls** by default. That is measured, not arbitrary: above
+roughly eight-way in-process concurrency the run store's optimistic-concurrency check starts
+rejecting writes, and against the durable store 20 unbounded parallel calls executed only 8 — the
+rest threw `Stale write for session …` without ever reaching their executor. Lower it with
+`limits.maxToolConcurrency` when tools open sockets, spawn subprocesses, or hit a rate-limited API:
+
+```typescript
+const runtime = createRuntime({
+  agents: [agent],
+  limits: { maxToolConcurrency: 4 },
+});
+```
+
+## Result size
+
+A tool result is capped where it enters the transcript, so one large payload cannot be re-sent to
+the model on every subsequent turn. Truncation is middle-out — the end of a payload usually holds
+the error, the total and the last record — and `ctx.tool()` and the durable journal keep the full
+untruncated value. Only what the model reads is bounded.
+
+## Timeouts and cancellation
+
+`timeoutMs` bounds a call. The timeout arrives at the tool as an **abort on `ctx.abortSignal`**, so a tool that watches the signal stops working when the runtime stops waiting:
+
+```typescript
+const fetch_report = defineTool({
+  name: 'fetch_report',
+  description: 'Fetch a report from the reporting service',
+  timeoutMs: 5_000,
+  input: z.object({ id: z.string() }),
+  execute: async ({ id }, ctx) =>
+    fetch(`/reports/${id}`, { signal: ctx?.abortSignal }).then((r) => r.json()),
+});
+```
+
+The call rejects with `ToolTimeoutError` either way. Passing the signal through is what stops the work; without it the request keeps running to completion after its result has been discarded.
+
+Set `interruptible: false` to opt a tool out of caller-driven aborts (barge-in). It does not opt out of `timeoutMs`.
+
+## Recovering from tool errors
+
+A tool that throws fails the call, and the model sees a generic failure. Give it an `onError` to return something the model can act on instead:
+
+```typescript
+const check_stock = defineTool({
+  name: 'check_stock',
+  description: 'Check warehouse stock',
+  input: z.object({ sku: z.string() }),
+  execute: async ({ sku }) => warehouse.stock(sku),
+  onError: (error, { sku }) => ({ sku, available: null, reason: error.message }),
+});
+```
+
+The recovered value is validated against `output` and journaled as the success it became, so a replay returns it without re-running the tool.
+
+`onError` is deliberately **not** called for a timeout, an abort, a schema violation, or an approval decision. Those are facts about the run, not results a tool may reinterpret.
+
+## Streaming progress from a tool
+
+A tool can be an async generator. Each `yield` is emitted immediately as an internal `tool-result` part marked `preliminary: true`; the aggregate is still the tool's result and the only thing journaled:
+
+```typescript
+const migrate = defineTool({
+  name: 'migrate',
+  description: 'Run a migration, reporting progress',
+  input: z.object({ table: z.string() }),
+  execute: async function* ({ table }) {
+    for (const batch of batches(table)) {
+      yield { migrated: batch.count };
+    }
+  },
+});
+```
+
+Because only the aggregate is journaled, a replayed call emits no preliminary parts — replay stays deterministic.
+
+## Overriding the idempotency key
+
+Every tool call is keyed automatically — a hash of the run, its position in the effect log, and `{ name, args }`. That's a stable identity as long as `args` uniquely identifies the call. When it doesn't (for example, args include a fresh nonce), override the key with `idempotencyKey` so a retry still dedups on the field that actually identifies the operation:
+
+```typescript
+const chargeCard = defineTool({
+  name: 'charge_card',
+  description: 'Charge a customer for an amount',
+  input: z.object({ amount: z.number(), nonce: z.string() }),
+  idempotencyKey: ({ amount }) => `charge:${amount}`,
+  execute: async ({ amount }) => processCharge(amount),
+});
+```
+
+See [Durable Execution](./durable-execution.md#idempotency-keys) for how the effect log and idempotency keys work end to end.
+
+## Multiple tools
+
+```typescript
+const tools = {
+  lookup_order: lookupOrder,
+  cancel_order: cancelOrder,
+  create_ticket: createTicket,
+};
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: '...',
+  model: openai('gpt-4o-mini'),
+  tools: tools,
+});
+```
+
+## Example
+
+`echo-tool.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
+import { defineAgent, defineTool, createRuntime } from '@kuralle-agents/core';
+
+// Define a tool with a Zod input schema and an async execute function
+const echo = defineTool({
+  name: 'echo',
+  description: 'Echo back the provided text',
+  input: z.object({ text: z.string() }),
+  execute: async ({ text }) => ({ echoed: text }),
+});
+
+// Wire durable tools on the agent; flow nodes use buildToolSet for model-visible schema.
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'Use the echo tool when asked.',
+  model: openai('gpt-4o-mini'),
+  tools: { echo },
+});
+
+const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
+
+const handle = runtime.run({ input: 'Echo "hello world"' });
+for await (const part of handle.events) {
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+  if (part.type === 'done') console.log('\nDone.');
+}
+await handle;
+```

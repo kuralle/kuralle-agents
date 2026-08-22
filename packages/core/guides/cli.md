@@ -1,0 +1,205 @@
+# CLI & Devtools
+
+Connect to hosted runtimes or run local chat, send, resume, simulation, and trace inspection against any Kuralle agent.
+
+`@kuralle-agents/cli` is the `kuralle` binary. It can connect to a deployed HTTP or native Cloudflare Agents runtime, or load an agent locally for interactive chat, persisted one-turn scripts, durable resume, simulation, and trace inspection.
+
+```bash
+npm install -g @kuralle-agents/cli
+# or: npx @kuralle-agents/cli chat
+```
+
+```
+kuralle chat [--trace] [--store <file>] [--session <id>] [--auto "msg1|msg2"] [--agent <path.ts>]
+kuralle send --session <id> [--store <file>] [--state|--reset] "<message>"
+kuralle resume <session> [--store <file>] [--summary <text>]
+kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
+kuralle trace <session> [--last] [--json] [--web] [--port N] [--store <file>]
+kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]
+kuralle connection | kuralle disconnect
+```
+
+Without `--agent` or a saved hosted connection, local commands run against a bundled cafe-concierge agent—enough to exercise the CLI with an `OPENAI_API_KEY`.
+
+## Hosted runtimes
+
+Connect once to a deployed Next.js, Hono, or Worker endpoint. Later `chat` and `send` commands execute there, so the server—not the CLI process—owns credentials, tools, sessions, and workspaces.
+
+```bash
+kuralle connect https://my-agent.vercel.app
+kuralle send --session customer-42 "What is in my cart?"
+kuralle chat --session customer-42
+```
+
+For a `KuralleAgent` Durable Object, select the native Cloudflare Agents WebSocket transport and its agent URL name:
+
+```bash
+kuralle connect https://my-agent.workers.dev \
+  --transport cloudflare \
+  --agent-name pharmacy-agent
+
+kuralle chat --session customer-42 \
+  --auto "hello|check amoxicillin 500 mg|what did I ask for?"
+```
+
+`kuralle connection` prints the saved non-secret connection. `kuralle disconnect` removes it. A saved connection becomes the default for `chat` and `send`; pass `--local` to run the local agent explicitly. `--server` or `KURALLE_SERVER` provides a one-command server override.
+
+Auth tokens are never written to the connection file. Prefer `KURALLE_TOKEN`; `--token` is available but may enter shell history. The HTTP transport first tries `POST /api/chat` with `{ sessionId, message }`, then falls back to the Hono SSE endpoint. The Cloudflare transport speaks the native Agents protocol and keeps the session id as the Durable Object instance boundary.
+
+> **Hosted and local state are intentionally different**
+>
+> In hosted mode, the deployed runtime owns persistence and tracing. Local `--store` and `--trace` options do not replace server state. Use the server's operational trace backend for production inspection.
+
+## The `--agent` contract
+
+`--agent <path.ts>` points at a module the CLI loads with a dynamic `import()`. The export is resolved **by shape** — you do not hand-wire `readState`, `label`, or `sessionId`; the CLI assembles those.
+
+Resolution order: `default` export, then named `runtime`, `agent`, `buildRuntime` / `build`. First matching shape wins.
+
+> **Running a `.ts` agent**
+>
+> Plain `node` cannot `import()` a TypeScript file. Run the CLI with a TypeScript-capable runtime — **`bun kuralle chat --agent ./agent.ts`** or `tsx` — or point `--agent` at compiled `.js`. The agent module must also be able to resolve its own imports (`@kuralle-agents/core`, `zod`, `@ai-sdk/openai`, …), so keep it inside a project where those are installed rather than a bare scratch file.
+
+### 1. Bare agent
+
+Export a `defineAgent` config. The CLI calls `createRuntime`, picks the dev session store, and wires `readState` for you. This shape uses Core's AI SDK driver because an `AgentConfig` does not carry Pi's provider registry or credential resolver.
+
+`custom-agent.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent } from '@kuralle-agents/core';
+
+// Bare agent — the CLI owns createRuntime, session store, readState, and label.
+export default defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+```
+
+If the agent has no `model`, pass `--model <id>` or set `OPENAI_MODEL` (with `OPENAI_API_KEY`).
+
+Give the agent `tools` (a record of `defineTool` effect tools) and the model can call them — each call shows up in the `--trace` panel as a `⚙ tool` span with its result and per-turn token counts:
+
+`agent-with-tool.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
+import { defineAgent, defineTool } from '@kuralle-agents/core';
+
+// A durable effect tool — the model can call it, and you'll see `⚙ tool get_weather`
+// in the `--trace` panel with its result and per-turn token counts.
+const getWeather = defineTool({
+  name: 'get_weather',
+  description: 'Get the current weather for a city. Call this for any weather question.',
+  input: z.object({ city: z.string() }),
+  execute: async ({ city }) => ({ city, tempC: 21, sky: 'clear', humidity: '48%' }),
+});
+
+// Bare agent — the CLI owns createRuntime, the session store, readState, and label.
+export default defineAgent({
+  id: 'assistant',
+  instructions:
+    'You are Aria, a concise and friendly assistant. Use get_weather for weather questions. ' +
+    'Keep replies to one or two sentences.',
+  model: openai('gpt-4o-mini'),
+  tools: { get_weather: getWeather },
+});
+```
+
+```bash
+bun kuralle chat --agent ./agent-with-tool.ts --trace
+# then ask: "What's the weather in Paris?" → fires get_weather
+```
+
+### 2. Runtime (recommended for Pi)
+
+Export an assembled `createRuntime({...})` instance (detected by a `.run` method). Use this when you need full control over agents, Pi driver configuration, handoffs, tracing, or hooks at construction time.
+
+```typescript
+import { createRuntime, defineAgent, MemoryStore } from '@kuralle-agents/core';
+
+export default createRuntime({
+  agents: [defineAgent({ id: 'bot', instructions: '…', model })],
+  defaultAgentId: 'bot',
+  sessionStore: new MemoryStore(), // CLI overrides store per command when needed
+});
+```
+
+### 3. Factory (legacy)
+
+Export `buildRuntime(sessionId?, store?, traceStore?)` returning `{ runtime, store, sessionId, agentId, label, readState }` — still supported for backward compatibility.
+
+```bash
+kuralle chat --agent ./custom-agent.ts
+kuralle send --agent ./custom-agent.ts --session demo "hello"
+kuralle trace --agent ./custom-agent.ts demo
+```
+
+> **Note**
+>
+> `send` and `trace` reuse a file-backed session store across separate CLI invocations (see below). For bare-agent and runtime shapes the CLI picks the store; for legacy `buildRuntime` modules the factory's store is used as returned.
+
+## `chat` — interactive TUI
+
+An Ink-rendered terminal REPL over a live runtime. Slash commands: `/state`, `/reset`, `/help`, `/quit`. Pass `--auto "msg1|msg2"` to drive it headlessly with a scripted turn sequence instead of a real terminal.
+
+- **`--trace`** renders a live **trace side panel** next to the chat — the built-in `AgentTrace` of each turn as a `turn → flow → node → tool` waterfall with per-span durations, the tool results, and **per-turn token counts + context-window** (`turn <in>↓/<out>↑ tok · ctx <n> tok`). Works for any agent, because [tracing is on by default](./observability.md#enabling-tracing).
+- **`--store <file>`** persists both the session (conversation + journal) and the traces to JSON files, so `--trace` accumulates history across launches instead of resetting each run; **`--session <id>`** picks which session to resume (default `default`).
+
+## `send` — adaptive single-turn
+
+One turn per invocation against a **persisted, file-backed session** — the shape you want for scripting a multi-turn conversation one shell command at a time, or for driving a real chat integration test:
+
+```bash
+kuralle send --session demo "I'd like to order"
+kuralle send --session demo "a cardamom bun, for tomorrow"
+kuralle send --session demo --state    # inspect active flow / epoch / turns, no new turn
+kuralle send --session demo --reset    # delete the session
+```
+
+`--store <file>` (default `runs/tui-sessions.json`) is a small JSON-file `SessionStore` — durable enough to survive across separate `send` calls without a real database.
+
+## `resume` — resolve an escalation hold
+
+Resume a local session that Kuralle parked for human escalation. The optional summary becomes the resolution note visible to the agent after resume.
+
+```bash
+kuralle resume customer-42 --store runs/support.json \
+  --summary "Identity verified; continue with the billing correction."
+```
+
+Tool approvals resume through their request-bound approval signal in the interactive surface; `resume` is for host escalation holds, not a way to bypass an approval decision.
+
+## `sim` — persona-driven simulation
+
+Drives `simulateConversation` with a synthetic persona toward a goal, then scores the transcript with an LLM judge (`createJudge`):
+
+```bash
+kuralle sim --goal "cancel my subscription" --profile "a frustrated customer" --turns 8
+```
+
+Prints the full transcript, how the conversation ended, which tools were called, and the judge's `overall` score, `pass`/`fail`, and summary.
+
+## `trace` — inspect recorded traces
+
+Reads whatever `TraceStore` the target runtime is configured with (`MemoryTraceStore` by default — see the [Observability guide](./observability.md)). Pass **`--store <file>`** to read the file-backed traces that `kuralle chat --store` / `send` wrote (traces live in a sidecar beside it — `runs/app.json` writes `runs/app.traces.json`, replacing the extension rather than appending; the file is JSONL, one span per line), so you can inspect a session recorded by an earlier, separate CLI invocation:
+
+```bash
+kuralle trace session-42            # terminal waterfall for every trace in the session
+kuralle trace session-42 --last     # just the most recent trace
+kuralle trace session-42 --json     # native AgentTrace[] JSON — for agents and CI
+kuralle trace session-42 --store runs/tui-sessions.json --last   # a persisted session from `chat`/`send`
+kuralle trace session-42 --web --port 4319   # loopback dev server + embedded trace-ui
+```
+
+The terminal waterfall marks each span with an offset, a duration, and a glyph for tool (🔧), handoff (⇢), or error (✕) spans. `--web` starts a **loopback-only**, read-only HTTP server: `GET /` serves the `@kuralle-agents/trace-ui` viewer (CSP-nonced), and `GET /api/traces/:session` / `GET /api/trace/:id` serve the same JSON `runtime.listTraces()` / `runtime.getTrace()` return.
+
+## Related
+
+- [Pi Driver](./pi-driver.md) — configure the recommended production model/tool loop.
+- [Observability](./observability.md) — `runOnce`, tracing config, store backends, OTLP/Langfuse export.
+- [Sessions & State](./sessions.md) — the `SessionStore` interface `--agent` modules configure.
+- [Examples](https://agents.kuralle.com/examples/) — complete agents with exact CLI commands.

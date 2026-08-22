@@ -1,0 +1,299 @@
+# Agent Plugins
+
+Load third-party Agent Plugins — plugin.json, skills/, optional mcp.json, and optional flows/ — with partial failure isolation.
+
+An **Agent Plugin** is a directory with a fixed layout: a `plugin.json` manifest at the root, a
+`skills/` tree of [agentskills.io](https://agentskills.io) folders, an optional `mcp.json` that
+declares MCP servers to connect, and — as a Kuralle host extension — an optional `flows/` directory of
+declarative flow graphs. Kuralle loads the bundle with `loadAgentPlugin(fs, root)` and returns
+a **discriminated result** — never throws — so callers can wire skills, MCP, and flows independently of
+whatever failed inside the bundle.
+
+```bash
+npm install @kuralle-agents/plugins @kuralle-agents/fs
+```
+
+## Layout
+
+```
+my-plugin/
+├── plugin.json          # required manifest
+├── skills/              # optional — SKILL.md folders
+│   └── returns-policy/
+│       └── SKILL.md
+├── flows/               # optional — Kuralle host extension
+│   └── returns.flow.json
+└── mcp.json             # optional — MCP server declarations
+```
+
+| File | Role |
+|------|------|
+| `plugin.json` | Identity and metadata (`name`, `$schema`, optional `version`, `license`, …). Validated against the [Agent Plugins schema](https://agent-plugins.org/schemas/1.0.0/plugin.schema.json). |
+| `skills/` | Top-level skill directories only — nested `SKILL.md` files inside a skill folder are bundled resources, not separate skills. Wired into `AgentConfig.skills` via the returned `SkillStoreLike`. |
+| `flows/` | Optional Kuralle host extension. Top-level `*.flow.json` files are validated as `FlowDefinition` graphs and returned on `plugin.flows` — the host registers them with `runtime.addDynamicFlows`. A missing directory is **not** an error. |
+| `mcp.json` | Declares `mcpServers` (stdio, `streamable-http`, or `sse`). Parsed only when the file exists; a missing file is **not** an error. See the [MCP guide](./mcp.md). |
+
+## Flows are a host extension
+
+[Agent Plugins 1.0.0](https://agent-plugins.org) does not define `flows/`. Other hosts ignore unknown
+directories, so a plugin that ships `flows/*.flow.json` stays portable. Kuralle reads those files as
+declarative `FlowDefinition` graphs.
+
+`loadAgentPlugin` **validates** them and returns them on `plugin.flows`. It does not register them —
+the host decides that with `runtime.addDynamicFlows`. Pass `hostTools` when loading so an action node
+cannot name a tool the host did not register; the plugin's own `mcp.json` server names are also
+prospective tools. Omit `hostTools` and the validator skips tool-reference checks (the registry index
+is gated: an absent kind is not a failure) rather than rejecting every action node. [`Policy`](./policy.md)
+still gates execution.
+
+## Not the same as a file-authored agent
+
+Both are a folder with a `skills/` directory, so they look alike. They solve opposite problems.
+
+| | Agent Plugin | [File-authored agent](./file-authored-agents.md) |
+|---|---|---|
+| Whose code | someone else's, published | yours |
+| Defines | a **capability bundle** to attach to an agent | the **agent itself** |
+| Spec | [Agent Plugins 1.0.0](https://agent-plugins.org), portable across clients | Kuralle's own format |
+| Manifest | `plugin.json` | `agent.json` + `instructions.md` |
+| Model, policy, routing | not present — the host decides | part of the agent definition |
+| MCP servers | declared in `mcp.json` | supplied by the host |
+| Loaded | at runtime, by `loadAgentPlugin(fs, root)` | at build time, by `kuralle build` |
+| Bad input | partial isolation — skip the broken part, keep the rest | the compiler rejects the build |
+| Identity | the plugin name | a content-addressed artifact digest |
+
+The difference in the last two rows follows from the first. You wrote a file-authored agent, so a
+mistake in it is a bug to fix before shipping and the compiler should stop you. You did **not** write
+the plugin, so a mistake in it must not take down an agent that merely loads it — hence
+[five failure widths](#five-failure-widths) instead of a thrown error.
+
+They compose: a file-authored agent can load plugins at runtime, and both feed
+[`AgentConfig.skills`](./skills.md) through the same `SkillStoreLike`.
+
+## Quick start
+
+Mirror a plugin directory onto any `FileSystem` (disk, in-memory, Durable-Object SQLite) and load it:
+
+```typescript
+import { loadAgentPlugin } from '@kuralle-agents/plugins';
+import { InMemoryFs } from '@kuralle-agents/fs';
+
+const fs = new InMemoryFs({
+  '/plugins/acme/plugin.json': JSON.stringify({
+    $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json',
+    name: 'acme',
+    version: '1.0.0',
+  }),
+  '/plugins/acme/skills/returns-policy/SKILL.md':
+    '---\nname: returns-policy\ndescription: Handle returns.\n---\n\n# Returns\n30-day window.',
+});
+
+const result = await loadAgentPlugin(fs, '/plugins/acme');
+
+if (!result.ok) {
+  console.error(result.rejection.message);
+  return;
+}
+
+const { manifest, skills, mcpServers, flows, diagnostics } = result.plugin;
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  workspace: fs,
+  skills, // SkillStoreLike — progressive disclosure handled by the runtime
+  // mcpServers → pass to mcpTools() — see /guides/mcp
+  // flows → runtime.addDynamicFlows(flows, { agentId: 'support' }) — host registration, not the loader
+});
+```
+
+`loadAgentPlugin` always resolves paths under `root`. Manifest, MCP, or flow paths that escape the plugin
+root are rejected — see [Containment](#containment-is-checked-twice) for what "escape" means once
+symlinks are involved.
+
+## Five failure widths
+
+The loader applies **different blast radii** depending on what broke. That is why loading returns
+`{ ok: true, plugin } | { ok: false, rejection, diagnostics }` instead of throwing.
+
+| What failed | Outcome | Skills | MCP servers | Flows |
+|-------------|---------|--------|-------------|-------|
+| Bad **`plugin.json`** (missing, unreadable, schema violation) | **Reject the whole plugin** (`ok: false`) | not loaded | not loaded | not loaded |
+| Bad **`mcp.json`** (malformed, schema violation, unsafe config) | **Disable MCP for this plugin** — skills and flows still load | loaded | `[]` + diagnostics | unchanged |
+| Bad **skill folder** (invalid frontmatter, name mismatch) | **Skip that skill** — rest of `skills/` still loads | partial | unchanged | unchanged |
+| Bad **server entry** in `mcp.json` (unknown transport, SSRF, secret in env) | **Skip that server** — siblings still load | unchanged | partial + diagnostics | unchanged |
+| Bad **flow file** (unreadable, bad JSON, envelope-schema violation, validation issues) | **Skip that flow** — siblings, skills, and MCP still load | unchanged | unchanged | partial + diagnostics |
+
+Diagnostics carry `{ section, rule, origin, message }` so you can log or surface them without
+guessing which layer failed. A missing `mcp.json`, `skills/`, or `flows/` directory produces **no**
+diagnostics — those components are optional (`skills/` and `mcp.json` by spec §6.2; `flows/` as a
+host extension).
+
+> **Missing components are not errors**
+>
+> A plugin that ships skills but no `mcp.json` — like the vendored
+> [`remotion-dev/codex-plugin`](https://github.com/remotion-dev/codex-plugin) fixture in this repo —
+> loads with `mcpServers: []`, `flows: []`, and `diagnostics: []`. Warning about a missing MCP file or
+> `flows/` directory would be non-conformant.
+
+## Worked example — partial skill failure
+
+Given a plugin with one valid skill and one malformed `SKILL.md`:
+
+```
+plugin/
+├── plugin.json
+└── skills/
+    ├── good-skill/SKILL.md      # valid
+    └── bad-skill/SKILL.md       # invalid frontmatter
+```
+
+`loadAgentPlugin` returns `ok: true` with one skill (`good-skill`) and a diagnostic on
+`skills/bad-skill/SKILL.md` (`section: "7.1"`, `rule: "skill-invalid"`). The agent still gets the
+good skill; the bad folder is skipped.
+
+Given a malformed `mcp.json` instead, skills still load, `mcpServers` is `[]`, and a diagnostic
+marks `mcp.json` invalid — MCP is disabled for that plugin, not the whole bundle.
+
+Given one valid `flows/*.flow.json` and one malformed sibling, the valid flow is returned on
+`plugin.flows` and a diagnostic with `section: "flows"` names the broken file. Skills and MCP are
+untouched.
+
+## `LoadPluginResult`
+
+```typescript
+type LoadPluginResult =
+  | { ok: true; plugin: LoadedPlugin }
+  | { ok: false; rejection: Rejection; diagnostics: readonly Diagnostic[] };
+
+interface LoadedPlugin {
+  manifest: PluginManifest;
+  skills: SkillStoreLike;
+  mcpServers: readonly McpServerConfig[];
+  flows: readonly FlowDefinition[]; // validated, not registered
+  diagnostics: readonly Diagnostic[];
+}
+```
+
+On success, check `diagnostics` even when `ok === true` — partial failures surface there. On
+rejection, `rejection` names the manifest rule that failed; `diagnostics` repeats the same facts for
+uniform logging.
+
+## MCP and platform limits
+
+Plugin MCP entries may declare `stdio` servers (`command`, `args`, `env`, `cwd`). **`stdio` cannot
+run on Cloudflare Workers** — there is no subprocess in workerd. Remote transports
+(`streamable-http`, `sse`) work on Workers and Durable Objects; `stdio` is available on Node and Bun
+via the `@kuralle-agents/mcp/node` subpath. That is a platform limit, not a missing install.
+
+See the [MCP guide](./mcp.md) for connecting servers, SSRF guards, disclosure budgets, and
+wiring tools into an agent.
+
+## How a `stdio` server is launched
+
+A `stdio` entry is not a request — it is a program this machine runs. Four things are decided for
+you before the process starts.
+
+```jsonc
+{
+  "mcpServers": {
+    "local": {
+      "type": "stdio",
+      "command": "./bin/server",          // resolved against the plugin root
+      "args": ["--data", "${PLUGIN_DATA}"],
+      "env": { "LOG_LEVEL": "debug" },
+      "cwd": "${PLUGIN_DATA}"             // optional; defaults to the plugin root
+    }
+  }
+}
+```
+
+**`command`** is either a bare token (`npx`, `uvx`, `python`) resolved through the platform search
+path, or a plugin-relative `./…` path resolved against the plugin root. Nothing else is accepted.
+
+**`cwd`** defaults to the plugin root when omitted (§7.2.1). When given, it must be `./…`,
+`${PLUGIN_ROOT}`, or `${PLUGIN_DATA}`, and it must stay under the root it names.
+
+**`env`** is composed, not inherited. The subprocess starts from a fixed base — `PATH`, `HOME`,
+`TMPDIR`, `LANG`, `LC_ALL`, and the Windows equivalents `SystemRoot`, `PATHEXT`, `APPDATA` — then the
+plugin's own `env`, then the reserved variables last, which a plugin can never override.
+
+> **An allowlist is not a sandbox**
+>
+> The base environment fails closed: a variable a plugin needs and does not get breaks it loudly at
+> connect, where inheriting would put every ambient credential in the host process in front of
+> third-party code. `HOME` is on the list knowing it points at `~/.aws` and `~/.ssh` — the subprocess
+> can reach those anyway, so withholding it would break `npm` and buy nothing. Spec §4.1 is explicit
+> that plugin containment is **not** a security sandbox. Govern what a server can *do* with
+> [`Policy`](./policy.md), not with the environment.
+
+### `${PLUGIN_ROOT}` and `${PLUGIN_DATA}`
+
+Two placeholders expand inside `args`, `env`, and `cwd`, and arrive as environment variables:
+
+| Variable | Points at | Writable |
+|----------|-----------|----------|
+| `PLUGIN_ROOT` | the plugin directory | treat as read-only |
+| `PLUGIN_DATA` | a private data directory for this plugin | yes |
+
+`PLUGIN_DATA` is a **sibling** of the plugin directory, keyed by plugin name — a plugin at
+`/plugins/acme` gets `/plugins/data/acme`. Keeping it outside the plugin root means writing state
+never mutates the distributed bundle, so a plugin stays byte-identical to what was published.
+
+The client creates it and proves it writable **before** the subprocess starts, so a server can write
+on its first line without a `mkdir` of its own. If it cannot be created, that one server entry is
+skipped with a diagnostic and the plugin's other components still load.
+
+Expansion is single-pass: text introduced by one substitution is never rescanned, so a path that
+happens to contain `${PLUGIN_ROOT}` cannot expand twice.
+
+## Containment is checked twice
+
+§4.1 requires a plugin's paths to stay inside the plugin, and §4.1(3) defines that against the
+**filesystem-resolved** path — symlinks followed. A plugin can ship `bin/server` as a symlink to
+`/usr/bin/curl`; the string `./bin/server` looks perfectly contained.
+
+Two checks run, at different moments, because one moment cannot serve both rules:
+
+| When | What it catches | Why it cannot do the other job |
+|------|-----------------|--------------------------------|
+| **Parse** — `loadAgentPlugin` | `../` escapes, cheaply and early | `${PLUGIN_DATA}` does not exist yet, so resolving it would reject the specification's own `cwd` example |
+| **Launch** — before the subprocess spawns | symlinks that resolve outside the permitted root | too late to stop a plugin from loading at all, and it never runs on Workers |
+
+A failure at either point invalidates that **one server entry** under §7.2.2 — `section: "4.1"`,
+`rule: "path-escapes-plugin-root"` — and the two are deliberately indistinguishable to a consumer.
+The plugin's skills and its other servers still load (§11.3). A `flows/*.flow.json` symlink that
+resolves outside the plugin root is skipped the same way (`section: "flows"`, same rule) — that one
+flow is dropped; siblings, skills, and MCP still load.
+
+A symlink that stays **inside** the plugin root is permitted, explicitly. This is a containment
+check, not a ban on symlinks.
+
+> **Containment is not a sandbox**
+>
+> §4.1 says so directly, and it is worth repeating because the guard reads like a security boundary.
+> It stops a plugin *declaring* a path outside itself. It does not stop the process that path launches
+> from doing anything it likes once running — the environment allowlist above is not a jail either.
+> Use [`Policy`](./policy.md) to govern what a connected server may **do**.
+
+## Live example
+
+The repo vendors a verbatim copy of `remotion-dev/codex-plugin` and proves offline loading:
+
+```bash
+bun packages/plugins/examples/third-party-plugin.ts
+```
+
+It asserts manifest metadata, exactly twelve skills, non-empty descriptions, a substantive
+`loadBody('remotion-best-practices')`, zero MCP servers, and zero diagnostics — the sharp case for
+a skills-only published plugin.
+
+## Related
+
+- [Skills](./skills.md) — progressive disclosure for the `skills/` component
+- [MCP](./mcp.md) — connecting and governing plugin-declared MCP servers
+- [Flows](./flows.md) — the `FlowDefinition` graphs `flows/*.flow.json` carry
+- [Dynamic Flows](./dynamic-flows.md) — `runtime.addDynamicFlows` for host registration
+- [File-authored Agents](./file-authored-agents.md) — the folder format for *your own* agent, not a third-party bundle
+- [Workspace](./workspace.md) — mount plugins on a workspace filesystem
+- [Tool Policy](./policy.md) — approval gate for MCP tool calls (not plugin loading)

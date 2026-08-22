@@ -101,7 +101,9 @@ E2E tests: see `packages/e2e-tests/README.md`.
    (`text-delta`, tool events, `done`).
 3. Add a runnable example under `packages/core/examples/` — and **run it live**, not just
    typecheck it.
-4. Update the docs (`apps/docs/`, package READMEs, `docs/skills/`) in the same change.
+4. Update the docs (`apps/docs/`, package READMEs, `docs/skills/`) in the same change,
+   then run `bun run docs:sync-guides` — `packages/core/guides/` is generated from
+   `apps/docs/` and ships in the npm tarball.
 
 ## Gotchas — learned the hard way, all still live
 
@@ -136,6 +138,15 @@ E2E tests: see `packages/e2e-tests/README.md`.
   **Vercel AI Gateway** and fails with a billing error even when `OPENAI_API_KEY` is valid — the
   provider key is never consulted. Always pass a configured provider instance
   (`createOpenAI({ apiKey })('gpt-4.1-mini')`), which is what `liveModel()` does. See RFC 0001 §4.4.
+- **`packages/core/guides/` is generated — never hand-edit it.** It is built from
+  `apps/docs/src/content/docs/guides/` by `scripts/sync-package-guides.ts` and ships to npm,
+  so consumers read it at `node_modules/@kuralle-agents/core/guides/`. It used to be a
+  hand-written second copy and drifted six weeks behind the site before anyone noticed.
+  Edit the `apps/docs` source and run `bun run docs:sync-guides`; `typecheck:all` and
+  `changeset:publish` both fail on a stale copy.
+- **A package README that is not in `files` does not exist.** `cf-agent` shipped 120 lines of
+  Cloudflare docs to nobody for several releases because its `files` array listed only
+  `CHANGELOG.md` and `dist`. Check `npm pack --dry-run` when adding docs to a package.
 - **An app with no `tsconfig.json` is invisible to the type gate.** `apps/examples/*` and
   `apps/playground/*` are both swept by `typecheck:all` now, but a sweep only sees configs
   that exist — `fs-demo-vercel` imported a package it never declared and nothing noticed
@@ -144,8 +155,7 @@ E2E tests: see `packages/e2e-tests/README.md`.
 ## Key docs
 
 - `README.md` — onboarding · `apps/docs/` — the documentation site (Astro Starlight)
-- `docs/skills/kuralle-usage/` — usage skill for coding agents
-- `docs/skills/kuralle-framework-development/` — framework-dev skill
+- `docs/skills/kuralle-agents/` — the skill for coding agents building on Kuralle
 - `docs/research/` — primary sources behind current RFCs
 - `CONTRIBUTING.md` — monorepo dev/build/publish workflow
 

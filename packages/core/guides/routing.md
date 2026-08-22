@@ -1,0 +1,116 @@
+# Routing & Handoffs
+
+Route between agents and hand off conversations without leaking triage state.
+
+When a conversation can go to multiple specialists, you need a router. Kuralle's `routes` + `routing` setup handles the decision and the handoff without surfacing triage logic to the user.
+
+## Defining a router
+
+Add `routes` and `routing` to `defineAgent`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent } from '@kuralle-agents/core';
+
+const triage = defineAgent({
+  id: 'triage',
+  routes: [
+    { agent: 'billing', when: 'billing question or payment issue' },
+    { agent: 'support', when: 'general product support or anything else' },
+  ],
+  routing: { model: openai('gpt-4o-mini') },
+});
+```
+
+Each `routes` entry needs a `when` description and a target — either an `agent` (a destination agent's `id`) or a `flow` (a flow on this agent). The model uses the `when` descriptions to select the right route.
+
+## Derived routing behavior
+
+Routing is derived from which fields you populate — there is no `routing.mode`:
+
+- **Pure dispatcher** — `routes` / `agents` / `handoffs` only, with no local answering surface (no `instructions`, `tools`, `flows`, etc.). The runtime runs a silent internal classifier and dispatches without speaking.
+- **Answering agent** — has `instructions`, `flows`, `tools`, or other local affordances. Host-control tools (`enter_flow`, `transfer_to_agent`) fold routing into the speaking turn; a **lazy** model-reasoned guard runs only when the turn produces no answer and no control tool, catching the case where the model neither answered nor routed.
+
+Set `routing: { model }` to classify with a separate (e.g. cheaper) control model. For compliance text that must never stream before dispatch resolves, set `routing: { dispatch: 'strict' }`.
+
+Model every fallback as a normal route with a semantic `when` (e.g. "general support") — there is no `routing.default`.
+
+## Handoffs
+
+A handoff moves the conversation to another agent and carries full session context. The receiving agent picks up with the complete message history.
+
+### Silent handoffs (default)
+
+A handoff should read as **one continuous assistant** — the user shouldn't see a "transferring you…" line or the target re-introducing itself. Kuralle makes this the default:
+
+- **No transfer announcement** (deterministic): the transfer is a silent control tool call — the runtime never emits a "please hold / connecting you" message.
+- **Continuation nudge** (best-effort): the target is given a directive not to greet or re-introduce itself, so it continues seamlessly. This mirrors the OpenAI Agents SDK's history-nesting approach.
+
+```typescript
+createRuntime({ agents, defaultAgentId, silentHandoff: false }); // opt into a visible transfer
+```
+
+> **Caution**
+>
+> The continuation nudge is best-effort — a prompt cannot reliably override a target that is **explicitly instructed** to introduce itself (e.g. `instructions: "Start replies with 'Bill here'"`). For truly seamless handoffs, **don't instruct handoff-target agents to greet or self-introduce**; the framework guarantees no *announcement*, not that the model disobeys its own instructions. Use `silentHandoff: false` when you want the target to follow its own greeting.
+
+For tool-based handoffs — where the agent decides explicitly when to transfer — declare which agent IDs the agent can hand off to with `handoffs`, and wire a handoff tool:
+
+```typescript
+const transferToSpanish = defineTool({
+  name: 'transfer_to_spanish',
+  description: 'Transfer to a Spanish-speaking agent when the user requests Spanish.',
+  input: z.object({ reason: z.string() }),
+  execute: async ({ reason }) => ({
+    __handoff: true,
+    targetAgentId: 'spanish-agent',
+    reason,
+  }),
+});
+
+const englishAgent = defineAgent({
+  id: 'english',
+  instructions: 'Friendly assistant. If the user speaks Spanish, use transfer_to_spanish.',
+  model: openai('gpt-4o-mini'),
+  handoffs: ['spanish-agent'],
+  agents: [spanishAgent],
+  tools: { transfer_to_spanish: transferToSpanish },
+});
+```
+
+The runtime intercepts `{ __handoff: true, targetAgentId }` in the tool result and routes the session to the target agent. Kuralle also ships a `createHandoffTool` helper that builds this transfer tool for you.
+
+## Example: triage router
+
+`triage.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent, createRuntime } from '@kuralle-agents/core';
+
+const billingAgent = defineAgent({
+  id: 'billing',
+  instructions: 'You handle billing questions and payment issues.',
+  model: openai('gpt-4o-mini'),
+});
+
+const supportAgent = defineAgent({
+  id: 'support',
+  instructions: 'You handle product support requests.',
+  model: openai('gpt-4o-mini'),
+});
+
+const triage = defineAgent({
+  id: 'triage',
+  routes: [
+    { agent: 'billing', when: 'billing question or payment issue' },
+    { agent: 'support', when: 'product support or general help' },
+  ],
+  routing: { model: openai('gpt-4o-mini') },
+});
+
+const runtime = createRuntime({
+  agents: [triage, billingAgent, supportAgent],
+  defaultAgentId: 'triage',
+});
+```

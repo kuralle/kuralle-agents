@@ -1,0 +1,113 @@
+# Sessions & State
+
+Persist conversation history and per-agent state across restarts.
+
+Kuralle uses a `SessionStore` to persist conversation history and per-agent state. Every `runtime.run()` call retrieves the session, appends the new turn, and saves it back.
+
+## Default: MemoryStore
+
+`createRuntime` defaults to an in-process `MemoryStore`. It's zero-config and suitable for development and short-lived processes:
+
+```typescript
+import { createRuntime } from '@kuralle-agents/core';
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  // sessionStore defaults to new MemoryStore()
+});
+```
+
+Sessions live in memory and are lost on process restart.
+
+## Redis
+
+For persistent sessions, pass a `RedisSessionStore` from `@kuralle-agents/redis-store`:
+
+```bash
+npm install @kuralle-agents/redis-store redis
+```
+
+`redis-store.ts`:
+
+```typescript
+import { createRuntime, defineAgent } from '@kuralle-agents/core';
+import { RedisSessionStore } from '@kuralle-agents/redis-store';
+import { createClient } from 'redis';
+import { openai } from '@ai-sdk/openai';
+
+const client = createClient({ url: process.env.REDIS_URL });
+await client.connect();
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  sessionStore: new RedisSessionStore({ client }),
+});
+```
+
+## Postgres
+
+For Postgres-backed sessions, use `@kuralle-agents/postgres-store`:
+
+```bash
+npm install @kuralle-agents/postgres-store pg
+```
+
+```typescript
+import { Pool } from 'pg';
+import { createRuntime } from '@kuralle-agents/core';
+import { PostgresSessionStore } from '@kuralle-agents/postgres-store';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  sessionStore: new PostgresSessionStore({ client: pool }),
+});
+```
+
+By default, `PostgresSessionStore` creates the sessions table on first use (`autoMigrate: true`).
+
+## Session IDs
+
+The runtime auto-assigns a session ID when none is provided. Pass `sessionId` back on subsequent turns to continue the same conversation:
+
+```typescript
+let sessionId: string | undefined;
+
+async function chat(input: string) {
+  const handle = runtime.run({ input, sessionId });
+  for await (const part of handle.events) {
+    if (part.type === 'done') sessionId = part.payload.sessionId;
+  }
+  await handle;
+}
+```
+
+## Flow state
+
+Flow state — active flow, current node, collected fields — lives on the durable run. With the default `SessionRunStore`, runs (state plus effect journal) persist inside the session under a `durableRuns` key, so when you swap session stores, flow state moves with the rest of the session automatically. A dedicated `runStore` on the harness config (e.g. `PostgresRunStore`) journals runs outside the session instead — see [Durable Execution](./durable-execution.md).
+
+## Custom stores
+
+The `SessionStore` interface is exported from `@kuralle-agents/core`. Implement it to back sessions with any storage system:
+
+```typescript
+import type { SessionStore } from '@kuralle-agents/core';
+
+class MyStore implements SessionStore {
+  // get, save, delete, list — the full interface
+}
+```
+
+> **Note**
+>
+> For multi-process deployments, a durable store (Redis or Postgres) is required so sessions survive restarts and are visible across all instances.

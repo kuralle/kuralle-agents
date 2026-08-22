@@ -1,0 +1,182 @@
+# Flow Execution Model
+
+How the flow engine dispatches nodes, normalizes transitions, reshapes context, and pauses for the next turn.
+
+The [Flows guide](./flows.md) covers *authoring* a flow. This page covers what the engine does with it at runtime: how a node is dispatched, how its return value becomes the next move, how history is reshaped between nodes, and how a flow pauses and resumes.
+
+A flow is a [core primitive](./flows.md) — a directed graph of typed nodes. Each node returns a **transition**, and that transition is the only thing that drives control flow. Nothing the model says, and no tool result, moves the graph — only transitions do.
+
+## The engine loop
+
+When a flow is active, the runtime runs one loop over the graph:
+
+1. **Resolve the entry node** — the active node recorded on the run, or the flow's `start` on first entry. This is the resume point: a flow that suspended mid-graph re-enters at the node it left, not at the beginning.
+2. **Dispatch the node** — run it according to its kind (below) and get back a transition.
+3. **Act on the transition:**
+   - `end` / `handoff` / `escalate` → leave the flow.
+   - `stay` → pause for the next user turn, or consume buffered input and continue.
+   - a node (`goto`) → **verify** the current node, check the **oscillation guard**, **reduce** the transition (reshape context, merge data, emit events), persist, and advance.
+4. Repeat until a terminal transition or a pause.
+
+The loop returns one of three results to the host: the flow **ended**, it wants a **handoff**, or it is **awaiting user** input.
+
+## How each node kind is dispatched
+
+| Kind | What runs | How the next move is chosen |
+|---|---|---|
+| `action` | Your `run(state, ctx)` — no model call | Its return value, normalized |
+| `decide` | A structured model call against the node's `schema` | `decide(data, state)` branches on the result |
+| `reply` | A model turn — or the node's authored `response(state)` rendered by the engine, no model call | `next(turn, state)`, or `stay` if no `next` |
+| `collect` | The extraction loop (below) | `onComplete(data, state)` once the schema is satisfied |
+
+A `reply` node with a `response` is **engine-rendered**: the text is emitted verbatim and the turn is tagged `rendered: 'engine'` in the trace (a spoken model turn is `rendered: 'model'`). Declarative flows run through the same engine; in the JSON dialect (see [Dynamic Flows](./dynamic-flows.md)) consecutive `generate: true` reply chains are additionally **batched into one model call** per segment.
+
+`action` is the only kind handed the durable `ctx` directly — `ctx.tool`, `ctx.approve`, `ctx.signal`, `ctx.now`, `ctx.uuid`, `ctx.emit`. The [durable-execution rules](./durable-execution.md) (use `ctx.now()` not `Date.now()`, keep effect order stable) apply specifically to `action` logic.
+
+`decide` requires a channel driver that supports structured output; it produces *data*, and your `decide` function turns that data into a transition.
+
+A `reply` node also handles **interruption**: if the turn is interrupted (barge-in), the engine waits for the user, appends their input, and re-dispatches the same node.
+
+> **Caution**
+>
+> There is no automatic "answer an off-topic question, then resume the flow" behavior in the engine today. A `reply` node will answer whatever the model produces for its instructions, and the flow holds its position via `stay` — but off-flow Q&A is not a configured feature. Don't rely on it as one.
+
+## Transitions
+
+Every node's return value is normalized into one of five internal moves:
+
+| You return | Normalized move |
+|---|---|
+| a node object registered in `flow.nodes` | `goto` that node |
+| `{ goto: 'nodeId', data? }` | `goto`, merging `data` into flow state |
+| `{ end: reason }` | finish the flow |
+| `{ handoff, reason }` | hand off to another agent |
+| `{ escalate: reason }` | fire an `__escalate` signal, then hand off to `human` |
+| `'stay'` | stay on this node for another user turn |
+
+Anything else throws — a malformed transition fails loudly rather than silently doing nothing. Inline node definitions and thunks (`() => node`) are not transitions: `defineFlow` rejects them at definition time (`inline-transition-target`), because a target with no registered identity cannot survive a parked run's resume.
+
+## Reducing a transition: context and data
+
+When the engine moves from one node to the next, it emits `node-exit` → `flow-transition` → `node-enter`, merges any `data` into the flow state, and applies the **context strategy** for the node being entered.
+
+Context strategy controls the message history the next model call sees. Resolution order is **node `context` (reply nodes only) → flow `context` → `append`**:
+
+- `append` *(default)* — keep the full history.
+- `reset` — keep system messages and the last user message only.
+- `reset_with_summary` — summarize the prior turns into a single system message (falls back to `reset` if the summary is empty).
+
+This is how a long flow keeps the model focused per stage instead of dragging the entire transcript through every node.
+
+## Two safety gates
+
+**Verify** runs on a node *before* a `goto` out of it commits. A node's `outputSchema` (or a `verify.check` predicate) validates the merged `{ ...state, ...data }`; the `check` form can also inspect the durable step log. On failure the flow does **not** advance — it holds position and returns *awaiting user*, so the next turn can supply what's missing.
+
+**Oscillation guard** counts how many times each `from → to` edge is traversed. Exceeding the flow's `maxOscillations` (default `2`) throws — the backstop against two nodes ping-ponging forever.
+
+## Post-run verification gates
+
+A flow can declare `gates` — checks the engine evaluates over the run record when the flow reaches a terminal transition. Two kinds, two severities:
+
+- `kind: 'predicate'` — a declarative predicate over `input`, `state`, `results`, and `requestContext`.
+- `kind: 'judge'` — a structured model verdict over an explicit allow-list of run-record paths (`inputs`), with an optional `rubric`. Requires `flowGateJudge` (a provider or a `LanguageModel`) on the harness config; an absent judge is an execution error.
+
+Each gate is `severity: 'blocking'` or `'advisory'`. A failed blocking gate — or **any gate that failed to execute**, regardless of declared severity — sets the run's `verification` record to `outcome: 'failed-verification'` and the turn ends with that reason; advisory failures are recorded in the verdicts but do not block. The verdicts travel on the `flow-end` event, so a consumer sees exactly which gate failed and why.
+
+## The `collect` extraction loop
+
+`collect` is the most involved node. Each pass:
+
+1. If the schema's `required` fields are all populated, project that data and call `onComplete`.
+2. Otherwise, if `maxTurns` (default `10`) is exceeded, complete **only if the node is genuinely satisfied**; if required fields are still missing, `escalate` naming them. Running out of turns is not the same as finishing — calling `onComplete` with a half-filled record lets a downstream `action` act on it.
+3. Run the node's **tier-0 `resolvers`** (`enum_check`, `range`, `jsonpath`) against the fresh user text. A field resolved deterministically is recorded with `slotSources: 'deterministic'` and excluded from the model's schema this turn.
+4. Build a per-turn **extraction tool** named `submit_<nodeId>_data` for the fields that remain. Its schema is the node schema made partial and nullable (so the model can submit just-learned fields), and its description embeds the still-missing fields plus the user's latest verbatim message to anchor extraction.
+5. Run the **non-speaking** extraction turn and merge submitted fields into flow state — dropping any value for a `verbatimFields` slot that has no provenance in the user's actual message (the never-guess guard). If still incomplete and there's no buffered input, `stay` (wait for the user).
+
+The extraction turn produces no user-facing text. When the node pauses on missing fields, the engine emits the node's deterministic `ask(missing, state)` — or a safe default built from the field names — so a collect can never narrate a downstream outcome. `instructions` on a collect node only steers the non-speaking extraction.
+
+Collected fields are stored under an internal `__collect_<nodeId>` key, and the turn counter under `__collectTurns_<nodeId>` — namespaced so they don't collide with your domain state. `onComplete` receives only the projected required fields.
+
+## Pause and resume
+
+A flow persists its position on every transition, so a crash mid-flow resumes at the last committed node. It pauses in two ways:
+
+- **`stay` with no buffered input** — the engine saves the run and returns *awaiting user*. The next `runtime.run({ input })` re-enters at the same node. (While a flow is active, user input is buffered for the node to consume rather than appended as a free-conversation message.)
+- **`ctx.approve()` / `ctx.signal()` inside an `action`** — a durable suspend; see [Durable Execution](./durable-execution.md).
+
+## Events
+
+A flow narrates itself through the stream: `flow-enter`, `node-enter`, `node-exit`, `flow-transition`, `flow-end`, plus `handoff` and `error`. This is what an inspector UI or SSE consumer renders as flow progress.
+
+## Example
+
+Collect an address, book the shipment in an `action` (gated by `verify`), then confirm in a `reply` that resets context to a summary first.
+
+`flow-execution.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent, defineFlow, collect, action, reply, defineTool } from '@kuralle-agents/core';
+import { z } from 'zod';
+
+const bookShipment = defineTool({
+  name: 'bookShipment',
+  description: 'Book a shipment to the given address',
+  input: z.object({ address: z.string() }),
+  execute: async ({ address }) => ({ id: `trk_${address.length}` }),
+});
+
+const done = reply({
+  id: 'done',
+  // `reset_with_summary` collapses the gathering turns into a single summary
+  // line before this node runs, keeping the model focused on the confirmation.
+  context: 'reset_with_summary',
+  instructions: 'Confirm the shipment was booked with its tracking id, then end.',
+  next: () => ({ end: 'booked' }),
+});
+
+const book = action({
+  id: 'book',
+  // `outputSchema` gates the transition OUT of this node. It validates the
+  // merged { ...state, ...data }; if it fails, runFlow holds position
+  // (awaitingUser) instead of advancing to `done`.
+  outputSchema: z.object({ trackingId: z.string().min(1) }),
+  run: async (state, ctx) => {
+    const receipt = (await ctx.tool('bookShipment', { address: state.address })) as { id: string };
+    // `data` is merged into flow state on the transition, so `done` and the
+    // verify check above both see `trackingId`.
+    return { goto: done.id, data: { trackingId: receipt.id } };
+  },
+});
+
+const getAddress = collect({
+  id: 'get_address',
+  schema: z.object({ address: z.string() }),
+  required: ['address'],
+  maxTurns: 5,
+  ask: (missing) => `Which ${missing.join(' and ')} should the shipment go to?`,
+  onComplete: () => book,
+});
+
+export const shippingAgent = defineAgent({
+  id: 'shipping',
+  instructions: 'You book shipments for customers.',
+  model: openai('gpt-4o-mini'),
+  tools: { bookShipment },
+  flows: [
+    defineFlow({
+      name: 'ship',
+      description: 'Collect an address, book the shipment, then confirm',
+      start: getAddress,
+      nodes: [getAddress, book, done],
+      maxOscillations: 2,
+    }),
+  ],
+});
+```
+
+## Related
+
+- [Flows](./flows.md) — authoring nodes and transitions.
+- [Durable Execution](./durable-execution.md) — the effect log behind `action` nodes and pauses.
+- [Tools](./tools.md) — wiring the tools an `action` or `reply` node calls.

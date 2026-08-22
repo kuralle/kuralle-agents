@@ -1,0 +1,200 @@
+# Agents
+
+Define agents with instructions, tools, flows, and routing.
+
+`defineAgent` is Kuralle's single agent primitive. Behavior is derived from which fields you populate — there's no separate `FlowAgent` or `TriageAgent` type.
+
+## The tagless primitive
+
+A minimal agent needs only `id`, `instructions`, and `model`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+```
+
+From there, the fields you add determine the behavior:
+
+| Add these fields | The agent becomes |
+|---|---|
+| `tools` | A durable tool-calling agent |
+| `flows` | A structured flow agent |
+| `routes` + `routing` | A triage router |
+| `agents` + `handoffs` | A composition wrapper |
+| `workspace` + `skills` | A file-native, progressively instructed agent |
+
+These aren't mutually exclusive. An agent can have tools, a flow, and route to specialists at the same time.
+
+## Fields
+
+```typescript
+defineAgent({
+  id: string,
+  name?: string,
+  description?: string,
+  instructions?: Instructions,              // string | AgentPrompt | (ctx) => Instructions
+  model?: LanguageModel,
+  controlModel?: LanguageModel,             // deterministic routing/extraction model
+  tools?: Record<string, AnyTool>,           // durable model-callable effects
+  globalTools?: Record<string, AnyTool>,     // safe tools visible in every speaking node
+  flows?: Flow[],                           // structured flow graphs
+  routes?: Route[],                         // route entries for triage
+  routing?: RoutingPolicy,                  // routing config — see Routing guide
+  agents?: AgentConfig[],                   // composed sub-agents
+  handoffs?: string[],                      // agent IDs this agent can hand off to
+  knowledge?: AgentKnowledge,               // grounding sources
+  memory?: AgentMemory,                     // long-term memory
+  guardrails?: Guardrails,                  // input / output guardrails
+  limits?: Limits,                          // step / turn limits
+  validate?: ValidationCapability[],        // post-turn validation
+  refine?: RefinementCapability[],          // pre-turn refinement
+  policy?: Policy,                          // allow / ask / deny tool calls
+  workspace?: AgentWorkspaceConfig,         // portable or per-session filesystem
+  skills?: SkillSource,                     // progressively disclosed procedures
+})
+```
+
+### `instructions`
+
+A string, an `AgentPrompt`, or a function of session state, describing the agent's role and rules. Keep it focused on persona and constraints — if you're writing more than ~20 lines of procedure here, move it to a flow.
+
+### `tools`
+
+`tools` is a single record of durable **effect tools** (`Record<string, AnyTool>` from `defineTool`). You author each tool once and pass the record — the runtime makes them model-visible (deriving the AI SDK `ToolSet` for you) *and* routes every model-issued call through the durable effect log for exactly-once replay:
+
+```typescript
+import { defineTool } from '@kuralle-agents/core';
+
+const tools = { echo, lookup };
+
+defineAgent({
+  id: 'support',
+  instructions: '...',
+  model: openai('gpt-4o-mini'),
+  tools,   // durable, model-callable effect tools
+});
+```
+
+Use `globalTools` only for safe, non-consequential capabilities that should remain visible in every speaking flow node. Mutating or narrowly scoped tools belong in `tools` or on the specific flow node that authorizes them. Raw AI SDK tools must be converted with `wrapAiSdkTool()` before they enter either record.
+
+> **Note**
+>
+> Tool effects are logged in an append-only effect log. On retry, the runtime replays log entries rather than re-executing — a payment tool won't charge twice.
+
+### `controlModel`
+
+`controlModel` handles routing, decisions, and extraction at deterministic temperature while `model` remains the speaking model. It defaults to `model`; set it when you want the control path pinned independently from the user-facing model.
+
+### `workspace` and `skills`
+
+`workspace` attaches a Kuralle filesystem directly or resolves one per session. The model receives read-only traversal by default; executor writes and model writes are separate capabilities. `skills` publishes a validated discovery snapshot and adds `load_skill` / `read_skill_resource` tools for progressive disclosure.
+
+See [Workspaces](./workspace.md), [Skills](./skills.md), and the complete [Release Governance Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/release-governance-agent) for an immutable repository mount, writable artifact mount, filesystem skill, and custom policy working together.
+
+### `flows`
+
+Attach one or more `Flow` objects (from `defineFlow`) to make the agent procedure-driven. The runtime enters the flow on the first turn and records the active node on the durable run.
+
+See the [Flows guide](./flows.md) for the full node model, and [Dynamic Flows](./dynamic-flows.md) to author the same graphs as JSON and hot-register them on a live runtime.
+
+### `routes` and `routing`
+
+Add `routes` to make the agent route between specialists. Pure dispatchers (routes only, no answering surface) classify silently; answering agents use host-control tools plus a lazy guard (it classifies only on a turn that produces no answer and no control tool) so dispatch never leaks as prose.
+
+See [Routing & Handoffs](./routing.md).
+
+### `agents` and `handoffs`
+
+`agents` registers sub-agents the runtime can activate during a handoff. `handoffs` declares which agent IDs this agent is allowed to transfer to. The combination enables tool-based handoffs where the agent explicitly decides when to transfer.
+
+Handoffs are silent by default — no transfer announcement, and the target agent gets a best-effort nudge not to re-introduce itself. See [Silent handoffs](./routing.md#silent-handoffs-default) in the Routing guide, including the honest limit on that guarantee.
+
+### `knowledge` — who invokes retrieval
+
+When an agent declares `knowledge`, the runtime wires retrieval from `HarnessConfig.knowledge` (the shared `KnowledgeProvider`). The `knowledge.autoRetrieve` boolean declares **who invokes** that retrieval — the runtime, or the model:
+
+| `knowledge.autoRetrieve` | Behavior | When to use |
+|---|---|---|
+| `true` (default) | **Guaranteed** — pre-injects retrieved snippets into the system prompt before every answering turn (`## Retrieved Knowledge`). Always grounded; routing turns on fused host agents pay the retrieval cost. | Regulated, factual, or policy-heavy agents where every answer must be grounded. |
+| `false` | **On-demand** — skips pre-injection and wires a `knowledge_search` tool the model calls when it needs facts. Routing/dispatch turns pay **zero** retrieval tax; grounding is model-discretion. | Agents that route often and need fast dispatch, or where retrieval is only needed for some answers. |
+
+The pre-injection provider and the `knowledge_search` tool are mutually exclusive — the boolean picks the invoker, there is no separate mode to configure. To disable retrieval entirely, omit `knowledge`.
+
+```typescript
+// Guaranteed (default) — pre-inject every answering turn
+defineAgent({
+  id: 'policy-bot',
+  knowledge: { autoRetrieve: true }, // or omit — true is the default
+  // ...
+});
+
+// On-demand — retrieve only when the model answers; no routing-turn tax
+defineAgent({
+  id: 'triage-support',
+  knowledge: { autoRetrieve: false },
+  // ...
+});
+```
+
+> **Note**
+>
+> Per-node `grounding.knowledge.autoRetrieve: false` (on flow nodes) is a separate axis: it opts a specific node out of **guaranteed** pre-injection. It is a no-op when the agent is on-demand (nothing is pre-injected). See the [Flows guide](./flows.md).
+
+## Example
+
+`define-agent.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent, defineTool, buildToolSet, defineFlow, reply } from '@kuralle-agents/core';
+import { z } from 'zod';
+
+// Minimal: chat agent with no flows or routing
+const chatAgent = defineAgent({
+  id: 'chat',
+  instructions: 'You are a helpful assistant.',
+  model: openai('gpt-4o-mini'),
+});
+
+// Tool agent: model-visible tools + durable executors
+const lookup = defineTool({
+  name: 'lookup',
+  description: 'Look up a product by ID',
+  input: z.object({ id: z.string() }),
+  execute: async ({ id }) => ({ name: `Product ${id}`, price: 49.99 }),
+});
+
+const toolAgent = defineAgent({
+  id: 'catalog',
+  instructions: 'Answer product questions using the lookup tool.',
+  model: openai('gpt-4o-mini'),
+  tools: { lookup },
+});
+
+// Flow agent: behavior driven by the flow graph, not the instructions alone
+const done = reply({
+  id: 'done',
+  instructions: 'Confirm and end the conversation.',
+  next: () => ({ end: 'complete' }),
+});
+
+const flowAgent = defineAgent({
+  id: 'booking',
+  instructions: 'You guide users through a booking.',
+  model: openai('gpt-4o-mini'),
+  flows: [
+    defineFlow({
+      name: 'booking',
+      description: 'Guide the user through the booking process',
+      start: done,
+      nodes: [done],
+    }),
+  ],
+});
+```

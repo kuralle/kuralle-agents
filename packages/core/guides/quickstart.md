@@ -1,0 +1,200 @@
+# Quickstart
+
+Build your first Kuralle agent in minutes.
+
+## Project setup
+
+1. Install Kuralle and its peers. The `ai` package is the Vercel AI SDK; bring your own provider.
+
+   ```bash
+   npm install @kuralle-agents/core @ai-sdk/openai ai zod
+   ```
+
+2. Set your API key.
+
+   ```bash
+   export OPENAI_API_KEY=sk-...
+   ```
+
+3. Define a tool. `defineTool` takes a Zod input schema and an async `execute` function. The return value is passed back to the model as a tool result.
+
+   ```typescript
+   import { z } from 'zod';
+   import { defineTool } from '@kuralle-agents/core';
+
+   const echo = defineTool({
+     name: 'echo',
+     description: 'Echo back the provided text',
+     input: z.object({ text: z.string() }),
+     execute: async ({ text }) => ({ echoed: text }),
+   });
+   ```
+
+4. Define an agent and wire the tool. Pass your effect tools as a single `tools` record — the runtime makes them model-visible *and* runs each call through the durable effect log.
+
+   ```typescript
+   import { openai } from '@ai-sdk/openai';
+   import { defineAgent } from '@kuralle-agents/core';
+
+   const agent = defineAgent({
+     id: 'support',
+     instructions: 'Helpful support agent. Use the echo tool when asked.',
+     model: openai('gpt-4o-mini'),
+     tools: { echo },
+   });
+   ```
+
+5. Create a runtime and run a turn. `runtime.run()` returns a `TurnHandle`. Stream events by iterating `handle.events` — it's a property, not a method call.
+
+   ```typescript
+   import { createRuntime } from '@kuralle-agents/core';
+
+   const runtime = createRuntime({ agents: [agent], defaultAgentId: 'support' });
+
+   const handle = runtime.run({ input: 'Use echo to say "hello"' });
+   for await (const part of handle.events) {
+     if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+     if (part.type === 'done') console.log('\nSession:', part.payload.sessionId);
+   }
+   await handle;
+   ```
+
+> **Note**
+>
+> `handle.events` is a property on `TurnHandle`, not a method. Writing `handle.events()` with parentheses will throw.
+
+## Full example
+
+Put it all together in `agent.ts`:
+
+`agent.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
+import { defineAgent, defineTool, createRuntime } from '@kuralle-agents/core';
+
+const echo = defineTool({
+  name: 'echo',
+  description: 'Echo back the provided text',
+  input: z.object({ text: z.string() }),
+  execute: async ({ text }) => ({ echoed: text }),
+});
+
+const agent = defineAgent({
+  id: 'support',
+  name: 'Support Agent',
+  instructions: 'Helpful support agent. Use the echo tool when asked.',
+  model: openai('gpt-4o-mini'),
+  tools: { echo },
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+});
+
+let sessionId: string | undefined;
+
+async function chat(input: string) {
+  const handle = runtime.run({ input, sessionId });
+  for await (const part of handle.events) {   // events is a property, not a method
+    if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+    if (part.type === 'done') sessionId = part.payload.sessionId;
+  }
+  await handle;
+}
+
+await chat('Use echo to say "hello"');
+await chat('What did I just ask you to do?');
+```
+
+Run it:
+
+```bash
+OPENAI_API_KEY=sk-... npx tsx agent.ts
+```
+
+## Streaming events
+
+The `handle.events` async iterable emits `StreamPart` events. The most common:
+
+| Event type | When | Key fields |
+|---|---|---|
+| `text-start` | Assistant message begins | `part.payload.id: string` |
+| `text-delta` | Each text chunk from the model | `part.payload.id: string`, `part.payload.delta: string` |
+| `text-end` | Assistant message complete | `part.payload.id: string` |
+| `text-cancel` | Partial message retracted (gate block) | `part.payload.id: string`, `part.payload.reason: string` |
+| `tool-call` | Before a tool executes | `part.payload.toolName`, `part.payload.args` |
+| `tool-result` | After a tool executes | `part.payload.toolName`, `part.payload.result` |
+| `done` | Turn complete | `part.payload.sessionId` |
+
+Save `part.payload.sessionId` and pass it back on subsequent turns to continue in the same session.
+
+## Session continuity
+
+```typescript
+let sessionId: string | undefined;
+
+async function chat(input: string) {
+  const handle = runtime.run({ input, sessionId });
+  for await (const part of handle.events) {
+    if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+    if (part.type === 'done') sessionId = part.payload.sessionId;
+  }
+  await handle;
+}
+```
+
+The runtime auto-assigns a session ID on the first turn and persists conversation history. By default it uses an in-process `MemoryStore`; swap for Redis or Postgres in production.
+
+## Web UI with `useChat` (no bridge)
+
+As of 0.5.0, `@kuralle-agents/hono-server` returns a native AI SDK `UIMessageStream` from `POST /api/chat/sse` by default. Point `useChat` at that endpoint — no hand-rolled `StreamPart` → `UIMessageChunk` bridge.
+
+```tsx
+'use client';
+
+import { useChat } from '@ai-sdk/react';
+import type { KuralleUIMessage } from '@kuralle-agents/core';
+
+export function Chat() {
+  const { messages, sendMessage } = useChat<KuralleUIMessage>({
+    api: '/api/chat/sse',
+    onData: (part) => {
+      // transient flow/node telemetry — delivered live, not stored in message.parts
+      if (part.type === 'data-kuralle-flow') console.log(part.data);
+    },
+  });
+
+  return (
+    <div>
+      {messages.map((m) => (
+        <div key={m.id}>
+          {m.parts.map((part, i) =>
+            part.type === 'text' ? <span key={i}>{part.text}</span> : null
+          )}
+        </div>
+      ))}
+      <button onClick={() => sendMessage({ text: 'Hello' })}>Send</button>
+    </div>
+  );
+}
+```
+
+Kuralle orchestration events arrive as typed `data-kuralle-*` parts:
+
+| Part type | Persisted? | Use for |
+|---|---|---|
+| `data-kuralle-node`, `data-kuralle-flow`, `data-kuralle-control` | transient (`onData` only) | flow/node telemetry |
+| `data-kuralle-interactive`, `data-kuralle-safety`, `data-kuralle-handoff`, `data-kuralle-outcome` | persistent (`message.parts`) | UI controls, safety blocks, handoffs |
+
+For non-UI consumers that need raw `StreamPart` JSON-SSE (curl, Studio), append `?format=raw` to `/api/chat/sse`. See [Deployment](./deployment.md).
+
+## Next steps
+
+- [Agents](./agents.md) — how `defineAgent` derives behavior from the fields you set.
+- [Flows](./flows.md) — multi-step procedures as typed node graphs.
+- [Tools](./tools.md) — tool wiring, durable execution, and the effect log.
+- [Sessions & State](./sessions.md) — durable session backends for production.
+- [Deployment](./deployment.md) — serve agents with `createKuralleChatRouter`.

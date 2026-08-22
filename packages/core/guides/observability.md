@@ -1,0 +1,365 @@
+# Observability
+
+Structured traces for every run — evals with runOnce, durable trace storage, OTLP/Langfuse export, and an embeddable trace viewer.
+
+Every run in Kuralle can be captured as a structured, JSON-serializable **trace** — the turn, its flow/node transitions, tool calls, and handoffs, as a tree of spans. This is built in: no external agent needed to see what a run actually did.
+
+Two independent things ship together:
+
+- **`runtime.runOnce(opts)`** — run an agent once and get the trace back directly, instead of a live stream. Built for evals and grounding checks.
+- **Tracing** — every `run()` call (not just `runOnce`) is recorded to a `TraceStore` and, optionally, forwarded to external sinks (OTLP, Langfuse). Read it back with `runtime.getTrace()` / `runtime.listTraces()`, from the terminal with `kuralle trace`, or embed `@kuralle-agents/trace-ui` in your own app.
+
+Tracing is **additive and read-only** — it never changes what a run does, and a broken sink never fails a turn.
+
+## `runOnce` for evals
+
+`runOnce` executes exactly one normal runtime turn, drains its event stream, and returns an `AgentTrace` instead of a `TurnHandle`:
+
+```typescript
+interface AgentTrace {
+  traceId: string;
+  sessionId: string;
+  spans: AgentSpan[];
+  answer: string;
+  usedTool: boolean;
+  toolCalls: Array<{ name: string; args: unknown }>;
+  toolResults: Array<{ name: string; result: unknown }>;
+  startedAt: number;
+  endedAt?: number;
+}
+```
+
+`answer` is the assembled reply, `toolCalls`/`toolResults`/`usedTool` are a flat roll-up for quick assertions, and `spans` is the full nested tree (`turn` → `flow` → `node` → `tool`/`handoff`) for anything that needs more detail. The whole thing is plain JSON — safe to log, diff, or hand to an LLM judge.
+
+### Grounding eval in ~20 lines
+
+`grounding-eval.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
+import { createRuntime, defineAgent, defineTool } from '@kuralle-agents/core';
+
+const lastInvoice = defineTool({
+  name: 'last_invoice',
+  description: "Return the caller's last invoice total",
+  input: z.object({}),
+  execute: async () => ({ invoiceUsd: 18.5, date: '2026-07-01' }),
+});
+
+const agent = defineAgent({
+  id: 'billing',
+  instructions: 'Answer billing questions using last_invoice. Keep replies short.',
+  model: openai('gpt-4o-mini'),
+  tools: { last_invoice: lastInvoice },
+});
+
+const runtime = createRuntime({ agents: [agent], defaultAgentId: 'billing' });
+
+// One complete, JSON-serializable turn instead of a live stream — built for evaluators.
+const trace = await runtime.runOnce({
+  sessionId: 'grounding-eval-1',
+  input: 'What was my last invoice total?',
+});
+
+// Grounding check: the answer must be backed by an actual tool result, not invented.
+const grounded =
+  trace.usedTool &&
+  trace.toolResults.some(({ result }) =>
+    trace.answer.includes(String((result as { invoiceUsd: number }).invoiceUsd)),
+  );
+
+console.log({ answer: trace.answer, usedTool: trace.usedTool, grounded, traceId: trace.traceId });
+```
+
+> **Note**
+>
+> `runOnce` is a pure consumer of the same `run().events` stream every turn already produces — it does not change how the turn executes, and it composes with tracing below (a `runOnce` call is traced like any other run if tracing is enabled).
+
+## Enabling tracing
+
+Tracing is **on by default**, backed by an in-process `MemoryTraceStore` — no config needed to start reading traces in development. Configure `tracing` on `createRuntime` to point at a durable store, sample, redact, or add export sinks:
+
+`tracing-config.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { createRuntime, defineAgent, MemoryTraceStore } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+
+// A native store you configure explicitly (here, for retention control) — the
+// same MemoryTraceStore backs tracing by default even if `tracing` is omitted.
+const traceStore = new MemoryTraceStore({ retentionMs: 24 * 60 * 60 * 1000 });
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: {
+    store: traceStore, // canonical store — read back via getTrace/listTraces
+    sampling: 0.25, // trace 1 in 4 runs; omit to trace every run
+    redact: (span) => ({
+      // strip tool payloads before they are persisted or exported
+      ...span,
+      attributes: { ...span.attributes, input: undefined, output: undefined },
+    }),
+  },
+});
+
+const handle = runtime.run({ input: 'Where is my order?', sessionId: 'session-42' });
+for await (const part of handle.events) {
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+}
+await handle;
+
+const traces = await runtime.listTraces('session-42');
+const trace = traces[0] ? await runtime.getTrace(traces[0].traceId) : null;
+console.log(trace?.spans.map((span) => span.name));
+```
+
+`HarnessConfig.tracing` fields:
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `enabled` | `boolean` | `true` | Set `false` to disable capture entirely |
+| `store` | `TraceStore` | `MemoryTraceStore` | The canonical store — what `getTrace`/`listTraces` read from |
+| `sinks` | `TraceSink[]` | `[]` | Additional destinations spans are also written to (export, custom logging) |
+| `sampling` | `number \| (ctx) => boolean` | trace every run | Fraction (`0`–`1`) or a per-run predicate over `{ sessionId, input }` |
+| `redact` | `(span) => AgentSpan \| null` | off | Rewrite or drop a span before it is persisted or exported |
+
+A few rules worth internalizing:
+
+- **The configured store is canonical; sinks are additive.** If you pass a `TraceStore` as one of `sinks` instead of `store`, Kuralle detects it (`isTraceStore`) and treats it as the store automatically.
+- **Sink failures never affect the run.** A write that throws — a down collector, a bad Redis connection — is swallowed. Tracing is strictly observational.
+- **Sampling is decided once per run**, not per span, so you never get a half-sampled trace.
+- **Redaction is off by default.** It runs before a span is persisted or exported, so use it to strip sensitive tool `input`/`output` before it leaves the process — nothing is redacted unless you supply the hook.
+
+## Reading traces
+
+```typescript
+const traces = await runtime.listTraces(sessionId); // newest first
+const trace = await runtime.getTrace(traces[0].traceId);
+const store = runtime.getTraceStore(); // the configured TraceStore, if any
+```
+
+Both read calls settle any trace writes already in flight for that run before returning, so a `getTrace` called right after `await handle` sees the completed trace.
+
+### From the terminal
+
+```bash
+kuralle trace session-42            # waterfall for every trace in the session
+kuralle trace session-42 --last     # just the most recent trace
+kuralle trace session-42 --json     # the native AgentTrace[] JSON — for agents and CI
+kuralle trace session-42 --web      # loopback dev server with the embedded viewer
+```
+
+See the [CLI guide](./cli.md) for the full command reference.
+
+## Choosing a store backend
+
+The trace store is configured **independently of the session store** — traces live in their own namespace/table and can use a different backend than `sessionStore`.
+
+| Backend | Package | Notes |
+|---|---|---|
+| `MemoryTraceStore` | `@kuralle-agents/core` | Default. In-process, `retentionMs` for eviction. Not durable across restarts. |
+| `RedisTraceStore` | `@kuralle-agents/redis-store` | `traceTtlSeconds` for expiry. Separate `trace`/`traces` key namespace from sessions. |
+| `PostgresTraceStore` | `@kuralle-agents/postgres-store` | Separate `kuralle_trace_spans` table (override with `tableName`), `retentionMs`, `autoMigrate`. |
+| `SqlTraceStore` | `@kuralle-agents/cf-agent` | DO-SQLite — traces persist inside the same Durable Object as the session, no external service. |
+
+`redis-trace-store.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { createRuntime, defineAgent } from '@kuralle-agents/core';
+import { RedisTraceStore } from '@kuralle-agents/redis-store';
+import { createClient } from 'redis';
+
+const client = createClient({ url: process.env.REDIS_URL });
+await client.connect();
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: {
+    store: new RedisTraceStore({ client, traceTtlSeconds: 7 * 24 * 60 * 60 }),
+  },
+});
+```
+
+`postgres-trace-store.ts`:
+
+```typescript
+import { Pool } from 'pg';
+import { openai } from '@ai-sdk/openai';
+import { createRuntime, defineAgent } from '@kuralle-agents/core';
+import { PostgresTraceStore } from '@kuralle-agents/postgres-store';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: {
+    store: new PostgresTraceStore({ client: pool, retentionMs: 7 * 24 * 60 * 60 * 1000 }),
+  },
+});
+```
+
+### Cloudflare / Durable Objects
+
+`@kuralle-agents/cf-agent` ships `SqlTraceStore` day one — tracing on Cloudflare is first-class, not bolted on. Wire it from `getSqlExecutor()` in `getRuntimeConfig()`, alongside the `KuralleAgent` subclass from the [Deployment guide](./deployment.md#cloudflare-workers):
+
+```typescript
+import { KuralleAgent, SqlTraceStore } from '@kuralle-agents/cf-agent';
+
+export class SupportAgent extends KuralleAgent<Env> {
+  // ...getAgents() / getDefaultAgentId() as in the Deployment guide...
+
+  // DO SQLite-backed trace store — traces persist alongside session state,
+  // no external service, and survive the Durable Object's lifecycle.
+  protected getRuntimeConfig() {
+    return {
+      tracing: { store: new SqlTraceStore(this.getSqlExecutor()) },
+    };
+  }
+}
+```
+
+## Exporting to OTLP and Langfuse
+
+`otelSink` and `langfuseSink` (both from `@kuralle-agents/core`) export the **full Kuralle-semantic trace** — turn, flow, node, tool, and handoff spans, not just LLM calls — as OTLP over `fetch`:
+
+`otel-export.ts`:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { createRuntime, defineAgent, langfuseSink, otelSink } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  tracing: {
+    sinks: [
+      otelSink({
+        endpoint: 'https://collector.example.com', // '/v1/traces' appended if missing
+        headers: { Authorization: `Bearer ${process.env.OTEL_TOKEN}` },
+        serviceName: 'support-agent',
+      }),
+      langfuseSink({
+        publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
+        secretKey: process.env.LANGFUSE_SECRET_KEY!,
+        // endpoint defaults to https://cloud.langfuse.com/api/public/otel
+      }),
+    ],
+  },
+});
+```
+
+> **Note**
+>
+> The exporter is HTTP/JSON over `fetch` only — there is no `@opentelemetry/sdk-node` dependency — so the same sink runs unmodified on Cloudflare Workers/workerd and on Node/Bun.
+
+`langfuseSink` is `otelSink` pre-configured for Langfuse's OTLP endpoint (`https://cloud.langfuse.com/api/public/otel` by default) with Basic auth built from `publicKey`/`secretKey`. Pass `endpoint` to point at a self-hosted Langfuse instance. Both sinks batch writes (`batchSize`, default `32`) and expose `flush()`.
+
+## AI SDK OpenTelemetry (v7)
+
+Kuralle's native tracing (above) is separate from the Vercel AI SDK's OpenTelemetry
+integration moved to `@ai-sdk/otel` in v7. Once registered, the SDK traces **by
+default** unless a call passes `telemetry: { isEnabled: false }`. Kuralle does
+**not** register an integration at import time — silence by default, spans by
+request.
+
+Opt in with `registerAiSdkOpenTelemetry({ tracer })` and/or
+`HarnessConfig.aiSdkTelemetry: { enabled: true }`. Pass the `tracer` to the
+integration constructor, not per-call telemetry options (v7 removed `tracer` from
+`TelemetryOptions`).
+
+`ai-sdk-telemetry.ts`:
+
+```typescript
+import { trace } from '@opentelemetry/api';
+import { openai } from '@ai-sdk/openai';
+import {
+  createRuntime,
+  defineAgent,
+  registerAiSdkOpenTelemetry,
+} from '@kuralle-agents/core';
+
+// AI SDK v7 traces by default once `@ai-sdk/otel` is registered — Kuralle never
+// registers at import time. Opt in explicitly:
+registerAiSdkOpenTelemetry({ tracer: trace.getTracer('my-app') });
+
+const agent = defineAgent({
+  id: 'support',
+  instructions: 'You are a helpful support agent.',
+  model: openai('gpt-4o-mini'),
+});
+
+const runtime = createRuntime({
+  agents: [agent],
+  defaultAgentId: 'support',
+  aiSdkTelemetry: { enabled: true },
+});
+```
+
+> **Caution**
+>
+> Do not register `@ai-sdk/otel` unconditionally on upgrade — that would start
+>   billing every deployment that never asked for LLM spans. Kuralle's native
+>   `tracing` config is unchanged and remains independent of AI SDK span emission.
+
+## Embedding the trace viewer
+
+`@kuralle-agents/trace-ui` is a dependency-free, read-only viewer you mount in your own app — the same component `kuralle trace --web` serves:
+
+`trace-ui-embed.ts`:
+
+```typescript
+import { mountTraceViewer } from '@kuralle-agents/trace-ui';
+
+const viewer = mountTraceViewer(document.querySelector('#traces')!, {
+  sessionId: 'session-42',
+  loadTraces: (sessionId) => fetch(`/api/traces/${sessionId}`).then((response) => response.json()),
+  nonce: (window as unknown as { __CSP_NONCE__: string }).__CSP_NONCE__,
+});
+await viewer.refresh();
+```
+
+It renders into a Shadow DOM root when available (`attachShadow`), so its styles never leak into or collide with your app, and it takes a CSP `nonce` for strict `style-src` policies. `renderTraceViewerDocument(traces, { title, nonce })` is the server-rendered counterpart — a full standalone HTML document — used by `kuralle trace --web`.
+
+## How it works
+
+- **One trace per run**, `traceId` generated fresh each time; `sessionId` stays a span attribute so a session's many runs are still independently addressable via `listTraces`.
+- **Spans nest by construction**: `turn` is the root, `flow`/`node` spans open and close as the run enters/exits them, and `tool`/`handoff` spans are leaves — this is exactly what the terminal waterfall and `trace-ui` render.
+- **Recording is a side-observer** (`TraceRecorder`) on the existing `StreamPart` event stream — it does not sit in the execution path, so a bug in trace recording can never change a turn's answer.
+- **IDs are OTLP-compatible hex** from the start, so native and exported traces share identifiers without remapping.
+- **Token usage rides the trace — strictly per turn.** The `turn` span carries `attributes.tokensIn` and `attributes.tokensOut` = **this turn's** consumed input/output tokens (deltas, not the running session total), plus `attributes.contextTokens` = the context-window occupancy (last prompt size). Per-turn scoping is deliberate: a trace is one run, so summing a session's traces gives the true total with no double-counting — the correct basis for **cost attribution**, and `contextTokens` is the signal for **window management**. All three flow everywhere the trace goes: `getTrace`/`listTraces`, the OTLP export (`kuralle.tokensIn` / `kuralle.tokensOut` / `kuralle.contextTokens`, so Langfuse shows them), and `kuralle trace` / `kuralle chat --trace`.
+- **Skill discovery is attributable.** When an agent declares skills, the root turn span records `attributes.skillContentHash` for the initiating agent and `attributes.skillContentHashes` keyed by every skill-bearing agent reached through handoff. Each value is the SHA-256 of the validated discovery snapshot (skill names, descriptions, and `SKILL.md` content), so an eval or incident can identify the instructions presented to the model. Referenced resource contents are loaded later and are not included in that snapshot hash; record their versions in your own tool output if resource-level provenance is required.
+
+## Related
+
+- [CLI guide](./cli.md) — `kuralle trace`, plus `chat`/`send`/`sim`.
+- [Deployment](./deployment.md) — Cloudflare Workers / Durable Objects setup.
+- [Sessions & State](./sessions.md) — the (separately configured) session store.

@@ -1,0 +1,526 @@
+# Build an Agent (from idea to production)
+
+A conversational walkthrough — start with an idea, grow it into a real Kuralle agent, then deploy it to Node, Cloudflare, or Vercel.
+
+You have an idea: *"I want an assistant that can do X."* This guide walks the whole
+distance — from that one sentence to an agent running in production. We'll build one
+concrete example and add capability only when the idea actually needs it, so every
+primitive shows up with a reason attached rather than as a feature list.
+
+If you just want the fastest possible "hello agent," read the [Quickstart](./quickstart.md)
+instead. This guide is the slower, fuller tour: it touches **every** primitive and ends
+with three real deploy targets.
+
+> **Tip**
+>
+> Read it top to bottom the first time. Each section assumes the one before it, and the
+>   example grows continuously — the agent you have at the end is the agent you started.
+
+## Start with the idea, in one sentence
+
+Pin the idea to a single sentence before you write code. Ours:
+
+> *"A pharmacy assistant that reads a customer's prescription, tells them what's in stock,
+> builds a cart, and takes payment."*
+
+That sentence already tells us what we'll need, and we'll meet each piece as it comes up:
+read a prescription (**multimodal input**), tell them what's in stock (a **tool** that
+checks inventory), build a cart (**durable tools + session state**), take payment (a
+**flow** that **suspends** for a human action and **resumes**). We'll also route, remember,
+and ground along the way. Don't worry about all those words yet — they'll each earn their
+place.
+
+## The smallest thing that works
+
+Everything in Kuralle is one primitive: `defineAgent`. There is no `FlowAgent`,
+`TriageAgent`, or `ToolAgent` class — an agent's behavior is *derived from which fields you
+fill in*. So the smallest agent is just an identity, an instruction, and a model:
+
+```bash
+npm install @kuralle-agents/core @ai-sdk/openai ai zod
+```
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { defineAgent, createRuntime } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'pharmacy',
+  instructions: 'You are a friendly pharmacy assistant. Be concise.',
+  model: openai('gpt-4o-mini'),
+});
+
+const runtime = createRuntime({ agents: [agent], defaultAgentId: 'pharmacy' });
+```
+
+`createRuntime` is the thing that actually *runs* turns. `model` is any
+[Vercel AI SDK](https://ai-sdk.dev) language model — Kuralle is built on the AI SDK, so you
+bring your own provider (`@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/xai`, …).
+
+### Running a turn
+
+`runtime.run()` hands back a `TurnHandle`. You stream from `handle.events` (a *property*,
+not a method) and you can `await handle` for the final result:
+
+```typescript
+const handle = runtime.run({ input: 'Hi, do you sell ibuprofen?' });
+
+for await (const part of handle.events) {
+  if (part.type === 'text-delta') process.stdout.write(part.payload.delta);
+  if (part.type === 'done') console.log('\nsession:', part.payload.sessionId);
+}
+await handle;
+```
+
+The interesting events as they stream by:
+
+| Event | Meaning |
+|---|---|
+| `text-start` / `text-delta` / `text-end` | the assistant message, chunk by chunk |
+| `tool-call` / `tool-result` | a tool ran |
+| `paused` | the run suspended (waiting for a signal — we'll get here) |
+| `done` | the turn finished; carries `sessionId` |
+
+Keep that `sessionId` — pass it back on the next turn and the conversation continues:
+
+```typescript
+runtime.run({ input: 'And paracetamol?', sessionId });
+```
+
+The runtime persists history for you. By default that's an in-process `MemoryStore`; in
+production you'll swap it for Redis or Postgres — more on that in [Sessions & State](./sessions.md).
+
+## Give it hands: tools
+
+Our assistant can chat, but it can't *check inventory* — it has no way to touch the real
+world. That's what a **tool** is: a typed function the model can call.
+
+```typescript
+import { z } from 'zod';
+import { defineTool } from '@kuralle-agents/core';
+
+const checkInventory = defineTool({
+  name: 'check_inventory',
+  description: 'Check whether a medicine is in stock and at what price.',
+  input: z.object({ name: z.string(), strength: z.string().optional() }),
+  execute: async ({ name, strength }) => {
+    const item = await db.lookup(name, strength); // your code
+    return item
+      ? { inStock: item.stock > 0, price: item.price }
+      : { inStock: false };
+  },
+});
+```
+
+A tool is a Zod input schema plus an async `execute`. Whatever `execute` returns goes back
+to the model as the tool result. Attach it to the agent under `tools`:
+
+```typescript
+const agent = defineAgent({
+  id: 'pharmacy',
+  instructions: 'You are a pharmacy assistant. Use check_inventory before quoting stock.',
+  model: openai('gpt-4o-mini'),
+  tools: { check_inventory: checkInventory },
+});
+```
+
+> **Note**
+>
+> `defineTool` makes a **durable** tool. Every effect is written to an append-only log, and
+>   on a retry the runtime *replays* the log instead of re-running `execute`. A `charge_card`
+>   tool won't double-charge if a turn is retried. This is why you pass `defineTool` outputs to
+>   `tools` rather than handing the model a raw AI SDK tool. (If you do have a raw AI SDK tool,
+>   wrap it with `wrapAiSdkTool()` so it still flows through the durable journal.)
+
+`tools` are model-callable in an answering turn. There's a sibling field, `globalTools`,
+for *safe, always-available* tools you want visible in **every** speaking turn — even
+inside a flow (think: a returns-policy lookup the customer might ask about mid-checkout).
+Keep mutating/consequential tools in `tools`; keep `globalTools` to a small read-only
+allow-list. Full detail: [Tools](./tools.md).
+
+## Give it a procedure: flows
+
+Here's a trap worth naming early. The moment your idea has *steps* — "first check the
+prescription, then confirm the cart, then take payment" — the temptation is to write those
+steps as a long paragraph in `instructions`. Don't. Prompts can't be tested and models
+wander.
+
+**Rule of thumb: more than ~20 lines of procedure belongs in a flow, not a prompt.**
+
+A flow is a small graph of typed nodes. Each node owns one slice of the conversation and
+returns a *transition* to the next node:
+
+```typescript
+import { defineFlow, reply, collect, action, decide, buildToolSet } from '@kuralle-agents/core';
+
+const confirm = reply({
+  id: 'confirm',
+  instructions: 'Read back the cart and total. When the user clearly says yes, call place_order.',
+  tools: () => buildToolSet({ place_order: placeOrder }),
+  next: (turn) =>
+    turn.toolResults.some((r) => r.name === 'place_order') ? { end: 'ordered' } : 'stay',
+});
+
+const flow = defineFlow({
+  name: 'checkout',
+  description: 'Confirm the cart and place the order.',
+  start: confirm,
+  nodes: [confirm],
+});
+```
+
+The four node kinds, each for one job:
+
+| Node | Does | Returns |
+|---|---|---|
+| `reply` | speaks, then moves on | a transition from `next(turn, state)` |
+| `collect` | gathers a Zod schema over one or more turns | `onComplete(data, state)` |
+| `action` | runs a side effect, no user-facing text | a transition (and can **suspend** — see below) |
+| `decide` | asks the model for a structured choice (no reply) | `decide(data, state)` |
+
+A node's `next`/`onComplete` returns a transition: a node to go to, `{ end: 'label' }`,
+`{ handoff: 'agentId' }`, `{ escalate: 'reason' }`, or `'stay'`. Attach the flow with
+`defineAgent({ flows: [flow] })`. The flow remembers its current node on the durable run and
+resumes there on the next turn — you don't wire that up.
+
+> **Tip**
+>
+> Most "my flow won't advance" bugs are prompt bugs, not graph bugs: the node's
+>   `instructions` keep asking a question instead of mandating the tool call that drives the
+>   transition. Tell the node to *act* on agreement, not to *ask again*. See
+>   [Flows](./flows.md) and the [Flow Execution Model](./flow-execution.md).
+
+## The trust primitive: durable human-in-the-loop
+
+Taking payment is the part you cannot let the model "decide" went fine. The customer leaves
+the chat, pays on an external page, and only *then* should the order complete. The
+conversation needs to **pause** and **resume** on a real-world event.
+
+Two ways to do this, both durable (they survive restarts and replay exactly once):
+
+**1. Approve a tool before it runs.** Flag a tool `needsApproval` and the runtime suspends
+before executing it until a human decision arrives:
+
+```typescript
+const refund = defineTool({
+  name: 'refund',
+  description: 'Refund an order.',
+  input: z.object({ orderId: z.string(), amount: z.number() }),
+  needsApproval: true,                 // pauses for a human yes/no before executing
+  execute: async ({ orderId, amount }) => api.refund(orderId, amount),
+});
+```
+
+**2. Suspend on a named signal.** Inside an `action` node, `ctx.signal('payment')` parks the
+run until you deliver that signal:
+
+```typescript
+const checkout = action({
+  id: 'checkout',
+  run: async (state, ctx) => {
+    const token = await ctx.uuid();                 // durable: stable across replay
+    ctx.emit(/* ...send the customer a payment link carrying `token`... */);
+    await ctx.signal('payment');                    // ⏸ run pauses here
+    return orderComplete;                           // ▶ resumes here after payment
+  },
+});
+```
+
+When the payment page is hit, you resume by handing the runtime the matching signal.
+`signalId` is the delivery's idempotency key — mint it durably inside the action (the
+`ctx.uuid()` above) and round-trip it through the payment link, so a double-clicked link
+delivers the same id and is deduplicated:
+
+```typescript
+runtime.run({ sessionId, signalDelivery: { signalId, name: 'payment', payload: { paid: true } } });
+```
+
+The run picks up exactly where it left off and continues to `orderComplete`. This is the
+backbone of any regulated or money-moving workflow. Full detail:
+[Durable Execution](./durable-execution.md).
+
+## Many jobs, one front door: routing & handoffs
+
+If your idea grows past one persona — say a *pharmacist* for clinical questions and a
+*billing* agent for payments — you don't cram them into one prompt. You give each its own
+agent and let a router send each message to the right one.
+
+```typescript
+const triage = defineAgent({
+  id: 'triage',
+  model: openai('gpt-4o-mini'),
+  routes: [
+    { agent: 'pharmacist', when: 'Clinical questions, dosage, interactions' },
+    { agent: 'billing', when: 'Payments, refunds, invoices' },
+  ],
+  agents: [pharmacist, billing],
+});
+```
+
+`routes` alone is enough — the dispatcher behavior is *derived* from the field being
+present. The optional `routing` policy exists only for tuning (pin a control `model`,
+`dispatch: 'strict'` buffering for compliance text).
+
+A pure router (routes only, no `instructions`/`tools`) dispatches **silently** — the
+hand-off never leaks to the user as prose. An agent that *also* answers gets host-control
+tools plus a lazy guard so it can route mid-conversation without narrating it. Agents can
+also `handoff` to each other directly. See [Routing & Handoffs](./routing.md).
+
+## Make it remember and make it know
+
+Two different needs, two different primitives:
+
+- **Memory** — facts about *this user* that should persist across turns (allergies, a
+  delivery address). Turn it on with `memory.workingMemory`; the model maintains durable
+  USER/MEMORY blocks via an auto-wired tool. Backends: in-memory, file, Redis/Upstash,
+  Postgres, or Cloudflare DO SQLite. See [Memory](./memory.md).
+
+- **Knowledge** — grounding the agent in *your* documents (a drug formulary, a returns
+  policy). Declare `knowledge` and the `knowledge.autoRetrieve` boolean decides *who*
+  retrieves: `true` (default) pre-injects facts before every answer (always grounded);
+  `false` wires a `knowledge_search` tool the model calls only when it needs facts (routing
+  turns pay zero retrieval cost). See the [Agents guide](./agents.md#knowledge--who-invokes-retrieval).
+
+```typescript
+const pharmacist = defineAgent({
+  id: 'pharmacist',
+  instructions: 'Answer clinical questions. Ground every answer in the formulary.',
+  model: openai('gpt-4o'),
+  knowledge: { autoRetrieve: true },        // always grounded
+  memory: { workingMemory: { /* blocks */ } },
+});
+```
+
+You can also give an agent a **workspace** (a portable filesystem it can read/write via a
+durable `workspace` tool) and **skills** (bundled procedural playbooks loaded on demand).
+Those are power-ups for document-heavy and multi-step agents — see [Skills](./skills.md).
+
+## Keep it safe and bounded
+
+A pharmacy agent shouldn't leak PII or loop forever. `defineAgent` has fields for both:
+
+- `guardrails` — input/output checks (PII redaction, prompt-injection, moderation) that run
+  around each turn.
+- `limits` — step/turn ceilings so a misbehaving loop can't run away.
+- `validate` / `refine` — post-turn validation (e.g. a grounding or confidence gate) and
+  pre-turn refinement policies.
+
+```typescript
+defineAgent({
+  id: 'pharmacist',
+  // …
+  limits: { maxSteps: 8 },
+  // guardrails / validate / refine: see the relevant guides for the exact policy builders
+});
+```
+
+These are opt-in — an agent with none of them just runs unconstrained, which is fine for a
+prototype. Add them as the idea moves toward production.
+
+`maxSteps` is the one worth setting deliberately. It defaults to **5**, which an agent that grounds
+itself, loads a couple of skills, writes something and checks it will exhaust before it ever
+summarises. A turn that runs out mid-chain still answers — the runtime makes one final call with no
+tools offered, so you never get a turn that ends in silence — but that wrap-up is a truncation: the
+agent writes its summary from wherever it happened to be cut off. Set the budget high enough that
+real work finishes inside it and the wrap-up stays a backstop, and treat it as a ceiling against
+runaway loops rather than a target to spend.
+
+`Limits` is exported from `@kuralle-agents/core` if you want to name the type.
+
+## Reading a photo, not just text
+
+Our pharmacy idea opened with *"reads a customer's prescription."* That's an image, not
+text — and a runtime that only accepts strings would silently drop it.
+
+Kuralle's user input is the AI SDK's own content shape: a string **or** an array of parts.
+So a turn can carry text *and* a file together:
+
+```typescript
+runtime.run({
+  input: [
+    { type: 'text', text: 'Here is my prescription — what can you fill?' },
+    { type: 'file', mediaType: 'image/jpeg', data: 'https://…/rx.jpg' }, // URL, data URL, or base64
+  ],
+});
+```
+
+A plain string still works exactly as before — text-only callers don't change. Images go to
+a vision-capable model (`gpt-4o`, `gemini-2.x`); voice notes can be transcribed automatically
+by setting a `transcriptionModel` on the runtime. The web and messaging front doors map
+uploads into this shape for you. This is enough to know it exists — the full treatment
+(web uploads, WhatsApp media, voice notes, the one durability rule) is its own guide:
+**[Multimodal Input](./multimodal.md)**.
+
+## Wiring the model in: `createRuntime`
+
+You've met `createRuntime` already. Here's the fuller shape, so you know what's available:
+
+```typescript
+const runtime = createRuntime({
+  agents: [triage, pharmacist, billing],
+  defaultAgentId: 'triage',
+  defaultModel: openai('gpt-4o-mini'),  // fallback when an agent omits `model`
+  sessionStore,                          // Memory (default) | Redis | Postgres | DO SQLite
+  transcriptionModel,                    // optional: transcribe inbound voice notes
+  knowledge,                             // shared KnowledgeProvider for agents that declare `knowledge`
+  hooks,                                 // lifecycle hooks for logging/metrics/tracing
+  compaction,                            // optional: auto-summarize long histories
+  escalation,                            // optional: human-handoff handler (see Engagement guide)
+  driver,                                // optional: PiDriver (recommended) or Core's AI SDK default
+});
+```
+
+That's the whole runtime surface you'll touch day to day. Now let's get it online.
+
+For production applications, put Pi's model/tool loop behind that same runtime boundary:
+
+```typescript
+import { createModels } from '@earendil-works/pi-ai';
+import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
+import { PiDriver } from '@kuralle-agents/pi-driver';
+
+const models = createModels();
+models.setProvider(openaiProvider());
+const piModel = models.getModel('openai', 'gpt-4.1-mini');
+if (!piModel) throw new Error('Pi model is not registered');
+
+const runtime = createRuntime({
+  agents: [triage, pharmacist, billing],
+  defaultAgentId: 'triage',
+  driver: new PiDriver({ model: piModel, models }),
+});
+```
+
+Pi owns model-facing iteration; Kuralle still owns every tool call, approval, flow transition, session write, trace, and stream event. See [Pi Driver](./pi-driver.md).
+
+## Deploy it
+
+The runtime is plain TypeScript with no required external process — it runs anywhere
+JavaScript runs. Three common homes:
+
+### Node (or Bun) — Hono
+
+`@kuralle-agents/hono-server` mounts a full chat API (single-turn, SSE, WebSocket, session
+CRUD, health) onto a Hono app in one call. `POST /api/chat/sse` returns a native AI SDK
+`UIMessageStream`, so a React `useChat` client needs **no** bridge.
+
+```bash
+npm install @kuralle-agents/hono-server hono @hono/node-server @hono/node-ws
+```
+
+```typescript
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import { createNodeWebSocket } from '@hono/node-ws';
+import { createKuralleChatRouter } from '@kuralle-agents/hono-server';
+
+const app = new Hono();
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
+app.route('/', createKuralleChatRouter({ runtime, upgradeWebSocket }));
+
+const server = serve({ fetch: app.fetch, port: 3000 });
+injectWebSocket(server);
+```
+
+On **Bun**, drop `@hono/node-server`/`createNodeWebSocket` and use `hono/bun`'s
+`upgradeWebSocket`. See [Deployment](./deployment.md).
+
+### Cloudflare Workers — Durable Objects
+
+`@kuralle-agents/cf-agent` runs an agent as a Durable Object. One DO per conversation gives
+you per-conversation persistence, multi-client sync, and stream resumability for free —
+Cloudflare owns the SQLite, you own the agent. Subclass `KuralleAgent` and implement two
+methods:
+
+```typescript
+import { KuralleAgent } from '@kuralle-agents/cf-agent';
+import { defineAgent } from '@kuralle-agents/core';
+import { createOpenAI } from '@ai-sdk/openai';
+
+interface Env { OPENAI_API_KEY: string }
+
+export class PharmacyAgent extends KuralleAgent<Env> {
+  protected getAgents() {
+    const openai = createOpenAI({ apiKey: this.env.OPENAI_API_KEY });
+    return [defineAgent({ id: 'pharmacy', instructions: '…', model: openai('gpt-4o-mini') })];
+  }
+  protected getDefaultAgentId() { return 'pharmacy'; }
+}
+```
+
+```jsonc
+// wrangler.jsonc
+{
+  "durable_objects": { "bindings": [{ "name": "PharmacyAgent", "class_name": "PharmacyAgent" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PharmacyAgent"] }]
+}
+```
+
+Flows, tools, routing, multimodal, and durable suspend/resume all behave identically on
+Cloudflare — same `defineAgent`, no runtime differences. (Durable HITL on CF: deliver a
+signal by POSTing to the agent's `…/resume` route, which resumes the suspended run and
+broadcasts the result.) See [Deployment](./deployment.md#cloudflare-workers).
+
+The [Pharmacy Workspace Agent](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/pharmacy-rx-agent) runs a complete pharmacy agent on both Vercel and a Pi-powered Durable Object. The focused [multichannel pharmacy playground](https://github.com/kuralle/kuralle-agents/tree/main/apps/playground/pharmacy-rx-agent) isolates prescription-image and payment-signal behavior.
+
+### Vercel — Next.js
+
+The simplest path is a Next.js App Router route handler that drives the runtime directly and
+returns a native AI SDK stream. Because `input` is `UserInputContent`, the same handler
+serves text *and* multimodal — the client decides what to send:
+
+```typescript
+// app/api/chat/route.ts
+import { runtime } from '@/lib/runtime';
+
+export async function POST(req: Request) {
+  const { input, sessionId } = await req.json(); // `input`: string OR content parts
+  const handle = runtime.run({ input, sessionId });
+  return handle.toUIMessageStreamResponse({ sessionId });
+}
+```
+
+Want the full batteries-included endpoint set (and automatic `useChat`-style
+`UIMessage` → multimodal mapping)? Hono runs on Vercel via the `hono/vercel` adapter. Mount
+the router at the app root and let a catch-all route forward `/api/*` to it — the router's
+own paths (`/api/chat/sse`, …) match the incoming path, so **don't** add a `basePath`:
+
+```typescript
+// app/api/[...route]/route.ts
+import { Hono } from 'hono';
+import { handle } from 'hono/vercel';
+import { createKuralleChatRouter } from '@kuralle-agents/hono-server';
+import { runtime } from '@/lib/runtime';
+
+const app = new Hono();
+app.route('/', createKuralleChatRouter({ runtime }));
+
+export const POST = handle(app);
+export const GET = handle(app);
+```
+
+WebSocket endpoints don't run on Vercel serverless functions; use the `POST /api/chat/sse`
+SSE stream (the `useChat` default) there.
+
+> **Caution**
+>
+> Serverless functions are stateless and short-lived, so on Vercel you **must** configure an
+>   external `SessionStore` (Redis/Upstash or Postgres) — the default in-process `MemoryStore`
+>   loses history between invocations. Long durable suspends (a payment link clicked an hour
+>   later) want a persistent store too. See [Sessions & State](./sessions.md).
+
+## Where to go next
+
+You now have the whole map. Each stop has a guide that goes deeper than this tour:
+
+- [Agents](./agents.md) — every `defineAgent` field and how behavior is derived.
+- [Flows](./flows.md) · [Flow Execution Model](./flow-execution.md) — the node graph and how it runs.
+- [Tools](./tools.md) · [Durable Execution](./durable-execution.md) — effects, the journal, approvals, suspend/resume.
+- [Routing & Handoffs](./routing.md) — silent dispatch and explicit transfers.
+- [Sessions & State](./sessions.md) · [Memory](./memory.md) — persistence and recall.
+- [Skills](./skills.md) — bundled procedural playbooks.
+- [Multimodal Input](./multimodal.md) — images, files, and voice notes end to end.
+- [Engagement & Messaging](./engagement.md) — WhatsApp/Instagram delivery.
+- [Deployment](./deployment.md) — the full endpoint set and production wiring.
+- [Pi Driver](./pi-driver.md) — the recommended model/tool loop and its runtime boundaries.
+- [Examples](https://agents.kuralle.com/examples/) — complete runnable systems and focused substrate labs.

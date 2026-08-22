@@ -16,7 +16,7 @@ The runtime and primitives for building conversational AI agents with structured
 npm install @kuralle-agents/core
 ```
 
-Peers: `ai@^6 zod` and a provider, e.g. `@ai-sdk/openai`.
+Peers: `ai@^7 zod@^4` and a provider, e.g. `@ai-sdk/openai`.
 
 Core includes a portable AI SDK channel loop so a minimal installation works on
 Node 20, Bun, and workerd. For production agent applications, the recommended

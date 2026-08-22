@@ -1,0 +1,100 @@
+# Engagement & Messaging
+
+Window-safe omnichannel bots with WhatsApp, Instagram, and web chat on one runtime.
+
+The **`@kuralle-agents/engagement`** package is the channel-agnostic layer for messaging bots: consent, ownership, closed-window recovery, interactive rendering, and broadcasts. Pair it with **`@kuralle-agents/messaging`** (router + pipeline) and **`@kuralle-agents/messaging-meta`** (WhatsApp/Instagram clients).
+
+## One bot, many channels
+
+Write agents and flows once. Per-channel rules live in **`ChannelPolicy`** adapters — not duplicated bot code.
+
+```typescript
+import { createMessagingRouter, InMemoryWindowStore } from '@kuralle-agents/messaging';
+import {
+  engagement,
+  whatsappPolicy,
+  webPolicy,
+  instagramPolicy,
+} from '@kuralle-agents/engagement';
+
+const windowStore = new InMemoryWindowStore();
+
+const { bridge } = engagement({
+  policies: [
+    whatsappPolicy({ client: whatsapp, selector, windowStore, wabaId }),
+    webPolicy(),
+    instagramPolicy({ client: instagram, windowStore }),
+  ],
+  windowStore,
+});
+
+createMessagingRouter({
+  runtime,
+  platforms: { whatsapp, instagram },
+  ...bridge,
+});
+```
+
+Web chat uses **`createKuralleChatRouter`** on the same runtime; `webPolicy()` is the always-open null adapter.
+
+## Window-safe outbound
+
+`createMessagingRouter` builds:
+
+```
+[consentGate?] → [ownershipGate?] → closedWindowRecovery → interactiveRenderer → windowGuard (terminal)
+```
+
+- **`windowGuard`** is always last and is **not** part of `bridge.outbound`. When the window is closed, free-form text/media/interactive **defer** with no client call.
+- **`closedWindowRecovery`** uses each policy’s strategy: WhatsApp templates, Instagram `HUMAN_AGENT` tags (text only), or web `none`.
+
+> **Caution**
+>
+> Do not add `windowGuard` to `engagement().bridge.outbound` — the router appends it. Duplicating it breaks the terminal-guard invariant.
+
+## Interactive choices
+
+Use **`withChoices`** on `collect` or `decide` nodes so the runtime emits an `interactive` stream part. **`interactiveRenderer`** turns that into channel-native UI (WhatsApp buttons/list, Instagram quick replies/templates, web controls). Route by **option id**, not label:
+
+```typescript
+import { decide, defineFlow } from '@kuralle-agents/core';
+import { withChoices } from '@kuralle-agents/engagement';
+import { z } from 'zod';
+
+const triage = withChoices(
+  decide({
+    id: 'triage',
+    instructions: 'How can we help?',
+    schema: z.object({ choice: z.string() }),
+    decide: (id) => (id === 'billing' ? billingNode : supportNode),
+  }),
+  [
+    { id: 'billing', label: 'Billing' },
+    { id: 'support', label: 'Support' },
+  ],
+);
+```
+
+## Consent, handoff, broadcasts
+
+- **`sessionConsentStore`** + **`consentGate`** — opt-in/out; STOP halts proactive sends.
+- **`sessionOwnershipStore`** + **`ownershipGate`** — while `owner(thread) === 'human'`, the bot does not send and inbound does not run flows.
+- **`broadcasts`** — pass **`broadcastPipeline`** into `engagement()` to enable `broadcasts.send()`; policies do not expose clients, so you construct the pipeline for the target platform explicitly.
+
+## Examples
+
+- **Deep, end-to-end bots** — `packages/engagement/examples/` (booking, pharmacy, clothing): free-form extraction, template-based closed-window sends, and mixed conversations across WhatsApp / web / Instagram. See [`AUTHORING.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/engagement/examples/AUTHORING.md) for the API + patterns.
+- **Multi-platform server** — `packages/messaging-meta/examples/multi-platform/` (WhatsApp + Instagram webhooks + web SSE, one shared flow; offline-friendly).
+- **Deployable WhatsApp server** — `packages/messaging-meta/examples/whatsapp-server/`: a self-hostable bot wiring `engagement()` + `createMessagingRouter` to a real WhatsApp Cloud API number (bring your own token, no Embedded Signup). Boots on Bun or Node, optional Redis `WindowStore` via `REDIS_URL`. See [Deployment](./deployment.md).
+
+## Dev loop — simulate before you deploy
+
+`createSimulator({ runtime, bridge, channels, windowStore })` drives the **real** router + engagement through fake recording clients — multi-turn conversations across channels with no live model and no live Meta. Use it as the `kuralle dev` inner loop and in deterministic tests (`send()` / `window()` / `sends()`).
+
+## Install
+
+```bash
+npm install @kuralle-agents/engagement @kuralle-agents/messaging @kuralle-agents/messaging-meta @kuralle-agents/core ai zod
+```
+
+Package README: [`packages/engagement/README.md`](https://github.com/kuralle/kuralle-agents/blob/main/packages/engagement/README.md).

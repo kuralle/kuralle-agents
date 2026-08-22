@@ -1,0 +1,202 @@
+# Memory
+
+Give agents durable working memory that persists across sessions, plus semantic recall.
+
+Kuralle agents have two complementary memory axes:
+
+- **Working memory** — small, durable, human-readable **blocks** (e.g. a `USER` profile) that the agent maintains with a tool and that are injected into the system prompt every turn. Persists across sessions. This is the right tool for "remember this caller's name / preferences / account".
+- **Semantic recall** — cross-session facts extracted via `memory.extract` (e.g. `factsExtractor()`), read two ways: `memory.preload` injects the `facts` slug automatically every turn, and a `search_memory` tool lets the model query any declared extractor on demand. Best for "remember durable facts about this user across sessions".
+
+This guide focuses on **working memory**.
+
+## Quick start
+
+```typescript
+import { defineAgent, createRuntime } from '@kuralle-agents/core';
+import { FilePersistentMemoryStore } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  instructions: 'You are a helpful support agent.',
+  memory: {
+    workingMemory: {
+      store: new FilePersistentMemoryStore(), // where blocks persist
+      autoLoad: [{ scope: 'user', key: 'USER' }],
+    },
+  },
+});
+```
+
+That's it. When the user shares something durable ("my plan is Pro", "call me Sam"), the agent calls the built-in `memory_block` tool to record it; on the next session for the same user, that block is loaded back into the prompt and the agent just knows it. **You do not need to instruct the agent to use memory** — Kuralle injects the directive automatically.
+
+> **Tip**
+>
+> Working memory is keyed by **user**, not session. Pass a stable `userId` to `runtime.run({ input, sessionId, userId })` (the hono server and cf-agent forward it from the request). Without a `userId`, `user`/`shared` blocks fall back to the owner `"anonymous"`.
+
+## The `workingMemory` options
+
+```typescript
+memory: {
+  workingMemory: {
+    store,                                   // PersistentMemoryStore — required (see resolution below)
+    autoLoad: [{ scope: 'user', key: 'USER', template: '...' }],
+    defaultCharLimit: 10_000,                // max chars per block (default 10_000)
+    scanForInjection: true,                  // reject prompt-injection in writes (default true)
+  },
+}
+```
+
+| Option | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `store` | `PersistentMemoryStore` | resolved (see below) | Where blocks are persisted. |
+| `autoLoad` | `WorkingMemoryBlockSpec[]` | `[{ scope: 'user', key: 'USER' }, { scope: 'agent', key: 'MEMORY' }]` | Which blocks to load at session start and inject into the prompt. |
+| `defaultCharLimit` | `number` | `10_000` | Per-block character cap; writes over the limit are rejected. |
+| `scanForInjection` | `boolean` | `true` | Scan block writes for prompt-injection patterns and reject matches. |
+
+### `autoLoad` — `WorkingMemoryBlockSpec`
+
+Each entry declares one block to load and expose:
+
+```typescript
+{
+  scope: 'user',          // 'user' | 'agent' | 'shared'
+  key: 'USER',            // the block name within its scope
+  template: '## About the user\n- name:\n- plan:', // optional seed (see below)
+}
+```
+
+- **`key`** — the block's name. `autoLoad: [{ scope: 'user', key: 'USER' }]` exposes a single per-user block named `USER`. You can declare several (e.g. a `USER` profile plus a `agent`/`MEMORY` block).
+- **`template`** — optional starter content shown when the block is empty. It is **not** persisted on read — it only seeds the prompt so the model knows the shape to fill in, and is saved the first time the agent writes. Great for a structured profile (`- name:\n- timezone:\n- plan:`).
+
+### `scope` — who a block belongs to
+
+The store keys every block by `(scope, owner, key)`. The **owner** is resolved automatically:
+
+| `scope` | Owner | Use it for |
+| --- | --- | --- |
+| `user` | the request's `userId` | Facts about the end-user (name, preferences, account). Shared across that user's sessions. |
+| `agent` | the agent's `id` | Knowledge global to the agent across all its users (house style, learned FAQs). |
+| `shared` | the request's `userId` | A second per-user namespace, separate from the `USER` profile. |
+
+> **Note**
+>
+> `agent`-scope blocks are shared by **every** user of that agent — never put one user's private data in an `agent` block.
+
+## How the agent maintains it
+
+When `workingMemory` is set, Kuralle does three things each turn:
+
+1. Loads the `autoLoad` blocks for the resolved owner and injects them as a `## Working memory` section in the system prompt.
+2. Registers a `memory_block` tool (actions: `view` / `add` / `replace` / `remove`).
+3. Injects a directive telling the model to **store durable facts proactively**, answer from the blocks first, and not announce saves.
+
+So the agent reads memory for free and writes it on its own — no extra prompt engineering required.
+
+## Choosing a store
+
+`store` resolves in this order: `workingMemory.store` → `HarnessConfig.defaultWorkingMemoryStore` → the Node file-store default (only if `FilePersistentMemoryStore` is imported) → an error.
+
+| Store | Package | Persists to | Runs on |
+| --- | --- | --- | --- |
+| `InMemoryPersistentMemoryStore` | `@kuralle-agents/core` | process memory (ephemeral) | Node + Workers |
+| `FilePersistentMemoryStore` | `@kuralle-agents/core` | `$KURALLE_MEMORY_DIR` or `~/.kuralle/memories/<scope>/<owner>/<KEY>.md` | Node |
+| `PostgresPersistentMemoryStore` | `@kuralle-agents/postgres-store` | a `working_memory_blocks` table | Node (Workers via Hyperdrive) |
+| `RedisPersistentMemoryStore` | `@kuralle-agents/redis-store` | `wm:<scope>:<owner>:<key>` keys | Node + Workers (Upstash REST) |
+| `SqlPersistentMemoryStore` | `@kuralle-agents/cf-agent` | the Durable Object's embedded SQLite | Cloudflare Workers |
+
+### Compose stores
+
+Route or layer backends with the composite stores in core:
+
+```typescript
+import { RoutedPersistentMemoryStore, TieredPersistentMemoryStore } from '@kuralle-agents/core';
+
+// Route by scope: per-user blocks in Postgres, per-agent in Redis.
+const routed = new RoutedPersistentMemoryStore({
+  user: postgresStore,
+  agent: redisStore,
+  default: postgresStore,
+});
+
+// Or a read-through cache over a durable store.
+const tiered = new TieredPersistentMemoryStore({ cache: inMemoryStore, durable: postgresStore });
+```
+
+## Where it runs
+
+### Node (hono server)
+
+The chat router reads `userId` from the request body and forwards it, so working memory is per-user automatically:
+
+```bash
+curl -X POST localhost:8787/api/chat \
+  -H 'content-type: application/json' \
+  -d '{ "message": "call me Sam", "sessionId": "s1", "userId": "user-42" }'
+```
+
+Pass a `FilePersistentMemoryStore` (or a Postgres/Redis store) to the agent, or set `HarnessConfig.defaultWorkingMemoryStore` once on `createRuntime`.
+
+### Cloudflare (cf-agent / Durable Objects)
+
+`@kuralle-agents/cf-agent` wires a **`SqlPersistentMemoryStore` over the Durable Object's embedded SQLite as the default working-memory store — zero config**. Just set `memory.workingMemory` on your agent; blocks persist in the DO. `userId` comes from the request body.
+
+#### Scoping on Cloudflare
+
+The DO-SQLite store is scoped to the **Durable Object instance**. If you address one DO per conversation, a `user`-scope block only spans that conversation. To get true cross-session per-user memory on CF, either address the DO by `userId` (so a user's sessions share one DO) or use an external store (`PostgresPersistentMemoryStore` / `RedisPersistentMemoryStore` via Upstash) so memory is shared across DOs.
+
+## Semantic recall (extracted facts)
+
+For cross-session fact memory, enable `memory.preload` and `memory.extract` with the built-in `factsExtractor()`:
+
+```typescript
+import { defineAgent, factsExtractor } from '@kuralle-agents/core';
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  memory: {
+    preload: { enabled: true, tokenBudget: 500 },
+    extract: [factsExtractor()],
+    extraction: { trigger: { tokens: 2000 } },
+  },
+});
+```
+
+Working memory and extracted facts are independent — use both: working memory for the always-in-context profile, extracted facts for LLM-merged cross-session recall keyed by `userId`.
+
+### Searching extracted memory on demand
+
+`memory.preload` only ever loads the `facts` slug. Declare more extractors and their values
+are written every turn but never reach the prompt unless the agent asks for them:
+
+```typescript
+import { defineAgent, factsExtractor, defineExtractor } from '@kuralle-agents/core';
+import { z } from 'zod';
+
+const dietaryProfile = defineExtractor({
+  name: 'Dietary Profile',
+  scope: 'user',
+  instructions: 'Allergies and dietary restrictions this person stated about themselves.',
+  schema: z.object({ allergies: z.array(z.string()), avoids: z.array(z.string()) }),
+});
+
+const agent = defineAgent({
+  id: 'support',
+  model,
+  memory: {
+    preload: { enabled: true, tokenBudget: 500 },
+    extract: [factsExtractor(), dietaryProfile],
+  },
+});
+```
+
+Declaring `memory.extract` automatically registers a `search_memory` tool the model can call
+mid-turn — Letta's core/archival split: `preload` is core memory (always in context),
+`search_memory` is archival (queried on demand). Its `slug` argument is a `z.enum` built from
+your `extract` list, the same pattern `memory_block`'s `block` argument uses, so an undeclared
+extractor cannot be expressed, let alone read. Matching is literal, and a query that matches
+nothing returns `{ results: [] }` — no fallback to showing everything, unlike `preload`.
+
+No extra config is needed; the tool is withheld under the same conditions the rest of
+user-scoped memory withholds under (no `userId` on the run).
