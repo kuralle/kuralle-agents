@@ -87,6 +87,7 @@ missing. Do not document proposed behavior as shipped.
 | Store agent definitions in Postgres | [agent-definitions-database](https://agents.kuralle.com/guides/agent-definitions-database) |
 | Let end users build agents from a form | [agent-builder-react](https://agents.kuralle.com/guides/agent-builder-react) |
 | Build a chat UI, or stream a turn to a browser | [references/clients.md](references/clients.md) |
+| Render buttons, approval prompts, or safety notices in a UI | [references/clients.md](references/clients.md) |
 | Embed a chat widget on any page | [references/clients.md](references/clients.md) |
 | Ship to Node, Bun, Cloudflare, or Vercel | [deployment](https://agents.kuralle.com/guides/deployment) |
 | Reach a running agent from a terminal | [cli](https://agents.kuralle.com/guides/cli) |

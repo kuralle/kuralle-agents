@@ -85,6 +85,131 @@ useChat<KuralleUIMessage>({
 });
 ```
 
+## What each part carries, and how to draw it
+
+The plumbing above gets parts to the client. This is what is inside them.
+Shapes are `KuralleDataParts` in `packages/core/src/ai-sdk/uiMessageStream.ts`.
+
+| Part | Payload | Draw it as |
+|---|---|---|
+| `data-kuralle-interactive` | `{ nodeId, prompt, options: ChoiceOption[] }` | Buttons or a list under the message |
+| `data-kuralle-safety` | `{ kind, moderator?, rationale, userFacingMessage? }` | A blocked-message notice |
+| `data-kuralle-handoff` | `{ targetAgent, reason? }` | A quiet "now talking to X" marker, or nothing |
+| `data-kuralle-outcome` | `{ outcome }` | Resolution state, CSAT prompt |
+| `data-kuralle-control` | `{ event: 'interrupted' \| 'paused', reason?, waitingFor?, interrupt? }` | An approval prompt — see below |
+| `data-kuralle-node` | `{ event: 'enter' \| 'exit', node }` | Progress, transient |
+| `data-kuralle-flow` | `{ event: 'enter' \| 'transition' \| 'end', flow?, from?, to?, reason? }` | Progress, transient |
+| `data-kuralle-custom` | `{ name, data }` | Whatever you emitted it for. Transient. |
+
+### Never render `safety.rationale`
+
+`rationale` is the moderator's internal explanation of why a message was
+blocked. `userFacingMessage` is the text written to be read by the person. A UI
+that renders `rationale` because it is always present, while
+`userFacingMessage` is optional, leaks moderation reasoning to the user it was
+written about. Fall back to your own copy, not to `rationale`.
+
+### Interactive choices
+
+```tsx
+const choice = message.parts.find((p) => p.type === 'data-kuralle-interactive');
+// choice.data.options: { id, label, description?, url?, flow? }[]
+```
+
+Send the selection back as `RunOptions.selection` — `{ id }` for a button, or
+`{ formData }` for a submitted form. The `id` becomes the routing input, so the
+agent sees the choice the user made rather than a paraphrase of it. An option
+carrying `url` is a link, not a reply.
+
+### Human-in-the-loop approval
+
+A tool with `needsApproval: true`, or a policy returning `ask`, pauses the run
+and emits `data-kuralle-control` with an `interrupt`.
+
+`data-kuralle-control` is **transient**, so the approval prompt arrives through
+`onData` and never appears in `message.parts`. Hold it in your own state:
+
+```tsx
+const [pending, setPending] = useState<HitlInterrupt | null>(null);
+
+useChat<KuralleUIMessage>({
+  api: '/api/chat/sse',
+  onData: (part) => {
+    if (part.type === 'data-kuralle-control' && part.data.interrupt) {
+      setPending(part.data.interrupt);
+    }
+  },
+});
+```
+
+A UI that looks for the interrupt in message history renders no approval prompt
+at all, and the run stays paused with nothing on screen explaining why. The same
+applies after a reload: message history will not contain the pending approval,
+so recover it from session state rather than from `messages`.
+
+The interrupt shape:
+
+```typescript
+interface HitlInterrupt {
+  requestId: string;
+  kind: 'approval' | 'signal';
+  signalName: string;
+  operation?: { toolCallId: string; toolName: string; args: unknown; argsHash: string };
+  display: { title: string; description?: string };
+  responseSchema: Record<string, unknown>;
+  deadline: number | null;
+  allowedDecisions: Array<'approve' | 'deny'>;
+}
+```
+
+Render `display.title` and `display.description` — they are written for a
+person; `operation.args` is the raw call and is for a debug view at most. Offer
+only the buttons in `allowedDecisions`, and respect `deadline` (epoch ms, or
+`null` for none).
+
+Resume with `POST /api/chat/resume`:
+
+```jsonc
+{
+  "sessionId": "…",
+  "signal": {
+    "signalId": "…",
+    "requestId": "…",      // from the interrupt
+    "name": "…",           // interrupt.signalName
+    "decision": "approve", // or "deny"
+    "reason": "optional",
+    "payload": {}          // must satisfy interrupt.responseSchema
+  }
+}
+```
+
+The response is an SSE stream of the resumed turn, so treat it like any other
+turn rather than a fire-and-forget POST.
+
+**The approver identity is not yours to send.** The server resolves the actor
+through `resolveSignalActor`, deliberately ignoring anything in the body — a
+client that names its own actor can approve as anyone. Do not add an `actor`
+field expecting it to be honoured.
+
+### Parts reconcile on `(type, id)`
+
+Only relevant if you write your own transport rather than using `useChat`. Data
+part ids are per-type ordinals within a turn (`kuralle-safety-0`,
+`kuralle-safety-1`), not random. A client updates a part in place when both
+`type` and `id` match and appends when they do not.
+
+Random ids therefore mean "always append", and a turn that gets re-emitted into
+an existing message — Cloudflare's chat recovery re-runs `onChatMessage` — then
+duplicates every handoff, safety block, and outcome it had already recorded.
+
+### `text-cancel` does not reach a `useChat` client
+
+When a gate retracts a partial message, the raw `StreamPart` stream emits
+`text-cancel`. The `UIMessageStream` path maps it to `text-end`, so a `useChat`
+client sees the text simply stop and the partial message stays on screen. If
+retraction matters to your UI, consume the raw stream (`?format=raw`) and handle
+`text-cancel` yourself.
+
 ## Uploads
 
 Send the shape `useChat` already produces — a text part plus one `file` part per
