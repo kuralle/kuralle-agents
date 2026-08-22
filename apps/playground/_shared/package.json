@@ -17,7 +17,7 @@
     "@ai-sdk/google": "latest",
     "@ai-sdk/openai": "latest",
     "@kuralle-agents/core": "workspace:*",
-    "ai": "latest",
+    "ai": "^7.0.0",
     "dotenv": "^16.4.5"
   }
 }

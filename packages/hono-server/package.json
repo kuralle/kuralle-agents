@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
-    "ai": "^6.0.0",
+    "ai": "^7.0.0",
     "hono": "^4.0.0",
     "@kuralle-agents/deployment": "workspace:*"
   },

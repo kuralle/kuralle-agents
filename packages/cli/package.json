@@ -21,7 +21,7 @@
     "@kuralle-agents/hono-server": "workspace:*",
     "@kuralle-agents/trace-ui": "workspace:*",
     "agents": "^0.20.1",
-    "ai": "^6.0.0",
+    "ai": "^7.0.0",
     "dotenv": "^16.4.0",
     "esbuild": "^0.28.1",
     "ink": "^7.1.0",
@@ -31,7 +31,7 @@
     "zod": "^4.1.8"
   },
   "peerDependencies": {
-    "ai": "^6.0.0",
+    "ai": "^7.0.0",
     "zod": "^4.1.8"
   },
   "devDependencies": {

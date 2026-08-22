@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "ai": "^6.0.0",
+    "ai": "^7.0.0",
     "workers-ai-provider": "^2.0.0"
   },
   "devDependencies": {
