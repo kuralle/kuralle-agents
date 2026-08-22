@@ -14,9 +14,9 @@ tier() {
   bun run "${args[@]}" build
 }
 
-tier rag http-client analytics-sdk eval widget                                             # T0 leaves
+tier http-client analytics-sdk eval widget                                                 # T0 leaves
 tier core                                                                                  # T1 hub
-tier fs commerce trace-ui pi-driver                                                         # T2 (need core)
+tier fs commerce trace-ui pi-driver rag                                                     # T2 (need core)
 tier deployment                                                                            # T3 (needs core/fs)
 tier build                                                                                 # T4 (needs core/deployment)
 tier tools messaging                                                                       # T2 (need core/rag)
