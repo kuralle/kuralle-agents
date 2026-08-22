@@ -146,17 +146,22 @@ function createGuardedFetch(
   };
 }
 
-export async function connectRemoteMcpServer(
+async function openRemoteMcpConnection(
   config: Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }>,
   opts: {
     timeoutMs: number;
     fetch?: FetchLike;
     allowedHosts: readonly string[] | null;
-    /** Resolved before the handshake; covers `initialize` and `tools/list`. */
     connectHeaders?: Record<string, string>;
     onDiagnostic?: (d: Diagnostic) => void;
   },
-): Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }> {
+): Promise<
+  | {
+      client: Client;
+      transport: StreamableHTTPClientTransport | SSEClientTransport;
+    }
+  | { diagnostic: Diagnostic }
+> {
   const parsed = parseRemoteUrl(config.url);
   if ('section' in parsed) {
     return { diagnostic: { ...parsed, origin: config.name } };
@@ -209,11 +214,47 @@ export async function connectRemoteMcpServer(
   // Server instructions are intentionally discarded — never forwarded to prompts.
   void client.getInstructions();
 
-  const server = createConnectedServer(client, {
+  return { client, transport };
+}
+
+export async function connectRemoteMcpServer(
+  config: Extract<McpServerConfig, { type: 'streamable-http' | 'sse' }>,
+  opts: {
+    timeoutMs: number;
+    fetch?: FetchLike;
+    allowedHosts: readonly string[] | null;
+    /** Resolved before the handshake; covers `initialize` and `tools/list`. */
+    connectHeaders?: Record<string, string>;
+    onDiagnostic?: (d: Diagnostic) => void;
+  },
+): Promise<{ server: ConnectedMcpServer } | { diagnostic: Diagnostic }> {
+  const connectOpts = {
+    timeoutMs: opts.timeoutMs,
+    fetch: opts.fetch,
+    allowedHosts: opts.allowedHosts,
+    connectHeaders: opts.connectHeaders,
+    onDiagnostic: opts.onDiagnostic,
+  };
+
+  const opened = await openRemoteMcpConnection(config, connectOpts);
+  if ('diagnostic' in opened) {
+    return opened;
+  }
+
+  const server = createConnectedServer(opened.client, {
     serverName: config.name,
     timeoutMs: opts.timeoutMs,
     configuredHeaders: config.headers ?? {},
     url: config.url,
+    transport: opened.transport,
+    onDiagnostic: opts.onDiagnostic,
+    reconnect: async () => {
+      const fresh = await openRemoteMcpConnection(config, connectOpts);
+      if ('diagnostic' in fresh) {
+        throw new Error(fresh.diagnostic.message);
+      }
+      return fresh;
+    },
   });
 
   return { server };
