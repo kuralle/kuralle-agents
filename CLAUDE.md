@@ -127,8 +127,15 @@ E2E tests: see `packages/e2e-tests/README.md`.
 - **No source maps** (`.map`) in published tarballs.
 - **`npm` / `wrangler` `config.load()` failure** — these CLIs error when run from *inside* a
   monorepo package dir. Run them from a neutral cwd.
-- **Model preference in examples** — `resolveTemplateModel` prefers **xAI → Google → OpenAI**
-  by which provider key is present. To force OpenAI, clear `XAI_API_KEY` and the Google keys.
+- **Model preference in live tests** — the selector is `liveModel()` in
+  `packages/core/test/helpers/liveModel.ts`, and it prefers **Google → xAI → OpenAI** by which
+  provider key is present. To force OpenAI, clear `GOOGLE_GENERATIVE_AI_API_KEY` and `XAI_API_KEY`.
+  (There is no `resolveTemplateModel`; that name was stale.)
+- **A bare model string does not reach the provider it names.** `ai@7` resolves any string through
+  `globalThis.AI_SDK_DEFAULT_PROVIDER ?? gateway`, so `model: 'openai/gpt-4.1-mini'` goes to the
+  **Vercel AI Gateway** and fails with a billing error even when `OPENAI_API_KEY` is valid — the
+  provider key is never consulted. Always pass a configured provider instance
+  (`createOpenAI({ apiKey })('gpt-4.1-mini')`), which is what `liveModel()` does. See RFC 0001 §4.4.
 - **An app with no `tsconfig.json` is invisible to the type gate.** `apps/examples/*` and
   `apps/playground/*` are both swept by `typecheck:all` now, but a sweep only sees configs
   that exist — `fs-demo-vercel` imported a package it never declared and nothing noticed

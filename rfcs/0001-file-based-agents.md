@@ -213,21 +213,48 @@ Answer in one or two sentences. Use `lookup_order` for any order question.
 `retrieval.ts` supplies `AgentConfig.knowledge` — vector retrieval, which needs a store. Naming them
 both "knowledge" would fuse two mechanisms with different costs.
 
-### 4.4 Why a string model works
+### 4.4 A string model typechecks, but it does not reach the named provider
 
-In the installed `ai@6.0.193`:
+Re-verified against the installed `ai@7.0.74` on 2026-08-22. The type still admits a bare string:
 
 ```ts
-type LanguageModel = GlobalProviderModelId | LanguageModelV3 | LanguageModelV2;
+type LanguageModel = GlobalProviderModelId | LanguageModelV4 | LanguageModelV3 | LanguageModelV2;
 ```
 
-resolved through `globalThis.AI_SDK_DEFAULT_PROVIDER ?? gateway` (`dist/index.mjs:878`). So
-`model: 'openai/gpt-4.1-mini'` already satisfies `AgentConfig.model`
-(`packages/core/src/types/agentConfig.ts:28`).
+So `model: 'openai/gpt-4.1-mini'` does satisfy `AgentConfig.model` (`AgentConfig.model?: LanguageModel`).
+That much of the original claim survives v7.
 
-This is load-bearing: **no model-resolver layer is needed**, so G1 costs nothing. `agent.ts` exists
-only for values YAML genuinely cannot hold — a configured provider instance, a dynamic
-`instructions` function, capability objects.
+**The rest of it does not.** `resolveLanguageModel` sends every string to
+`getGlobalProvider().languageModel(model)`, and `getGlobalProvider()` is
+`globalThis.AI_SDK_DEFAULT_PROVIDER ?? gateway`. With no default provider registered, a bare string
+is resolved by the **Vercel AI Gateway**, which authenticates against a Vercel account — not against
+the provider key the string names. `OPENAI_API_KEY` is never consulted.
+
+Measured, all three with their own provider key present in the environment:
+
+| `model` | result |
+| --- | --- |
+| `'openai/gpt-4.1-mini'` | `GatewayInternalServerError` — AI Gateway requires a credit card on file |
+| `'google/gemini-2.0-flash'` | `GatewayInternalServerError` — same |
+| `'xai/grok-3-mini'` | `GatewayInternalServerError` — same |
+
+Setting `globalThis.AI_SDK_DEFAULT_PROVIDER = createOpenAI({ apiKey })` and calling
+`generateText({ model: 'gpt-4.1-mini' })` returns normally. That pair is the whole finding: the
+string resolves fine, it just resolves somewhere else.
+
+**So a model-resolver layer *is* needed, and G1 is not free.** A YAML `model:` string must be mapped
+to a configured provider instance — either by parsing the `provider/model-id` prefix and calling that
+provider's factory, or by registering `AI_SDK_DEFAULT_PROVIDER` at startup. Shipping the bare string
+straight through means every file-based agent fails at first call with a Vercel billing error, on a
+machine whose provider keys are all valid.
+
+The repo already takes the explicit route everywhere it runs live: `liveModel()` in
+`packages/core/test/helpers/liveModel.ts` calls `createGoogleGenerativeAI` / `createXai` /
+`createOpenAI` by hand rather than passing a string. That is the pattern the resolver should
+generalise.
+
+`agent.ts` still exists for values YAML genuinely cannot hold — a configured provider instance, a
+dynamic `instructions` function, capability objects.
 
 ### 4.5 Precedence — fail loud, don't guess
 
