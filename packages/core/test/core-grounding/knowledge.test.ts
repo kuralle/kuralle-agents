@@ -1,10 +1,11 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import { mockV3CapturingStreamModel, mockV3ReplyModel } from '../helpers/mockLanguageModelV3Results.js';
 import {
   buildAutoRetrieveProvider,
   buildKnowledgeProvider,
@@ -13,40 +14,23 @@ import {
 import { createInMemoryKnowledgeConfig } from '../../src/runtime/grounding/inMemoryKnowledge.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 
-afterEach(() => {
-  mock.restore();
-});
+function systemFromCapture(captured: Record<string, unknown>[]): string {
+  const system = captured[0]?.system;
+  if (typeof system === 'string') return system;
+  if (Array.isArray(system)) {
+    return system
+      .map((message: { content?: unknown }) =>
+        typeof message?.content === 'string' ? message.content : '',
+      )
+      .join('\n\n');
+  }
+  return '';
+}
 
 describe('knowledge gather', () => {
   it('runs autoRetrieve in gather phase and injects retrieved text into the system prompt', async () => {
-    let capturedSystem = '';
-
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { system?: unknown }) => {
-          capturedSystem =
-            typeof opts.system === 'string'
-              ? opts.system
-              : Array.isArray(opts.system)
-                ? opts.system
-                    .map((m: { content?: unknown }) =>
-                      typeof m?.content === 'string' ? m.content : '',
-                    )
-                    .join('\n\n')
-                : '';
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Answer' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const captured: Record<string, unknown>[] = [];
+    const model = mockV3CapturingStreamModel(captured, 'Answer');
 
     const { session, runStore, runState } = await setupDurableHarness();
     runState.messages = [{ role: 'user', content: 'How long do I have to return something?' }];
@@ -69,7 +53,7 @@ describe('knowledge gather', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model,
       autoRetrieve,
       emit: () => {},
     });
@@ -84,6 +68,7 @@ describe('knowledge gather', () => {
     const driver = new TextDriver();
     await driver.runAgentTurn(resolveReplyNode(node, runState.state), ctx);
 
+    const capturedSystem = systemFromCapture(captured);
     expect(capturedSystem).toContain('45 days');
     expect(capturedSystem).toContain('Retrieved Knowledge');
   });
@@ -106,7 +91,7 @@ describe('knowledge gather', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       autoRetrieve: {
         retrieve: async () => {
           retrieveCalls += 1;

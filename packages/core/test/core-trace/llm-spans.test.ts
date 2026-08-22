@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
@@ -6,52 +7,73 @@ import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { defineFlow, reply, decide, collect } from '../../src/types/flow.js';
-import { makeRunState, makeTestSession, stubModel } from '../core-durable/helpers.js';
+import { makeRunState, makeTestSession } from '../core-durable/helpers.js';
+import {
+  mockV3GenerateResult,
+  mockV3MultiStepStreamModel,
+} from '../helpers/mockLanguageModelV3Results.js';
 
-afterEach(() => {
-  mock.restore();
-});
+function streamUsage(inputTokens: number, outputTokens: number) {
+  return {
+    inputTokens: {
+      total: inputTokens,
+      noCache: inputTokens,
+      cacheRead: undefined,
+      cacheWrite: undefined,
+    },
+    outputTokens: {
+      total: outputTokens,
+      text: outputTokens,
+      reasoning: undefined,
+    },
+  };
+}
+
+function mockV3ToolCallStreamWithUsage(
+  toolName: string,
+  toolCallId: string,
+  input: string,
+  inputTokens: number,
+  outputTokens: number,
+) {
+  return {
+    stream: simulateReadableStream({
+      chunks: [
+        { type: 'stream-start' as const, warnings: [] },
+        { type: 'tool-call' as const, toolCallId, toolName, input },
+        {
+          type: 'finish' as const,
+          finishReason: { unified: 'tool-calls' as const, raw: undefined },
+          usage: streamUsage(inputTokens, outputTokens),
+        },
+      ],
+    }),
+  };
+}
+
+function mockV3StreamWithUsage(text: string, inputTokens: number, outputTokens: number) {
+  return {
+    stream: simulateReadableStream({
+      chunks: [
+        { type: 'text-start' as const, id: 't0' },
+        { type: 'text-delta' as const, id: 't0', delta: text },
+        { type: 'text-end' as const, id: 't0' },
+        {
+          type: 'finish' as const,
+          finishReason: { unified: 'stop' as const, raw: undefined },
+          usage: streamUsage(inputTokens, outputTokens),
+        },
+      ],
+    }),
+  };
+}
 
 describe('llm spans', () => {
   it('records one llm span per model round-trip, parented to the node, reconciling tokensIn', async () => {
-    let modelCall = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          modelCall += 1;
-          if (modelCall === 1) {
-            return {
-              fullStream: (async function* () {})(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                { toolName: 'lookup', toolCallId: 'call-llm', input: {} },
-              ]),
-              totalUsage: Promise.resolve({
-                inputTokens: 100,
-                outputTokens: 10,
-                totalTokens: 110,
-              }),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'Done.' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-            totalUsage: Promise.resolve({
-              inputTokens: 150,
-              outputTokens: 20,
-              totalTokens: 170,
-            }),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => mockV3ToolCallStreamWithUsage('lookup', 'call-llm', '{}', 100, 10),
+      () => mockV3StreamWithUsage('Done.', 150, 20),
+    ]);
 
     const lookup = defineTool({
       name: 'lookup',
@@ -73,7 +95,7 @@ describe('llm spans', () => {
     const agent = defineAgent({
       id: 'llm-span-agent',
       instructions: 'Use the lookup tool.',
-      model: stubModel,
+      model,
       tools: { lookup },
       flows: [flow],
     });
@@ -113,39 +135,17 @@ describe('llm spans', () => {
   });
 
   it('reconciles tokens across speaking and extraction calls', async () => {
-    let streamCall = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCall += 1;
-          if (streamCall === 1) {
-            return {
-              fullStream: (async function* () {})(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                { toolName: 'submit_name_data', toolCallId: 'call-ex', input: { name: 'Riley' } },
-              ]),
-              totalUsage: Promise.resolve({ inputTokens: 80, outputTokens: 8, totalTokens: 88 }),
-            };
-          }
-          if (streamCall === 2) {
-            return {
-              fullStream: (async function* () {
-                yield Object.assign({ type: 'text-delta' }, { text: 'Thanks Riley.' });
-              })(),
-              finishReason: Promise.resolve('stop'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([]),
-              totalUsage: Promise.resolve({ inputTokens: 120, outputTokens: 12, totalTokens: 132 }),
-            };
-          }
-          throw new Error(`unexpected streamText call ${streamCall}`);
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () =>
+        mockV3ToolCallStreamWithUsage(
+          'submit_name_data',
+          'call-ex',
+          JSON.stringify({ name: 'Riley' }),
+          80,
+          8,
+        ),
+      () => mockV3StreamWithUsage('Thanks Riley.', 120, 12),
+    ]);
 
     const confirm = reply({
       id: 'confirm',
@@ -167,7 +167,7 @@ describe('llm spans', () => {
     const agent = defineAgent({
       id: 'name-span-agent',
       instructions: 'Collect names.',
-      model: stubModel,
+      model,
       flows: [flow],
     });
 
@@ -201,15 +201,8 @@ describe('llm spans', () => {
   });
 
   it('records control-path llm spans on decide-node transitions', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: { choice: 'checkout' },
-          usage: { inputTokens: 55, outputTokens: 5, totalTokens: 60 },
-        }),
-      };
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => mockV3GenerateResult(JSON.stringify({ choice: 'checkout' }), 55),
     });
 
     const checkout = reply({
@@ -236,7 +229,7 @@ describe('llm spans', () => {
     const agent = defineAgent({
       id: 'decide-span-agent',
       instructions: 'Help with cart',
-      model: stubModel,
+      model,
       flows: [flow],
     });
 
@@ -265,28 +258,9 @@ describe('llm spans', () => {
   });
 
   it('reconciles decide plus reply tokens and parents controlPath spans to the turn', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: { choice: 'continue' },
-          usage: { inputTokens: 55, outputTokens: 5, totalTokens: 60 },
-        }),
-        streamText: () => ({
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'finished' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-          totalUsage: Promise.resolve({
-            inputTokens: 100,
-            outputTokens: 4,
-            totalTokens: 104,
-          }),
-        }),
-      };
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => mockV3GenerateResult(JSON.stringify({ choice: 'continue' }), 55),
+      doStream: async () => mockV3StreamWithUsage('finished', 100, 4),
     });
 
     const finish = reply({
@@ -309,7 +283,7 @@ describe('llm spans', () => {
     const agent = defineAgent({
       id: 'mixed-llm-agent',
       instructions: 'Help.',
-      model: stubModel,
+      model,
       flows: [flow],
     });
 

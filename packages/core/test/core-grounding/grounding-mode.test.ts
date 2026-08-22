@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test';
 import { z } from 'zod';
 import { InMemoryFs } from '@kuralle-agents/fs';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
@@ -10,7 +11,13 @@ import { executeModelToolCall } from '../../src/runtime/channels/executeModelToo
 import { defineTool } from '../../src/tools/effect/defineTool.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { InMemoryPersistentMemoryStore } from '../../src/memory/blocks/InMemoryPersistentMemoryStore.js';
-import { setupDurableHarness, stubModel, reloadRunState } from '../core-durable/helpers.js';
+import { setupDurableHarness, reloadRunState } from '../core-durable/helpers.js';
+import {
+  extractSystemFromPrompt,
+  mockV3ReplyModel,
+  mockV3StreamResult,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 import {
   buildAutoRetrieveProvider,
   buildKnowledgeProvider,
@@ -25,10 +32,6 @@ const SEED_DOC = { text: 'Free shipping on orders over $50.', id: 'shipping' };
 function knowledgeProvider() {
   return buildKnowledgeProvider(createInMemoryKnowledgeConfig([SEED_DOC]));
 }
-
-afterEach(() => {
-  mock.restore();
-});
 
 describe('declared grounding contract', () => {
   it('guaranteed default builds pre-injection provider and no knowledge tool', () => {
@@ -57,7 +60,7 @@ describe('declared grounding contract', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: { knowledge_search: tool! } }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
 
@@ -97,7 +100,7 @@ describe('declared grounding contract', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       autoRetrieve: undefined,
       emit: () => {},
     });
@@ -135,48 +138,42 @@ describe('declared grounding contract', () => {
       },
     ];
     const seenToolSets: string[][] = [];
-
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { tools?: Record<string, unknown> }) => {
-          seenToolSets.push(Object.keys(opts.tools ?? {}).sort());
-          const turn = modelTurns.shift();
-          if (!turn) {
-            throw new Error('unexpected extra model turn');
-          }
-          return {
-            fullStream: (async function* () {
-              if (turn.text) {
-                yield Object.assign({ type: 'text-delta' }, { text: turn.text });
-              }
-            })(),
-            finishReason: Promise.resolve(turn.finishReason),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve(turn.toolCalls),
-          };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doStream: async (options) => {
+        seenToolSets.push((options.tools ?? []).map((tool) => tool.name).sort());
+        const turn = modelTurns.shift();
+        if (!turn) {
+          throw new Error('unexpected extra model turn');
+        }
+        if (turn.text) {
+          return mockV3StreamResult(turn.text);
+        }
+        const toolCall = turn.toolCalls[0]!;
+        return mockV3ToolCallStreamResult(
+          toolCall.toolName,
+          toolCall.toolCallId,
+          JSON.stringify(toolCall.input),
+        );
+      },
     });
 
     const specialist = defineAgent({
       id: 'specialist',
       instructions: 'Answer with knowledge.',
       knowledge: { autoRetrieve: false },
-      model: stubModel,
+      model,
     });
     const host = defineAgent({
       id: 'host',
       instructions: 'Route when needed.',
       handoffs: ['specialist'],
       agents: [specialist],
-      model: stubModel,
+      model,
     });
     const runtime = createRuntime({
       agents: [host, specialist],
       defaultAgentId: 'host',
-      defaultModel: stubModel,
+      defaultModel: model,
       sessionStore: new MemoryStore(),
       knowledge: createInMemoryKnowledgeConfig([SEED_DOC]),
     });
@@ -276,40 +273,54 @@ describe('declared grounding contract', () => {
     const seenToolSets: string[][] = [];
     let capturedSpecialistSystem = '';
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: { tools?: Record<string, unknown>; system?: unknown }) => {
-          seenToolSets.push(Object.keys(opts.tools ?? {}).sort());
-          if (seenToolSets.length >= 2) {
-            capturedSpecialistSystem =
-              typeof opts.system === 'string'
-                ? opts.system
-                : Array.isArray(opts.system)
-                  ? opts.system
-                      .map((m: { content?: unknown }) =>
-                        typeof m?.content === 'string' ? m.content : '',
-                      )
-                      .join('\n\n')
-                  : '';
-          }
-          const turn = modelTurns.shift();
-          if (!turn) {
-            throw new Error('unexpected extra model turn');
-          }
-          return {
-            fullStream: (async function* () {
-              if (turn.text) {
-                yield Object.assign({ type: 'text-delta' }, { text: turn.text });
-              }
-            })(),
-            finishReason: Promise.resolve(turn.finishReason),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve(turn.toolCalls),
-          };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doStream: async (options) => {
+        seenToolSets.push((options.tools ?? []).map((tool) => tool.name).sort());
+        if (seenToolSets.length >= 2) {
+          capturedSpecialistSystem = extractSystemFromPrompt(options.prompt ?? []) ?? '';
+        }
+        const turn = modelTurns.shift();
+        if (!turn) {
+          throw new Error('unexpected extra model turn');
+        }
+        if (turn.text) {
+          return mockV3StreamResult(turn.text);
+        }
+        const toolCalls = turn.toolCalls;
+        if (toolCalls.length === 1) {
+          const toolCall = toolCalls[0]!;
+          return mockV3ToolCallStreamResult(
+            toolCall.toolName,
+            toolCall.toolCallId,
+            JSON.stringify(toolCall.input),
+          );
+        }
+        // Multiple parallel tool calls in one step — emit sequentially in one stream.
+        const usage = {
+          inputTokens: { total: 100, noCache: 100, cacheRead: undefined, cacheWrite: undefined },
+          outputTokens: { total: 1, text: 1, reasoning: undefined },
+        };
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'stream-start' as const, warnings: [] },
+              ...toolCalls.flatMap((toolCall) => [
+                {
+                  type: 'tool-call' as const,
+                  toolCallId: toolCall.toolCallId,
+                  toolName: toolCall.toolName,
+                  input: JSON.stringify(toolCall.input),
+                },
+              ]),
+              {
+                type: 'finish' as const,
+                finishReason: { unified: 'tool-calls' as const, raw: undefined },
+                usage,
+              },
+            ],
+          }),
+        };
+      },
     });
 
     const memoryStore = new InMemoryPersistentMemoryStore();
@@ -333,7 +344,7 @@ describe('declared grounding contract', () => {
           allowedTools: [],
         },
       ],
-      model: stubModel,
+      model,
     });
     const host = defineAgent({
       id: 'host',
@@ -350,12 +361,12 @@ describe('declared grounding contract', () => {
         },
       ],
       agents: [specialist],
-      model: stubModel,
+      model,
     });
     const runtime = createRuntime({
       agents: [host, specialist],
       defaultAgentId: 'host',
-      defaultModel: stubModel,
+      defaultModel: model,
       sessionStore: new MemoryStore(),
       knowledge: createInMemoryKnowledgeConfig([SEED_DOC]),
     });
@@ -428,7 +439,7 @@ describe('declared grounding contract', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
     const call = {
@@ -449,7 +460,7 @@ describe('declared grounding contract', () => {
       runStore,
       steps: await runStore.getSteps(runState.runId),
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
     const second = await executeModelToolCall(ctx2, call, { global_lookup: injectedGlobalTool });
@@ -490,7 +501,7 @@ describe('declared grounding contract', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: { global_lookup: registryTool } }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
     const call = {
@@ -511,7 +522,7 @@ describe('declared grounding contract', () => {
       runStore,
       steps: await runStore.getSteps(runState.runId),
       toolExecutor: new CoreToolExecutor({ tools: { global_lookup: registryTool } }),
-      model: stubModel,
+      model: mockV3ReplyModel(),
       emit: () => {},
     });
     const second = await executeModelToolCall(ctx2, call, { global_lookup: injectedGlobalTool });

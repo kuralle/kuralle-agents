@@ -1,4 +1,4 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import type { ValidationCapability, ValidateInput, ValidateDecision } from '../../src/capabilities/ValidationCapability.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
@@ -20,27 +20,7 @@ import {
 import { createInMemoryKnowledgeConfig } from '../../src/runtime/grounding/inMemoryKnowledge.js';
 import type { StreamPart } from '../../src/types/stream.js';
 import type { SourceRef } from '../../src/types/knowledge.js';
-
-afterEach(() => {
-  mock.restore();
-});
-
-function mockStreamText(text: string) {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      streamText: () => ({
-        fullStream: (async function* () {
-          yield Object.assign({ type: 'text-delta' }, { text });
-        })(),
-        finishReason: Promise.resolve('stop'),
-        response: Promise.resolve({ messages: [] }),
-        toolCalls: Promise.resolve([]),
-      }),
-    };
-  });
-}
+import { mockV3StreamTextModel } from '../helpers/mockLanguageModelV3Results.js';
 
 describe('H6 confidence/grounding gate', () => {
   it('reachable: agent validate policies are wired and validate() is called post-turn', async () => {
@@ -58,8 +38,6 @@ describe('H6 confidence/grounding gate', () => {
     expect(policies.validationPolicies).toHaveLength(1);
     expect(policies.validationPolicies[0]?.name).toBe('spy-validation');
 
-    mockStreamText('model claims order placed');
-
     const { session, runStore, runState } = await setupDurableHarness('h6-reach', 'h6-reach-run');
     runState.messages = [{ role: 'user', content: 'status?' }];
     const ctx = await createRunContext({
@@ -68,7 +46,7 @@ describe('H6 confidence/grounding gate', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel('model claims order placed'),
       validationPolicies: policies.validationPolicies,
       emit: () => {},
     });
@@ -94,8 +72,6 @@ describe('H6 confidence/grounding gate', () => {
       },
     };
 
-    mockStreamText('Your order has been placed!');
-
     const lowNode = reply({ id: 'low', instructions: 'low', next: () => ({ end: 'low-path' }) });
     const main = reply({
       id: 'main',
@@ -119,7 +95,7 @@ describe('H6 confidence/grounding gate', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel('Your order has been placed!'),
       validationPolicies: [policy],
       emit: (part) => {
         if (part.type === 'text-delta') {
@@ -144,8 +120,6 @@ describe('H6 confidence/grounding gate', () => {
       },
     };
 
-    mockStreamText('Answer from docs');
-
     const agent = defineAgent({ id: 'support', knowledge: { autoRetrieve: true }, model: stubModel });
     const knowledgeProvider = buildKnowledgeProvider(
       createInMemoryKnowledgeConfig([{ text: 'Return window is 45 days.', id: 'returns-doc' }]),
@@ -161,7 +135,7 @@ describe('H6 confidence/grounding gate', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel('Answer from docs'),
       autoRetrieve,
       validationPolicies: [policy],
       emit: () => {},
@@ -206,8 +180,6 @@ describe('H6 confidence/grounding gate', () => {
       },
     };
 
-    mockStreamText('maybe answer');
-
     const driver = new TextDriver();
     const runLow = async () => {
       const { session, runStore, runState } = await setupDurableHarness('h6-low', 'h6-low-run');
@@ -218,7 +190,7 @@ describe('H6 confidence/grounding gate', () => {
         runStore,
         steps: [],
         toolExecutor: new CoreToolExecutor({ tools: {} }),
-        model: stubModel,
+        model: mockV3StreamTextModel('maybe answer'),
         validationPolicies: [lowPolicy],
         emit: () => {},
       });
@@ -234,7 +206,7 @@ describe('H6 confidence/grounding gate', () => {
         runStore,
         steps: [],
         toolExecutor: new CoreToolExecutor({ tools: {} }),
-        model: stubModel,
+        model: mockV3StreamTextModel('maybe answer'),
         validationPolicies: [highPolicy],
         emit: () => {},
       });
@@ -258,8 +230,6 @@ describe('H6 confidence/grounding gate', () => {
       },
     };
 
-    mockStreamText('I will process a refund now.');
-
     const main = reply({ id: 'main', instructions: 'main', next: () => ({ end: 'should-not-reach' }) });
     const flow = defineFlow({
       name: 'esc-flow',
@@ -277,7 +247,7 @@ describe('H6 confidence/grounding gate', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel('I will process a refund now.'),
       validationPolicies: [policy],
       emit: () => {},
     });
@@ -291,7 +261,6 @@ describe('H6 confidence/grounding gate', () => {
 
   it('parity: no validate/confidenceGate behaves like baseline (model text emitted)', async () => {
     const modelText = 'plain answer without gate';
-    mockStreamText(modelText);
 
     const emitted: string[] = [];
     const { session, runStore, runState } = await setupDurableHarness('h6-parity', 'h6-parity-run');
@@ -302,7 +271,7 @@ describe('H6 confidence/grounding gate', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model: mockV3StreamTextModel(modelText),
       emit: (part) => {
         if (part.type === 'text-delta') {
           emitted.push(part.payload.delta);

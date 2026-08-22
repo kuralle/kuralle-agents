@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
@@ -17,8 +17,8 @@ import {
   makeTestSession,
   stubModel,
 } from '../core-durable/helpers.js';
-
-afterEach(() => mock.restore());
+import { mockV3GenerateResult } from '../helpers/mockLanguageModelV3Results.js';
+import { MockLanguageModelV3 } from 'ai/test';
 
 const actionDriver: ChannelDriver = {
   async runAgentTurn() {
@@ -276,25 +276,22 @@ describe('delegated flow audit adversarial repros', () => {
   });
 
   it('records a pure-dispatcher routing model call in LLM spans and usage', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: {
+    const routingModel = new MockLanguageModelV3({
+      doGenerate: async () =>
+        mockV3GenerateResult(
+          JSON.stringify({
             action: 'transfer',
             flowName: null,
             agentId: 'worker',
             reason: 'route to worker',
-          },
-          usage: { inputTokens: 47, outputTokens: 3, totalTokens: 50 },
-        }),
-      };
+          }),
+          47,
+        ),
     });
 
     const router = defineAgent({
       id: 'router',
-      model: stubModel,
+      model: routingModel,
       handoffs: ['worker'],
     });
     const worker = defineAgent({
@@ -305,7 +302,7 @@ describe('delegated flow audit adversarial repros', () => {
     const runtime = createRuntime({
       agents: [router, worker],
       defaultAgentId: router.id,
-      defaultModel: stubModel,
+      defaultModel: routingModel,
     });
 
     const trace = await runtime.runOnce({

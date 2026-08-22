@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { simulateReadableStream } from 'ai/test';
 import { z } from 'zod';
 import { collect, defineFlow, reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
@@ -11,11 +12,29 @@ import {
   mergeTurnExtraction,
   wouldCollectSatisfyAfterToolResults,
 } from '../../src/flow/extraction.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import {
+  mockV3MultiStepStreamModel,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
-afterEach(() => {
-  mock.restore();
-});
+const TOOL_CALLS_FINISH = { unified: 'tool-calls' as const, raw: undefined };
+
+function mockUsage(inputTokens: number, outputTokens: number) {
+  return {
+    inputTokens: {
+      total: inputTokens,
+      noCache: inputTokens,
+      cacheRead: undefined,
+      cacheWrite: undefined,
+    },
+    outputTokens: {
+      total: outputTokens,
+      text: outputTokens,
+      reasoning: undefined,
+    },
+  };
+}
 
 describe('runSilentExtraction early break', () => {
   it('stops after submit tool returns (exactly one streamText, merged data unchanged)', async () => {
@@ -38,37 +57,26 @@ describe('runSilentExtraction early break', () => {
       nodes: [collectNode, replyNode],
     });
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCalls += 1;
-          if (streamCalls === 1) {
-            return {
-              fullStream: (async function* () {})(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                {
-                  toolName: 'submit_intake_data',
-                  toolCallId: 'call-submit',
-                  input: { unitId: 'A-204' },
-                },
-              ]),
-              totalUsage: Promise.resolve({ inputTokens: 42, outputTokens: 7, totalTokens: 49 }),
-            };
-          }
-          return {
-            fullStream: (async function* () {})(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-            totalUsage: Promise.resolve({ inputTokens: 99, outputTokens: 9, totalTokens: 108 }),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'submit_intake_data',
+          'call-submit',
+          JSON.stringify({ unitId: 'A-204' }),
+          42,
+        );
+      },
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'submit_intake_data',
+          'call-should-not-run',
+          JSON.stringify({ unitId: 'B-105' }),
+          99,
+        );
+      },
+    ]);
 
     const submitTool = createExtractionSubmitTool(collectNode, ['unitId']);
     const { session, runStore, runState } = await setupDurableHarness('extract-break', 'extract-break');
@@ -82,7 +90,7 @@ describe('runSilentExtraction early break', () => {
       runStore,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model,
       emit: () => {},
     });
 
@@ -98,29 +106,26 @@ describe('runSilentExtraction early break', () => {
 
   it('continues extraction across steps until all required fields are collected', async () => {
     let streamCalls = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCalls += 1;
-          const field = streamCalls === 1 ? { first: 'Ada' } : { last: 'Lovelace' };
-          return {
-            fullStream: (async function* () {})(),
-            finishReason: Promise.resolve('tool-calls'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([
-              {
-                toolName: 'submit_name_data',
-                toolCallId: `submit-${streamCalls}`,
-                input: field,
-              },
-            ]),
-            totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 1, totalTokens: 11 }),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'submit_name_data',
+          `submit-${streamCalls}`,
+          JSON.stringify({ first: 'Ada' }),
+          10,
+        );
+      },
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'submit_name_data',
+          `submit-${streamCalls}`,
+          JSON.stringify({ last: 'Lovelace' }),
+          10,
+        );
+      },
+    ]);
 
     const confirm = reply({ id: 'confirm', instructions: 'Confirm', next: () => ({ end: 'done' }) });
     const collectNode = collect({
@@ -145,7 +150,7 @@ describe('runSilentExtraction early break', () => {
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model,
       emit: () => {},
     });
 
@@ -158,33 +163,31 @@ describe('runSilentExtraction early break', () => {
 
   it('keeps both submit calls from one response and still breaks early', async () => {
     let streamCalls = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCalls += 1;
-          return {
-            fullStream: (async function* () {})(),
-            finishReason: Promise.resolve('tool-calls'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([
+    const model = mockV3MultiStepStreamModel([
+      () => {
+        streamCalls += 1;
+        return {
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'stream-start', warnings: [] },
               {
-                toolName: 'submit_name_data',
+                type: 'tool-call',
                 toolCallId: 'submit-first',
-                input: { first: 'Ada' },
+                toolName: 'submit_name_data',
+                input: JSON.stringify({ first: 'Ada' }),
               },
               {
-                toolName: 'submit_name_data',
+                type: 'tool-call',
                 toolCallId: 'submit-last',
-                input: { last: 'Lovelace' },
+                toolName: 'submit_name_data',
+                input: JSON.stringify({ last: 'Lovelace' }),
               },
-            ]),
-            totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 1, totalTokens: 11 }),
-          };
-        },
-      };
-    });
+              { type: 'finish', finishReason: TOOL_CALLS_FINISH, usage: mockUsage(10, 1) },
+            ],
+          }),
+        };
+      },
+    ]);
 
     const done = reply({ id: 'done', instructions: 'Done', next: () => ({ end: 'done' }) });
     const collectNode = collect({
@@ -202,13 +205,14 @@ describe('runSilentExtraction early break', () => {
       'extract-double-submit',
       'extract-double-submit',
     );
+    runState.messages = [{ role: 'user', content: 'Ada Lovelace' }];
     const ctx = await createRunContext({
       session,
       runStore,
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
-      model: stubModel,
+      model,
       emit: () => {},
     });
 
@@ -236,29 +240,26 @@ describe('runSilentExtraction early break', () => {
       },
     });
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCalls += 1;
-          const unitId = streamCalls === 1 ? 'A-204' : 'B-105';
-          return {
-            fullStream: (async function* () {})(),
-            finishReason: Promise.resolve('tool-calls'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([
-              {
-                toolName: 'submit_intake_data',
-                toolCallId: `call-${streamCalls}`,
-                input: { unitId },
-              },
-            ]),
-            totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 1, totalTokens: 11 }),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'submit_intake_data',
+          `call-${streamCalls}`,
+          JSON.stringify({ unitId: streamCalls === 1 ? 'A-204' : 'B-105' }),
+          10,
+        );
+      },
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'submit_intake_data',
+          `call-${streamCalls}`,
+          JSON.stringify({ unitId: 'B-105' }),
+          10,
+        );
+      },
+    ]);
 
     const done = reply({ id: 'done', instructions: 'Done', next: () => ({ end: 'done' }) });
     const collectNode = collect({
@@ -271,6 +272,7 @@ describe('runSilentExtraction early break', () => {
       'extract-submit-error',
       'extract-submit-error',
     );
+    runState.messages = [{ role: 'user', content: 'Unit please' }];
     const resolved = resolveCollectExtractionNode(
       collectNode,
       ['unitId'],
@@ -286,7 +288,7 @@ describe('runSilentExtraction early break', () => {
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: { submit_intake_data: flakySubmit } }),
-      model: stubModel,
+      model,
       emit: () => {},
     });
 

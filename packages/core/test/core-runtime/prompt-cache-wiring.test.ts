@@ -1,23 +1,48 @@
 // Regression: provider prompt caching must reach streamText with the Eve layout.
 // applyPromptCache takes an object (system/tools/messages); TextDriver must pass
 // SystemModelMessage[] as `system` and cached tools.
-import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { LanguageModel, ModelMessage, SystemModelMessage } from 'ai';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
+import type { ModelMessage, SystemModelMessage } from 'ai';
 import { applyPromptCache } from '../../src/runtime/promptCache.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
+import {
+  mockV3StreamResult,
+  streamTextCaptureFromDoStream,
+} from '../helpers/mockLanguageModelV3Results.js';
 
-const anthropic = { provider: 'anthropic', modelId: 'claude-3-5-sonnet-20241022' } as unknown as LanguageModel;
-const openai = { provider: 'openai', modelId: 'gpt-4o-mini' } as unknown as LanguageModel;
-const other = { provider: 'xai', modelId: 'grok-2' } as unknown as LanguageModel;
+const anthropic = new MockLanguageModelV3({
+  provider: 'anthropic',
+  modelId: 'claude-3-5-sonnet-20241022',
+});
+const openai = new MockLanguageModelV3({ provider: 'openai', modelId: 'gpt-4o-mini' });
+const other = new MockLanguageModelV3({ provider: 'xai', modelId: 'grok-2' });
 const MSGS: ModelMessage[] = [
   { role: 'user', content: 'hi' },
   { role: 'assistant', content: 'hello' },
   { role: 'user', content: 'again' },
 ];
 
-afterEach(() => mock.restore());
+function capturingStreamModel(
+  captured: Array<Record<string, unknown>>,
+  provider: string,
+  modelId: string,
+  text = 'hi',
+): MockLanguageModelV3 {
+  return new MockLanguageModelV3({
+    provider,
+    modelId,
+    doStream: async (options) => {
+      captured.push({
+        ...streamTextCaptureFromDoStream(options),
+        providerOptions: options.providerOptions,
+      });
+      return mockV3StreamResult(text);
+    },
+  });
+}
 
 describe('applyPromptCache (provider gating)', () => {
   it('Anthropic: applies dual-namespace breakpoints; no openai providerOptions', () => {
@@ -66,13 +91,13 @@ describe('applyPromptCache (provider gating)', () => {
     expect(String(out.providerOptions?.openai?.promptCacheKey)).toMatch(/^kuralle-[0-9a-f]+$/);
 
     // A different session with the same prefix lands in the SAME lane — the whole point.
-    const other = applyPromptCache({
+    const otherSession = applyPromptCache({
       model: openai,
       sessionId: 'sess-zzz',
       messages: MSGS,
       stableSystem: [{ role: 'system', content: 'You are Realm.' }],
     });
-    expect(other.providerOptions?.openai?.promptCacheKey).toBe(
+    expect(otherSession.providerOptions?.openai?.promptCacheKey).toBe(
       out.providerOptions?.openai?.promptCacheKey,
     );
   });
@@ -90,35 +115,14 @@ describe('applyPromptCache (provider gating)', () => {
 
 describe('TextDriver wires prompt cache into streamText', () => {
   it('passes openai.promptCacheKey through to the streamText call', async () => {
-    let captured:
-      | {
-          providerOptions?: { openai?: { promptCacheKey?: string } };
-          system?: unknown;
-        }
-      | undefined;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: typeof captured) => {
-          captured = opts;
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'hi' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const captured: Array<Record<string, unknown>> = [];
+    const model = capturingStreamModel(captured, 'openai', 'gpt-4o-mini');
 
-    const agent = defineAgent({ id: 'a', instructions: 'Answer concisely.', model: openai });
+    const agent = defineAgent({ id: 'a', instructions: 'Answer concisely.', model });
     const runtime = createRuntime({
       agents: [agent],
       defaultAgentId: 'a',
-      defaultModel: openai,
+      defaultModel: model,
       sessionStore: new MemoryStore(),
     });
     const handle = runtime.run({ sessionId: 'sess-xyz', input: 'hello' });
@@ -127,46 +131,33 @@ describe('TextDriver wires prompt cache into streamText', () => {
     }
     await handle;
 
-    expect(captured?.providerOptions?.openai?.promptCacheKey).not.toBe('sess-xyz');
-    expect(String(captured?.providerOptions?.openai?.promptCacheKey)).toMatch(/^kuralle-[0-9a-f]+$/);
+    const streamCall = captured[0];
+    const providerOptions = streamCall?.providerOptions as
+      | { openai?: { promptCacheKey?: string } }
+      | undefined;
+    expect(providerOptions?.openai?.promptCacheKey).not.toBe('sess-xyz');
+    expect(String(providerOptions?.openai?.promptCacheKey)).toMatch(/^kuralle-[0-9a-f]+$/);
     // System must be SystemModelMessage[] (not a bare string) so breakpoints can attach.
-    expect(Array.isArray(captured?.system)).toBe(true);
+    expect(Array.isArray(streamCall?.system)).toBe(true);
   });
 
   it('passes Anthropic system as SystemModelMessage[] with cacheControl on the stable head', async () => {
-    let captured:
-      | {
-          system?: Array<{ role: string; content: string; providerOptions?: unknown }>;
-          tools?: Record<string, { providerOptions?: unknown }>;
-        }
-      | undefined;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: (opts: typeof captured) => {
-          captured = opts;
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'hi' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-          };
-        },
-      };
-    });
+    const captured: Array<Record<string, unknown>> = [];
+    const model = capturingStreamModel(
+      captured,
+      'anthropic',
+      'claude-3-5-sonnet-20241022',
+    );
 
     const agent = defineAgent({
       id: 'a',
       instructions: 'Stable instructions for caching.',
-      model: anthropic,
+      model,
     });
     const runtime = createRuntime({
       agents: [agent],
       defaultAgentId: 'a',
-      defaultModel: anthropic,
+      defaultModel: model,
       sessionStore: new MemoryStore(),
     });
     const handle = runtime.run({ sessionId: 'sess-anth', input: 'hello' });
@@ -175,8 +166,12 @@ describe('TextDriver wires prompt cache into streamText', () => {
     }
     await handle;
 
-    expect(Array.isArray(captured?.system)).toBe(true);
-    const head = captured?.system?.[0];
+    expect(Array.isArray(captured[0]?.system)).toBe(true);
+    const systemParts =
+      model.doStreamCalls[0]?.prompt?.filter((message) => message.role === 'system') ?? [];
+    const head = systemParts[0] as
+      | { role: string; content: string; providerOptions?: unknown }
+      | undefined;
     expect(head?.role).toBe('system');
     expect(
       (head?.providerOptions as { anthropic?: { cacheControl?: unknown } } | undefined)?.anthropic
@@ -192,7 +187,7 @@ describe('decide nodes are cached', () => {
     // the main channel.
     const { applyPromptCache } = await import('../../src/runtime/promptCache.js');
     const out = applyPromptCache({
-      model: { provider: 'openai', modelId: 'gpt-4.1-mini' },
+      model: new MockLanguageModelV3({ provider: 'openai', modelId: 'gpt-4.1-mini' }),
       sessionId: 'decide-sess',
       messages: [{ role: 'user', content: 'pick one' }],
       stableSystem: [{ role: 'system', content: 'You are Realm.' }],

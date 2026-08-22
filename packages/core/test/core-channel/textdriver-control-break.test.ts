@@ -1,16 +1,16 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { reply } from '../../src/types/flow.js';
 import { TextDriver } from '../../src/runtime/channels/TextDriver.js';
-import { defineTool, CoreToolExecutor } from '../../src/tools/effect/index.js';
+import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { resolveReplyNode } from '../../src/flow/nodeBuilders.js';
 import { createEnterFlowTool } from '../../src/tools/enterFlow.js';
 import { defineFlow } from '../../src/types/flow.js';
-import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
-
-afterEach(() => {
-  mock.restore();
-});
+import { setupDurableHarness } from '../core-durable/helpers.js';
+import {
+  mockV3MultiStepStreamModel,
+  mockV3ToolCallStreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 describe('TextDriver control break', () => {
   it('stops the speaking loop after a control tool sets out.control (exactly one streamText)', async () => {
@@ -24,41 +24,29 @@ describe('TextDriver control break', () => {
     });
     const enterFlow = createEnterFlowTool([flow]);
 
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        streamText: () => {
-          streamCalls += 1;
-          if (streamCalls === 1) {
-            return {
-              fullStream: (async function* () {})(),
-              finishReason: Promise.resolve('tool-calls'),
-              response: Promise.resolve({ messages: [] }),
-              toolCalls: Promise.resolve([
-                {
-                  toolName: 'enter_flow',
-                  toolCallId: 'call-enter',
-                  input: { flowName: 'target-flow', reason: 'user asked' },
-                },
-              ]),
-              totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
-            };
-          }
-          return {
-            fullStream: (async function* () {
-              yield Object.assign({ type: 'text-delta' }, { text: 'should not run' });
-            })(),
-            finishReason: Promise.resolve('stop'),
-            response: Promise.resolve({ messages: [] }),
-            toolCalls: Promise.resolve([]),
-            totalUsage: Promise.resolve({ inputTokens: 100, outputTokens: 10, totalTokens: 110 }),
-          };
-        },
-      };
-    });
+    const model = mockV3MultiStepStreamModel([
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'enter_flow',
+          'call-enter',
+          JSON.stringify({ flowName: 'target-flow', reason: 'user asked' }),
+          10,
+        );
+      },
+      () => {
+        streamCalls += 1;
+        return mockV3ToolCallStreamResult(
+          'enter_flow',
+          'call-should-not-run',
+          JSON.stringify({ flowName: 'target-flow', reason: 'never' }),
+          100,
+        );
+      },
+    ]);
 
     const { session, runStore, runState } = await setupDurableHarness('ctrl-break', 'ctrl-break');
+    runState.messages = [{ role: 'user', content: 'Route me' }];
     const toolExecutor = new CoreToolExecutor({ tools: { enter_flow: enterFlow } });
     const ctx = await createRunContext({
       session,
@@ -66,7 +54,7 @@ describe('TextDriver control break', () => {
       runStore,
       steps: [],
       toolExecutor,
-      model: stubModel,
+      model,
       emit: () => {},
     });
 

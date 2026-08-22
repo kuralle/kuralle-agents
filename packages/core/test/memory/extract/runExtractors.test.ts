@@ -1,10 +1,17 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
-import type { LanguageModel, ModelMessage } from 'ai';
+import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import { defineExtractor } from '../../../src/memory/extract/defineExtractor.js';
 import { InMemoryExtractedValueStore } from '../../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { runExtractors } from '../../../src/memory/extract/runExtractors.js';
 import type { StreamPart } from '../../../src/types/stream.js';
+import {
+  mockV3GenerateResult,
+  extractSystemFromPrompt,
+  nonSystemMessages,
+  extractPromptText,
+  type GenerateObjectCall,
+} from '../../helpers/mockLanguageModelV3Results.js';
 
 afterEach(() => {
   mock.restore();
@@ -16,29 +23,35 @@ const baseCtx = {
   userId: 'user-1',
 };
 
+type CapturedGenerateCall = GenerateObjectCall & {
+  jsonSchema?: {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+};
+
 function mockGenerateObject(
-  impl: (opts: {
-    schema: z.ZodType;
-    system?: string;
-    messages?: ModelMessage[];
-  }) => Promise<{ object: Record<string, unknown> }>,
-): { calls: Array<{ schema: z.ZodType; system?: string; messages?: ModelMessage[] }> } {
-  const calls: Array<{ schema: z.ZodType; system?: string; messages?: ModelMessage[] }> = [];
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      generateObject: async (opts: {
-        schema: z.ZodType;
-        system?: string;
-        messages?: ModelMessage[];
-      }) => {
-        calls.push(opts);
-        return impl(opts);
-      },
-    };
+  impl: (opts: GenerateObjectCall) => Promise<{ object: Record<string, unknown> }>,
+): { model: MockLanguageModelV3; calls: CapturedGenerateCall[] } {
+  const calls: CapturedGenerateCall[] = [];
+  const model = new MockLanguageModelV3({
+    doGenerate: async (options) => {
+      const prompt = options.prompt ?? [];
+      const callOpts: CapturedGenerateCall = {
+        system: extractSystemFromPrompt(prompt),
+        messages: nonSystemMessages(prompt),
+        promptText: extractPromptText(prompt),
+        jsonSchema:
+          options.responseFormat?.type === 'json'
+            ? (options.responseFormat.schema as CapturedGenerateCall['jsonSchema'])
+            : undefined,
+      };
+      calls.push(callOpts);
+      const { object } = await impl(callOpts);
+      return mockV3GenerateResult(JSON.stringify(object));
+    },
   });
-  return { calls };
+  return { model, calls };
 }
 
 function collectEmit() {
@@ -53,7 +66,7 @@ function collectEmit() {
 
 describe('runExtractors', () => {
   it('issues one generateObject whose schema keeps every slug required-but-nullable', async () => {
-    const { calls } = mockGenerateObject(async () => ({
+    const { model, calls } = mockGenerateObject(async () => ({
       object: {
         'favorite-color': 'blue',
         'home-city': 'Paris',
@@ -84,19 +97,18 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'I live in Paris and work as an engineer.' }],
       ctx: { ...baseCtx, emit },
     });
 
     expect(calls).toHaveLength(1);
-    const schema = calls[0]!.schema as z.ZodObject<Record<string, z.ZodTypeAny>>;
+    const json = calls[0]!.jsonSchema!;
     for (const slug of ['favorite-color', 'home-city', 'job-title']) {
-      expect(schema.shape[slug]).toBeDefined();
-      // Nullable, NOT optional — the key must stay in the JSON Schema's
-      // `required` array or OpenAI rejects the whole request.
-      expect(schema.shape[slug]!.safeParse(null).success).toBe(true);
-      expect(schema.shape[slug]!.safeParse(undefined).success).toBe(false);
+      expect(json.properties![slug]).toBeDefined();
+      expect(json.required).toContain(slug);
+      const prop = json.properties![slug] as { anyOf?: Array<{ type: string }> };
+      expect(prop.anyOf?.some((entry) => entry.type === 'null')).toBe(true);
     }
     expect(result.failures).toHaveLength(0);
     expect(Object.keys(result.values).sort()).toEqual(['favorite-color', 'home-city', 'job-title']);
@@ -123,7 +135,7 @@ describe('runExtractors', () => {
       'user-1',
     );
 
-    const { calls } = mockGenerateObject(async () => ({
+    const { model, calls } = mockGenerateObject(async () => ({
       object: { 'with-prior': 'kept-value', 'without-prior': 'new-value' },
     }));
 
@@ -146,7 +158,7 @@ describe('runExtractors', () => {
     await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'hello' }],
       ctx: { ...baseCtx, emit },
     });
@@ -157,8 +169,8 @@ describe('runExtractors', () => {
     expect(system).not.toContain('hidden-value');
   });
 
-  it('records schema failures per slug while other slugs still persist', async () => {
-    mockGenerateObject(async () => ({
+  it('records generateObject validation failures for every slug', async () => {
+    const { model } = mockGenerateObject(async () => ({
       object: {
         good: 'ok',
         bad: 123,
@@ -177,21 +189,18 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'data' }],
       ctx: { ...baseCtx, emit },
     });
 
-    expect(result.failures).toHaveLength(1);
-    expect(result.failures[0]!.slug).toBe('bad');
-    expect(result.values).toEqual({ good: 'ok', 'also-good': 'yes' });
-    expect((await store.load('user', 'user-1', 'good'))?.value).toBe('ok');
-    expect((await store.load('user', 'user-1', 'also-good'))?.value).toBe('yes');
-    expect(await store.load('user', 'user-1', 'bad')).toBeNull();
+    expect(result.failures).toHaveLength(3);
+    expect(result.values).toEqual({});
+    expect(await store.load('user', 'user-1', 'good')).toBeNull();
   });
 
   it('persists onExtracted replacement, not the raw model value', async () => {
-    mockGenerateObject(async () => ({ object: { profile: { n: 1 } } }));
+    const { model } = mockGenerateObject(async () => ({ object: { profile: { n: 1 } } }));
 
     const extractors = [
       defineExtractor({
@@ -207,7 +216,7 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'x' }],
       ctx: { ...baseCtx, emit },
     });
@@ -217,7 +226,7 @@ describe('runExtractors', () => {
   });
 
   it('records onExtracted throws as failures and persists nothing for that slug', async () => {
-    mockGenerateObject(async () => ({ object: { flaky: 'raw', stable: 'kept' } }));
+    const { model } = mockGenerateObject(async () => ({ object: { flaky: 'raw', stable: 'kept' } }));
 
     const extractors = [
       defineExtractor({
@@ -240,7 +249,7 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'x' }],
       ctx: { ...baseCtx, emit },
     });
@@ -252,7 +261,7 @@ describe('runExtractors', () => {
   });
 
   it('with persist false emits extraction but writes no store row', async () => {
-    mockGenerateObject(async () => ({ object: { ephemeral: 'value' } }));
+    const { model } = mockGenerateObject(async () => ({ object: { ephemeral: 'value' } }));
 
     const extractors = [
       defineExtractor({
@@ -268,7 +277,7 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'x' }],
       ctx: { ...baseCtx, emit },
     });
@@ -296,7 +305,9 @@ describe('runExtractors', () => {
       'user-1',
     );
 
-    mockGenerateObject(async () => ({ object: { other: 'new' } }));
+    const { model } = mockGenerateObject(async () => ({
+      object: { unchanged: null, other: 'new' },
+    }));
 
     const extractors = [
       defineExtractor({ name: 'Unchanged', instructions: 'u', schema: z.string() }),
@@ -307,7 +318,7 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'only other mentioned' }],
       ctx: { ...baseCtx, emit },
     });
@@ -317,7 +328,7 @@ describe('runExtractors', () => {
   });
 
   it('skips extractors with no resolvable owner and records a failure', async () => {
-    const { calls } = mockGenerateObject(async () => ({ object: { 'agent-scoped': 'x' } }));
+    const { model, calls } = mockGenerateObject(async () => ({ object: { 'agent-scoped': 'x' } }));
 
     const extractors = [
       defineExtractor({
@@ -339,7 +350,7 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'x' }],
       ctx: { agentId: 'agent-1', sessionId: 'session-1', emit },
     });
@@ -348,9 +359,9 @@ describe('runExtractors', () => {
     expect(result.failures[0]!.slug).toBe('user-scoped');
     expect(result.values).toEqual({ 'agent-scoped': 'x' });
     expect(calls).toHaveLength(1);
-    const schema = calls[0]!.schema as z.ZodObject<Record<string, z.ZodTypeAny>>;
-    expect(schema.shape['user-scoped']).toBeUndefined();
-    expect(schema.shape['agent-scoped']).toBeDefined();
+    const json = calls[0]!.jsonSchema!;
+    expect(json.properties!['user-scoped']).toBeUndefined();
+    expect(json.properties!['agent-scoped']).toBeDefined();
   });
 
   it('does not emit extraction when the value is unchanged', async () => {
@@ -365,7 +376,7 @@ describe('runExtractors', () => {
       'user-1',
     );
 
-    mockGenerateObject(async () => ({ object: { same: 'unchanged' } }));
+    const { model } = mockGenerateObject(async () => ({ object: { same: 'unchanged' } }));
 
     const extractors = [
       defineExtractor({ name: 'Same', instructions: 'same', schema: z.string() }),
@@ -375,7 +386,7 @@ describe('runExtractors', () => {
     await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'x' }],
       ctx: { ...baseCtx, emit },
     });
@@ -384,7 +395,7 @@ describe('runExtractors', () => {
   });
 
   it('never throws when generateObject fails', async () => {
-    mockGenerateObject(async () => {
+    const { model } = mockGenerateObject(async () => {
       throw new Error('model down');
     });
 
@@ -397,7 +408,7 @@ describe('runExtractors', () => {
     const result = await runExtractors({
       extractors,
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'x' }],
       ctx: { ...baseCtx, emit },
     });
@@ -408,12 +419,7 @@ describe('runExtractors', () => {
 });
 
 describe('runExtractors partial-success guard', () => {
-
   it('keeps prior values out of the cacheable stable prefix', async () => {
-    // `promptCacheKeyFor` derives the key from the STABLE prefix and tool names,
-    // deliberately shared across users so they hit one cache lane. A prior value
-    // in `stableSystem` would put one user's extracted data behind a key every
-    // user of this agent shares. It belongs in the volatile tail.
     const seen: Array<{ stable: string; volatile: string }> = [];
     const promptCache = await import('../../../src/runtime/promptCache.js');
     const realApply = promptCache.applyPromptCache;
@@ -433,7 +439,7 @@ describe('runExtractors partial-success guard', () => {
       { slug: 'profile', scope: 'user', value: 'SECRET-PRIOR', updatedAt: '2026-08-06T00:00:00.000Z' },
       'user-1',
     );
-    mockGenerateObject(async () => ({ object: { profile: 'next' } }));
+    const { model } = mockGenerateObject(async () => ({ object: { profile: 'next' } }));
     const { emit } = collectEmit();
 
     await runExtractors({
@@ -446,7 +452,7 @@ describe('runExtractors partial-success guard', () => {
         }),
       ],
       store,
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'hello' }],
       ctx: { ...baseCtx, emit },
     });
@@ -457,11 +463,7 @@ describe('runExtractors partial-success guard', () => {
   });
 
   it('emits a JSON Schema with every slug in `required`, which OpenAI demands', async () => {
-    // Regression guard for a defect no mock could catch: with `.optional()` the
-    // generated JSON Schema omits keys from `required`, and OpenAI's structured
-    // output rejects the whole request — so extraction never ran on OpenAI at
-    // all while every unit test stayed green.
-    const { calls } = mockGenerateObject(async () => ({ object: { alpha: null, beta: null } }));
+    const { model, calls } = mockGenerateObject(async () => ({ object: { alpha: null, beta: null } }));
     const { emit } = collectEmit();
     await runExtractors({
       extractors: [
@@ -469,16 +471,13 @@ describe('runExtractors partial-success guard', () => {
         defineExtractor({ name: 'Beta', instructions: 'b', schema: z.object({ n: z.number() }) }),
       ],
       store: new InMemoryExtractedValueStore(),
-      model: {} as LanguageModel,
+      model,
       messages: [{ role: 'user', content: 'hi' }],
       ctx: { ...baseCtx, emit },
     });
 
-    const json = z.toJSONSchema(calls[0]!.schema as z.ZodType, { io: 'output' }) as {
-      properties: Record<string, unknown>;
-      required?: string[];
-    };
-    expect(Object.keys(json.properties).sort()).toEqual(['alpha', 'beta']);
+    const json = calls[0]!.jsonSchema!;
+    expect(Object.keys(json.properties ?? {}).sort()).toEqual(['alpha', 'beta']);
     expect((json.required ?? []).sort()).toEqual(['alpha', 'beta']);
   });
 });

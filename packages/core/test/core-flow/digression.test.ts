@@ -1,6 +1,4 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
-
-afterEach(() => mock.restore());
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { collect, defineFlow, reply } from '../../src/types/flow.js';
 import { runFlow } from '../../src/flow/runFlow.js';
@@ -8,9 +6,13 @@ import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { createRunContext } from '../../src/runtime/ctx.js';
 import { getCollectData, schemaSatisfied } from '../../src/flow/extraction.js';
 import { getFlowPark, looksLikeOffScriptQuestion } from '../../src/flow/collectDigression.js';
-import { setupDurableHarness } from '../core-durable/helpers.js';
+import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import { setPendingUserInput } from '../../src/runtime/channels/inputBuffer.js';
 import type { StreamPart } from '../../src/types/stream.js';
+import {
+  mockV3GenerateObjectModel,
+  mockV3ReplyModel,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 function makeCollectFlow(id = 'name') {
   const done = reply({ id: 'done', instructions: 'Thanks.', next: () => ({ end: 'done' }) });
@@ -82,7 +84,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       emit: (p) => parts.push(p),
       outOfBandControl: false,
     });
@@ -99,21 +101,15 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
   });
 
   it('flag-ON route: intent switch handoffs with collect node parked', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: {
-            action: 'transfer',
-            flowName: null,
-            agentId: 'billing-agent',
-            reason: 'billing',
-            confidence: 0.95,
-          },
-        }),
-      };
-    });
+    const controlModel = mockV3GenerateObjectModel(async () => ({
+      object: {
+        action: 'transfer',
+        flowName: null,
+        agentId: 'billing-agent',
+        reason: 'billing',
+        confidence: 0.95,
+      },
+    }));
 
     const { ask, flow } = makeCollectFlow();
     const billingDone = reply({ id: 'bill-end', instructions: 'billing', next: () => ({ end: 'ok' }) });
@@ -126,7 +122,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const agent = defineAgent({
       id: 'router',
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       flows: [flow, billing],
       routes: [{ agent: 'billing-agent', when: 'billing invoice payment' }],
       experimental: { outOfBandControl: true },
@@ -144,7 +140,8 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: mockV3ReplyModel(),
+      controlModel,
       emit: () => {},
       outOfBandControl: true,
     });
@@ -157,21 +154,15 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
   });
 
   it('flag-ON enterFlow: switches flow and parks collect position', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: {
-            action: 'enterFlow',
-            flowName: 'billing',
-            agentId: null,
-            reason: 'billing',
-            confidence: 0.95,
-          },
-        }),
-      };
-    });
+    const controlModel = mockV3GenerateObjectModel(async () => ({
+      object: {
+        action: 'enterFlow',
+        flowName: 'billing',
+        agentId: null,
+        reason: 'billing',
+        confidence: 0.95,
+      },
+    }));
 
     const { ask, flow } = makeCollectFlow();
     const billingHold = reply({ id: 'bill-reply', instructions: 'How can I help with billing?' });
@@ -184,7 +175,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const agent = defineAgent({
       id: 'router',
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       flows: [flow, billing],
       routes: [{ flow: 'billing', when: 'billing invoice payment' }],
       experimental: { outOfBandControl: true },
@@ -202,7 +193,8 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: mockV3ReplyModel(),
+      controlModel,
       emit: () => {},
       outOfBandControl: true,
     });
@@ -238,7 +230,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const agent = defineAgent({
       id: 'support',
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       flows: [flow],
       experimental: { outOfBandControl: true },
     });
@@ -255,7 +247,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       emit: (p) => parts.push(p),
       outOfBandControl: true,
     });
@@ -330,7 +322,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const agent = defineAgent({
       id: 'support',
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       flows: [flow],
       experimental: { outOfBandControl: true },
     });
@@ -347,7 +339,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       emit: () => {},
       outOfBandControl: true,
     });
@@ -381,7 +373,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const agent = defineAgent({
       id: 'support',
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       flows: [flow],
       experimental: { outOfBandControl: true },
     });
@@ -398,7 +390,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       emit: (p) => parts.push(p),
       outOfBandControl: true,
     });
@@ -450,7 +442,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const agent = defineAgent({
       id: 'support',
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       flows: [flow],
       experimental: { outOfBandControl: true },
     });
@@ -467,7 +459,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       emit: () => {},
       outOfBandControl: true,
     });
@@ -503,7 +495,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
 
     const agent = defineAgent({
       id: 'support',
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       flows: [flow],
       experimental: { outOfBandControl: true },
     });
@@ -520,7 +512,7 @@ describe('H5 in-flow digression (outOfBandControl)', () => {
       runStore,
       steps: [],
       toolExecutor: { execute: async () => ({}) },
-      model: {} as import('ai').LanguageModel,
+      model: stubModel,
       emit: () => {},
       outOfBandControl: true,
     });

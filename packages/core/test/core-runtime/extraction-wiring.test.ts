@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { MockLanguageModelV3 } from 'ai/test';
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { defineExtractor } from '../../src/memory/extract/defineExtractor.js';
@@ -7,13 +8,13 @@ import { closeRun } from '../../src/runtime/closeRun.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { InMemoryExtractedValueStore } from '../../src/memory/extract/InMemoryExtractedValueStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { setupDurableHarness, stubModel, buildCtx } from '../core-durable/helpers.js';
+import { setupDurableHarness, buildCtx } from '../core-durable/helpers.js';
 import { CoreToolExecutor } from '../../src/tools/effect/index.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
-
-afterEach(() => {
-  mock.restore();
-});
+import {
+  mockV3GenerateResult,
+  mockV3StreamResult,
+} from '../helpers/mockLanguageModelV3Results.js';
 
 const colorExtractor = defineExtractor({
   name: 'Favorite Color',
@@ -21,21 +22,19 @@ const colorExtractor = defineExtractor({
   schema: z.object({ value: z.string() }),
 });
 
-function installGenerateObjectMock(
-  impl: () => Promise<{ object: Record<string, unknown> }>,
-): { calls: { count: number } } {
+function countingExtractModel(
+  onCall: () => Promise<{ object: Record<string, unknown> }>,
+): { model: MockLanguageModelV3; calls: { count: number } } {
   const calls = { count: 0 };
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      generateObject: async () => {
-        calls.count += 1;
-        return impl();
-      },
-    };
+  const model = new MockLanguageModelV3({
+    doGenerate: async () => {
+      calls.count += 1;
+      const result = await onCall();
+      return mockV3GenerateResult(JSON.stringify(result.object));
+    },
+    doStream: async () => mockV3StreamResult('Sure.'),
   });
-  return { calls };
+  return { model, calls };
 }
 
 function conversationalDriver(reply = 'Sure.'): ChannelDriver {
@@ -63,6 +62,17 @@ function toolTurnDriver(): ChannelDriver {
           },
         ],
       });
+      ctx.runState.messages.push({
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call-1',
+            toolName: 'lookup',
+            output: { type: 'json', value: { ok: true } },
+          },
+        ],
+      });
       return { text: 'Looked it up.', toolResults: [] };
     },
     async awaitUser() {
@@ -87,7 +97,7 @@ async function runTurn(
 
 describe('Runtime extraction wiring', () => {
   it('runs extraction zero times for three short turns and once when history crosses the token threshold', async () => {
-    const { calls } = installGenerateObjectMock(async () => ({
+    const { model, calls } = countingExtractModel(async () => ({
       object: { 'favorite-color': { value: 'blue' } },
     }));
     const sessionStore = new MemoryStore();
@@ -97,7 +107,7 @@ describe('Runtime extraction wiring', () => {
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model,
           memory: {
             extract: [colorExtractor],
             extraction: { trigger: { tokens: 2000 } },
@@ -118,7 +128,7 @@ describe('Runtime extraction wiring', () => {
   });
 
   it("skips extraction on an idle trigger when the turn made tool calls", async () => {
-    const { calls } = installGenerateObjectMock(async () => ({
+    const { model, calls } = countingExtractModel(async () => ({
       object: { 'favorite-color': { value: 'blue' } },
     }));
     const sessionStore = new MemoryStore();
@@ -128,7 +138,7 @@ describe('Runtime extraction wiring', () => {
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model,
           memory: {
             extract: [colorExtractor],
             extraction: { trigger: 'idle' },
@@ -147,7 +157,7 @@ describe('Runtime extraction wiring', () => {
   });
 
   it('runs extraction on every turn with the each-turn trigger', async () => {
-    const { calls } = installGenerateObjectMock(async () => ({
+    const { model, calls } = countingExtractModel(async () => ({
       object: { 'favorite-color': { value: 'blue' } },
     }));
     const sessionStore = new MemoryStore();
@@ -157,7 +167,7 @@ describe('Runtime extraction wiring', () => {
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model,
           memory: {
             extract: [colorExtractor],
             extraction: { trigger: 'each-turn' },
@@ -179,16 +189,13 @@ describe('Runtime extraction wiring', () => {
       resolveExtraction = resolve;
     });
     let extractionEntered = false;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          extractionEntered = true;
-          await extractionGate;
-          return { object: { 'favorite-color': { value: 'blue' } } };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        extractionEntered = true;
+        await extractionGate;
+        return mockV3GenerateResult(JSON.stringify({ 'favorite-color': { value: 'blue' } }));
+      },
+      doStream: async () => mockV3StreamResult('Sure.'),
     });
 
     const sessionStore = new MemoryStore();
@@ -198,7 +205,7 @@ describe('Runtime extraction wiring', () => {
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model,
           memory: {
             extract: [colorExtractor],
             extraction: { trigger: 'each-turn', blocking: false },
@@ -224,6 +231,7 @@ describe('Runtime extraction wiring', () => {
       }
     }
     expect(sawDone).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(extractionEntered).toBe(true);
 
     const settledRace = await Promise.race([
@@ -247,24 +255,21 @@ describe('Runtime extraction wiring', () => {
     process.addListener('unhandledRejection', onUnhandled);
 
     try {
-      mock.module('ai', () => {
-        const actual = require('ai');
-        return {
-          ...actual,
-          generateObject: async () => {
-            throw new Error('extraction model unavailable');
-          },
-        };
+      const model = new MockLanguageModelV3({
+        doGenerate: async () => {
+          throw new Error('extraction model unavailable');
+        },
+        doStream: async () => mockV3StreamResult('Sure.'),
       });
 
       const sessionStore = new MemoryStore();
       const runtime = createRuntime({
-      extractedValueStore: new InMemoryExtractedValueStore(),
+        extractedValueStore: new InMemoryExtractedValueStore(),
         agents: [
           defineAgent({
             id: 'a',
             instructions: 'help',
-            model: stubModel,
+            model,
             memory: {
               extract: [colorExtractor],
               extraction: { trigger: 'each-turn', blocking: false },
@@ -284,18 +289,15 @@ describe('Runtime extraction wiring', () => {
 
   it('does not advance lastExtractedMessageCount on failure so the next turn retries', async () => {
     let attempt = 0;
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => {
-          attempt += 1;
-          if (attempt === 1) {
-            throw new Error('temporary extraction failure');
-          }
-          return { object: { 'favorite-color': { value: 'blue' } } };
-        },
-      };
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        attempt += 1;
+        if (attempt === 1) {
+          throw new Error('temporary extraction failure');
+        }
+        return mockV3GenerateResult(JSON.stringify({ 'favorite-color': { value: 'blue' } }));
+      },
+      doStream: async () => mockV3StreamResult('Sure.'),
     });
 
     const sessionStore = new MemoryStore();
@@ -305,7 +307,7 @@ describe('Runtime extraction wiring', () => {
         defineAgent({
           id: 'a',
           instructions: 'help',
-          model: stubModel,
+          model,
           memory: {
             extract: [colorExtractor],
             extraction: { trigger: { tokens: 2000 } },

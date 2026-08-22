@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { action, collect, defineFlow } from '../../src/types/flow.js';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
@@ -19,8 +19,7 @@ import {
   buildHostControlTools,
 } from '../../src/runtime/hostControlTools.js';
 import { isValidControl } from '../../src/runtime/hostControlGuard.js';
-
-afterEach(() => mock.restore());
+import { mockV3GenerateObjectModel } from '../helpers/mockLanguageModelV3Results.js';
 
 /**
  * Flow entry is model-discretionary: `enter_flow` is one tool among many and the
@@ -141,21 +140,15 @@ describe('binding flow entry', () => {
   });
 
   it('parks on binding entry, then consumes the next turn without cascading', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
+    const controlModel = mockV3GenerateObjectModel(async ({ promptText }) => {
+      const activeFlowWasAChoice = (promptText ?? '').includes('flow "intake_flow"');
       return {
-        ...actual,
-        generateObject: async (options: { prompt: string }) => {
-          const activeFlowWasAChoice = options.prompt.includes('flow "intake_flow"');
-          return {
-            object: {
-              action: 'enterFlow',
-              flowName: activeFlowWasAChoice ? 'intake_flow' : 'unrequested_side_effect',
-              agentId: null,
-              reason: activeFlowWasAChoice ? 'still answering intake' : 'next-best flow',
-              confidence: 0.95,
-            },
-          };
+        object: {
+          action: 'enterFlow',
+          flowName: activeFlowWasAChoice ? 'intake_flow' : 'unrequested_side_effect',
+          agentId: null,
+          reason: activeFlowWasAChoice ? 'still answering intake' : 'next-best flow',
+          confidence: 0.95,
         },
       };
     });
@@ -247,6 +240,7 @@ describe('binding flow entry', () => {
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
       model: stubModel,
+      controlModel,
       emit: (part) => parts.push(part),
       outOfBandControl: true,
     });
@@ -275,6 +269,7 @@ describe('binding flow entry', () => {
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
       model: stubModel,
+      controlModel,
       emit: (part) => parts.push(part),
       outOfBandControl: true,
     });
@@ -305,6 +300,7 @@ describe('binding flow entry', () => {
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: {} }),
       model: stubModel,
+      controlModel,
       emit: (part) => parts.push(part),
       outOfBandControl: true,
     });

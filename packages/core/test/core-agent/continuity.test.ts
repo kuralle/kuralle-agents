@@ -1,33 +1,25 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
-
-afterEach(() => mock.restore());
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { defineAgent } from '../../src/authoring/defineAgent.js';
 import { collect, defineFlow, reply } from '../../src/types/flow.js';
 import { createRuntime } from '../../src/runtime/Runtime.js';
 import { MemoryStore } from '../../src/session/stores/MemoryStore.js';
 import { SessionRunStore } from '../../src/runtime/durable/SessionRunStore.js';
-import { stubModel } from '../core-durable/helpers.js';
 import type { ChannelDriver } from '../../src/types/channel.js';
+import { mockV3GenerateObjectModel } from '../helpers/mockLanguageModelV3Results.js';
+
+const routingModel = mockV3GenerateObjectModel(async () => ({
+  object: {
+    action: 'keep',
+    flowName: null,
+    agentId: null,
+    reason: null,
+    confidence: 1,
+  },
+}));
 
 describe('RunState continuity across Runtime.run calls', () => {
   it('restores activeAgentId, activeNode, and flow position after mid-flow turn boundary', async () => {
-    mock.module('ai', () => {
-      const actual = require('ai');
-      return {
-        ...actual,
-        generateObject: async () => ({
-          object: {
-            action: 'keep',
-            flowName: null,
-            agentId: null,
-            reason: null,
-            confidence: 1,
-          },
-        }),
-      };
-    });
-
     const confirm = reply({
       id: 'confirm',
       instructions: 'Confirm the name briefly',
@@ -54,7 +46,7 @@ describe('RunState continuity across Runtime.run calls', () => {
     const agent = defineAgent({
       id: 'support',
       flows: [flow],
-      model: stubModel,
+      model: routingModel,
     });
 
     const sessionStore = new MemoryStore();
@@ -96,7 +88,7 @@ describe('RunState continuity across Runtime.run calls', () => {
       agents: [agent],
       defaultAgentId: 'support',
       sessionStore,
-      defaultModel: stubModel,
+      defaultModel: routingModel,
     });
 
     await runtime.run({

@@ -1,4 +1,4 @@
-import { describe, expect, it, mock, afterEach } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 import { reply, defineFlow } from '../../src/types/flow.js';
 import { runFlow } from '../../src/flow/runFlow.js';
@@ -13,10 +13,7 @@ import { CoreToolExecutor, defineTool, wrapAiSdkTool, buildToolSet } from '../..
 import { setupDurableHarness, stubModel } from '../core-durable/helpers.js';
 import type { StreamPart } from '../../src/types/stream.js';
 import { tool as aiTool } from 'ai';
-
-afterEach(() => {
-  mock.restore();
-});
+import { mockV3CapturingStreamModel } from '../helpers/mockLanguageModelV3Results.js';
 
 const handoffEffect = defineTool({
   name: 'handoff',
@@ -35,26 +32,6 @@ const dataTool = defineTool({
   input: z.object({ q: z.string() }),
   execute: async () => ({ ok: true }),
 });
-
-function captureStreamText(captured: Record<string, unknown>[]) {
-  mock.module('ai', () => {
-    const actual = require('ai');
-    return {
-      ...actual,
-      streamText: (args: Record<string, unknown>) => {
-        captured.push(args);
-        return {
-          fullStream: (async function* () {
-            yield Object.assign({ type: 'text-delta' }, { text: 'reply' });
-          })(),
-          finishReason: Promise.resolve('stop'),
-          response: Promise.resolve({ messages: [] }),
-          toolCalls: Promise.resolve([]),
-        };
-      },
-    };
-  });
-}
 
 describe('evaluateReplyControl unit', () => {
   const replyNode = reply({ id: 'r', instructions: 'x' });
@@ -125,7 +102,7 @@ describe('evaluateReplyControl unit', () => {
 describe('H1 out-of-band control (flag-gated)', () => {
   it('flag-OFF: speaking tool set includes control tools and node.next transition unchanged', async () => {
     const captured: Record<string, unknown>[] = [];
-    captureStreamText(captured);
+    const model = mockV3CapturingStreamModel(captured, 'reply');
 
     const nextNode = reply({ id: 'end', instructions: 'done', next: () => ({ end: 'ok' }) });
     const greet = reply({
@@ -136,6 +113,7 @@ describe('H1 out-of-band control (flag-gated)', () => {
     const flow = defineFlow({ name: 'parity', description: 'x', start: greet, nodes: [greet, nextNode] });
 
     const { session, runStore, runState } = await setupDurableHarness('h1-off', 'h1-off-run');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const parts: StreamPart[] = [];
     const ctx = await createRunContext({
       session,
@@ -143,7 +121,7 @@ describe('H1 out-of-band control (flag-gated)', () => {
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: { handoff: handoffEffect } }),
-      model: stubModel,
+      model,
       emit: (p) => parts.push(p),
       outOfBandControl: false,
     });
@@ -164,19 +142,20 @@ describe('H1 out-of-band control (flag-gated)', () => {
 
   it('flag-ON: flow reply speaking dict excludes control tools; executor still registered', async () => {
     const captured: Record<string, unknown>[] = [];
-    captureStreamText(captured);
+    const model = mockV3CapturingStreamModel(captured, 'reply');
 
     const greet = reply({ id: 'greet', instructions: 'hi', next: () => ({ end: 'done' }) });
     const flow = defineFlow({ name: 'silo', description: 'x', start: greet, nodes: [greet] });
 
     const { session, runStore, runState } = await setupDurableHarness('h1-on-silo', 'h1-on-silo-run');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session,
       runStore,
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: { handoff: handoffEffect, lookup: dataTool } }),
-      model: stubModel,
+      model,
       emit: () => {},
       outOfBandControl: true,
     });
@@ -284,12 +263,12 @@ describe('H1 out-of-band control (flag-gated)', () => {
 
   it('flag-ON: free conversation keeps control tools in speaking dict', async () => {
     const captured: Record<string, unknown>[] = [];
-    captureStreamText(captured);
+    const model = mockV3CapturingStreamModel(captured, 'reply');
 
     const agent = defineAgent({
       id: 'free-agent',
       instructions: 'help',
-      model: stubModel,
+      model,
       experimental: { outOfBandControl: true },
       tools: {
         handoff: wrapAiSdkTool(
@@ -309,13 +288,14 @@ describe('H1 out-of-band control (flag-gated)', () => {
 
     const driver = new TextDriver({ toolDefs: { handoff: handoffEffect } });
     const { session, runStore, runState } = await setupDurableHarness('h1-free', 'h1-free-run');
+    runState.messages = [{ role: 'user', content: 'hello' }];
     const ctx = await createRunContext({
       session,
       runStore,
       runState,
       steps: [],
       toolExecutor: new CoreToolExecutor({ tools: { handoff: handoffEffect } }),
-      model: stubModel,
+      model,
       emit: () => {},
       outOfBandControl: true,
     });
