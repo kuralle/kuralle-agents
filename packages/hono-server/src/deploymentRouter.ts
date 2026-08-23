@@ -8,6 +8,7 @@ import {
   resolveWorkingMemoryStore,
   sanitizePart,
   scanMemoryWrite,
+  scrubSecrets,
   type Extractor,
   type HarnessConfig,
   type LoggedEvent,
@@ -92,11 +93,24 @@ function applyNoBufferingHeaders(headers: Headers): void {
   headers.set('X-Accel-Buffering', 'no');
 }
 
-function parseNonNegativeInt(raw: string | undefined, fallback: number): number | null {
+const SNAPSHOT_LIMIT_DEFAULT = 100;
+const SNAPSHOT_LIMIT_MAX = 1000;
+
+function parseNonNegativeInt(
+  raw: string | undefined,
+  fallback: number,
+  param: 'from' | 'limit',
+): number | null {
   if (raw === undefined) return fallback;
   const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) return null;
+  if (!Number.isInteger(value)) return null;
+  if (param === 'from' && value < 0) return null;
+  if (param === 'limit' && value < 1) return null;
   return value;
+}
+
+function clampSnapshotLimit(limit: number): number {
+  return Math.min(limit, SNAPSHOT_LIMIT_MAX);
 }
 
 function parseFollow(raw: string | undefined): boolean {
@@ -120,25 +134,67 @@ function gateMemoryContent(content: string): string {
   return scanMemoryWrite(content).safe ? content : '';
 }
 
+function scrubExtractedValue(value: unknown): unknown {
+  const scrubbed = scrubSecrets({
+    channel: 'internal',
+    type: 'extraction',
+    payload: { slug: '', value, changed: false },
+  });
+  if (scrubbed.type !== 'extraction') return value;
+  return scrubbed.payload.value;
+}
+
+function memoryOwner(tenantId: string, userId: string): string {
+  return scopedKey(tenantId, userId);
+}
+
 function ndjsonEventStream(
   source: AsyncIterable<LoggedEvent>,
   streamFilter: StreamEventFilter,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
+  let cancelled = false;
   return new ReadableStream({
     async start(controller) {
       try {
         for await (const event of source) {
+          if (cancelled) break;
           const filtered = filterLoggedEvent(event, streamFilter);
           if (!filtered) continue;
           controller.enqueue(encoder.encode(`${JSON.stringify(filtered)}\n`));
         }
-        controller.close();
+        if (!cancelled) controller.close();
       } catch (error) {
-        controller.error(error);
+        if (!cancelled) controller.error(error);
       }
     },
+    cancel() {
+      cancelled = true;
+    },
   });
+}
+
+async function snapshotVisibleEvents(
+  eventLog: SessionEventLog,
+  sessionId: string,
+  limit: number,
+  streamFilter: StreamEventFilter,
+): Promise<{ events: LoggedEvent[]; cursorIndex: number }> {
+  const tail = await eventLog.tail(sessionId);
+  if (tail < 0) {
+    return { events: [], cursorIndex: -1 };
+  }
+
+  const visible: LoggedEvent[] = [];
+  for (let index = tail; index >= 0 && visible.length < limit; index -= 1) {
+    const { events } = await eventLog.read(sessionId, index, 1);
+    if (events.length === 0) continue;
+    const filtered = filterLoggedEvent(events[0]!, streamFilter);
+    if (filtered) visible.unshift(filtered);
+  }
+
+  const cursorIndex = visible.length > 0 ? visible[visible.length - 1]!.index : -1;
+  return { events: visible, cursorIndex };
 }
 
 async function* boundedEventFollow(
@@ -217,7 +273,11 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     if (!principal) return c.json({ error: 'unauthorized' }, 401);
     if (!eventLog) return c.json({ error: 'event log not configured' }, 503);
 
-    const from = parseNonNegativeInt(c.req.query('from'), 0);
+    const agentEntityId = c.req.param('agentEntityId');
+    const entity = await options.deploymentStore.getEntity(principal.tenantId, agentEntityId);
+    if (!entity) return c.json({ error: 'agent not found' }, 404);
+
+    const from = parseNonNegativeInt(c.req.query('from'), 0, 'from');
     if (from === null) return c.json({ error: 'from must be a non-negative integer' }, 400);
     const follow = parseFollow(c.req.query('follow'));
     const sessionId = scopedKey(principal.tenantId, c.req.param('sessionId'));
@@ -240,22 +300,32 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     if (!principal) return c.json({ error: 'unauthorized' }, 401);
     if (!eventLog) return c.json({ error: 'event log not configured' }, 503);
 
-    const limit = parseNonNegativeInt(c.req.query('limit'), 100);
-    if (limit === null || limit === 0) {
+    const agentEntityId = c.req.param('agentEntityId');
+    const entity = await options.deploymentStore.getEntity(principal.tenantId, agentEntityId);
+    if (!entity) return c.json({ error: 'agent not found' }, 404);
+
+    const rawLimit = parseNonNegativeInt(c.req.query('limit'), SNAPSHOT_LIMIT_DEFAULT, 'limit');
+    if (rawLimit === null) {
       return c.json({ error: 'limit must be a positive integer' }, 400);
     }
+    const limit = clampSnapshotLimit(rawLimit);
 
-    const sessionId = scopedKey(principal.tenantId, c.req.param('sessionId'));
-    const { events, next } = await eventLog.read(sessionId, 0, limit);
-    const filtered = events
-      .map(event => filterLoggedEvent(event, filter))
-      .filter((event): event is LoggedEvent => event !== null);
-    return c.json({ events: filtered, cursor: next });
+    const rawSessionId = c.req.param('sessionId');
+    const sessionId = scopedKey(principal.tenantId, rawSessionId);
+    const { events, cursorIndex } = await snapshotVisibleEvents(eventLog, sessionId, limit, filter);
+    return c.json({
+      events,
+      cursor: { sessionId: rawSessionId, index: cursorIndex },
+    });
   });
 
   app.post('/v1/agents/:agentEntityId/sessions/:sessionId/cancel', async c => {
     const principal = await options.resolvePrincipal(c);
     if (!principal) return c.json({ error: 'unauthorized' }, 401);
+
+    const agentEntityId = c.req.param('agentEntityId');
+    const entity = await options.deploymentStore.getEntity(principal.tenantId, agentEntityId);
+    if (!entity) return c.json({ error: 'agent not found' }, 404);
 
     const sessionKey = scopedKey(principal.tenantId, c.req.param('sessionId'));
     const active = activeTurns.get(sessionKey);
@@ -287,6 +357,8 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
           ? resolveWorkingMemoryStore(workingMemory, options.runtimeConfig?.defaultWorkingMemoryStore)
           : undefined);
       const extractedStore = resolveExtractedValueStore(options.runtimeConfig?.extractedValueStore);
+      const scopedUserOwner = memoryOwner(principal.tenantId, requestedUserId);
+      const scopedAgentOwner = scopedKey(principal.tenantId, bound.agent.id);
 
       const blocks: Array<{
         key: string;
@@ -298,21 +370,22 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
 
       if (blockStore) {
         const scopes: Array<{ scope: MemoryBlockScope; owner: string }> = [
-          { scope: 'user', owner: requestedUserId },
-          { scope: 'shared', owner: requestedUserId },
-          { scope: 'agent', owner: bound.agent.id },
+          { scope: 'user', owner: scopedUserOwner },
+          { scope: 'shared', owner: scopedUserOwner },
+          { scope: 'agent', owner: scopedAgentOwner },
         ];
         for (const { scope, owner } of scopes) {
           const keys = await blockStore.listBlocks(scope, owner);
           for (const key of keys) {
             const block = await blockStore.loadBlock(scope, owner, key);
             if (!block) continue;
+            const content = gateMemoryContent(block.content);
             blocks.push({
               key: block.key,
               scope: block.scope,
-              chars: block.content.length,
+              chars: content.length,
               limit: block.charLimit,
-              content: gateMemoryContent(block.content),
+              content,
             });
           }
         }
@@ -325,13 +398,13 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         updatedAt: string;
       }> = [];
       for (const extractor of memoryConfig?.extract ?? []) {
-        const owner = extractor.scope === 'agent' ? bound.agent.id : requestedUserId;
+        const owner = extractor.scope === 'agent' ? scopedAgentOwner : scopedUserOwner;
         const value = await extractedStore.load(extractor.scope, owner, extractor.slug);
         if (!value) continue;
         extracted.push({
           slug: value.slug,
           scope: value.scope,
-          value: value.value,
+          value: scrubExtractedValue(value.value),
           updatedAt: value.updatedAt,
         });
       }
