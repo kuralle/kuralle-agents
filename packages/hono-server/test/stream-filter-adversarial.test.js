@@ -85,3 +85,30 @@ test('safe error composition sanitizes after classification', () => {
     console.error = original;
   }
 });
+
+test('__proto__ in an error payload does not pollute Object.prototype', () => {
+  // sanitizePart spreads the incoming part, so a hostile payload is the input
+  // that spread has to survive. This lived only in review-adversarial.ts, which
+  // nobody runs in CI — the check existed and could still regress unnoticed.
+  const original = console.error;
+  console.error = () => {};
+  let safe;
+  try {
+    safe = sanitizePart({
+      channel: 'client',
+      type: 'error',
+      payload: {
+        error: 'leaked stack',
+        __proto__: { polluted: true },
+        constructor: { prototype: { polluted: true } },
+      },
+    });
+  } finally {
+    console.error = original;
+  }
+
+  assert.equal(safe.payload.error, 'An error occurred. Please try again.');
+  assert.equal({}.polluted, undefined);
+  assert.equal(Object.prototype.polluted, undefined);
+  assert.equal(shouldEmit(safe, 'safe'), true);
+});
