@@ -9,25 +9,34 @@
  * escalation state, and marks the run runnable — the next `run()` continues with context.
  */
 import { join } from 'node:path';
+import { Command } from 'commander';
+import { createClient } from '@kuralle-agents/client';
 import type { BuildRuntime } from './agentRuntime.js';
 import { fileSessionStore } from './fileStore.js';
 import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
 
-function flag(argv: string[], name: string): string | undefined {
-  const i = argv.indexOf(name);
-  return i >= 0 ? argv[i + 1] : undefined;
+function resumeCommand(): Command {
+  return new Command('resume')
+    .option('--store <file>', 'persist session + traces')
+    .option('--summary <text>', 'resolution note appended on resume')
+    .argument('<session>', 'session id');
+}
+
+function parseResumeArgs(argv: string[]): { sessionId: string; store: string; summary?: string } {
+  const cmd = resumeCommand();
+  cmd.parse(argv, { from: 'user' });
+  const sessionId = cmd.args[0];
+  const opts = cmd.opts<{ store?: string; summary?: string }>();
+  return {
+    sessionId,
+    store: opts.store ?? join(process.cwd(), 'runs/tui-sessions.json'),
+    summary: opts.summary,
+  };
 }
 
 export async function runResume(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
-  const storePath = flag(argv, '--store') ?? join(process.cwd(), 'runs/tui-sessions.json');
-  const summary = flag(argv, '--summary');
-
-  // Every flag whose VALUE must not be mistaken for the session id positional. Missing one
-  // here would let the value survive the filter and become the session id (see send.ts).
-  const consumesValue = new Set(['--store', '--summary']);
-  const positional = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && consumesValue.has(argv[i - 1]!)));
-  const sessionId = positional[0];
+  const { sessionId, store: storePath, summary } = parseResumeArgs(argv);
 
   if (!sessionId) {
     console.error('usage: kuralle resume <session> [--store <path>] [--summary <text>]');
@@ -39,6 +48,7 @@ export async function runResume(argv: string[], buildRuntime: BuildRuntime): Pro
   const traces = fileTraceStore(`${base}.traces.jsonl`);
   const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
   const demo = await buildRuntime(sessionId, store, traces, eventLog);
+  createClient({ kind: 'local', runtime: demo.runtime, eventLog });
 
   await demo.runtime.resumeFromEscalation(
     sessionId,

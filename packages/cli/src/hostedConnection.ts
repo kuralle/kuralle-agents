@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { Command } from 'commander';
 
 export type HostedTransport = 'http' | 'cloudflare';
 
@@ -10,9 +11,25 @@ export interface HostedConnection {
   agentName?: string;
 }
 
-function flag(argv: string[], name: string): string | undefined {
-  const index = argv.indexOf(name);
-  return index >= 0 ? argv[index + 1] : undefined;
+function connectionFlagsCommand(): Command {
+  return new Command()
+    .option('--server <url>', 'hosted server URL')
+    .option('--transport <kind>', 'hosted transport')
+    .option('--agent-name <name>', 'hosted agent name')
+    .option('--local', 'ignore saved hosted connection')
+    .allowUnknownOption()
+    .allowExcessArguments();
+}
+
+function parseConnectionFlags(argv: string[]): {
+  server?: string;
+  transport?: string;
+  agentName?: string;
+  local?: boolean;
+} {
+  const cmd = connectionFlagsCommand();
+  cmd.parse(argv, { from: 'user' });
+  return cmd.opts();
 }
 
 export function hostedConfigPath(): string {
@@ -62,13 +79,14 @@ export async function readHostedConnection(): Promise<HostedConnection | undefin
 }
 
 export async function resolveHostedConnection(argv: string[]): Promise<HostedConnection | undefined> {
-  if (argv.includes('--local')) return undefined;
-  const server = flag(argv, '--server') || process.env.KURALLE_SERVER?.trim();
+  const flags = parseConnectionFlags(argv);
+  if (flags.local) return undefined;
+  const server = flags.server || process.env.KURALLE_SERVER?.trim();
   if (server) {
     return validate({
       server,
-      transport: parseTransport(flag(argv, '--transport') || process.env.KURALLE_TRANSPORT),
-      agentName: flag(argv, '--agent-name') || process.env.KURALLE_AGENT_NAME,
+      transport: parseTransport(flags.transport || process.env.KURALLE_TRANSPORT),
+      agentName: flags.agentName || process.env.KURALLE_AGENT_NAME,
     });
   }
   return readHostedConnection();
@@ -93,11 +111,17 @@ export async function clearHostedConnection(): Promise<boolean> {
 }
 
 export function connectionFromArgs(argv: string[]): HostedConnection {
-  const server = argv.find((value, index) => index === 0 && !value.startsWith('--'));
+  const cmd = new Command('connect')
+    .option('--transport <kind>', 'hosted transport')
+    .option('--agent-name <name>', 'hosted agent name')
+    .argument('<server>', 'server URL');
+  cmd.parse(argv, { from: 'user' });
+  const server = cmd.args[0];
   if (!server) throw new Error('Usage: kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]');
+  const opts = cmd.opts<{ transport?: string; agentName?: string }>();
   return validate({
     server,
-    transport: parseTransport(flag(argv, '--transport')),
-    agentName: flag(argv, '--agent-name'),
+    transport: parseTransport(opts.transport),
+    agentName: opts.agentName,
   });
 }

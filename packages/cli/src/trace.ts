@@ -1,9 +1,47 @@
 import type { AgentSpan, AgentTrace } from '@kuralle-agents/core';
+import { createClient } from '@kuralle-agents/client';
 import { renderTraceViewerDocument } from '@kuralle-agents/trace-ui';
+import { Command } from 'commander';
 import { createServer, type Server } from 'node:http';
 import type { BuildRuntime } from './agentRuntime.js';
 import { fileSessionStore } from './fileStore.js';
+import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
+
+function traceCommand(): Command {
+  return new Command('trace')
+    .option('--store <file>', 'session store file')
+    .option('--last', 'show only the most recent trace')
+    .option('--json', 'emit JSON')
+    .option('--web', 'start a trace viewer web server')
+    .option('--port <n>', 'web server port', '4319')
+    .argument('<session>', 'session id');
+}
+
+function parseTraceArgs(argv: string[]): {
+  sessionId: string;
+  storePath?: string;
+  last: boolean;
+  json: boolean;
+  web: boolean;
+  port: number;
+} {
+  const cmd = traceCommand();
+  cmd.parse(argv, { from: 'user' });
+  const opts = cmd.opts<{ store?: string; last?: boolean; json?: boolean; web?: boolean; port: string }>();
+  const port = Number(opts.port);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error('--port requires a valid port');
+  }
+  return {
+    sessionId: cmd.args[0]!,
+    storePath: opts.store,
+    last: opts.last === true,
+    json: opts.json === true,
+    web: opts.web === true,
+    port,
+  };
+}
 
 export async function runTrace(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
   // --store <file> points at the same file `kuralle chat --store` / `kuralle send`
@@ -11,25 +49,38 @@ export async function runTrace(argv: string[], buildRuntime: BuildRuntime): Prom
   // `runs/app.json` -> `runs/app.traces.jsonl` (JSONL, one span per line).
   // Without wiring these, buildRuntime falls back to an in-memory store that is
   // always empty in a fresh process, so no persisted trace is ever found.
-  const storeIdx = argv.indexOf('--store');
-  const storePath = storeIdx >= 0 ? argv[storeIdx + 1] : undefined;
-  const sessionId = argv.find((arg, i) => !arg.startsWith('--') && i !== storeIdx + 1);
+  let parsed: ReturnType<typeof parseTraceArgs>;
+  try {
+    parsed = parseTraceArgs(argv);
+  } catch (error) {
+    throw error instanceof Error && error.message.includes('--port')
+      ? error
+      : new Error('Usage: kuralle trace <session> [--last] [--json] [--store <file>]');
+  }
+  const { sessionId, storePath, last, json, web, port } = parsed;
   if (!sessionId) throw new Error('Usage: kuralle trace <session> [--last] [--json] [--store <file>]');
+
   const sessionStore = storePath ? fileSessionStore(storePath) : undefined;
   const traceStore = storePath
     ? fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.jsonl')
     : undefined;
-  const { runtime } = await buildRuntime(sessionId, sessionStore, traceStore);
-  if (argv.includes('--web')) {
-    const port = numberFlag(argv, '--port') ?? 4319;
+  const eventLog = storePath
+    ? fileSessionEventLog(storePath.replace(/\.json$/, '') + '.events.jsonl')
+    : undefined;
+  const { runtime } = await buildRuntime(sessionId, sessionStore, traceStore, eventLog);
+  if (eventLog) {
+    createClient({ kind: 'local', runtime, eventLog });
+  }
+
+  if (web) {
     await startTraceWebServer(runtime, sessionId, port);
     process.stdout.write(`Kuralle trace viewer: http://127.0.0.1:${port}\n`);
     return;
   }
   const traces = await runtime.listTraces(sessionId);
-  const selected = argv.includes('--last') ? traces.slice(0, 1) : traces;
-  if (argv.includes('--json')) {
-    process.stdout.write(`${JSON.stringify(argv.includes('--last') ? selected[0] ?? null : selected, null, 2)}\n`);
+  const selected = last ? traces.slice(0, 1) : traces;
+  if (json) {
+    process.stdout.write(`${JSON.stringify(last ? selected[0] ?? null : selected, null, 2)}\n`);
     return;
   }
   if (selected.length === 0) {
@@ -85,14 +136,6 @@ export async function startTraceWebServer(
 function sendJson(response: import('node:http').ServerResponse, value: unknown, status = 200): void {
   response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   response.end(JSON.stringify(value));
-}
-
-function numberFlag(argv: string[], name: string): number | undefined {
-  const index = argv.indexOf(name);
-  if (index < 0) return undefined;
-  const value = Number(argv[index + 1]);
-  if (!Number.isInteger(value) || value < 0 || value > 65535) throw new Error(`${name} requires a valid port`);
-  return value;
 }
 
 export function formatTrace(trace: AgentTrace): string {

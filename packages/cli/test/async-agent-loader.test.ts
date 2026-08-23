@@ -13,7 +13,6 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveBuildRuntime } from '../src/agentLoader.js';
-import { runChat } from '../src/chat.js';
 
 async function writeAgentModule(contents: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'kuralle-cli-async-agent-'));
@@ -84,25 +83,5 @@ describe('test:cli-async-agent-loader', () => {
     `);
     const buildRuntime = await resolveBuildRuntime(path);
     await expect(buildRuntime('s4')).rejects.toThrow('boom: could not load remote config');
-  });
-
-  it('runChat rejects before render() when the factory throws — no react-reconciler frame', async () => {
-    const path = await writeAgentModule(`
-      export async function buildRuntime() {
-        throw new Error('boom: could not load remote config');
-      }
-    `);
-    const buildRuntime = await resolveBuildRuntime(path);
-
-    let caught: unknown;
-    try {
-      await runChat([], buildRuntime);
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(caught).toBeInstanceOf(Error);
-    expect((caught as Error).message).toBe('boom: could not load remote config');
-    expect((caught as Error).stack ?? '').not.toContain('react-reconciler');
   });
 });

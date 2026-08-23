@@ -9,30 +9,79 @@
  * paused again. The runtime already accepted `signalDelivery`; only the CLI could not send one.
  */
 import { join } from 'node:path';
+import { Command } from 'commander';
 import type { StreamPart } from '@kuralle-agents/core';
+import { createClient } from '@kuralle-agents/client';
 import type { BuildRuntime } from './agentRuntime.js';
 import { fileSessionStore } from './fileStore.js';
 import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
 
-function flag(argv: string[], name: string): string | undefined {
-  const i = argv.indexOf(name);
-  return i >= 0 ? argv[i + 1] : undefined;
+interface SendOptions {
+  session: string;
+  user?: string;
+  store: string;
+  reset?: boolean;
+  state?: boolean;
+  approve?: string | boolean;
+  deny?: string | boolean;
+  signal?: string;
+  payload?: string;
+}
+
+function sendCommand(): Command {
+  return new Command('send')
+    .option('--session <id>', 'session id', 'default')
+    .option('--user <id>', 'user id for scoped memory')
+    .option('--store <file>', 'persist session + traces')
+    .option('--reset', 'delete the session and exit')
+    .option('--state', 'print session state and exit')
+    .option('--approve [by]', 'approve a pending tool')
+    .option('--deny [by]', 'deny a pending tool')
+    .option('--signal <name>', 'deliver a named signal')
+    .option('--payload <json>', 'signal payload JSON')
+    .option('--server <url>', 'hosted server URL')
+    .option('--transport <kind>', 'hosted transport')
+    .option('--agent-name <name>', 'hosted agent name')
+    .option('--token <token>', 'hosted bearer token')
+    .option('--model <id>', 'model override')
+    .option('--agent <path>', 'agent module path')
+    .option('--summary <text>', 'ignored on send')
+    .option('--auto <script>', 'ignored on send')
+    .option('--trace', 'ignored on send')
+    .option('--local', 'ignore hosted connection')
+    .argument('[message...]', 'message text');
+}
+
+export function parseSendArgs(argv: string[]): { opts: SendOptions; message: string } {
+  const cmd = sendCommand();
+  cmd.parse(argv, { from: 'user' });
+  const opts = cmd.opts<SendOptions>();
+  opts.store ??= join(process.cwd(), 'runs/tui-sessions.json');
+  return { opts, message: cmd.args.join(' ').trim() };
+}
+
+/** Flag values must never become message text — exercised by packages/cli/test/hosted-commands.test.ts */
+export function messageFrom(argv: string[]): string {
+  return parseSendArgs(argv).message;
 }
 
 export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
-  const sessionId = flag(argv, '--session') ?? 'default';
+  const { opts, message } = parseSendArgs(argv);
+  const sessionId = opts.session;
   // Without this the CLI could not exercise user-scoped memory at all: preload,
   // extractors and the USER block are all skipped when a session has no userId
   // (deliberately — a placeholder owner would pool every anonymous session).
-  const userId = flag(argv, '--user');
-  const storePath = flag(argv, '--store') ?? join(process.cwd(), 'runs/tui-sessions.json');
-  const doReset = argv.includes('--reset');
-  const doState = argv.includes('--state');
-  const approve = argv.includes('--approve');
-  const deny = argv.includes('--deny');
-  const signalName = flag(argv, '--signal');
-  const by = flag(argv, '--approve') ?? flag(argv, '--deny') ?? 'cli';
+  const userId = opts.user;
+  const storePath = opts.store;
+  const doReset = opts.reset === true;
+  const doState = opts.state === true;
+  const approve = opts.approve !== undefined;
+  const deny = opts.deny !== undefined;
+  const signalName = opts.signal;
+  const by = (typeof opts.approve === 'string' ? opts.approve : undefined)
+    ?? (typeof opts.deny === 'string' ? opts.deny : undefined)
+    ?? 'cli';
   const store = fileSessionStore(storePath);
   const stored = await store.get(sessionId);
   const waitingFor = (
@@ -43,40 +92,6 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
       >;
     }
   )?.durableRuns?.[sessionId]?.runState?.waitingFor;
-  const signalDelivery =
-    approve || deny
-      ? {
-          signalId: `cli-${Date.now()}`,
-          requestId: waitingFor?.requestId ?? '',
-          name: '__approval',
-          actor: { id: by, type: 'user' as const },
-          decision: approve ? 'approve' as const : 'deny' as const,
-        }
-      : signalName
-        ? {
-            signalId: `cli-${Date.now()}`,
-            requestId: waitingFor?.requestId ?? '',
-            name: signalName,
-            actor: { id: 'cli', type: 'service' as const },
-            payload: JSON.parse(flag(argv, '--payload') ?? '{}') as Record<string, unknown>,
-          }
-        : undefined;
-  // Every flag whose VALUE must not be mistaken for message text. Missing `--model` here
-  // meant the model id survived the filter and became the first word of every user turn —
-  // a whole live run was sent to the model with "gpt-4.1-mini " prepended to each message.
-  const consumesValue = new Set([
-    '--session',
-    '--store',
-    '--model',
-    '--signal',
-    '--payload',
-    '--approve',
-    '--deny',
-  ]);
-  const message = argv
-    .filter((a, i) => !a.startsWith('--') && !(i > 0 && consumesValue.has(argv[i - 1]!)))
-    .join(' ')
-    .trim();
 
   // Traces must be file-backed too. `send` is one turn per process, so a MemoryTraceStore
   // (what the loader defaults to whenever a session store is supplied) is discarded on
@@ -86,6 +101,8 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const traces = fileTraceStore(`${base}.traces.jsonl`);
   const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
   const demo = await buildRuntime(sessionId, store, traces, eventLog);
+  const client = createClient({ kind: 'local', runtime: demo.runtime, eventLog });
+  const session = client.sessions.attach(sessionId);
 
   async function readState() {
     const s = await store.get(sessionId);
@@ -98,8 +115,10 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
     console.log(`reset session "${sessionId}"`);
     return;
   }
+
+  const hasSignal = approve || deny || signalName;
   // A decision can arrive with no message — approving is itself the turn.
-  if (doState || (!message && !signalDelivery)) {
+  if (doState || (!message && !hasSignal)) {
     console.log(await readState());
     if (!message && !doState) console.error('(no message — pass one to take a turn, or --state to inspect)');
     return;
@@ -108,14 +127,27 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const events: string[] = [];
   const started = performance.now();
   let ttftMs: number | null = null;
-  const handle = demo.runtime.run({
-    sessionId,
-    input: message,
-    ...(userId ? { userId } : {}),
-    ...(signalDelivery ? { signalDelivery } : {}),
-  });
+  let turn;
+  if (approve || deny) {
+    turn = await session.respond([{
+      requestId: waitingFor?.requestId ?? '',
+      decision: approve ? 'approve' : 'deny',
+      actor: { id: by, type: 'user' },
+    }], userId ? { userId } : undefined);
+  } else if (signalName) {
+    turn = await session.respond([{
+      requestId: waitingFor?.requestId ?? '',
+      signalName,
+      payload: JSON.parse(opts.payload ?? '{}') as Record<string, unknown>,
+      actor: { id: 'cli', type: 'service' },
+    }], userId ? { userId } : undefined);
+  } else {
+    turn = await session.send(message, userId ? { userId } : undefined);
+  }
+
   let text = '';
-  for await (const part of handle.events as AsyncIterable<StreamPart>) {
+  for await (const logged of turn) {
+    const part = logged.part as StreamPart;
     if (part.type === 'text-delta') {
       if (part.payload.delta && ttftMs === null) ttftMs = performance.now() - started;
       text += part.payload.delta;
@@ -135,7 +167,7 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
     }
     else if (part.type === 'error') events.push(`error:${part.payload.error}`);
   }
-  const res = await handle;
+  const res = await turn.result();
   if (!text && typeof (res as { text?: string }).text === 'string') text = (res as { text: string }).text;
   if (!text.endsWith('\n')) process.stdout.write('\n');
   if (events.length) console.log(`[events] ${events.join(' ')}`);
