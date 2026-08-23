@@ -20,9 +20,13 @@ export interface ChatAppProps {
   session: Session;
   title?: string;
   scripted?: string[];
+  scriptedSlash?: string[];
   terminalWidth?: number;
   terminalHeight?: number;
   bindCancelHandler?: (handler: () => void) => void;
+  onInterceptSubmit?: (text: string) => boolean | Promise<boolean>;
+  focusRailTab?: RailTab;
+  commandNotice?: string;
   userId?: string;
   agentId?: string;
   memoryConfigured?: boolean;
@@ -153,7 +157,11 @@ function ChatAppInner({
   session,
   title = 'Kuralle',
   scripted,
+  scriptedSlash,
   bindCancelHandler,
+  onInterceptSubmit,
+  focusRailTab,
+  commandNotice,
   width,
   height,
   userId,
@@ -292,6 +300,10 @@ function ChatAppInner({
     async (raw: string) => {
       const text = raw.trim();
       if (!text || busyRef.current || approvalPendingRef.current) return;
+      if (await onInterceptSubmit?.(text)) {
+        setInput('');
+        return;
+      }
       setInput('');
       turnStartIndexRef.current = nextEventIndex(eventsRef.current);
       sessionUsersRef.current = [
@@ -306,7 +318,7 @@ function ChatAppInner({
       const turn = await session.send(text, userId ? { userId, agentId } : { agentId });
       await drainTurn(turn);
     },
-    [agentId, drainTurn, refresh, session, userId],
+    [agentId, drainTurn, onInterceptSubmit, refresh, session, userId],
   );
 
   const respondToApproval = useCallback(
@@ -342,11 +354,26 @@ function ChatAppInner({
     bindCancelHandler?.(cancelActiveTurn);
   }, [bindCancelHandler, cancelActiveTurn]);
 
+  useEffect(() => {
+    if (focusRailTab) setRailTab(focusRailTab);
+  }, [focusRailTab]);
+
   useKeyboard((key) => {
     if (key.name === 'escape') cancelActiveTurn();
     if (key.ctrl && key.name === 't') setRailTab('trace');
     if (key.ctrl && key.name === 'm') setRailTab('memory');
   });
+
+  const scriptedSlashStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (!scriptedSlash?.length || scriptedSlashStartedRef.current || !busy) return;
+    scriptedSlashStartedRef.current = true;
+    const timer = setTimeout(() => {
+      void submit(scriptedSlash[0]!);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [busy, scriptedSlash, submit]);
 
   useEffect(() => {
     if (!scripted?.length || scriptedStartedRef.current) return;
@@ -370,7 +397,7 @@ function ChatAppInner({
       height={height}
       title={title}
       blocks={blocks}
-      status={statusLine(status, session.id, busy, approvalPending)}
+      status={`${statusLine(status, session.id, busy, approvalPending)}${commandNotice ? ` · ${commandNotice}` : ''}`}
       busy={busy || Boolean(scripted?.length && scriptedIndexRef.current < scripted.length)}
       approvalPending={approvalPending}
       inspectingArgs={inspectingArgs}
