@@ -64,8 +64,8 @@ describe('test:cli-store-wiring', () => {
     } as AgentSpan;
     seen.traceStore!.write(span);
 
-    // `<store>.json` -> `<store>.traces.json`; the `.json` is replaced, not appended.
-    const sidecar = path.replace(/\.json$/, '') + '.traces.json';
+    // `<store>.json` -> `<store>.traces.jsonl`; the `.json` is replaced, not appended.
+    const sidecar = path.replace(/\.json$/, '') + '.traces.jsonl';
     expect(existsSync(sidecar)).toBe(true);
 
     // Durable across processes is the whole point, so read it back through a fresh store.
@@ -75,7 +75,7 @@ describe('test:cli-store-wiring', () => {
   });
 
   it('the trace sidecar is JSONL — one span per line, appended', async () => {
-    const sidecar = tmpStore('t.traces.json');
+    const sidecar = tmpStore('t.traces.jsonl');
     const store = fileTraceStore(sidecar);
     for (const id of ['a', 'b', 'c']) {
       store.write({
@@ -91,7 +91,7 @@ describe('test:cli-store-wiring', () => {
   });
 
   it('a torn final line does not fail the read', async () => {
-    const sidecar = tmpStore('torn.traces.json');
+    const sidecar = tmpStore('torn.traces.jsonl');
     const store = fileTraceStore(sidecar);
     store.write({
       traceId: 'ok', spanId: 's1', name: 'turn', kind: 'turn',

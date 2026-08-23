@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import type { StreamPart } from '@kuralle-agents/core';
 import type { BuildRuntime } from './agentRuntime.js';
 import { fileSessionStore } from './fileStore.js';
+import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
 
 function flag(argv: string[], name: string): string | undefined {
@@ -81,8 +82,10 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   // (what the loader defaults to whenever a session store is supplied) is discarded on
   // exit and `kuralle trace --store` finds nothing — the exact sidecar `chat --store`
   // writes and the CLI guide promises for both commands.
-  const traces = fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json');
-  const demo = await buildRuntime(sessionId, store, traces);
+  const base = storePath.replace(/\.json$/, '');
+  const traces = fileTraceStore(`${base}.traces.jsonl`);
+  const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
+  const demo = await buildRuntime(sessionId, store, traces, eventLog);
 
   async function readState() {
     const s = await store.get(sessionId);

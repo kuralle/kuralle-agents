@@ -69,7 +69,7 @@ describe('test:cli-resume-wiring', () => {
       traceId: 't1', spanId: 's1', name: 'turn', kind: 'turn',
       startTime: 1, endTime: 2, attributes: { sessionId: 'demo' },
     } as never);
-    const sidecar = path.replace(/\.json$/, '') + '.traces.json';
+    const sidecar = path.replace(/\.json$/, '') + '.traces.jsonl';
     expect(existsSync(sidecar)).toBe(true);
   });
 });

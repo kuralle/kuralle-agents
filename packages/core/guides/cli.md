@@ -185,7 +185,7 @@ Prints the full transcript, how the conversation ended, which tools were called,
 
 ## `trace` — inspect recorded traces
 
-Reads whatever `TraceStore` the target runtime is configured with (`MemoryTraceStore` by default — see the [Observability guide](./observability.md)). Pass **`--store <file>`** to read the file-backed traces that `kuralle chat --store` / `send` wrote (traces live in a sidecar beside it — `runs/app.json` writes `runs/app.traces.json`, replacing the extension rather than appending; the file is JSONL, one span per line), so you can inspect a session recorded by an earlier, separate CLI invocation:
+Reads whatever `TraceStore` the target runtime is configured with (`MemoryTraceStore` by default — see the [Observability guide](./observability.md)). Pass **`--store <file>`** to read the file-backed traces that `kuralle chat --store` / `send` wrote (traces live in a sidecar beside it — `runs/app.json` writes `runs/app.traces.jsonl`, replacing the extension rather than appending; the file is JSONL, one span per line). Stream events for replay and attach live in `runs/app.events.jsonl` beside the same store file, so you can inspect a session recorded by an earlier, separate CLI invocation:
 
 ```bash
 kuralle trace session-42            # terminal waterfall for every trace in the session

@@ -12,6 +12,7 @@ import {
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
 import { buildDemoRuntime } from './demoAgent.js';
 import { fileSessionStore } from './fileStore.js';
+import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
 import { readAgentRunState } from './runState.js';
 import { resolveCliModel } from './resolveModel.js';
@@ -30,6 +31,7 @@ type BuildRuntimeFactory = (
   sessionId?: string,
   store?: SessionStore,
   traceStore?: TraceStore,
+  eventLog?: import('@kuralle-agents/core').SessionEventLog,
 ) => AgentRuntime | Runtime | Promise<AgentRuntime | Runtime>;
 
 const NAMED_KEYS = ['runtime', 'agent', 'buildRuntime', 'build'] as const;
@@ -82,7 +84,12 @@ function defaultStores(
   sessionId: string | undefined,
   store?: SessionStore,
   traceStore?: TraceStore,
-): { sessionStore: SessionStore; traceStore: TraceStore; fileBacked: boolean } {
+): {
+  sessionStore: SessionStore;
+  traceStore: TraceStore;
+  eventLog?: import('@kuralle-agents/core').SessionEventLog;
+  fileBacked: boolean;
+} {
   if (store) {
     return {
       sessionStore: store,
@@ -93,9 +100,11 @@ function defaultStores(
   // sim: buildRuntime() with no args → file-backed session store
   if (sessionId === undefined) {
     const path = join(process.cwd(), 'runs/tui-sessions.json');
+    const base = path.replace(/\.json$/, '');
     return {
       sessionStore: fileSessionStore(path),
-      traceStore: traceStore ?? fileTraceStore(path.replace(/\.json$/, '') + '.traces.json'),
+      traceStore: traceStore ?? fileTraceStore(`${base}.traces.jsonl`),
+      eventLog: fileSessionEventLog(`${base}.events.jsonl`),
       fileBacked: true,
     };
   }
@@ -127,7 +136,7 @@ function buildFromAgent(
   agent: AgentConfig,
   options: LoaderOptions | undefined,
 ): BuildRuntime {
-  return (sessionId?, store?, traceStore?) => {
+  return (sessionId?, store?, traceStore?, eventLog?) => {
     const sid = sessionId ?? newSessionId();
     const stores = defaultStores(sessionId, store, traceStore);
     const model = resolveCliModel(agent, options?.modelFlag);
@@ -137,6 +146,7 @@ function buildFromAgent(
       sessionStore: stores.sessionStore,
       defaultModel: model,
       tracing: { store: stores.traceStore },
+      eventLog: eventLog ?? stores.eventLog,
     });
     return assembleAgentRuntime(runtime, stores.sessionStore, sid, agent.id);
   };
@@ -152,10 +162,10 @@ function buildFromRuntime(runtime: Runtime): BuildRuntime {
 }
 
 function buildFromFactory(factory: BuildRuntimeFactory): BuildRuntime {
-  return async (sessionId?, store?, traceStore?) => {
+  return async (sessionId?, store?, traceStore?, eventLog?) => {
     const sid = sessionId ?? newSessionId();
     const stores = defaultStores(sessionId, store, traceStore);
-    const result = await factory(sid, stores.sessionStore, stores.traceStore);
+    const result = await factory(sid, stores.sessionStore, stores.traceStore, eventLog ?? stores.eventLog);
     if (isAgentRuntime(result)) return result;
     if (isRuntime(result)) {
       return assembleAgentRuntime(result, stores.sessionStore, sid, 'agent');

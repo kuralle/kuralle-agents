@@ -8,7 +8,7 @@ import { fileTraceStore } from './fileTraceStore.js';
 export async function runTrace(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
   // --store <file> points at the same file `kuralle chat --store` / `kuralle send`
   // persist to; traces live in a sidecar with the extension replaced —
-  // `runs/app.json` -> `runs/app.traces.json` (JSONL, one span per line).
+  // `runs/app.json` -> `runs/app.traces.jsonl` (JSONL, one span per line).
   // Without wiring these, buildRuntime falls back to an in-memory store that is
   // always empty in a fresh process, so no persisted trace is ever found.
   const storeIdx = argv.indexOf('--store');
@@ -17,7 +17,7 @@ export async function runTrace(argv: string[], buildRuntime: BuildRuntime): Prom
   if (!sessionId) throw new Error('Usage: kuralle trace <session> [--last] [--json] [--store <file>]');
   const sessionStore = storePath ? fileSessionStore(storePath) : undefined;
   const traceStore = storePath
-    ? fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json')
+    ? fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.jsonl')
     : undefined;
   const { runtime } = await buildRuntime(sessionId, sessionStore, traceStore);
   if (argv.includes('--web')) {

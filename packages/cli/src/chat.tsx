@@ -6,13 +6,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { render, Box, Text, useApp, useInput, Static } from 'ink';
 import TextInput from 'ink-text-input';
-import type { AgentSpan, AgentTrace, StreamPart, SessionStore, TraceStore } from '@kuralle-agents/core';
+import type { AgentSpan, AgentTrace, StreamPart, SessionEventLog, SessionStore, TraceStore } from '@kuralle-agents/core';
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
 import { newSessionId } from './sessionId.js';
 import { fileSessionStore } from './fileStore.js';
+import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
 
-type Persist = { sessionStore: SessionStore; traceStore: TraceStore; sessionId: string };
+type Persist = {
+  sessionStore: SessionStore;
+  traceStore: TraceStore;
+  eventLog: SessionEventLog;
+  sessionId: string;
+};
 
 /** Order spans as a depth-first tree (turn root → flow → node → tool/handoff). */
 function orderSpans(spans: AgentSpan[]): Array<{ span: AgentSpan; depth: number }> {
@@ -111,7 +117,7 @@ async function runTurn(
 function App({ scripted, runtime, buildRuntime, showTrace, persist }: { scripted?: string[]; runtime: AgentRuntime; buildRuntime: BuildRuntime; showTrace?: boolean; persist?: Persist }) {
   const { exit } = useApp();
   const make = (sid?: string): AgentRuntime | Promise<AgentRuntime> =>
-    persist ? buildRuntime(sid ?? persist.sessionId, persist.sessionStore, persist.traceStore) : buildRuntime(sid);
+    persist ? buildRuntime(sid ?? persist.sessionId, persist.sessionStore, persist.traceStore, persist.eventLog) : buildRuntime(sid);
   const demoRef = useRef<AgentRuntime>(runtime);
   const [log, setLog] = useState<Line[]>([line('system', demoRef.current.label)]);
   const [live, setLive] = useState('');
@@ -228,7 +234,8 @@ export async function runChat(argv: string[], buildRuntime: BuildRuntime): Promi
   const persist: Persist | undefined = storePath
     ? {
         sessionStore: fileSessionStore(storePath),
-        traceStore: fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json'),
+        traceStore: fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.jsonl'),
+        eventLog: fileSessionEventLog(storePath.replace(/\.json$/, '') + '.events.jsonl'),
         sessionId: flag('--session') ?? 'default',
       }
     : undefined;
@@ -236,7 +243,7 @@ export async function runChat(argv: string[], buildRuntime: BuildRuntime): Promi
   // Resolved BEFORE render() — a React function component cannot await, so an async
   // factory (e.g. one that loads remote config) must finish here, not during render.
   const runtime = await (persist
-    ? buildRuntime(persist.sessionId, persist.sessionStore, persist.traceStore)
+    ? buildRuntime(persist.sessionId, persist.sessionStore, persist.traceStore, persist.eventLog)
     : buildRuntime());
 
   render(<App scripted={scripted} runtime={runtime} buildRuntime={buildRuntime} showTrace={showTrace} persist={persist} />);

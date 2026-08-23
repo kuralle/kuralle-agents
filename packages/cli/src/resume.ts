@@ -11,6 +11,7 @@
 import { join } from 'node:path';
 import type { BuildRuntime } from './agentRuntime.js';
 import { fileSessionStore } from './fileStore.js';
+import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
 
 function flag(argv: string[], name: string): string | undefined {
@@ -34,8 +35,10 @@ export async function runResume(argv: string[], buildRuntime: BuildRuntime): Pro
   }
 
   const store = fileSessionStore(storePath);
-  const traces = fileTraceStore(storePath.replace(/\.json$/, '') + '.traces.json');
-  const demo = await buildRuntime(sessionId, store, traces);
+  const base = storePath.replace(/\.json$/, '');
+  const traces = fileTraceStore(`${base}.traces.jsonl`);
+  const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
+  const demo = await buildRuntime(sessionId, store, traces, eventLog);
 
   await demo.runtime.resumeFromEscalation(
     sessionId,

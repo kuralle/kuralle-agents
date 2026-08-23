@@ -1,4 +1,4 @@
-import type { Runtime, SessionStore, TraceStore } from '@kuralle-agents/core';
+import type { Runtime, SessionEventLog, SessionStore, TraceStore } from '@kuralle-agents/core';
 
 export interface AgentRuntime {
   runtime: Runtime;
@@ -18,4 +18,5 @@ export type BuildRuntime = (
   sessionId?: string,
   store?: SessionStore,
   traceStore?: TraceStore,
+  eventLog?: SessionEventLog,
 ) => AgentRuntime | Promise<AgentRuntime>;
