@@ -16,6 +16,7 @@ export interface CliLaunchOptions {
   sessionId?: string;
   userId?: string;
   tokenEnv?: string;
+  model?: string;
 }
 
 function authFromEnv(tokenEnv?: string): Auth | undefined {
@@ -30,23 +31,24 @@ export async function resolveLaunchTarget(options: CliLaunchOptions): Promise<{
   label: string;
 } | undefined> {
   if (options.local) {
-    const local = await loadLocalTarget(options.local);
+    const local = await loadLocalTarget(options.local, options.model);
     return { target: local.target, label: `local · ${local.label}` };
   }
 
-  const input = {
+  // Before resolveHostedConnection, not after: it normalises through `new URL(...)`, which throws
+  // on a filesystem path, so `kuralle-tui ./agent.ts` died with "cannot be parsed as a URL" and
+  // never reached the local branch below. The scheme decides the transport, so the scheme is
+  // inspected first.
+  if (options.server && inferTargetKind(options.server) === 'local') {
+    const local = await loadLocalTarget(options.server, options.model);
+    return { target: local.target, label: `local · ${local.label}` };
+  }
+
+  const connection = await resolveHostedConnection({
     server: options.server,
     transport: options.transport,
     agentName: options.agentName,
-  };
-  const connection = await resolveHostedConnection(input);
-  if (!connection && !options.server) return undefined;
-
-  if (options.server && inferTargetKind(options.server) === 'local') {
-    const local = await loadLocalTarget(options.server);
-    return { target: local.target, label: `local · ${local.label}` };
-  }
-
+  });
   if (!connection) return undefined;
   const target = connectionToTarget(connection, authFromEnv(options.tokenEnv));
   const label = connection.agentName ? `${connection.server} · ${connection.agentName}` : connection.server;
@@ -65,5 +67,6 @@ export function parseCliArgv(argv: string[]): CliLaunchOptions {
     sessionId: flags.get('session'),
     userId: flags.get('user'),
     tokenEnv: flags.get('token-env'),
+    model: flags.get('model'),
   };
 }
