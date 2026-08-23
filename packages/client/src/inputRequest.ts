@@ -1,5 +1,6 @@
 import type { HitlInterrupt } from '@kuralle-agents/core';
-import type { InputRequest, InputRequestOption } from './types.js';
+import type { InputRequest, InputRequestOption, InputResponse } from './types.js';
+import type { TurnView } from './reduce.js';
 
 function decisionOptions(decisions: Array<'approve' | 'deny'>): InputRequestOption[] {
   return decisions.map((id) => ({
@@ -21,4 +22,14 @@ export function projectInputRequest(interrupt: HitlInterrupt): InputRequest {
       ? decisionOptions(interrupt.allowedDecisions)
       : undefined,
   };
+}
+
+export type PendingInterrupt = TurnView['pending'][number];
+
+/** The one respond payload both surfaces send. Parity is structural, not a thing a test guesses at. */
+export function buildApprovalResponse(
+  interrupt: PendingInterrupt,
+  decision: 'approve' | 'deny',
+): InputResponse[] {
+  return [{ requestId: interrupt.requestId, decision }];
 }

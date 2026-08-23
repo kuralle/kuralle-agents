@@ -1,5 +1,5 @@
 export { createClient } from './client.js';
-export { projectInputRequest } from './inputRequest.js';
+export { projectInputRequest, buildApprovalResponse, type PendingInterrupt } from './inputRequest.js';
 export { reduce, type Block, type LoggedEvent, type TurnStatus, type TurnView } from './reduce.js';
 export {
   type Auth,

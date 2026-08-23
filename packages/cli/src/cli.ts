@@ -180,6 +180,13 @@ async function main(): Promise<void> {
       await runStartCommand(subcommandArgv('start'));
     });
 
+  // Commander exits 1 on a usage error; the agent contract reserves 1 for a failed turn and 2 for
+  // bad invocation, so an agent can tell "you called it wrong" from "the turn failed".
+  program.exitOverride((err) => {
+    if (err.code === 'commander.helpDisplayed' || err.code === 'commander.version') process.exit(0);
+    process.exit(2);
+  });
+
   await program.parseAsync(process.argv);
 }
 
