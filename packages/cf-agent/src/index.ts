@@ -44,7 +44,7 @@ export { SqlFlowDefinitionsStore } from './SqlFlowDefinitionsStore.js';
 export { createSqlExecutor } from './sqlExecutor.js';
 export { SqlSessionEventLog } from './SqlSessionEventLog.js';
 export { dispatchSessionRequest, shouldEmit } from './sessionHttp.js';
-export type { StreamEventFilter, SessionHttpOptions } from './sessionHttp.js';
+export type { StreamEventFilter, SessionHttpOptions, SessionPrincipal } from './sessionHttp.js';
 export {
   AgentScheduleCoalesceScheduler,
   QueuedTurnRunner,

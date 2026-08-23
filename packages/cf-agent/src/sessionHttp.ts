@@ -1,18 +1,27 @@
 import {
   PART_CHANNEL,
+  sanitizePart,
   scanMemoryWrite,
+  scrubSecrets,
   type ExtractedValue,
   type LoggedEvent,
   type SessionEventLog,
   type StreamPart,
 } from '@kuralle-agents/core';
+import { scopedKey } from '@kuralle-agents/deployment';
 import type { SqlExecutor } from './types.js';
 
 export type StreamEventFilter = 'safe' | 'all' | ((part: StreamPart) => boolean);
 
+export interface SessionPrincipal {
+  tenantId: string;
+  userId: string;
+}
+
 export function shouldEmit(part: StreamPart, filter: StreamEventFilter): boolean {
   if (filter === 'all') return true;
   if (typeof filter === 'function') return filter(part);
+  if (part.type === 'log-truncated') return true;
   return PART_CHANNEL[part.type] === 'client';
 }
 
@@ -28,38 +37,46 @@ type SessionRouteMatch =
   | { kind: 'cancel'; agent: string; sessionId: string }
   | { kind: 'memory'; agent: string; userId: string };
 
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function matchSessionRoute(pathname: string): SessionRouteMatch | null {
-  const events = pathname.match(/\/v1\/agents\/([^/]+)\/sessions\/([^/]+)\/events\/?$/);
+  const events = pathname.match(/\/v1\/agents\/([^/]+)\/sessions\/([^/]+)\/events$/);
   if (events?.[1] && events[2]) {
-    return { kind: 'events', agent: decodeURIComponent(events[1]), sessionId: decodeURIComponent(events[2]) };
+    return { kind: 'events', agent: decodePathSegment(events[1]), sessionId: decodePathSegment(events[2]) };
   }
-  const snapshot = pathname.match(/\/v1\/agents\/([^/]+)\/sessions\/([^/]+)\/snapshot\/?$/);
+  const snapshot = pathname.match(/\/v1\/agents\/([^/]+)\/sessions\/([^/]+)\/snapshot$/);
   if (snapshot?.[1] && snapshot[2]) {
-    return { kind: 'snapshot', agent: decodeURIComponent(snapshot[1]), sessionId: decodeURIComponent(snapshot[2]) };
+    return { kind: 'snapshot', agent: decodePathSegment(snapshot[1]), sessionId: decodePathSegment(snapshot[2]) };
   }
-  const cancel = pathname.match(/\/v1\/agents\/([^/]+)\/sessions\/([^/]+)\/cancel\/?$/);
+  const cancel = pathname.match(/\/v1\/agents\/([^/]+)\/sessions\/([^/]+)\/cancel$/);
   if (cancel?.[1] && cancel[2]) {
-    return { kind: 'cancel', agent: decodeURIComponent(cancel[1]), sessionId: decodeURIComponent(cancel[2]) };
+    return { kind: 'cancel', agent: decodePathSegment(cancel[1]), sessionId: decodePathSegment(cancel[2]) };
   }
-  const memory = pathname.match(/\/v1\/agents\/([^/]+)\/users\/([^/]+)\/memory\/?$/);
+  const memory = pathname.match(/\/v1\/agents\/([^/]+)\/users\/([^/]+)\/memory$/);
   if (memory?.[1] && memory[2]) {
-    return { kind: 'memory', agent: decodeURIComponent(memory[1]), userId: decodeURIComponent(memory[2]) };
+    return { kind: 'memory', agent: decodePathSegment(memory[1]), userId: decodePathSegment(memory[2]) };
   }
   return null;
 }
 
 function parseFromIndex(value: string | null): number | null {
   if (value == null || value === '') return 0;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) return null;
   return parsed;
 }
 
 function parseLimit(value: string | null): number | null {
-  if (value == null || value === '') return Number.POSITIVE_INFINITY;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return parsed;
+  if (value == null || value === '') return 100;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) return null;
+  return Math.min(parsed, 1000);
 }
 
 function parseFollow(value: string | null): boolean {
@@ -67,14 +84,32 @@ function parseFollow(value: string | null): boolean {
   return value !== 'false' && value !== '0';
 }
 
+const clientSafeFilter: StreamEventFilter = (part) => shouldEmit(part, 'safe');
+
 function filterLoggedEvent(event: LoggedEvent, filter: StreamEventFilter): LoggedEvent | null {
-  if (shouldEmit(event.part, filter)) return event;
-  return null;
+  if (!shouldEmit(event.part, filter)) return null;
+  return {
+    ...event,
+    part: sanitizePart(event.part),
+  };
+}
+
+function scrubExtractedValue(value: unknown): unknown {
+  const part = scrubSecrets({
+    channel: 'internal',
+    type: 'extraction',
+    payload: { slug: 'memory-export', value, changed: false },
+  });
+  if (part.type === 'extraction') {
+    return part.payload.value;
+  }
+  return value;
 }
 
 async function loadMemoryBlocks(
   sql: SqlExecutor,
   owner: string,
+  agentId: string,
 ): Promise<Array<{ key: string; scope: string; chars: number; limit: number; content: string }>> {
   sql`
     CREATE TABLE IF NOT EXISTS working_memory_blocks (
@@ -87,27 +122,34 @@ async function loadMemoryBlocks(
       PRIMARY KEY (scope, owner, key)
     )
   `;
-  const rows = sql<{
-    key: string;
-    scope: string;
-    content: string;
-    char_limit: number;
-  }>`
-    SELECT key, scope, content, char_limit
-    FROM working_memory_blocks
-    WHERE owner = ${owner}
-    ORDER BY scope, key
-  `;
+  const owners = [
+    { scope: 'user', owner },
+    { scope: 'shared', owner },
+    { scope: 'agent', owner: agentId },
+  ];
   const blocks: Array<{ key: string; scope: string; chars: number; limit: number; content: string }> = [];
-  for (const row of rows) {
-    if (!scanMemoryWrite(row.content).safe) continue;
-    blocks.push({
-      key: row.key,
-      scope: row.scope,
-      chars: row.content.length,
-      limit: row.char_limit,
-      content: row.content,
-    });
+  for (const { scope, owner: blockOwner } of owners) {
+    const rows = sql<{
+      key: string;
+      scope: string;
+      content: string;
+      char_limit: number;
+    }>`
+      SELECT key, scope, content, char_limit
+      FROM working_memory_blocks
+      WHERE scope = ${scope} AND owner = ${blockOwner}
+      ORDER BY key
+    `;
+    for (const row of rows) {
+      const content = scanMemoryWrite(row.content).safe ? row.content : '';
+      blocks.push({
+        key: row.key,
+        scope: row.scope,
+        chars: content.length,
+        limit: row.char_limit,
+        content,
+      });
+    }
   }
   return blocks;
 }
@@ -134,11 +176,47 @@ async function loadExtractedValues(
     extracted.push({
       slug: parsed.slug,
       scope: parsed.scope,
-      value: parsed.value,
+      value: scrubExtractedValue(parsed.value),
       updatedAt: parsed.updatedAt,
     });
   }
   return extracted;
+}
+
+async function readVisibleSnapshot(
+  eventLog: SessionEventLog,
+  sessionId: string,
+  limit: number,
+  filter: StreamEventFilter,
+): Promise<{ events: LoggedEvent[]; next: number }> {
+  const visible: LoggedEvent[] = [];
+  let cursor = 0;
+  let next = 0;
+
+  while (visible.length < limit) {
+    const batch = await eventLog.read(sessionId, cursor, limit);
+    if (batch.events.length === 0) {
+      next = cursor;
+      break;
+    }
+    for (const event of batch.events) {
+      const filtered = filterLoggedEvent(event, filter);
+      if (filtered) {
+        visible.push(filtered);
+        if (visible.length >= limit) {
+          return { events: visible, next: batch.next };
+        }
+      }
+    }
+    if (batch.next <= cursor) {
+      next = batch.next;
+      break;
+    }
+    cursor = batch.next;
+    next = batch.next;
+  }
+
+  return { events: visible, next };
 }
 
 export interface SessionHttpOptions {
@@ -147,6 +225,7 @@ export interface SessionHttpOptions {
   eventLog: SessionEventLog;
   sql: SqlExecutor;
   cancelTurn: () => boolean;
+  resolvePrincipal?: (request: Request) => SessionPrincipal | null | Promise<SessionPrincipal | null>;
 }
 
 export async function dispatchSessionRequest(options: SessionHttpOptions): Promise<Response | null> {
@@ -166,7 +245,13 @@ export async function dispatchSessionRequest(options: SessionHttpOptions): Promi
     case 'cancel':
       return handleCancel(options.request, options.cancelTurn);
     case 'memory':
-      return handleMemory(options.request, options.sql, match.userId);
+      return handleMemory(
+        options.request,
+        options.sql,
+        match.agent,
+        match.userId,
+        options.resolvePrincipal,
+      );
   }
 }
 
@@ -177,7 +262,7 @@ async function handleEvents(
   url: URL,
 ): Promise<Response> {
   if (request.method !== 'GET') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return Response.json({ error: 'not found' }, { status: 404 });
   }
 
   const from = parseFromIndex(url.searchParams.get('from'));
@@ -186,7 +271,7 @@ async function handleEvents(
   }
 
   const follow = parseFollow(url.searchParams.get('follow'));
-  const filter: StreamEventFilter = 'safe';
+  const filter = clientSafeFilter;
   const encoder = new TextEncoder();
 
   if (!follow) {
@@ -209,7 +294,7 @@ async function handleEvents(
         controller.close();
       },
     });
-    const headers = new Headers({ 'content-type': 'application/x-ndjson' });
+    const headers = new Headers({ 'content-type': 'application/x-ndjson; charset=utf-8' });
     applyNoBufferingHeaders(headers);
     return new Response(stream, { headers });
   }
@@ -230,7 +315,7 @@ async function handleEvents(
       }
     },
   });
-  const headers = new Headers({ 'content-type': 'application/x-ndjson' });
+  const headers = new Headers({ 'content-type': 'application/x-ndjson; charset=utf-8' });
   applyNoBufferingHeaders(headers);
   return new Response(stream, { headers });
 }
@@ -242,28 +327,25 @@ async function handleSnapshot(
   url: URL,
 ): Promise<Response> {
   if (request.method !== 'GET') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return Response.json({ error: 'not found' }, { status: 404 });
   }
   const limit = parseLimit(url.searchParams.get('limit'));
   if (limit === null) {
-    return Response.json({ error: 'limit must be a non-negative integer' }, { status: 400 });
+    return Response.json({ error: 'limit must be a positive integer' }, { status: 400 });
   }
 
-  const filter: StreamEventFilter = 'safe';
-  const { events, next } = await eventLog.read(sessionId, 0, limit);
-  const visible = events
-    .map((event) => filterLoggedEvent(event, filter))
-    .filter((event): event is LoggedEvent => event != null);
+  const filter = clientSafeFilter;
+  const { events, next } = await readVisibleSnapshot(eventLog, sessionId, limit, filter);
 
   return Response.json({
-    events: visible,
+    events,
     cursor: { sessionId, index: next },
   });
 }
 
 function handleCancel(request: Request, cancelTurn: () => boolean): Response {
   if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return Response.json({ error: 'not found' }, { status: 404 });
   }
   const cancelled = cancelTurn();
   return Response.json({
@@ -271,11 +353,27 @@ function handleCancel(request: Request, cancelTurn: () => boolean): Response {
   });
 }
 
-async function handleMemory(request: Request, sql: SqlExecutor, userId: string): Promise<Response> {
+async function handleMemory(
+  request: Request,
+  sql: SqlExecutor,
+  agentId: string,
+  userId: string,
+  resolvePrincipal?: (request: Request) => SessionPrincipal | null | Promise<SessionPrincipal | null>,
+): Promise<Response> {
   if (request.method !== 'GET') {
-    return new Response('Method Not Allowed', { status: 405 });
+    return Response.json({ error: 'not found' }, { status: 404 });
   }
-  const blocks = await loadMemoryBlocks(sql, userId);
-  const extracted = await loadExtractedValues(sql, userId);
+
+  const principal = resolvePrincipal ? await resolvePrincipal(request) : null;
+  if (!principal) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  if (principal.userId !== userId) {
+    return Response.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  const owner = scopedKey(principal.tenantId, userId);
+  const blocks = await loadMemoryBlocks(sql, owner, agentId);
+  const extracted = await loadExtractedValues(sql, owner);
   return Response.json({ blocks, extracted });
 }

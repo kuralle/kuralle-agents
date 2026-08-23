@@ -86,10 +86,32 @@ describe('SqlSessionEventLog', () => {
     expect(seen.size).toBeGreaterThan(0);
   });
 
-  test('red gate: missing index in storage fails the gapless index check', () => {
-    const indices = [0, 2];
+  test('red gate: append keeps gapless indices in storage', async () => {
+    const db = new Database(':memory:');
+    const sql = bunSql(db);
+    const gapLog = new SqlSessionEventLog(sql);
+    await gapLog.append('gap-sess', [textDelta('one'), textDelta('two'), turnEnd()], 'r1');
+
+    const rows = sql<{ idx: number }>`
+      SELECT idx FROM session_events WHERE session_id = ${'gap-sess'} ORDER BY idx ASC
+    `;
+    const indices = rows.map((row) => row.idx);
     for (let index = 1; index < indices.length; index += 1) {
-      expect(indices[index]! - indices[index - 1]!).toBe(2);
+      expect(indices[index]! - indices[index - 1]!).toBe(1);
     }
+  });
+
+  test('enforceCeiling drops head events and read synthesizes a log-truncated marker', async () => {
+    const tight = new SqlSessionEventLog(bunSql(), { maxEvents: 4 });
+    for (let index = 0; index < 6; index += 1) {
+      await tight.append('ceil-sess', [turnEnd()], 'r1');
+    }
+
+    const fromStart = await tight.read('ceil-sess', 0, 2);
+    expect(fromStart.events.some((event) => event.part.type === 'log-truncated')).toBe(true);
+
+    const retained = await tight.read('ceil-sess', fromStart.next);
+    expect(retained.events.every((event) => event.index >= fromStart.next)).toBe(true);
+    expect(await tight.tail('ceil-sess')).toBeGreaterThanOrEqual(fromStart.next);
   });
 });

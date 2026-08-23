@@ -62,7 +62,7 @@ import { SqlFlowDefinitionsStore } from './SqlFlowDefinitionsStore.js';
 import { dispatchStoredFlowsRequest } from './storedFlowsHttp.js';
 import { SqlExtractedValueStore } from './SqlExtractedValueStore.js';
 import { SqlSessionEventLog } from './SqlSessionEventLog.js';
-import { dispatchSessionRequest } from './sessionHttp.js';
+import { dispatchSessionRequest, type SessionPrincipal } from './sessionHttp.js';
 
 export interface ResolvedRuntimeDefinition {
   agents: HarnessConfig['agents'];
@@ -276,6 +276,15 @@ export abstract class KuralleAgent<
    */
   protected async resolveSignalActor(_request: Request): Promise<SignalActor | undefined> {
     return undefined;
+  }
+
+  /**
+   * Resolve the authenticated principal for session HTTP routes that expose
+   * tenant-scoped data (notably `/users/:userId/memory`). Fail closed: the
+   * default returns null and the memory route responds 401.
+   */
+  protected resolveSessionPrincipal(_request: Request): SessionPrincipal | null | Promise<SessionPrincipal | null> {
+    return null;
   }
 
   private async durableRunStore(): Promise<SqlRunStore> {
@@ -634,6 +643,7 @@ export abstract class KuralleAgent<
       eventLog: this.getSessionEventLog(),
       sql: this.getSql(),
       cancelTurn: () => this.cancelActiveTurn(),
+      resolvePrincipal: (req) => this.resolveSessionPrincipal(req),
     });
     if (sessionRoute) return sessionRoute;
 
