@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createOpenAI } from '@ai-sdk/openai';
-import { MemoryStore, type AgentConfig } from '@kuralle-agents/core';
+import { MemorySessionEventLog, MemoryStore, type AgentConfig } from '@kuralle-agents/core';
 import {
   embeddedArtifactContentResolver,
   InMemoryDeploymentStore,
@@ -143,6 +143,10 @@ export default async function createHost(
   return {
     deploymentStore,
     sessionStore: new MemoryStore(),
+    // Without this the session routes return 503 "event log not configured", so `kuralle-tui`
+    // cannot attach: it reads /snapshot on connect and follows /events. In-memory is right for an
+    // example — it dies with the process. A real deployment gives this a durable backend.
+    eventLog: new MemorySessionEventLog(),
     runtimeRevision,
     bindings,
     coordinator: localCoordinator(),
