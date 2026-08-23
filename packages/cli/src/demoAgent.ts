@@ -18,6 +18,7 @@ import {
   defineTool,
   MemoryStore,
   MemoryTraceStore,
+  type SessionEventLog,
   type SessionStore,
   type TraceStore,
 } from '@kuralle-agents/core';
@@ -45,6 +46,7 @@ export function buildDemoRuntime(
   sessionId = newSessionId(),
   store: SessionStore = new MemoryStore(),
   traceStore: TraceStore = new MemoryTraceStore(),
+  eventLog?: SessionEventLog,
 ): AgentRuntime {
   const model = demoModel();
 
@@ -110,6 +112,7 @@ export function buildDemoRuntime(
     sessionStore: store,
     defaultModel: model,
     tracing: { store: traceStore },
+    eventLog,
   });
 
   const readState = () => readAgentRunState(runtime, sessionId);

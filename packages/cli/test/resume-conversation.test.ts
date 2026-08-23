@@ -60,4 +60,22 @@ describe('resume conversation across processes', () => {
       'reply 4: turn 4',
     ]);
   });
+
+  it('message carries only this turn, while view carries the whole transcript', () => {
+    // The view is cumulative on purpose — it is the transcript. `message` is not: it is the
+    // one field an agent driving the CLI reads to decide what to say next, and joining every
+    // assistant block re-emitted all four replies glued together with no separator.
+    const store = join(mkdtempSync(join(tmpdir(), 'kuralle-resume-')), 'sessions.json');
+    const base = ['send', '--agent', multiTurnAgent, '--session', 'scoped', '--store', store];
+
+    let piped = runKuralle([...base, 'turn 1']).stdout;
+    expect(parseResult(piped).message).toBe('reply 1: turn 1');
+
+    for (const [index, prompt] of ['turn 2', 'turn 3'].entries()) {
+      piped = runKuralle([...base, '--resume', prompt], piped).stdout;
+      const result = parseResult(piped);
+      expect(result.message).toBe(`reply ${index + 2}: ${prompt}`);
+      expect(assistantTexts(result)).toHaveLength(index + 2);
+    }
+  });
 });

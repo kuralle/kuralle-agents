@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { LanguageModel, ModelMessage, TranscriptionModel } from 'ai';
 import type { UserInputContent } from './userInput.js';
 import type { Session } from '../types/session.js';
+import type { SessionEventLog } from '../events/SessionEventLog.js';
 import type { SessionStore } from '../session/SessionStore.js';
 import type { AuditListOptions, ConversationAuditEntry } from '../audit/types.js';
 import { filterAuditEntries } from '../audit/filterAuditEntries.js';
@@ -220,7 +221,7 @@ export interface HarnessConfig {
    */
   runStore?: RunStore;
   /** Session-scoped event log for replay and cross-client attach. Omitted: live stream only. */
-  eventLog?: import('../events/SessionEventLog.js').SessionEventLog;
+  eventLog?: SessionEventLog;
   /**
    * Default versioned store for `addDynamicFlows` / `loadDynamicFlows` when the
    * call does not pass `store`. Live registration still works without one.
@@ -1090,6 +1091,10 @@ export class Runtime {
 
   getSessionStore(): SessionStore {
     return this.sessionStore;
+  }
+
+  getEventLog(): SessionEventLog | undefined {
+    return this.config.eventLog;
   }
 
   getRunStore(sessionId = ''): RunStore {

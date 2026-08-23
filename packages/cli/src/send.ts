@@ -204,6 +204,7 @@ export async function runSend(
   await collectTurn(turn, hooks);
 
   const { events } = await eventLog.read(sessionId, fromIndex);
-  const view = reduce(events, priorView(resolved.previous));
-  return buildTurnResult(sessionId, view);
+  const seed = priorView(resolved.previous);
+  const view = reduce(events, seed);
+  return buildTurnResult(sessionId, view, seed?.blocks.length ?? 0);
 }

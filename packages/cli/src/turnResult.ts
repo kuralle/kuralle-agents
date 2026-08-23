@@ -198,8 +198,17 @@ export function writeTurnResult(result: TurnResult): void {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
-function assistantMessage(view: TurnView): string | undefined {
+/**
+ * The assistant text produced by THIS turn.
+ *
+ * `--resume` seeds the reducer with the prior TurnResult's view so the transcript stays whole
+ * across process boundaries, which means `view.blocks` is cumulative. Joining all of them made
+ * `message` re-emit every earlier reply glued to the new one — the field an agent driving the
+ * CLI actually reads. `fromBlock` is where this turn's blocks start.
+ */
+function assistantMessage(view: TurnView, fromBlock = 0): string | undefined {
   const text = view.blocks
+    .slice(fromBlock)
     .filter((block): block is Extract<Block, { kind: 'assistant' }> => block.kind === 'assistant')
     .map((block) => block.text)
     .join('');
@@ -214,14 +223,18 @@ function noticeText(view: TurnView, level: 'warn' | 'error'): string | undefined
   return notice?.text;
 }
 
-export function buildTurnResult(sessionId: string, view: TurnView): TurnResult {
+export function buildTurnResult(
+  sessionId: string,
+  view: TurnView,
+  fromBlock = 0,
+): TurnResult {
   const cursor: Cursor = { sessionId, index: view.cursor };
 
   switch (view.status) {
     case 'completed':
-      return { status: 'completed', message: assistantMessage(view), cursor, view };
+      return { status: 'completed', message: assistantMessage(view, fromBlock), cursor, view };
     case 'waiting':
-      return { status: 'waiting', message: assistantMessage(view), cursor, view };
+      return { status: 'waiting', message: assistantMessage(view, fromBlock), cursor, view };
     case 'input-required':
       return {
         status: 'input-required',
@@ -243,7 +256,7 @@ export function buildTurnResult(sessionId: string, view: TurnView): TurnResult {
         cursor,
       };
     default:
-      return { status: 'waiting', message: assistantMessage(view), cursor, view };
+      return { status: 'waiting', message: assistantMessage(view, fromBlock), cursor, view };
   }
 }
 

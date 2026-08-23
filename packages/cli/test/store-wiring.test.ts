@@ -18,6 +18,12 @@ import { join } from 'node:path';
 import type { SessionStore, TraceStore, AgentSpan } from '@kuralle-agents/core';
 import { runSend } from '../src/send.js';
 import { fileTraceStore } from '../src/fileTraceStore.js';
+import { fileSessionEventLog } from '../src/fileEventLog.js';
+import { resolveBuildRuntime } from '../src/agentLoader.js';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 function tmpStore(name = 'sessions.json'): string {
   return join(mkdtempSync(join(tmpdir(), 'kuralle-cli-')), name);
@@ -104,5 +110,40 @@ describe('test:cli-store-wiring', () => {
     const traces = await fileTraceStore(sidecar).listTraces('demo');
     expect(traces).toHaveLength(1);
     expect(traces[0]!.traceId).toBe('ok');
+  });
+});
+
+/**
+ * The same bug as the one above, one parameter over.
+ *
+ * `BuildRuntime` grew a fourth argument — the SessionEventLog — because `send` builds its
+ * TurnResult by reducing that log, not by reading the runtime's return value. Every loader
+ * shape forwards it except `buildDemoRuntime`, which took three parameters and silently
+ * dropped the fourth. The demo agent is what `kuralle send` uses when no `--agent` is passed,
+ * so the *default* invocation wrote a correct assistant reply into the session store and then
+ * reported `{"status":"waiting","view":{"blocks":[]}}` — an agent driving the CLI saw an empty
+ * turn every time.
+ *
+ * Every existing test passed because each fixture runtime appends to the event log itself
+ * rather than letting `createRuntime({ eventLog })` do it. The contract is the wiring, so
+ * that is what these assert. No API key is used for a request — `createOpenAI` is lazy, so
+ * constructing the model never leaves the process.
+ */
+describe('every BuildRuntime shape forwards the event log', () => {
+  const recorder = () => fileSessionEventLog(tmpStore('wiring.events.jsonl'));
+
+  it('the demo agent — the default kuralle send path', async () => {
+    process.env.OPENAI_API_KEY ||= 'test-key';
+    const log = recorder();
+    const { buildDemoRuntime } = await import('../src/demoAgent.js');
+    const built = buildDemoRuntime('demo', undefined, undefined, log);
+    expect(built.runtime.getEventLog()).toBe(log);
+  });
+
+  it('an exported defineAgent', async () => {
+    const log = recorder();
+    const build = await resolveBuildRuntime(join(here, 'fixtures/memory-fixture-agent.ts'));
+    const built = await build('demo', undefined, undefined, log);
+    expect(built.runtime.getEventLog()).toBe(log);
   });
 });
