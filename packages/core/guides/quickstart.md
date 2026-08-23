@@ -173,30 +173,23 @@ The runtime auto-assigns a session ID on the first turn and persists conversatio
 
 ## Web UI with `useChat` (no bridge)
 
-As of 0.5.0, `@kuralle-agents/hono-server` returns a native AI SDK `UIMessageStream` from `POST /api/chat/sse` by default. Point `useChat` at that endpoint — no hand-rolled `StreamPart` → `UIMessageChunk` bridge.
+`@kuralle-agents/hono-server` returns a native AI SDK `UIMessageStream` from
+`POST /api/chat/sse`, so a React client points `useChat` at that endpoint with no
+bridge code:
 
 ```tsx
 'use client';
-
 import { useChat } from '@ai-sdk/react';
 import type { KuralleUIMessage } from '@kuralle-agents/core';
 
 export function Chat() {
-  const { messages, sendMessage } = useChat<KuralleUIMessage>({
-    api: '/api/chat/sse',
-    onData: (part) => {
-      // transient flow/node telemetry — delivered live, not stored in message.parts
-      if (part.type === 'data-kuralle-flow') console.log(part.data);
-    },
-  });
+  const { messages, sendMessage } = useChat<KuralleUIMessage>({ api: '/api/chat/sse' });
 
   return (
     <div>
       {messages.map((m) => (
         <div key={m.id}>
-          {m.parts.map((part, i) =>
-            part.type === 'text' ? <span key={i}>{part.text}</span> : null
-          )}
+          {m.parts.map((part, i) => (part.type === 'text' ? <span key={i}>{part.text}</span> : null))}
         </div>
       ))}
       <button onClick={() => sendMessage({ text: 'Hello' })}>Send</button>
@@ -205,14 +198,12 @@ export function Chat() {
 }
 ```
 
-Kuralle orchestration events arrive as typed `data-kuralle-*` parts:
+Kuralle's flow, safety, and interactive events arrive as typed `data-kuralle-*`
+parts. Some are transient and reachable only through `onData`, which is the most
+common thing to get wrong when building a UI.
 
-| Part type | Persisted? | Use for |
-|---|---|---|
-| `data-kuralle-node`, `data-kuralle-flow`, `data-kuralle-control` | transient (`onData` only) | flow/node telemetry |
-| `data-kuralle-interactive`, `data-kuralle-safety`, `data-kuralle-handoff`, `data-kuralle-outcome` | persistent (`message.parts`) | UI controls, safety blocks, handoffs |
-
-For non-UI consumers that need raw `StreamPart` JSON-SSE (curl, Studio), append `?format=raw` to `/api/chat/sse`. See [Deployment](./deployment.md).
+[Clients & Streaming](./clients.md) covers that split, plus interactive
+choices, approval prompts, uploads, proxy buffering, and the embeddable widget.
 
 ## Next steps
 

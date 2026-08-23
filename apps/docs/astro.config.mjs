@@ -149,6 +149,7 @@ const sidebar = [
       { label: 'Tool Policy', link: '/guides/policy' },
       { label: 'Durable Execution', link: '/guides/durable-execution' },
       { label: 'Engagement & Messaging', link: '/guides/engagement' },
+      { label: 'Clients & Streaming', link: '/guides/clients' },
       { label: 'Deployment', link: '/guides/deployment' },
       { label: 'Agent Builder in React', link: '/guides/agent-builder-react' },
       { label: 'Agent Definitions in Your Database', link: '/guides/agent-definitions-database' },

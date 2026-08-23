@@ -80,6 +80,7 @@ const READING_ORDER = [
   'agent-definitions-database',
   'agent-builder-react',
   'engagement',
+  'clients',
   'observability',
   'deployment',
   'cli',

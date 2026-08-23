@@ -69,7 +69,7 @@ See `packages/messaging-meta/examples/whatsapp-server/README.md` and the [Engage
 
 ## Endpoints
 
-`createKuralleChatRouter` mounts these routes:
+`createKuralleChatRouter` mounts these routes. [Clients & Streaming](./clients.md) covers what to do with them:
 
 | Method | Path | Description |
 |---|---|---|
@@ -171,96 +171,31 @@ The hosted runtime owns credentials, state, tools, and workspaces. The CLI store
 ## The deployment thread route
 
 `POST /v1/agents/:agentEntityId/threads/:threadId/messages` serves an AI SDK
-`UIMessageStream` by default — the same wire every Kuralle runtime speaks — so
-`useChat` consumes it with no bridge code:
+`UIMessageStream` by default — the same wire every Kuralle runtime speaks. The
+thread is pinned on its first turn to an exact Agent Version, artifact digest,
+release, and Runtime Revision, so activating another release does not move a
+live conversation.
 
-```ts
-const transport = new DefaultChatTransport({
-  api: `/v1/agents/${agentId}/threads/${threadId}/messages`,
-  headers: () => ({ authorization: `Bearer ${token}`, 'idempotency-key': key.current }),
-});
-const { messages, sendMessage } = useChat<KuralleUIMessage>({ id: threadId, transport });
-```
-
-Append `?format=raw` for the named-event `StreamPart` SSE, the same negotiation
-`/api/chat/sse` and `/api/flow/sse` already use. That form is for non-browser
-consumers — CLIs, webhooks, custom transports.
-
-> **Transient parts never reach `message.parts`**
->
-> `data-kuralle-node`, `-flow`, `-control` and `-flow-*` are written with
-> `transient: true`, so they arrive via `useChat({ onData })` and are dropped from
-> message history. Reading them off `message.parts` produces a panel that renders
-> nothing. The persistent parts — `-handoff`, `-interactive`, `-safety`,
-> `-outcome` — do stay in `message.parts`.
+For the `DefaultChatTransport` wiring, the `?format=raw` negotiation, and the
+transient-versus-persistent part split, see
+[Clients & Streaming](./clients.md).
 
 ## HTTP streaming
 
-### Web (`useChat`, default)
+`POST /api/chat/sse` returns a native AI SDK `UIMessageStream`, so a React client
+uses `useChat` with no bridge. Append `?format=raw` for `StreamPart` JSON-SSE, or
+return `handle.toUIMessageStreamResponse()` directly without the router.
 
-`POST /api/chat/sse` returns a native AI SDK `UIMessageStream`. A React client uses `useChat` with no bridge:
+[Clients & Streaming](./clients.md) is the full client story: the endpoint
+table, `useChat` wiring, the transient versus persistent `data-kuralle-*` split,
+approval prompts, uploads, proxy buffering, and the embeddable widget.
 
-```tsx
-import { useChat } from '@ai-sdk/react';
-import type { KuralleUIMessage } from '@kuralle-agents/core';
-
-const { messages } = useChat<KuralleUIMessage>({ api: '/api/chat/sse' });
-```
-
-Kuralle flow/safety/interactive events arrive as `data-kuralle-*` parts — read persistent parts from `message.parts`, transient telemetry from `useChat({ onData })`. See an earlier decision for the full mapping table.
-
-### Proxies and buffering
-
-The runtime sets `Cache-Control: no-cache, no-transform`, `Content-Encoding: identity` and
-`X-Accel-Buffering: no` on every streamed turn. Leave them alone — they are what stops an
-intermediary collecting the whole turn and delivering it in one frame.
-
-This is worth knowing about because the failure looks like a slow model rather than a broken proxy:
-the server streams correctly, the client shows a spinner for the entire turn, and then everything
-appears at once. It is also easy to mis-diagnose. A plain `curl` sends no `Accept-Encoding`, so it
-measures a healthy stream while a browser — which always negotiates encoding — sees nothing until
-the end. If you are checking whether streaming works, use `curl --compressed`, or measure in the
-browser.
-
-A Next.js `rewrites()` proxy in front of the server is the common case that trips this.
-
-### Raw JSON-SSE (`?format=raw`)
-
-Non-UI consumers that parsed `StreamPart` JSON from 0.4.x append `?format=raw`:
-
-```bash
-curl -N -X POST 'http://localhost:3000/api/chat/sse?format=raw' \
-  -H 'Content-Type: application/json' \
-  -d '{"message":"hello"}'
-```
-
-Or use `createKuralleSseChatRouter` for a router that always emits raw JSON-SSE.
-
-### Direct `TurnHandle` piping
-
-Without `createKuralleChatRouter`, return a native stream for web clients:
-
-```typescript
-app.post('/chat', async (c) => {
-  const { input, sessionId } = await c.req.json();
-  const handle = runtime.run({ input, sessionId });
-  return handle.toUIMessageStreamResponse({ sessionId });
-});
-```
-
-For raw `StreamPart` JSON-SSE (curl, custom transports):
-
-```typescript
-return new Response(handle.toResponseStream('sse'), {
-  headers: { 'Content-Type': 'text/event-stream; charset=utf-8' },
-});
-```
-
-`createKuralleChatRouter` wires the native default on `/api/chat/sse` and also mounts sessions, WebSocket, and the full endpoint set.
-
-> **Note**
+> **Proxies buffer streams**
 >
-> For production, pair the Hono server or CF agent with a durable `SessionStore`. See [Sessions & State](./sessions.md).
+> The runtime sets `Cache-Control: no-cache, no-transform`, `Content-Encoding: identity`
+> and `X-Accel-Buffering: no` on every streamed turn. Leave them alone — a Next.js
+> `rewrites()` proxy in front of the server is the usual reason a stream arrives in one
+> frame. See [Clients & Streaming](./clients.md#streaming-through-a-proxy).
 
 ## Production references
 

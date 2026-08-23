@@ -1,0 +1,312 @@
+# Clients & Streaming
+
+Build a web chat UI, stream a turn to a browser, render Kuralle's typed parts, and embed the widget.
+
+A Kuralle runtime speaks the Vercel AI SDK's wire format. A React client consumes
+it with `useChat` and no bridge code, and the orchestration Kuralle adds on top —
+flow progress, interactive choices, approval prompts, safety blocks — arrives as
+typed `data-kuralle-*` parts alongside the text.
+
+This page is the client half. [Deployment](./deployment.md) covers where the
+server runs; this covers what talks to it.
+
+## The wire is the AI SDK's, not a Kuralle one
+
+Since 0.5.0 the default response is a native AI SDK `UIMessageStream`.
+
+```tsx
+'use client';
+import { useChat } from '@ai-sdk/react';
+import type { KuralleUIMessage } from '@kuralle-agents/core';
+
+const { messages, sendMessage } = useChat<KuralleUIMessage>({ api: '/api/chat/sse' });
+```
+
+Type the hook with `KuralleUIMessage`. Without it the `data-kuralle-*` parts are
+untyped and the compiler cannot tell you which ones exist.
+
+> **Do not write a bridge**
+>
+> If you find a hand-rolled `StreamPart` → `UIMessageChunk` adapter in a codebase,
+> delete it. It was necessary before 0.5.0 and is now a source of drift.
+
+## Endpoints
+
+`createKuralleChatRouter` from `@kuralle-agents/hono-server` mounts:
+
+| Method | Path | Returns |
+|---|---|---|
+| `POST` | `/api/chat` | Single-turn JSON |
+| `POST` | `/api/chat/sse` | AI SDK `UIMessageStream` — the `useChat` default |
+| `POST` | `/api/chat/stream` | Chunked text |
+| `POST` | `/api/chat/resume` | Resumes a paused turn — see [approval](#human-in-the-loop-approval) |
+| `GET` | `/agents/chat/:sessionId` | WebSocket, widget endpoint |
+| `GET` | `/ws/:sessionId` | WebSocket, turn endpoint |
+| `GET` | `/api/session/:id` | Fetch session |
+| `DELETE` | `/api/session/:id` | Delete session |
+| `GET` | `/health` | Health check |
+
+A deployment serves threads at
+`POST /v1/agents/:agentEntityId/threads/:threadId/messages` — the same wire:
+
+```ts
+const transport = new DefaultChatTransport({
+  api: `/v1/agents/${agentId}/threads/${threadId}/messages`,
+  headers: () => ({ authorization: `Bearer ${token}`, 'idempotency-key': key.current }),
+});
+const { messages, sendMessage } = useChat<KuralleUIMessage>({ id: threadId, transport });
+```
+
+Without the router, pipe a `TurnHandle` directly:
+
+```typescript
+app.post('/chat', async (c) => {
+  const { input, sessionId } = await c.req.json();
+  const handle = runtime.run({ input, sessionId });
+  return handle.toUIMessageStreamResponse({ sessionId });
+});
+```
+
+## Transient and persistent parts are read differently
+
+This is the mistake that produces a panel rendering nothing. Kuralle's
+orchestration events do not all reach message history.
+
+| Part | Where to read it |
+|---|---|
+| `data-kuralle-node`, `-flow`, `-control`, `-custom` | **Transient.** `useChat({ onData })` only. Dropped from `message.parts`. |
+| `data-kuralle-interactive`, `-safety`, `-handoff`, `-outcome` | **Persistent.** Stays in `message.parts`. |
+
+Transient parts are written with `transient: true`. Reading them off
+`message.parts` compiles, runs, and shows an empty panel forever.
+
+```tsx
+useChat<KuralleUIMessage>({
+  api: '/api/chat/sse',
+  onData: (part) => {
+    if (part.type === 'data-kuralle-flow') setFlowState(part.data);
+  },
+});
+```
+
+## What each part carries
+
+Shapes are `KuralleDataParts` in `packages/core/src/ai-sdk/uiMessageStream.ts`.
+
+| Part | Payload |
+|---|---|
+| `data-kuralle-interactive` | `{ nodeId, prompt, options: ChoiceOption[] }` |
+| `data-kuralle-safety` | `{ kind, moderator?, rationale, userFacingMessage? }` |
+| `data-kuralle-handoff` | `{ targetAgent, reason? }` |
+| `data-kuralle-outcome` | `{ outcome }` |
+| `data-kuralle-control` | `{ event: 'interrupted' \| 'paused', reason?, waitingFor?, interrupt? }` |
+| `data-kuralle-node` | `{ event: 'enter' \| 'exit', node }` |
+| `data-kuralle-flow` | `{ event: 'enter' \| 'transition' \| 'end', flow?, from?, to?, reason? }` |
+| `data-kuralle-custom` | `{ name, data }` |
+
+### Interactive choices
+
+```tsx
+const choice = message.parts.find((p) => p.type === 'data-kuralle-interactive');
+// choice.data.options: { id, label, description?, url?, flow? }[]
+```
+
+Send the selection back as `RunOptions.selection` — `{ id }` for a button, or
+`{ formData }` for a submitted form. The `id` becomes the routing input, so the
+agent sees the choice the user made rather than a paraphrase of it. An option
+carrying `url` is a link, not a reply.
+
+### Safety notices
+
+> **Never render `safety.rationale`**
+>
+> `rationale` is the moderator's internal explanation of why a message was
+> blocked. `userFacingMessage` is the text written to be read by the person.
+>
+> `rationale` is always present and `userFacingMessage` is optional, so the
+> convenient fallback is the wrong one — it leaks moderation reasoning to the user
+> it was written about. Fall back to your own copy instead.
+
+### Human-in-the-loop approval
+
+A tool with `needsApproval: true`, or a [policy](./policy.md) returning
+`ask`, pauses the run and emits `data-kuralle-control` carrying an `interrupt`.
+
+> **`data-kuralle-control` is transient**
+>
+> The approval prompt arrives through `onData` and never appears in
+> `message.parts`. A UI that looks for it in message history renders no prompt at
+> all, and the run sits paused with nothing on screen explaining why. The same
+> applies after a reload — recover a pending approval from session state, not from
+> `messages`.
+
+```tsx
+const [pending, setPending] = useState<HitlInterrupt | null>(null);
+
+useChat<KuralleUIMessage>({
+  api: '/api/chat/sse',
+  onData: (part) => {
+    if (part.type === 'data-kuralle-control' && part.data.interrupt) {
+      setPending(part.data.interrupt);
+    }
+  },
+});
+```
+
+```typescript
+interface HitlInterrupt {
+  requestId: string;
+  kind: 'approval' | 'signal';
+  signalName: string;
+  operation?: { toolCallId: string; toolName: string; args: unknown; argsHash: string };
+  display: { title: string; description?: string };
+  responseSchema: Record<string, unknown>;
+  deadline: number | null;
+  allowedDecisions: Array<'approve' | 'deny'>;
+}
+```
+
+Render `display.title` and `display.description` — they are written for a
+person, while `operation.args` is the raw call and belongs in a debug view at
+most. Offer only the buttons in `allowedDecisions`, and respect `deadline`
+(epoch milliseconds, or `null` for none).
+
+Resume with `POST /api/chat/resume`:
+
+```jsonc
+{
+  "sessionId": "…",
+  "signal": {
+    "signalId": "…",
+    "requestId": "…",      // from the interrupt
+    "name": "…",           // interrupt.signalName
+    "decision": "approve", // or "deny"
+    "reason": "optional",
+    "payload": {}          // must satisfy interrupt.responseSchema
+  }
+}
+```
+
+The response is an SSE stream of the resumed turn, so treat it like any other
+turn rather than a fire-and-forget POST.
+
+> **The approver identity is not yours to send**
+>
+> The server resolves the actor through `resolveSignalActor` and deliberately
+> ignores anything in the request body — a client that names its own actor could
+> otherwise approve as anyone. Do not add an `actor` field expecting it to be
+> honoured.
+
+## Uploads
+
+Send the shape `useChat` already produces — a text part plus one `file` part per
+attachment. `createKuralleChatRouter` maps inbound `UIMessage` parts to
+`UserInputContent` for you: text-only collapses to a plain string, and file
+parts become `FilePart`s pointing at the upload URL.
+
+```tsx
+sendMessage({
+  role: 'user',
+  parts: [
+    { type: 'text', text: 'Read this prescription' },
+    { type: 'file', url: blobUrl, mediaType: 'image/png', filename: 'rx.png' },
+  ],
+});
+```
+
+Upload the file wherever you like — Vercel Blob, S3, R2 — and pass its URL. See
+[Multimodal Input](./multimodal.md).
+
+## Streaming through a proxy
+
+The runtime sets `Cache-Control: no-cache, no-transform`,
+`Content-Encoding: identity`, and `X-Accel-Buffering: no` on every streamed turn.
+Leave them alone — they are what stops an intermediary collecting the whole turn
+and delivering it in one frame.
+
+Know this failure by sight, because it looks like a slow model rather than a
+broken proxy: the server streams correctly, the client spins for the entire turn,
+then everything appears at once. A Next.js `rewrites()` proxy in front of the
+server is the common cause.
+
+It is also easy to mis-diagnose. Plain `curl` sends no `Accept-Encoding`, so it
+measures a healthy stream while a browser — which always negotiates encoding —
+sees nothing until the end. Check with `curl --compressed`, or measure in the
+browser.
+
+## Raw `StreamPart` JSON-SSE
+
+Non-browser consumers — CLIs, webhooks, custom transports — append `?format=raw`
+to any streaming endpoint:
+
+```bash
+curl -N -X POST 'http://localhost:3000/api/chat/sse?format=raw' \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"hello"}'
+```
+
+`createKuralleSseChatRouter` is a router that always emits raw JSON-SSE.
+
+> **`text-cancel` only exists on the raw stream**
+>
+> When a gate retracts a partial message the raw stream emits `text-cancel`. The
+> `UIMessageStream` path maps it to `text-end`, so a `useChat` client sees the text
+> stop and the partial message stays on screen. Consume the raw stream if
+> retraction matters to your UI.
+
+## Session continuity
+
+Save `payload.sessionId` from the `done` event and pass it back on the next turn.
+The runtime assigns one on the first turn and persists history against it.
+
+> **Caution**
+>
+> `done` fires on failed turns too, and the `for await` loop completes without
+> throwing. See [Quickstart](./quickstart.md#streaming-events) — `await handle`
+> is the error boundary.
+
+The default `MemoryStore` is in-process. Swap it for Redis or Postgres before a
+second replica exists — see [Sessions & State](./sessions.md).
+
+## Embeddable widget
+
+`@kuralle-agents/widget` registers a `<kuralle-widget>` custom element backed by
+Preact. It resolves agent config over HTTP, opens a WebSocket, and renders a
+floating chat UI with streaming, message queuing, and auto-reconnect.
+
+```html
+<script src="/path/to/widget.js"></script>
+
+<kuralle-widget
+  agent-url="https://your-api.example.com"
+  agent-id="support"
+  position="bottom-right"
+  theme="light"
+  title="Chat with us">
+</kuralle-widget>
+```
+
+The widget calls `GET /api/agent/:agentId` on `agent-url` to resolve the
+WebSocket URL, then connects directly to the agent.
+
+`WidgetClient` is the programmatic form:
+
+```typescript
+import { WidgetClient } from '@kuralle-agents/widget';
+
+const client = new WidgetClient('https://your-api.example.com', 'support');
+await client.initWidget();
+
+client.onMessages((messages) => render(messages));
+client.onConnectionChange((connected) => setOnline(connected));
+await client.sendMessage('Hello!');
+client.dispose();
+```
+
+## Related
+
+- [Deployment](./deployment.md) — where the server runs, and the hosting matrix
+- [Multimodal Input](./multimodal.md) — what the model accepts beyond text
+- [Engagement & Messaging](./engagement.md) — the same agent on WhatsApp, Messenger, and Instagram
+- [Tool Policy](./policy.md) — what makes a turn pause for approval
+- [Agent Builder in React](./agent-builder-react.md) — a UI for authoring agents, rather than talking to one

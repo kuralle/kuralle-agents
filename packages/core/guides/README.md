@@ -29,7 +29,8 @@ Read in this order for a full picture; jump straight to a page to solve one task
 21. [Agent Definitions in Your Database](./agent-definitions-database.md) — Own agent-definition schema and migrations in Postgres, Prisma, or Drizzle, and run the agents on Cloudflare.
 22. [Build an Agent Builder in React](./agent-builder-react.md) — Build a multi-tenant agent builder UI on React — drafts, publishing, releases, live preview streaming, and deploying the result to Node or Cloudflare.
 23. [Engagement & Messaging](./engagement.md) — Window-safe omnichannel bots with WhatsApp, Instagram, and web chat on one runtime.
-24. [Observability](./observability.md) — Structured traces for every run — evals with runOnce, durable trace storage, OTLP/Langfuse export, and an embeddable trace viewer.
-25. [Deployment](./deployment.md) — Deploy Kuralle agents to Hono/Node, Cloudflare Workers, or serverless platforms.
-26. [CLI & Devtools](./cli.md) — Connect to hosted runtimes or run local chat, send, resume, simulation, and trace inspection against any Kuralle agent.
-27. [Pi Driver](./pi-driver.md) — Use pi-agent-core as Kuralle's production model/tool loop while Kuralle retains flows, policy, durability, sessions, and streaming.
+24. [Clients & Streaming](./clients.md) — Build a web chat UI, stream a turn to a browser, render Kuralle's typed parts, and embed the widget.
+25. [Observability](./observability.md) — Structured traces for every run — evals with runOnce, durable trace storage, OTLP/Langfuse export, and an embeddable trace viewer.
+26. [Deployment](./deployment.md) — Deploy Kuralle agents to Hono/Node, Cloudflare Workers, or serverless platforms.
+27. [CLI & Devtools](./cli.md) — Connect to hosted runtimes or run local chat, send, resume, simulation, and trace inspection against any Kuralle agent.
+28. [Pi Driver](./pi-driver.md) — Use pi-agent-core as Kuralle's production model/tool loop while Kuralle retains flows, policy, durability, sessions, and streaming.
