@@ -201,7 +201,17 @@ export async function runSend(
     turn = await session.send(message, userId ? { userId } : undefined);
   }
 
-  await collectTurn(turn, hooks);
+  // A provider error — a bad key, a rate limit, a network fault — rejects here rather than
+  // arriving as an `error` part. Letting it propagate printed a stack trace on stderr and left
+  // stdout EMPTY, which breaks the contract this whole binary exists to keep: an agent reads
+  // stdout and gets nothing. The turn did fail, so it is reported as a failed TurnResult built
+  // from whatever reached the log, and the exit code stays 1.
+  let turnError: unknown;
+  try {
+    await collectTurn(turn, hooks);
+  } catch (error) {
+    turnError = error;
+  }
   // One turn per process, so the process boundary IS the turn boundary. Extraction runs as
   // background work by default, which assumes a long-lived host — here the process exits first
   // and the fact is lost with no error. settled() is what the runtime already offers for this.
@@ -210,5 +220,12 @@ export async function runSend(
   const { events } = await eventLog.read(sessionId, fromIndex);
   const seed = priorView(resolved.previous);
   const view = reduce(events, seed);
+  if (turnError !== undefined) {
+    return {
+      status: 'failed',
+      message: turnError instanceof Error ? turnError.message : String(turnError),
+      cursor: { sessionId, index: view.cursor },
+    };
+  }
   return buildTurnResult(sessionId, view, seed?.blocks.length ?? 0);
 }
