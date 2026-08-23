@@ -590,6 +590,12 @@ export {
 export type { Route } from './types/route.js';
 export { sanitizePart } from './events/sanitizePart.js';
 export { scrubSecrets, SECRET_MARKER } from './events/scrubSecrets.js';
+export {
+  MemorySessionEventLog,
+  type LoggedEvent,
+  type MemorySessionEventLogOptions,
+  type SessionEventLog,
+} from './events/SessionEventLog.js';
 export { PART_CHANNEL } from './types/stream.js';
 export type {
   StreamChannel,
@@ -627,6 +633,7 @@ export type {
   ErrorPayload,
   CustomPayload,
   DonePayload,
+  LogTruncatedPayload,
   KnowledgeCacheHitPayload,
   KnowledgeCacheMissPayload,
   KnowledgeSearchPayload,

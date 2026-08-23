@@ -76,6 +76,8 @@ function readNarrowedPayload(part: StreamPart): unknown {
       return part.payload.quality;
     case 'knowledge-reformulation':
       return part.payload.reformulatedQuery;
+    case 'log-truncated':
+      return part.payload.toIndex;
     default: {
       const unreachable: never = part;
       return unreachable;
@@ -85,7 +87,7 @@ function readNarrowedPayload(part: StreamPart): unknown {
 
 describe('public StreamPart export', () => {
   it('classifies every publicly exported variant', () => {
-    expect(Object.keys(PART_CHANNEL)).toHaveLength(37);
+    expect(Object.keys(PART_CHANNEL)).toHaveLength(38);
     expect(readNarrowedPayload).toBeFunction();
   });
 });

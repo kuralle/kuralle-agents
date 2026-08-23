@@ -20,6 +20,7 @@ import { TextDriver } from './channels/TextDriver.js';
 import { createRunContext } from './ctx.js';
 import type { FlowGateJudgeProvider } from '../flow/evaluateGates.js';
 import { createEventBus, createTurnHandle } from '../events/TurnHandle.js';
+import { scrubSecrets } from '../events/scrubSecrets.js';
 import { CoreToolExecutor } from '../tools/effect/index.js';
 import { buildAgentToolSurface } from './buildAgentToolSurface.js';
 import { createNoSkillsGetSkill } from '../skills/skillHandle.js';
@@ -218,6 +219,8 @@ export interface HarnessConfig {
    * `sessionStore`. A shared adapter (e.g. `PostgresRunStore`) is used as-is.
    */
   runStore?: RunStore;
+  /** Session-scoped event log for replay and cross-client attach. Omitted: live stream only. */
+  eventLog?: import('../events/SessionEventLog.js').SessionEventLog;
   /**
    * Default versioned store for `addDynamicFlows` / `loadDynamicFlows` when the
    * call does not pass `store`. Live registration still works without one.
@@ -399,6 +402,13 @@ export class Runtime {
         recorder?.record(part);
         if (part.type === 'done') this.flushTraceSinks();
         bus.emit(part);
+        // Append outlives the turn bus — background work (e.g. non-blocking extraction) emits after done closes it.
+        const pendingLog = this.config.eventLog?.append(
+          sessionId,
+          [scrubSecrets(part)],
+          opened.runState.runId,
+        );
+        if (pendingLog) void pendingLog.catch(() => undefined);
         void runHookSafely('onStreamPart', () => this.hooks?.onStreamPart?.(runCtx, part));
       };
 
@@ -1189,6 +1199,7 @@ export class Runtime {
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.sessionStore.delete(sessionId);
+    await this.config.eventLog?.delete(sessionId);
   }
 
   abortSession(sessionId: string, reason?: string): void {

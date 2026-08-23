@@ -209,4 +209,9 @@ export const coverageEvents: LoggedEvent[] = [
     },
   }),
   logged(20, { channel: 'internal', type: 'interrupted', payload: { reason: 'barge-in', lastStep: 1 } }),
+  logged(21, {
+    channel: 'internal',
+    type: 'log-truncated',
+    payload: { fromIndex: 0, toIndex: 100 },
+  }),
 ];

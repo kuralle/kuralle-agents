@@ -403,6 +403,16 @@ function foldEvent(view: TurnView, event: LoggedEvent): void {
     case 'knowledge-reformulation':
       pushNotice(view, id, 'info', `reformulated (${part.payload.trigger})`);
       break;
+    case 'log-truncated':
+      // Truncation is observable by decision, never silent: a reader must be able to tell
+      // "nothing happened there" from "that history is gone".
+      pushNotice(
+        view,
+        id,
+        'info',
+        `earlier history dropped (events ${part.payload.fromIndex}–${part.payload.toIndex})`,
+      );
+      break;
     default: {
       const _exhaustive: never = part;
       return _exhaustive;

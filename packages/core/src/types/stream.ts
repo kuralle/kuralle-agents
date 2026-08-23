@@ -211,6 +211,11 @@ export interface DonePayload {
   };
 }
 
+export interface LogTruncatedPayload {
+  fromIndex: number;
+  toIndex: number;
+}
+
 export interface KnowledgeCacheHitPayload {
   query: string;
   resultCount: number;
@@ -277,6 +282,7 @@ interface StreamPayloadMap {
   error: ErrorPayload;
   custom: CustomPayload;
   done: DonePayload;
+  'log-truncated': LogTruncatedPayload;
   'knowledge-cache-hit': KnowledgeCacheHitPayload;
   'knowledge-cache-miss': KnowledgeCacheMissPayload;
   'knowledge-search': KnowledgeSearchPayload;
@@ -336,6 +342,7 @@ export const PART_CHANNEL: Record<StreamPart['type'], StreamChannel> = {
   error: 'client',
   custom: 'internal',
   done: 'client',
+  'log-truncated': 'internal',
   'knowledge-cache-hit': 'internal',
   'knowledge-cache-miss': 'internal',
   'knowledge-search': 'internal',

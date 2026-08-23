@@ -94,3 +94,21 @@ describe('reduce', () => {
     expect(view.memory.compactions[0]?.beforeTokens).toBe(9000);
   });
 });
+
+describe('log-truncated', () => {
+  it('renders a notice rather than being swallowed', () => {
+    const view = reduce([
+      {
+        index: 0,
+        eventId: 'trunc-1',
+        runId: 'r1',
+        at: 1,
+        part: { channel: 'internal', type: 'log-truncated', payload: { fromIndex: 0, toIndex: 41 } },
+      },
+    ]);
+    const notice = view.blocks.find((block) => block.kind === 'notice');
+    expect(notice).toBeDefined();
+    expect((notice as { text: string }).text).toContain('0');
+    expect((notice as { text: string }).text).toContain('41');
+  });
+});
