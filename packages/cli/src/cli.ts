@@ -4,6 +4,9 @@
  *
  *   kuralle send --session <id> [--user <id>] [--store <file>] [--state|--reset] "<message>"
  *   kuralle resume <session> [--store <file>] [--summary <text>]
+ *   kuralle memory --user <id> [--session <id>] [--watch] [--store <file>]
+ *   kuralle cancel --session <id> [--store <file>]
+ *   kuralle history --session <id> [--from <index>] [--store <file>]
  *   kuralle sim --goal "<goal>" [--turns N] [--profile "<who>"] [--agent <path.ts>]
  *   kuralle trace <session> [--last] [--json] [--web] [--port N]
  *   kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]
@@ -25,6 +28,9 @@ import {
   saveHostedConnection,
 } from './hostedConnection.js';
 import { runBuildCommand, runStartCommand } from './buildCommand.js';
+import { runCancel } from './cancel.js';
+import { runHistory } from './history.js';
+import { runMemory } from './memory.js';
 import {
   authRequiredResult,
   exitCodeFor,
@@ -178,6 +184,66 @@ async function main(): Promise<void> {
     .allowExcessArguments()
     .action(async () => {
       await runStartCommand(subcommandArgv('start'));
+    });
+
+  program
+    .command('memory')
+    .description('Read working-memory blocks and extracted values')
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .action(async () => {
+      try {
+        const { agentPath } = globalAgentFlags();
+        const buildRuntime = await resolveBuildRuntime(agentPath);
+        await runMemory(subcommandArgv('memory'), buildRuntime, agentPath);
+      } catch (err) {
+        if (err instanceof UsageError) {
+          process.stderr.write(`${err.message}\n`);
+          process.exit(2);
+        }
+        throw err;
+      }
+    });
+
+  program
+    .command('cancel')
+    .description('Cancel the active turn on a session')
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .action(async () => {
+      try {
+        const { agentPath } = globalAgentFlags();
+        const buildRuntime = await resolveBuildRuntime(agentPath);
+        const result = await runCancel(subcommandArgv('cancel'), buildRuntime);
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.exit(0);
+      } catch (err) {
+        if (err instanceof UsageError) {
+          process.stderr.write(`${err.message}\n`);
+          process.exit(2);
+        }
+        throw err;
+      }
+    });
+
+  program
+    .command('history')
+    .description('Print the session TurnView from the event log snapshot')
+    .allowUnknownOption()
+    .allowExcessArguments()
+    .action(async () => {
+      try {
+        const { agentPath } = globalAgentFlags();
+        const buildRuntime = await resolveBuildRuntime(agentPath);
+        const view = await runHistory(subcommandArgv('history'), buildRuntime);
+        process.stdout.write(`${JSON.stringify(view)}\n`);
+      } catch (err) {
+        if (err instanceof UsageError) {
+          process.stderr.write(`${err.message}\n`);
+          process.exit(2);
+        }
+        throw err;
+      }
     });
 
   // Commander exits 1 on a usage error; the agent contract reserves 1 for a failed turn and 2 for
