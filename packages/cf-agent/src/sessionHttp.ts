@@ -1,3 +1,4 @@
+import { shouldEmit, type StreamEventFilter } from '@kuralle-agents/core';
 import {
   PART_CHANNEL,
   sanitizePart,
@@ -11,18 +12,10 @@ import {
 import { scopedKey } from '@kuralle-agents/deployment';
 import type { SqlExecutor } from './types.js';
 
-export type StreamEventFilter = 'safe' | 'all' | ((part: StreamPart) => boolean);
 
 export interface SessionPrincipal {
   tenantId: string;
   userId: string;
-}
-
-export function shouldEmit(part: StreamPart, filter: StreamEventFilter): boolean {
-  if (filter === 'all') return true;
-  if (typeof filter === 'function') return filter(part);
-  if (part.type === 'log-truncated') return true;
-  return PART_CHANNEL[part.type] === 'client';
 }
 
 function applyNoBufferingHeaders(headers: Headers): void {

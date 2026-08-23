@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PART_CHANNEL, sanitizePart } from '@kuralle-agents/core';
-import { shouldEmit } from '../dist/index.js';
+import { shouldEmit } from '@kuralle-agents/core';
 
 const part = (type, payload = {}) => ({
   channel: PART_CHANNEL[type],

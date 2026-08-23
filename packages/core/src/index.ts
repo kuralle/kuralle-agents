@@ -589,6 +589,7 @@ export {
 } from './runtime/durable/deadlineExpiry.js';
 export type { Route } from './types/route.js';
 export { sanitizePart } from './events/sanitizePart.js';
+export { shouldEmit, type StreamEventFilter } from './events/shouldEmit.js';
 export { scrubSecrets, SECRET_MARKER } from './events/scrubSecrets.js';
 export {
   MemorySessionEventLog,

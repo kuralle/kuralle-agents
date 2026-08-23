@@ -43,8 +43,9 @@ export { SqlRunStore } from './SqlRunStore.js';
 export { SqlFlowDefinitionsStore } from './SqlFlowDefinitionsStore.js';
 export { createSqlExecutor } from './sqlExecutor.js';
 export { SqlSessionEventLog } from './SqlSessionEventLog.js';
-export { dispatchSessionRequest, shouldEmit } from './sessionHttp.js';
-export type { StreamEventFilter, SessionHttpOptions, SessionPrincipal } from './sessionHttp.js';
+export { dispatchSessionRequest } from './sessionHttp.js';
+export type { SessionHttpOptions, SessionPrincipal } from './sessionHttp.js';
+export { shouldEmit, type StreamEventFilter } from '@kuralle-agents/core';
 export {
   AgentScheduleCoalesceScheduler,
   QueuedTurnRunner,

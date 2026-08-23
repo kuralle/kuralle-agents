@@ -2,7 +2,13 @@ import { createUIMessageStreamResponse } from 'ai';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { Context, Handler } from 'hono';
-import { harnessToUIMessageStream, sanitizePart, userInputToText } from '@kuralle-agents/core';
+import {
+  harnessToUIMessageStream,
+  sanitizePart,
+  shouldEmit,
+  userInputToText,
+  type StreamEventFilter,
+} from '@kuralle-agents/core';
 import { runInputErrorBody, runInputErrorStatus } from './runInputErrors.js';
 import type {
   ConversationOutcome,
@@ -24,10 +30,7 @@ export {
   type ChatCompletionsRequest,
 } from './openaiCompat.js';
 
-export {
-  shouldEmit,
-  type StreamEventFilter,
-} from './streamFilter.js';
+
 
 export { createKuralleSseChatRouter, type KuralleSseChatRouterOptions } from './chatRouter.js';
 export {
@@ -53,10 +56,7 @@ export {
   type StoredFlowVersionBody,
 } from './storedFlowsRouter.js';
 
-import {
-  shouldEmit,
-  type StreamEventFilter,
-} from './streamFilter.js';
+
 import { wantsRawStreamFormat } from './streamFormat.js';
 import { debug } from './debug.js';
 

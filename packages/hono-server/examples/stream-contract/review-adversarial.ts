@@ -10,7 +10,7 @@
  *
  * Run: bun run packages/hono-server/examples/stream-contract/review-adversarial.ts
  */
-import { shouldEmit } from '@kuralle-agents/hono-server';
+import { shouldEmit } from '@kuralle-agents/core';
 import { PART_CHANNEL, sanitizePart } from '@kuralle-agents/core';
 
 // The filter's public type is `(part: StreamPart, filter) => boolean`. To attack

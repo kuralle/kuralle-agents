@@ -1,3 +1,4 @@
+import { shouldEmit, type StreamEventFilter } from '@kuralle-agents/core';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { createUIMessageStreamResponse } from 'ai';
@@ -28,7 +29,7 @@ import {
   type RuntimeRevision,
   type ThreadPin,
 } from '@kuralle-agents/deployment';
-import { shouldEmit, type StreamEventFilter } from './streamFilter.js';
+
 import { wantsRawStreamFormat } from './streamFormat.js';
 
 export interface DeploymentPrincipal {

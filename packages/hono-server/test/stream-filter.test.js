@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PART_CHANNEL, sanitizePart } from '@kuralle-agents/core';
-import { shouldEmit } from '../dist/index.js';
+import { shouldEmit } from '@kuralle-agents/core';
 
 const clientTypes = Object.entries(PART_CHANNEL)
   .filter(([, channel]) => channel === 'client')
@@ -31,10 +31,19 @@ test('safe filter allows every client-channel type', () => {
   }
 });
 
-test('safe filter blocks every internal-channel type', () => {
+test('safe filter blocks every internal-channel type except log-truncated', () => {
   for (const type of internalTypes) {
+    if (type === 'log-truncated') continue;
     assert.equal(shouldEmit(part(type), 'safe'), false, type);
   }
+});
+
+// The one deliberate exception, asserted positively so it cannot be reintroduced by accident:
+// a client that never learns a range was dropped sees silently fewer events, which is the exact
+// failure the marker exists to prevent.
+test('safe filter lets log-truncated through despite being internal', () => {
+  assert.equal(PART_CHANNEL['log-truncated'], 'internal');
+  assert.equal(shouldEmit(part('log-truncated'), 'safe'), true);
 });
 
 test('all filter allows every classified type', () => {
