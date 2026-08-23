@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PART_CHANNEL } from '@kuralle-agents/core';
-import { shouldEmit, sanitizeForClient } from '../dist/index.js';
+import { PART_CHANNEL, sanitizePart } from '@kuralle-agents/core';
+import { shouldEmit } from '../dist/index.js';
 
 const clientTypes = Object.entries(PART_CHANNEL)
   .filter(([, channel]) => channel === 'client')
@@ -58,7 +58,7 @@ test('sanitize error strips details without changing the envelope', () => {
     logs.push(args);
   };
   try {
-    const output = sanitizeForClient({
+    const output = sanitizePart({
       channel: 'client',
       type: 'error',
       payload: { error: 'SQL syntax error at line 42' },
@@ -80,5 +80,5 @@ test('sanitize preserves non-error parts', () => {
     type: 'text-delta',
     payload: { id: 't', delta: 'hi' },
   };
-  assert.deepEqual(sanitizeForClient(streamPart), streamPart);
+  assert.deepEqual(sanitizePart(streamPart), streamPart);
 });

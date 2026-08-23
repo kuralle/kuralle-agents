@@ -588,6 +588,7 @@ export {
   deadlineExpiryDelivery,
 } from './runtime/durable/deadlineExpiry.js';
 export type { Route } from './types/route.js';
+export { sanitizePart } from './events/sanitizePart.js';
 export { PART_CHANNEL } from './types/stream.js';
 export type {
   StreamChannel,

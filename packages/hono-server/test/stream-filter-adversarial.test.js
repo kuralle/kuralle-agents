@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PART_CHANNEL } from '@kuralle-agents/core';
-import { shouldEmit, sanitizeForClient } from '../dist/index.js';
+import { PART_CHANNEL, sanitizePart } from '@kuralle-agents/core';
+import { shouldEmit } from '../dist/index.js';
 
 const part = (type, payload = {}) => ({
   channel: PART_CHANNEL[type],
@@ -44,7 +44,7 @@ test('sanitization strips SQL errors, API keys, and stack traces', () => {
   console.error = () => {};
   try {
     for (const message of messages) {
-      const safe = sanitizeForClient(part('error', { error: message }));
+      const safe = sanitizePart(part('error', { error: message }));
       assert.equal(safe.type, 'error');
       assert.equal(safe.payload.error, 'An error occurred. Please try again.');
     }
@@ -79,7 +79,7 @@ test('safe error composition sanitizes after classification', () => {
   const original = console.error;
   console.error = () => {};
   try {
-    const safe = sanitizeForClient(streamPart);
+    const safe = sanitizePart(streamPart);
     assert.equal(safe.payload.error, 'An error occurred. Please try again.');
   } finally {
     console.error = original;

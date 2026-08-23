@@ -2,7 +2,7 @@ import { createUIMessageStreamResponse } from 'ai';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { Context, Handler } from 'hono';
-import { harnessToUIMessageStream, userInputToText } from '@kuralle-agents/core';
+import { harnessToUIMessageStream, sanitizePart, userInputToText } from '@kuralle-agents/core';
 import { runInputErrorBody, runInputErrorStatus } from './runInputErrors.js';
 import type {
   ConversationOutcome,
@@ -26,7 +26,6 @@ export {
 
 export {
   shouldEmit,
-  sanitizeForClient,
   type StreamEventFilter,
 } from './streamFilter.js';
 
@@ -56,7 +55,6 @@ export {
 
 import {
   shouldEmit,
-  sanitizeForClient,
   type StreamEventFilter,
 } from './streamFilter.js';
 import { wantsRawStreamFormat } from './streamFormat.js';
@@ -334,7 +332,7 @@ const sendSSEPart = async (
   filter: StreamEventFilter,
 ) => {
   if (!shouldEmit(part, filter)) return;
-  const safe = sanitizeForClient(part);
+  const safe = sanitizePart(part);
   await stream.writeSSE({ event: safe.type, data: JSON.stringify(safe) });
 };
 
@@ -344,7 +342,7 @@ const sendStreamPartToWs = (
   filter: StreamEventFilter,
 ) => {
   if (!shouldEmit(part, filter)) return;
-  ws.send(JSON.stringify(sanitizeForClient(part)));
+  ws.send(JSON.stringify(sanitizePart(part)));
 };
 
 const sendTransportFrameToWs = (

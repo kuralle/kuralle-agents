@@ -1,11 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { TurnHandle, Runtime } from '@kuralle-agents/core';
-import {
-  shouldEmit,
-  sanitizeForClient,
-  type StreamEventFilter,
-} from './streamFilter.js';
+import { sanitizePart, type TurnHandle, type Runtime } from '@kuralle-agents/core';
+import { shouldEmit, type StreamEventFilter } from './streamFilter.js';
 
 export type ChatRequest = {
   sessionId?: string;
@@ -55,7 +51,7 @@ export function createKuralleSseChatRouter({
         try {
           for await (const part of handle.events) {
             if (!shouldEmit(part, streamFilter)) continue;
-            const safe = sanitizeForClient(part);
+            const safe = sanitizePart(part);
             const payload = `data: ${JSON.stringify(safe)}\n\n`;
             controller.enqueue(encoder.encode(payload));
           }

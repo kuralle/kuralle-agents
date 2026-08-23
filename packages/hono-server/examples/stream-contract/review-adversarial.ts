@@ -10,8 +10,8 @@
  *
  * Run: bun run packages/hono-server/examples/stream-contract/review-adversarial.ts
  */
-import { shouldEmit, sanitizeForClient } from '@kuralle-agents/hono-server';
-import { PART_CHANNEL } from '@kuralle-agents/core';
+import { shouldEmit } from '@kuralle-agents/hono-server';
+import { PART_CHANNEL, sanitizePart } from '@kuralle-agents/core';
 
 // The filter's public type is `(part: StreamPart, filter) => boolean`. To attack
 // it we must bypass the type system (a real emitter cannot construct a lying
@@ -91,7 +91,7 @@ check(
 );
 
 console.log('\n=== Attack 4: prototype-pollution / __proto__ in error payload ===');
-// sanitizeForClient spreads the incoming part. A hostile payload with __proto__
+// sanitizePart spreads the incoming part. A hostile payload with __proto__
 // must not pollute Object.prototype. Verify the global prototype is intact after
 // sanitize and the safe message replaces the hostile one.
 const original = console.error;
@@ -105,7 +105,7 @@ const hostile = asPart({
     constructor: { prototype: { polluted: true } },
   },
 });
-const safe = sanitizeForClient(hostile);
+const safe = sanitizePart(hostile);
 console.error = original;
 check(
   'sanitized error carries generic message, not hostile payload',

@@ -4,6 +4,7 @@ import { createUIMessageStreamResponse } from 'ai';
 import {
   createRuntime,
   harnessToUIMessageStream,
+  sanitizePart,
   type HarnessConfig,
   type SessionStore,
   type StreamPart,
@@ -16,7 +17,7 @@ import {
   type RuntimeBindings,
   type RuntimeRevision,
 } from '@kuralle-agents/deployment';
-import { sanitizeForClient, shouldEmit, type StreamEventFilter } from './streamFilter.js';
+import { shouldEmit, type StreamEventFilter } from './streamFilter.js';
 import { wantsRawStreamFormat } from './streamFormat.js';
 
 export interface DeploymentPrincipal {
@@ -183,7 +184,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         try {
           for await (const part of handle.events) {
             if (!shouldEmit(part, filter)) continue;
-            yield sanitizeForClient(part);
+            yield sanitizePart(part);
           }
           await handle;
           if (renewalFailed) throw renewalFailed;

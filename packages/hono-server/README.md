@@ -23,7 +23,7 @@ Peers: `@kuralle-agents/core`, `ai@^6`.
 - **`createKuralleSseChatRouter`** — raw JSON-SSE only (explicit legacy wire).
 - **`createOpenAICompatRouter`** — OpenAI-compatible `/v1/chat/completions` endpoint.
 - **`createKuralleRouter`** — standalone router for flow-manager instances.
-- **`shouldEmit` / `sanitizeForClient`** — stream event filter utilities.
+- **`shouldEmit`** — the stream event *audience* filter: decides which channel a consumer may see, keyed on `PART_CHANNEL[part.type]` so a part cannot lie about its own channel. The *safety* half moved to `sanitizePart` in `@kuralle-agents/core`, because the durable event log has to sanitise on write and core cannot import this package.
 
 ## Web client (`useChat`, no bridge)
 
