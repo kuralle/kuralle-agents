@@ -4,18 +4,28 @@ import { createUIMessageStreamResponse } from 'ai';
 import {
   createRuntime,
   harnessToUIMessageStream,
+  resolveExtractedValueStore,
+  resolveWorkingMemoryStore,
   sanitizePart,
+  scanMemoryWrite,
+  type Extractor,
   type HarnessConfig,
+  type LoggedEvent,
+  type MemoryBlockScope,
+  type SessionEventLog,
   type SessionStore,
   type StreamPart,
+  type WorkingMemoryConfig,
 } from '@kuralle-agents/core';
 import {
   DeploymentError,
   bindAgentVersion,
   scopedKey,
+  type BoundAgentRevision,
   type DeploymentStore,
   type RuntimeBindings,
   type RuntimeRevision,
+  type ThreadPin,
 } from '@kuralle-agents/deployment';
 import { shouldEmit, type StreamEventFilter } from './streamFilter.js';
 import { wantsRawStreamFormat } from './streamFormat.js';
@@ -47,6 +57,11 @@ export interface DeploymentRouterOptions {
   coordinator: ThreadExecutionCoordinator;
   resolvePrincipal(c: Context): DeploymentPrincipal | null | Promise<DeploymentPrincipal | null>;
   runtimeConfig?: Omit<Partial<HarnessConfig>, 'agents' | 'defaultAgentId' | 'sessionStore'>;
+  eventLog?: SessionEventLog;
+  memoryDefaults?: {
+    workingMemory?: WorkingMemoryConfig;
+    extract?: Extractor<unknown>[];
+  };
   streamFilter?: StreamEventFilter;
   leaseTtlMs?: number;
   readiness?: () => void | Promise<void>;
@@ -71,11 +86,115 @@ function statusFor(error: unknown): 403 | 404 | 409 | 500 {
   return 409;
 }
 
+function applyNoBufferingHeaders(headers: Headers): void {
+  headers.set('Cache-Control', 'no-cache, no-transform');
+  headers.set('Content-Encoding', 'identity');
+  headers.set('X-Accel-Buffering', 'no');
+}
+
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number | null {
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) return null;
+  return value;
+}
+
+function parseFollow(raw: string | undefined): boolean {
+  if (raw === undefined) return true;
+  return raw !== 'false' && raw !== '0';
+}
+
+function resolveEventLog(options: DeploymentRouterOptions): SessionEventLog | undefined {
+  return options.eventLog ?? options.runtimeConfig?.eventLog;
+}
+
+function filterLoggedEvent(event: LoggedEvent, streamFilter: StreamEventFilter): LoggedEvent | null {
+  if (!shouldEmit(event.part, streamFilter)) return null;
+  return {
+    ...event,
+    part: sanitizePart(event.part),
+  };
+}
+
+function gateMemoryContent(content: string): string {
+  return scanMemoryWrite(content).safe ? content : '';
+}
+
+function ndjsonEventStream(
+  source: AsyncIterable<LoggedEvent>,
+  streamFilter: StreamEventFilter,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const event of source) {
+          const filtered = filterLoggedEvent(event, streamFilter);
+          if (!filtered) continue;
+          controller.enqueue(encoder.encode(`${JSON.stringify(filtered)}\n`));
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+}
+
+async function* boundedEventFollow(
+  eventLog: SessionEventLog,
+  sessionId: string,
+  from: number,
+  endIndex: number,
+): AsyncGenerator<LoggedEvent> {
+  let cursor = from;
+  while (cursor <= endIndex) {
+    const { events, next } = await eventLog.read(sessionId, cursor);
+    if (events.length === 0) break;
+    for (const event of events) {
+      if (event.index > endIndex) return;
+      yield event;
+    }
+    if (next <= cursor) break;
+    cursor = next;
+  }
+}
+
 export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
   const app = new Hono();
   const leaseTtlMs = options.leaseTtlMs ?? 30_000;
   const filter = options.streamFilter ?? 'safe';
   const environment = options.environment ?? 'production';
+  const eventLog = resolveEventLog(options);
+  const activeTurns = new Map<string, AbortController>();
+
+  const resolveBoundAgent = async (
+    principal: DeploymentPrincipal,
+    agentEntityId: string,
+    threadId: string,
+  ): Promise<{ pin: ThreadPin; bound: BoundAgentRevision }> => {
+    const generations = await options.resolveGenerations?.({ principal, agentEntityId }) ?? {
+      configGeneration: 1,
+      secretGeneration: 1,
+    };
+    const pin = await options.deploymentStore.assignThread({
+      tenantId: principal.tenantId,
+      threadId,
+      agentEntityId,
+      environment,
+      configGeneration: generations.configGeneration,
+      secretGeneration: generations.secretGeneration,
+    });
+    const version = await options.deploymentStore.getVersion(principal.tenantId, pin.agentVersionId);
+    if (!version) throw new DeploymentError('NOT_FOUND', 'pinned agent version does not exist');
+    const bound = await bindAgentVersion({
+      version,
+      pin,
+      runtime: options.runtimeRevision,
+      bindings: options.bindings,
+    });
+    return { pin, bound };
+  };
 
   app.get('/health/live', c => c.json({ status: 'ok' }));
   app.get('/health/ready', async c => {
@@ -90,6 +209,139 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         status: 'not-ready',
         error: error instanceof Error ? error.message : 'readiness failed',
       }, 503);
+    }
+  });
+
+  app.get('/v1/agents/:agentEntityId/sessions/:sessionId/events', async c => {
+    const principal = await options.resolvePrincipal(c);
+    if (!principal) return c.json({ error: 'unauthorized' }, 401);
+    if (!eventLog) return c.json({ error: 'event log not configured' }, 503);
+
+    const from = parseNonNegativeInt(c.req.query('from'), 0);
+    if (from === null) return c.json({ error: 'from must be a non-negative integer' }, 400);
+    const follow = parseFollow(c.req.query('follow'));
+    const sessionId = scopedKey(principal.tenantId, c.req.param('sessionId'));
+
+    const source = follow
+      ? eventLog.follow(sessionId, from, c.req.raw.signal)
+      : boundedEventFollow(eventLog, sessionId, from, await eventLog.tail(sessionId));
+
+    const body = ndjsonEventStream(source, filter);
+    const headers = new Headers({
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      Connection: 'keep-alive',
+    });
+    applyNoBufferingHeaders(headers);
+    return new Response(body, { headers });
+  });
+
+  app.get('/v1/agents/:agentEntityId/sessions/:sessionId/snapshot', async c => {
+    const principal = await options.resolvePrincipal(c);
+    if (!principal) return c.json({ error: 'unauthorized' }, 401);
+    if (!eventLog) return c.json({ error: 'event log not configured' }, 503);
+
+    const limit = parseNonNegativeInt(c.req.query('limit'), 100);
+    if (limit === null || limit === 0) {
+      return c.json({ error: 'limit must be a positive integer' }, 400);
+    }
+
+    const sessionId = scopedKey(principal.tenantId, c.req.param('sessionId'));
+    const { events, next } = await eventLog.read(sessionId, 0, limit);
+    const filtered = events
+      .map(event => filterLoggedEvent(event, filter))
+      .filter((event): event is LoggedEvent => event !== null);
+    return c.json({ events: filtered, cursor: next });
+  });
+
+  app.post('/v1/agents/:agentEntityId/sessions/:sessionId/cancel', async c => {
+    const principal = await options.resolvePrincipal(c);
+    if (!principal) return c.json({ error: 'unauthorized' }, 401);
+
+    const sessionKey = scopedKey(principal.tenantId, c.req.param('sessionId'));
+    const active = activeTurns.get(sessionKey);
+    if (!active) return c.json({ status: 'no_active_turn' });
+    active.abort('cancelled');
+    return c.json({ status: 'cancelled' });
+  });
+
+  app.get('/v1/agents/:agentEntityId/users/:userId/memory', async c => {
+    const principal = await options.resolvePrincipal(c);
+    if (!principal) return c.json({ error: 'unauthorized' }, 401);
+
+    const requestedUserId = c.req.param('userId');
+    if (principal.userId !== requestedUserId) {
+      return c.json({ blocks: [], extracted: [] });
+    }
+
+    try {
+      const agentEntityId = c.req.param('agentEntityId');
+      const { bound } = await resolveBoundAgent(
+        principal,
+        agentEntityId,
+        `memory.${requestedUserId}`,
+      );
+      const memoryConfig = bound.agent.memory ?? options.memoryDefaults;
+      const workingMemory = memoryConfig?.workingMemory;
+      const blockStore = options.runtimeConfig?.defaultWorkingMemoryStore
+        ?? (workingMemory
+          ? resolveWorkingMemoryStore(workingMemory, options.runtimeConfig?.defaultWorkingMemoryStore)
+          : undefined);
+      const extractedStore = resolveExtractedValueStore(options.runtimeConfig?.extractedValueStore);
+
+      const blocks: Array<{
+        key: string;
+        scope: MemoryBlockScope;
+        chars: number;
+        limit: number;
+        content: string;
+      }> = [];
+
+      if (blockStore) {
+        const scopes: Array<{ scope: MemoryBlockScope; owner: string }> = [
+          { scope: 'user', owner: requestedUserId },
+          { scope: 'shared', owner: requestedUserId },
+          { scope: 'agent', owner: bound.agent.id },
+        ];
+        for (const { scope, owner } of scopes) {
+          const keys = await blockStore.listBlocks(scope, owner);
+          for (const key of keys) {
+            const block = await blockStore.loadBlock(scope, owner, key);
+            if (!block) continue;
+            blocks.push({
+              key: block.key,
+              scope: block.scope,
+              chars: block.content.length,
+              limit: block.charLimit,
+              content: gateMemoryContent(block.content),
+            });
+          }
+        }
+      }
+
+      const extracted: Array<{
+        slug: string;
+        scope: MemoryBlockScope;
+        value: unknown;
+        updatedAt: string;
+      }> = [];
+      for (const extractor of memoryConfig?.extract ?? []) {
+        const owner = extractor.scope === 'agent' ? bound.agent.id : requestedUserId;
+        const value = await extractedStore.load(extractor.scope, owner, extractor.slug);
+        if (!value) continue;
+        extracted.push({
+          slug: value.slug,
+          scope: value.scope,
+          value: value.value,
+          updatedAt: value.updatedAt,
+        });
+      }
+
+      return c.json({ blocks, extracted });
+    } catch (error) {
+      const status = statusFor(error);
+      const message = status === 500 ? 'internal deployment error' : (error as Error).message;
+      if (status === 500) console.error('[Kuralle] deployment memory request failed', error);
+      return c.json({ error: message }, status);
     }
   });
 
@@ -110,26 +362,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     const message = body.message.trim();
 
     try {
-      const generations = await options.resolveGenerations?.({ principal, agentEntityId }) ?? {
-        configGeneration: 1,
-        secretGeneration: 1,
-      };
-      const pin = await options.deploymentStore.assignThread({
-        tenantId: principal.tenantId,
-        threadId,
-        agentEntityId,
-        environment,
-        configGeneration: generations.configGeneration,
-        secretGeneration: generations.secretGeneration,
-      });
-      const version = await options.deploymentStore.getVersion(principal.tenantId, pin.agentVersionId);
-      if (!version) throw new DeploymentError('NOT_FOUND', 'pinned agent version does not exist');
-      const bound = await bindAgentVersion({
-        version,
-        pin,
-        runtime: options.runtimeRevision,
-        bindings: options.bindings,
-      });
+      const { bound } = await resolveBoundAgent(principal, agentEntityId, threadId);
       const ownerId = crypto.randomUUID();
       const lease = await options.coordinator.acquire({
         tenantId: principal.tenantId,
@@ -146,9 +379,12 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         agents: [bound.agent],
         defaultAgentId: bound.agent.id,
         sessionStore: options.sessionStore,
+        eventLog,
       });
 
       const abort = new AbortController();
+      const sessionKey = scopedKey(principal.tenantId, threadId);
+      activeTurns.set(sessionKey, abort);
       let renewalFailed: Error | undefined;
       const timer = setInterval(() => {
         void lease.renew().catch(error => {
@@ -163,7 +399,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         // credential. Everything keyed by `sessionId` downstream — history,
         // traces, durable run state — inherits its isolation from this one
         // composition, so it happens once, here.
-        sessionId: scopedKey(principal.tenantId, threadId),
+        sessionId: sessionKey,
         userId: principal.userId,
         idempotencyKey,
         abortSignal: abort.signal,
@@ -190,6 +426,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
           if (renewalFailed) throw renewalFailed;
         } finally {
           clearInterval(timer);
+          activeTurns.delete(sessionKey);
           await heldLease.release().catch(error => {
             console.error('[Kuralle] thread lease release failed', error);
           });
