@@ -12,7 +12,9 @@
  */
 import { Command } from 'commander';
 import { resolveBuildRuntime } from './agentLoader.js';
+import { AuthRequiredError, UsageError } from './errors.js';
 import { runResume } from './resume.js';
+import { runSchema } from './schema.js';
 import { runSend } from './send.js';
 import { runSim } from './sim.js';
 import { runTrace } from './trace.js';
@@ -23,6 +25,11 @@ import {
   saveHostedConnection,
 } from './hostedConnection.js';
 import { runBuildCommand, runStartCommand } from './buildCommand.js';
+import {
+  authRequiredResult,
+  exitCodeFor,
+  writeTurnResult,
+} from './turnResult.js';
 
 const CHAT_STUB = 'interactive chat moved to kuralle-tui — install @kuralle-agents/tui (requires Bun)';
 
@@ -64,9 +71,31 @@ async function main(): Promise<void> {
     .allowUnknownOption()
     .allowExcessArguments()
     .action(async () => {
-      const { agentPath, modelFlag } = globalAgentFlags();
-      const buildRuntime = await resolveBuildRuntime(agentPath, { modelFlag });
-      await runSend(subcommandArgv('send'), buildRuntime);
+      try {
+        const { agentPath, modelFlag } = globalAgentFlags();
+        const buildRuntime = await resolveBuildRuntime(agentPath, { modelFlag });
+        const result = await runSend(subcommandArgv('send'), buildRuntime);
+        writeTurnResult(result);
+        process.exit(exitCodeFor(result.status));
+      } catch (err) {
+        if (err instanceof UsageError) {
+          process.stderr.write(`${err.message}\n`);
+          process.exit(2);
+        }
+        if (err instanceof AuthRequiredError) {
+          const result = authRequiredResult(err.message, err.code);
+          writeTurnResult(result);
+          process.exit(exitCodeFor(result.status));
+        }
+        throw err;
+      }
+    });
+
+  program
+    .command('schema')
+    .description('Print the TurnResult JSON Schema')
+    .action(() => {
+      runSchema();
     });
 
   program

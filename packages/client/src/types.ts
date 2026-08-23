@@ -12,6 +12,22 @@ export interface Cursor {
   index: number;
 }
 
+export interface InputRequestOption {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+export interface InputRequest {
+  requestId: string;
+  kind: 'approval' | 'signal';
+  prompt: string;
+  description?: string;
+  signalName?: string;
+  toolName?: string;
+  options?: InputRequestOption[];
+}
+
 export interface SendOptions {
   agentId?: string;
   userId?: string;

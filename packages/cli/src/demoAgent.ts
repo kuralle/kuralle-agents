@@ -22,6 +22,7 @@ import {
   type TraceStore,
 } from '@kuralle-agents/core';
 import type { AgentRuntime, BuildRuntime } from './agentRuntime.js';
+import { AuthRequiredError } from './errors.js';
 import { readAgentRunState } from './runState.js';
 import { newSessionId } from './sessionId.js';
 
@@ -32,8 +33,10 @@ config({ path: join(here, '../../../.env') });
 export function demoModel(): LanguageModel {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
-    console.error('No OPENAI_API_KEY — set it in packages/cli/.env or the repo .env');
-    process.exit(2);
+    throw new AuthRequiredError(
+      'No OPENAI_API_KEY — set it in packages/cli/.env or the repo .env',
+      'OPENAI_API_KEY',
+    );
   }
   return createOpenAI({ apiKey: key })(process.env.OPENAI_MODEL ?? 'gpt-4.1-mini');
 }

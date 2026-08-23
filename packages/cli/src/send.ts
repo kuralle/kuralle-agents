@@ -10,12 +10,13 @@
  */
 import { join } from 'node:path';
 import { Command } from 'commander';
-import type { StreamPart } from '@kuralle-agents/core';
-import { createClient } from '@kuralle-agents/client';
+import { createClient, reduce } from '@kuralle-agents/client';
 import type { BuildRuntime } from './agentRuntime.js';
+import { UsageError } from './errors.js';
 import { fileSessionStore } from './fileStore.js';
 import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
+import { buildTurnResult, type TurnResult } from './turnResult.js';
 
 interface SendOptions {
   session: string;
@@ -66,7 +67,17 @@ export function messageFrom(argv: string[]): string {
   return parseSendArgs(argv).message;
 }
 
-export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
+async function snapshotView(
+  sessionId: string,
+  eventLog: Awaited<ReturnType<typeof fileSessionEventLog>>,
+): Promise<TurnResult> {
+  const tail = await eventLog.tail(sessionId);
+  const { events } = await eventLog.read(sessionId, 0);
+  const view = reduce(events);
+  return buildTurnResult(sessionId, { ...view, cursor: tail });
+}
+
+export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promise<TurnResult> {
   const { opts, message } = parseSendArgs(argv);
   const sessionId = opts.session;
   // Without this the CLI could not exercise user-scoped memory at all: preload,
@@ -85,7 +96,7 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const store = fileSessionStore(storePath);
   const stored = await store.get(sessionId);
   const waitingFor = (
-    stored as unknown as {
+    stored as {
       durableRuns?: Record<
         string,
         { runState?: { waitingFor?: { requestId?: string; signalName?: string } } }
@@ -104,30 +115,28 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
   const client = createClient({ kind: 'local', runtime: demo.runtime, eventLog });
   const session = client.sessions.attach(sessionId);
 
-  async function readState() {
-    const s = await store.get(sessionId);
-    const rs = (s as unknown as { durableRuns?: Record<string, { runState?: { activeFlow?: string; runEpoch?: number; state?: Record<string, unknown> } }> })?.durableRuns?.[sessionId]?.runState;
-    return `[state] flow=${rs?.activeFlow ?? 'none'} · epoch=${rs?.runEpoch ?? 0} · done=${JSON.stringify((rs?.state as Record<string, unknown> | undefined)?.__completedFlows ?? [])} · turns=${(s?.messages ?? []).filter((m) => m.role === 'user').length}`;
-  }
-
   if (doReset) {
     await store.delete(sessionId);
-    console.log(`reset session "${sessionId}"`);
-    return;
+    const view = reduce([]);
+    return {
+      status: 'completed',
+      message: `reset session "${sessionId}"`,
+      cursor: { sessionId, index: -1 },
+      view,
+    };
   }
 
   const hasSignal = approve || deny || signalName;
-  // A decision can arrive with no message — approving is itself the turn.
-  if (doState || (!message && !hasSignal)) {
-    console.log(await readState());
-    if (!message && !doState) console.error('(no message — pass one to take a turn, or --state to inspect)');
-    return;
+  if (doState) {
+    return snapshotView(sessionId, eventLog);
   }
 
-  const events: string[] = [];
-  const started = performance.now();
-  let ttftMs: number | null = null;
+  if (!message && !hasSignal) {
+    throw new UsageError('pass a message to take a turn, or --state to inspect');
+  }
+
   let turn;
+  const fromIndex = (await eventLog.tail(sessionId)) + 1;
   if (approve || deny) {
     turn = await session.respond([{
       requestId: waitingFor?.requestId ?? '',
@@ -145,35 +154,8 @@ export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promi
     turn = await session.send(message, userId ? { userId } : undefined);
   }
 
-  let text = '';
-  for await (const logged of turn) {
-    const part = logged.part as StreamPart;
-    if (part.type === 'text-delta') {
-      if (part.payload.delta && ttftMs === null) ttftMs = performance.now() - started;
-      text += part.payload.delta;
-      process.stdout.write(part.payload.delta);
-    }
-    else if (part.type === 'tool-call') events.push(`tool:${part.payload.toolName}`);
-    else if (part.type === 'flow-enter') events.push(`enter:${part.payload.flow}`);
-    else if (part.type === 'flow-end') events.push(`end:${part.payload.flow}`);
-    else if (part.type === 'handoff') events.push(`handoff:${part.payload.targetAgent}`);
-    else if (part.type === 'paused') {
-      const operation = part.payload.interrupt.operation;
-      events.push(
-        operation
-          ? `approval-pending:${part.payload.interrupt.requestId}:${operation.toolName}`
-          : `paused:${part.payload.interrupt.requestId}:${part.payload.waitingFor}`,
-      );
-    }
-    else if (part.type === 'error') events.push(`error:${part.payload.error}`);
-  }
-  const res = await turn.result();
-  if (!text && typeof (res as { text?: string }).text === 'string') text = (res as { text: string }).text;
-  if (!text.endsWith('\n')) process.stdout.write('\n');
-  if (events.length) console.log(`[events] ${events.join(' ')}`);
-  console.log(
-    `[timing] TTFT=${ttftMs === null ? 'none' : `${Math.round(ttftMs)}ms`} ` +
-    `total=${Math.round(performance.now() - started)}ms`,
-  );
-  console.log(await readState());
+  await turn.result();
+  const { events } = await eventLog.read(sessionId, fromIndex);
+  const view = reduce(events);
+  return buildTurnResult(sessionId, view);
 }
