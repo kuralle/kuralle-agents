@@ -546,7 +546,7 @@ function parseAgentFile(
     return {};
   }
   const object = value as Record<string, unknown>;
-  const allowed = new Set(['id', 'name', 'description', 'model', 'controlModel', 'limits', 'handoffs']);
+  const allowed = new Set(['id', 'name', 'description', 'model', 'controlModel', 'limits', 'handoffs', 'memory']);
   for (const key of Object.keys(object)) {
     if (!allowed.has(key)) diagnostic(state, 'AGENT_CONFIG_INVALID', path, `unknown agent.json field ${key}`);
   }
@@ -710,6 +710,7 @@ async function compileOne(
       flows: [...inlineFlowResult.entries, ...flowResult.references]
         .sort((a, b) => a.id.localeCompare(b.id)),
       policies: policyResult.policies,
+      memory: config.memory,
       requiredCapabilities,
       secretRefs: [],
       sourceMap,

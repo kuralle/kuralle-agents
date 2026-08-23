@@ -29,6 +29,50 @@ const OPTIONS = {
 };
 
 describe('folder agent compiler', () => {
+  it('compiles static memory configuration from agent.json into the artifact', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kuralle-memory-artifact-'));
+    await writeFile(join(directory, 'instructions.md'), 'You are concise.');
+    await writeFile(join(directory, 'agent.json'), JSON.stringify({
+      memory: {
+        workingMemory: {
+          autoLoad: [{ scope: 'user', key: 'USER', template: 'Known facts.' }],
+        },
+        extract: [{
+          name: 'Favorite Color',
+          scope: 'user',
+          instructions: 'Extract the favorite color.',
+          schema: {
+            type: 'object',
+            properties: { value: { type: 'string' } },
+            required: ['value'],
+          },
+        }],
+        extraction: { trigger: 'each-turn' },
+        preload: { enabled: true, tokenBudget: 250 },
+      },
+    }));
+
+    const compiled = await compileAgentDirectory(directory, { ...OPTIONS, target: 'node' });
+
+    expect(compiled.rootArtifact.memory).toEqual({
+      workingMemory: {
+        autoLoad: [{ scope: 'user', key: 'USER', template: 'Known facts.' }],
+      },
+      extract: [{
+        name: 'Favorite Color',
+        scope: 'user',
+        instructions: 'Extract the favorite color.',
+        schema: {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+          required: ['value'],
+        },
+      }],
+      extraction: { trigger: 'each-turn' },
+      preload: { enabled: true, tokenBudget: 250 },
+    });
+  });
+
   it('compiles nested agents, complete skills, context, and static capability modules deterministically', async () => {
     const first = await compileAgentDirectory(join(FIXTURES, 'support'), OPTIONS);
     const second = await compileAgentDirectory(join(FIXTURES, 'support'), OPTIONS);

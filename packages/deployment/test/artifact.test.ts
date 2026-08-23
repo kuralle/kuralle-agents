@@ -7,6 +7,88 @@ import {
 import { artifactInput, inlineRefundFlow } from './fixtures.js';
 
 describe('canonical agent artifacts', () => {
+  it('carries static memory configuration through the artifact schema', async () => {
+    const created = await createArtifact(artifactInput({
+      memory: {
+        workingMemory: {
+          autoLoad: [{ scope: 'user', key: 'USER', template: 'Known user facts.' }],
+          defaultCharLimit: 4000,
+          scanForInjection: false,
+        },
+        extract: [{
+          name: 'Favorite Color',
+          scope: 'user',
+          instructions: 'Extract the user favorite color.',
+          schema: {
+            type: 'object',
+            properties: { value: { type: 'string' } },
+            required: ['value'],
+          },
+          includePrevious: false,
+          persist: true,
+        }],
+        extraction: { trigger: { tokens: 12 }, blocking: true },
+        preload: { enabled: true, tokenBudget: 250 },
+      },
+    }));
+
+    expect(created.memory).toEqual({
+      workingMemory: {
+        autoLoad: [{ scope: 'user', key: 'USER', template: 'Known user facts.' }],
+        defaultCharLimit: 4000,
+        scanForInjection: false,
+      },
+      extract: [{
+        name: 'Favorite Color',
+        scope: 'user',
+        instructions: 'Extract the user favorite color.',
+        schema: {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+          required: ['value'],
+        },
+        includePrevious: false,
+        persist: true,
+      }],
+      extraction: { trigger: { tokens: 12 }, blocking: true },
+      preload: { enabled: true, tokenBudget: 250 },
+    });
+  });
+
+  it('rejects function-form extractor instructions with the extractor and field named', async () => {
+    const input = artifactInput({
+      memory: {
+        extract: [{
+          name: 'Favorite Color',
+          scope: 'user',
+          instructions: (() => 'dynamic') as never,
+          schema: { type: 'object' },
+        }],
+      },
+    });
+
+    await expect(createArtifact(input)).rejects.toThrow(
+      '[Kuralle] extractor "Favorite Color" cannot use function-form instructions in an artifact',
+    );
+  });
+
+  it('rejects function-form extractor schemas with the extractor and field named', async () => {
+    const input = artifactInput({
+      memory: {
+        extract: [{
+          name: 'Favorite Color',
+          scope: 'user',
+          instructions: 'Extract the color.',
+          schema: (() => ({ type: 'object' })) as never,
+        }],
+      },
+    });
+
+    await expect(createArtifact(input)).rejects.toThrow(
+      '[Kuralle] extractor "Favorite Color" cannot use function-form schema in an artifact',
+    );
+  });
+
   it('produces the same digest for equivalent object key insertion orders', async () => {
     const first = artifactInput();
     const second = artifactInput({

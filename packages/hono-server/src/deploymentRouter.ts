@@ -64,6 +64,7 @@ export interface DeploymentRouterOptions {
   coordinator: ThreadExecutionCoordinator;
   resolvePrincipal(c: Context): DeploymentPrincipal | null | Promise<DeploymentPrincipal | null>;
   runtimeConfig?: Omit<Partial<HarnessConfig>, 'agents' | 'defaultAgentId' | 'sessionStore'>;
+  runtimeFactory?: typeof createRuntime;
   eventLog?: SessionEventLog;
   memoryDefaults?: {
     workingMemory?: WorkingMemoryConfig;
@@ -415,7 +416,7 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
       const heldLease = lease;
       const baseMemoryStore = options.runtimeConfig?.defaultWorkingMemoryStore;
       const baseExtractedStore = resolveExtractedValueStore(options.runtimeConfig?.extractedValueStore);
-      const runtime = createRuntime({
+      const runtime = (options.runtimeFactory ?? createRuntime)({
         ...options.runtimeConfig,
         agents: [bound.agent],
         defaultAgentId: bound.agent.id,
@@ -445,9 +446,11 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         // traces, durable run state — inherits its isolation from this one
         // composition, so it happens once, here.
         sessionId: sessionKey,
-        // Same scoped key the memory route reads under; a raw owner here would put every
-        // tenant's memory in one keyspace and make the route's tenancy check cosmetic.
-        userId: scopedKey(principal.tenantId, principal.userId),
+        // Raw on purpose. The runtime is handed tenantScope{Memory,Extracted}Store above, which
+        // scopes every owner it is given, so scoping here too wrote under scopedKey(t, scopedKey(t, u))
+        // while the memory route read scopedKey(t, u) — the value was written and never findable.
+        // One scoping site, and it is the store wrapper.
+        userId: principal.userId,
         idempotencyKey,
         abortSignal: abort.signal,
         deployment: bound.deployment,

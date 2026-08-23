@@ -1,4 +1,4 @@
-import type { FlowDefinition } from '@kuralle-agents/core';
+import type { FlowDefinition, MemoryBlockScope } from '@kuralle-agents/core';
 
 export type ArtifactSchemaVersion = 1;
 
@@ -101,6 +101,46 @@ export interface PolicyArtifact {
   validate?: CapabilityReference;
 }
 
+export type ArtifactJsonSchema = Record<string, unknown>;
+
+export interface ArtifactMemoryBlockSpec {
+  scope: MemoryBlockScope;
+  key: string;
+  template?: string;
+}
+
+export interface ArtifactWorkingMemory {
+  autoLoad?: ArtifactMemoryBlockSpec[];
+  defaultCharLimit?: number;
+  scanForInjection?: boolean;
+}
+
+export type ArtifactExtractionTrigger = 'each-turn' | 'idle' | { tokens: number };
+
+export interface ArtifactExtractionConfig {
+  trigger?: ArtifactExtractionTrigger;
+  blocking?: boolean;
+}
+
+export interface ArtifactExtractor {
+  name: string;
+  scope: MemoryBlockScope;
+  instructions: string;
+  schema: ArtifactJsonSchema;
+  includePrevious?: boolean;
+  persist?: boolean;
+}
+
+export interface AgentMemoryArtifact {
+  workingMemory?: ArtifactWorkingMemory;
+  extract?: ArtifactExtractor[];
+  extraction?: ArtifactExtractionConfig;
+  preload?: {
+    enabled?: boolean;
+    tokenBudget?: number;
+  };
+}
+
 export interface CapabilityRequirement {
   capability: string;
   versionRange: string;
@@ -147,6 +187,7 @@ export interface AgentArtifactV1 {
   tools: ToolReference[];
   flows: ArtifactFlow[];
   policies: PolicyArtifact;
+  memory?: AgentMemoryArtifact;
   requiredCapabilities: CapabilityRequirement[];
   secretRefs: SecretReference[];
   sourceMap: SourceMapEntry[];

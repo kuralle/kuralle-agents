@@ -6,6 +6,7 @@ import { canonicalJson, sha256 } from './canonical.js';
 import { DeploymentError } from './errors.js';
 import type {
   AgentArtifact,
+  AgentMemoryArtifact,
   ArtifactInputV1,
   CapabilityReference,
   ContentEntry,
@@ -19,6 +20,7 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 const ALLOWED_CONTENT_ROLES = new Set(['instructions', 'skill', 'reference', 'workspace-seed']);
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const MEMORY_SCOPES = new Set(['user', 'agent', 'shared']);
 
 function fail(message: string, path: string): never {
   throw new DeploymentError('ARTIFACT_INVALID', message, path);
@@ -55,6 +57,10 @@ function string(value: unknown, path: string, options: { id?: boolean; digest?: 
 
 function optionalString(value: unknown, path: string): void {
   if (value !== undefined) string(value, path);
+}
+
+function optionalBoolean(value: unknown, path: string): void {
+  if (value !== undefined && typeof value !== 'boolean') fail('must be a boolean', path);
 }
 
 function array(value: unknown, path: string): unknown[] {
@@ -201,6 +207,97 @@ function policies(value: unknown, path: string): PolicyArtifact {
   return value as PolicyArtifact;
 }
 
+function memoryScope(value: unknown, path: string): void {
+  const scope = string(value, path);
+  if (!MEMORY_SCOPES.has(scope)) fail('has an unsupported memory scope', path);
+}
+
+function rejectDynamicExtractorFields(value: unknown): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return;
+  const memory = (value as Record<string, unknown>).memory;
+  if (memory === null || typeof memory !== 'object' || Array.isArray(memory)) return;
+  const extract = (memory as Record<string, unknown>).extract;
+  if (!Array.isArray(extract)) return;
+  extract.forEach((candidate, index) => {
+    if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) return;
+    const extractor = candidate as Record<string, unknown>;
+    const name = typeof extractor.name === 'string' ? extractor.name : '<unnamed>';
+    for (const field of ['instructions', 'schema', 'onExtracted'] as const) {
+      if (typeof extractor[field] !== 'function') continue;
+      const label = field === 'onExtracted' ? 'callback' : `function-form ${field}`;
+      throw new DeploymentError(
+        'ARTIFACT_INVALID',
+        `[Kuralle] extractor "${name}" cannot use ${label} in an artifact`,
+        `artifact.memory.extract[${index}].${field}`,
+      );
+    }
+  });
+}
+
+function memory(value: unknown, path: string): AgentMemoryArtifact {
+  const config = record(value, path);
+  exactKeys(config, [], ['workingMemory', 'extract', 'extraction', 'preload'], path);
+
+  if (config.workingMemory !== undefined) {
+    const workingMemory = record(config.workingMemory, `${path}.workingMemory`);
+    exactKeys(workingMemory, [], ['autoLoad', 'defaultCharLimit', 'scanForInjection'], `${path}.workingMemory`);
+    if (workingMemory.autoLoad !== undefined) {
+      array(workingMemory.autoLoad, `${path}.workingMemory.autoLoad`).forEach((entry, index) => {
+        const specPath = `${path}.workingMemory.autoLoad[${index}]`;
+        const spec = record(entry, specPath);
+        exactKeys(spec, ['scope', 'key'], ['template'], specPath);
+        memoryScope(spec.scope, `${specPath}.scope`);
+        string(spec.key, `${specPath}.key`);
+        if (spec.template !== undefined && typeof spec.template !== 'string') {
+          fail('must be a string', `${specPath}.template`);
+        }
+      });
+    }
+    if (workingMemory.defaultCharLimit !== undefined) {
+      nonNegativeInteger(workingMemory.defaultCharLimit, `${path}.workingMemory.defaultCharLimit`);
+    }
+    optionalBoolean(workingMemory.scanForInjection, `${path}.workingMemory.scanForInjection`);
+  }
+
+  if (config.extract !== undefined) {
+    array(config.extract, `${path}.extract`).forEach((entry, index) => {
+      const extractorPath = `${path}.extract[${index}]`;
+      const extractor = record(entry, extractorPath);
+      exactKeys(extractor, ['name', 'scope', 'instructions', 'schema'], ['includePrevious', 'persist'], extractorPath);
+      string(extractor.name, `${extractorPath}.name`);
+      memoryScope(extractor.scope, `${extractorPath}.scope`);
+      if (typeof extractor.instructions !== 'string') fail('must be a string', `${extractorPath}.instructions`);
+      record(extractor.schema, `${extractorPath}.schema`);
+      optionalBoolean(extractor.includePrevious, `${extractorPath}.includePrevious`);
+      optionalBoolean(extractor.persist, `${extractorPath}.persist`);
+    });
+  }
+
+  if (config.extraction !== undefined) {
+    const extraction = record(config.extraction, `${path}.extraction`);
+    exactKeys(extraction, [], ['trigger', 'blocking'], `${path}.extraction`);
+    if (extraction.trigger !== undefined) {
+      if (extraction.trigger === 'each-turn' || extraction.trigger === 'idle') {
+        // Valid string trigger.
+      } else {
+        const trigger = record(extraction.trigger, `${path}.extraction.trigger`);
+        exactKeys(trigger, ['tokens'], [], `${path}.extraction.trigger`);
+        nonNegativeInteger(trigger.tokens, `${path}.extraction.trigger.tokens`);
+      }
+    }
+    optionalBoolean(extraction.blocking, `${path}.extraction.blocking`);
+  }
+
+  if (config.preload !== undefined) {
+    const preload = record(config.preload, `${path}.preload`);
+    exactKeys(preload, [], ['enabled', 'tokenBudget'], `${path}.preload`);
+    optionalBoolean(preload.enabled, `${path}.preload.enabled`);
+    if (preload.tokenBudget !== undefined) nonNegativeInteger(preload.tokenBudget, `${path}.preload.tokenBudget`);
+  }
+
+  return value as AgentMemoryArtifact;
+}
+
 function unique(values: readonly string[], path: string): void {
   const seen = new Set<string>();
   for (const value of values) {
@@ -218,7 +315,7 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
       'skills', 'references', 'workspaceSeed', 'agents', 'tools', 'flows', 'policies',
       'requiredCapabilities', 'secretRefs', 'sourceMap',
     ],
-    ['digest'],
+    ['digest', 'memory'],
     'artifact',
   );
   if (artifact.schemaVersion !== 1) fail('must equal 1', 'artifact.schemaVersion');
@@ -311,6 +408,7 @@ function validateStructure(value: unknown, requireDigest: boolean): AgentArtifac
   const flowIds = flowEntries.map((flow, index) => artifactFlow(flow, `artifact.flows[${index}]`).id);
   unique(flowIds, 'artifact.flows');
   policies(artifact.policies, 'artifact.policies');
+  if (artifact.memory !== undefined) memory(artifact.memory, 'artifact.memory');
 
   const requirements = array(artifact.requiredCapabilities, 'artifact.requiredCapabilities');
   const requirementIds = requirements.map((value, index) => {
@@ -415,6 +513,7 @@ export async function artifactDigest(artifact: ArtifactInputV1 | AgentArtifact):
 }
 
 export async function createArtifact(input: ArtifactInputV1): Promise<AgentArtifact> {
+  rejectDynamicExtractorFields(input);
   // Normalize through canonical JSON so optional `undefined` properties from
   // TypeScript object construction cannot survive into an allegedly portable
   // artifact or produce target-dependent object shapes.
@@ -427,6 +526,7 @@ export async function createArtifact(input: ArtifactInputV1): Promise<AgentArtif
 }
 
 export async function validateArtifact(value: unknown): Promise<AgentArtifact> {
+  rejectDynamicExtractorFields(value);
   const artifact = validateStructure(value, true);
   await validateInlineDigests(artifact);
   const expected = await artifactDigest(artifact);

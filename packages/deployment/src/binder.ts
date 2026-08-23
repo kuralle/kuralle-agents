@@ -1,4 +1,5 @@
 import {
+  defineExtractor,
   parseSkillFrontmatter,
   rehydrateFlow,
   type AgentConfig,
@@ -11,6 +12,7 @@ import {
   type RefinementCapability,
   type ValidationCapability,
 } from '@kuralle-agents/core';
+import { z } from 'zod';
 import type {
   InputProcessor,
   OutputProcessor,
@@ -26,6 +28,7 @@ import { NamedRegistry, VersionedRegistry } from './registry.js';
 import {
   isInlineFlowEntry,
   type AgentArtifact,
+  type AgentMemoryArtifact,
   type AgentVersion,
   type CapabilityReference,
   type ContentEntry,
@@ -270,6 +273,37 @@ function verifyPin(version: AgentVersion, pin: ThreadPin, runtime: RuntimeRevisi
   }
 }
 
+function rehydrateMemory(memory: AgentMemoryArtifact | undefined): AgentConfig['memory'] | undefined {
+  if (!memory) return undefined;
+
+  const extract = memory.extract?.map(extractor => {
+    let schema: ReturnType<typeof z.fromJSONSchema>;
+    try {
+      schema = z.fromJSONSchema(extractor.schema);
+    } catch (error) {
+      return bindingError(
+        `extractor "${extractor.name}" schema could not be rehydrated: ` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+    return defineExtractor({
+      name: extractor.name,
+      instructions: extractor.instructions,
+      schema,
+      scope: extractor.scope,
+      ...(extractor.includePrevious === undefined ? {} : { includePrevious: extractor.includePrevious }),
+      ...(extractor.persist === undefined ? {} : { persist: extractor.persist }),
+    });
+  });
+
+  return {
+    ...(memory.workingMemory ? { workingMemory: structuredClone(memory.workingMemory) } : {}),
+    ...(memory.extract === undefined ? {} : { extract }),
+    ...(memory.extraction ? { extraction: structuredClone(memory.extraction) } : {}),
+    ...(memory.preload ? { preload: structuredClone(memory.preload) } : {}),
+  };
+}
+
 /** `artifact` must already be validated by the caller — this function trusts it and does not re-validate. */
 async function bindArtifact(
   artifact: AgentArtifact,
@@ -386,6 +420,7 @@ async function bindArtifact(
     handoffs: validated.agent.handoffs,
     limits: validated.agent.limits,
     skills: validated.skills.length > 0 ? new ArtifactSkillStore(validated, bindings.content) : undefined,
+    ...(validated.memory ? { memory: rehydrateMemory(validated.memory) } : {}),
     ...(guardrails ? { guardrails } : {}),
     policy: toolPolicy,
     refine: refinement ? [refinement] : undefined,

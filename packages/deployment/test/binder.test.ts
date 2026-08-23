@@ -3,6 +3,7 @@ import {
   createRuntime,
   defineTool,
   MemoryStore,
+  resolveExtractor,
   type AgentConfig,
   type Flow,
   type StreamPart,
@@ -101,6 +102,61 @@ function bindings(): RuntimeBindings {
 }
 
 describe('runtime compatibility and artifact binding', () => {
+  it('rehydrates static memory configuration into an executable agent config', async () => {
+    const artifact = await createArtifact(artifactInput({
+      memory: {
+        workingMemory: {
+          autoLoad: [{ scope: 'user', key: 'USER', template: 'Known facts.' }],
+          defaultCharLimit: 4000,
+          scanForInjection: false,
+        },
+        extract: [{
+          name: 'Favorite Color',
+          scope: 'user',
+          instructions: 'Extract the favorite color.',
+          schema: {
+            type: 'object',
+            properties: { value: { type: 'string' } },
+            required: ['value'],
+          },
+          includePrevious: false,
+          persist: true,
+        }],
+        extraction: { trigger: 'each-turn', blocking: true },
+        preload: { enabled: true, tokenBudget: 250 },
+      },
+    }));
+
+    const bound = await bindAgentVersion({
+      version: version(artifact),
+      pin: pin(artifact),
+      runtime: runtime([]),
+      bindings: bindings(),
+    });
+
+    expect(bound.agent.memory?.workingMemory).toEqual({
+      autoLoad: [{ scope: 'user', key: 'USER', template: 'Known facts.' }],
+      defaultCharLimit: 4000,
+      scanForInjection: false,
+    });
+    expect(bound.agent.memory?.extract?.[0]).toMatchObject({
+      name: 'Favorite Color',
+      slug: 'favorite-color',
+      scope: 'user',
+      instructions: 'Extract the favorite color.',
+      includePrevious: false,
+      persist: true,
+    });
+    const resolved = await resolveExtractor(bound.agent.memory!.extract![0]!, {
+      agentId: 'support',
+      sessionId: 'session-a',
+      userId: 'user-a',
+    });
+    expect(resolved.schema.safeParse({ value: 'blue' }).success).toBe(true);
+    expect(bound.agent.memory?.extraction).toEqual({ trigger: 'each-turn', blocking: true });
+    expect(bound.agent.memory?.preload).toEqual({ enabled: true, tokenBudget: 250 });
+  });
+
   it('checks runtime API and exact capability version ranges before traffic', async () => {
     const artifact = await createArtifact(artifactInput({
       requiredCapabilities: [{ capability: 'orders.lookup', versionRange: '^2.0.0' }],

@@ -11,6 +11,7 @@ import {
   defineTool,
   type AgentConfig,
   type Extractor,
+  createRuntime,
 } from '@kuralle-agents/core';
 import {
   InMemoryDeploymentStore,
@@ -26,6 +27,10 @@ import {
   createDeploymentRouter,
   type ThreadExecutionCoordinator,
 } from '../src/deploymentRouter.js';
+import {
+  mockV3GenerateResult,
+  mockV3StreamResult,
+} from './helpers/mockLanguageModelV3Results.js';
 
 const AT = '2026-08-01T00:00:00.000Z';
 const SECRET = 'sk-proj-abc123def456789012345678901';
@@ -41,6 +46,7 @@ async function setupRouter(overrides?: {
   streamFilter?: 'safe' | 'all';
   slowTurn?: boolean;
   withMemory?: boolean;
+  artifactMemory?: boolean;
   withTool?: boolean;
   eventLog?: MemorySessionEventLog;
   resolvePrincipal?: (c: { req: { header: (name: string) => string | undefined } }) => {
@@ -64,37 +70,30 @@ async function setupRouter(overrides?: {
     : undefined;
 
   const model = new MockLanguageModelV3({
+    doGenerate: async () => mockV3GenerateResult(JSON.stringify({
+      'favorite-color': { color: 'teal' },
+    })),
     doStream: async () => {
       if (overrides?.slowTurn) {
         await new Promise(resolve => setTimeout(resolve, 200));
       }
+      if (!overrides?.withTool) return mockV3StreamResult('ok');
       return {
         stream: simulateReadableStream({
-          chunks: overrides?.withTool
-            ? [
-              { type: 'stream-start', warnings: [] },
-              {
-                type: 'tool-call',
-                toolCallId: 'call-1',
-                toolName: 'leak',
-                input: JSON.stringify({ apiKey: SECRET }),
-              },
-              {
-                type: 'finish',
-                finishReason: { unified: 'tool-calls' },
-                usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
-              },
-            ] as never[]
-            : [
-              { type: 'text-start', id: '1' },
-              { type: 'text-delta', id: '1', delta: 'ok' },
-              { type: 'text-end', id: '1' },
-              {
-                type: 'finish',
-                finishReason: 'stop',
-                usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
-              },
-            ],
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            {
+              type: 'tool-call',
+              toolCallId: 'call-1',
+              toolName: 'leak',
+              input: JSON.stringify({ apiKey: SECRET }),
+            },
+            {
+              type: 'finish',
+              finishReason: { unified: 'tool-calls' },
+              usage: { inputTokens: { total: 1 }, outputTokens: { total: 1 } },
+            },
+          ] as never[],
         }),
       } as never;
     },
@@ -120,6 +119,17 @@ async function setupRouter(overrides?: {
     tools: overrides?.withTool
       ? [{ kind: 'trusted', id: 'leak', capability: 'leak', versionRange: '^1.0.0' }]
       : [],
+    memory: overrides?.artifactMemory
+      ? {
+        extract: [{
+          name: 'Favorite Color',
+          scope: 'user',
+          instructions: 'Extract the favorite color.',
+          schema: z.toJSONSchema(z.object({ color: z.string() })),
+        }],
+        extraction: { trigger: 'each-turn' },
+      }
+      : undefined,
     policies: {}, requiredCapabilities: overrides?.withTool
       ? [{ capability: 'leak', versionRange: '^1.0.0' }]
       : [], secretRefs: [], sourceMap: [],
@@ -190,6 +200,7 @@ async function setupRouter(overrides?: {
   const eventLog = overrides?.eventLog ?? new MemorySessionEventLog();
   const memoryStore = new InMemoryPersistentMemoryStore();
   const extractedStore = new InMemoryExtractedValueStore();
+  let latestRuntime: ReturnType<typeof createRuntime> | undefined;
 
   const app = createDeploymentRouter({
     deploymentStore,
@@ -205,6 +216,11 @@ async function setupRouter(overrides?: {
       extractedValueStore: extractedStore,
       ...(overrides?.withTool ? { tools: { leak: leakTool } } : {}),
     },
+    runtimeFactory: config => {
+      const runtime = createRuntime(config);
+      latestRuntime = runtime;
+      return runtime;
+    },
     resolvePrincipal: overrides?.resolvePrincipal ?? (c => {
       const tenantId = c.req.header('authorization')?.replace('Bearer ', '');
       return tenantId ? { tenantId, userId: 'user-1' } : null;
@@ -216,6 +232,7 @@ async function setupRouter(overrides?: {
     eventLog,
     memoryStore,
     extractedStore,
+    getLatestRuntime: () => latestRuntime,
     postMessage: async (threadId: string, message: string, key: string) => {
       const res = await app.request(
         `http://local/v1/agents/support/threads/${threadId}/messages`,
@@ -318,6 +335,31 @@ describe('deployment session routes', () => {
     expect(await res.json()).toEqual({ status: 'no_active_turn' });
   });
 
+  it('binds and runs an artifact without memory configuration', async () => {
+    const { app } = await setupRouter();
+    const turn = await app.request(
+      'http://local/v1/agents/support/threads/no-memory-thread/messages',
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer tenant-a',
+          'content-type': 'application/json',
+          'idempotency-key': 'no-memory-1',
+        },
+        body: JSON.stringify({ message: 'Hello.' }),
+      },
+    );
+    expect(turn.status).toBe(200);
+    expect(await turn.text()).toContain('"delta":"ok"');
+
+    const memory = await app.request(
+      'http://local/v1/agents/support/users/user-1/memory',
+      { headers: { authorization: 'Bearer tenant-a' } },
+    );
+    expect(memory.status).toBe(200);
+    expect(await memory.json()).toEqual({ blocks: [], extracted: [] });
+  });
+
   it('memory returns blocks and extracted values for the authenticated owner only', async () => {
     const { app, memoryStore, extractedStore } = await setupRouter({ withMemory: true });
     const scopedOwner = scopedKey('tenant-a', 'user-1');
@@ -352,6 +394,42 @@ describe('deployment session routes', () => {
       { headers: { authorization: 'Bearer tenant-a' } },
     );
     expect(other.status).toBe(403);
+  });
+
+  it('carries artifact memory through a real turn and exposes the extracted value', async () => {
+    const { app, getLatestRuntime } = await setupRouter({ artifactMemory: true });
+
+    const turn = await app.request(
+      'http://local/v1/agents/support/threads/artifact-memory-thread/messages',
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer tenant-a',
+          'content-type': 'application/json',
+          'idempotency-key': 'artifact-memory-1',
+        },
+        body: JSON.stringify({ message: 'My favorite color is teal.' }),
+      },
+    );
+    expect(turn.status).toBe(200);
+    expect(await turn.text()).toContain('"delta":"ok"');
+    const runtime = getLatestRuntime();
+    expect(runtime).toBeDefined();
+    await runtime!.settled();
+
+    const response = await app.request(
+      'http://local/v1/agents/support/users/user-1/memory',
+      { headers: { authorization: 'Bearer tenant-a' } },
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      blocks: unknown[];
+      extracted: Array<{ slug: string; value: { color: string } }>;
+    };
+    expect(body.extracted).toContainEqual(expect.objectContaining({
+      slug: 'favorite-color',
+      value: { color: 'teal' },
+    }));
   });
 
   it('memory is tenant-scoped so a colliding userId in another tenant sees empty data', async () => {

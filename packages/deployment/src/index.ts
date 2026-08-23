@@ -51,7 +51,13 @@ export {
 export type {
   AgentArtifact,
   AgentArtifactV1,
+  AgentMemoryArtifact,
+  ArtifactExtractionConfig,
+  ArtifactExtractionTrigger,
+  ArtifactExtractor,
   ArtifactFlow,
+  ArtifactJsonSchema,
+  ArtifactMemoryBlockSpec,
   AgentDraft,
   AgentEntity,
   AgentNode,
@@ -84,5 +90,6 @@ export type {
   ThreadPin,
   ToolReference,
   TrustedToolReference,
+  ArtifactWorkingMemory,
 } from './types.js';
 export { isInlineFlowEntry } from './types.js';

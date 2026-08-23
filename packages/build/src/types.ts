@@ -1,4 +1,4 @@
-import type { AgentArtifact, ToolReference } from '@kuralle-agents/deployment';
+import type { AgentArtifact, AgentMemoryArtifact, ToolReference } from '@kuralle-agents/deployment';
 
 export type BuildTarget = 'node' | 'cloudflare';
 
@@ -82,6 +82,7 @@ export interface SerializableAgentFile {
     maxToolConcurrency?: number;
   };
   handoffs?: string[];
+  memory?: AgentMemoryArtifact;
 }
 
 export interface DiscoveredTool {
