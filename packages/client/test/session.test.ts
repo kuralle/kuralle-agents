@@ -231,10 +231,10 @@ describe('Session local transport', () => {
     expect(completed.status).toBe('completed');
   });
 
-  it('http and cloudflare targets throw not implemented', () => {
-    expect(() => createClient({ kind: 'http', url: 'http://localhost' })).toThrow('not implemented');
+  it('http and cloudflare targets create hosted clients', () => {
+    expect(() => createClient({ kind: 'http', url: 'http://localhost' })).not.toThrow();
     expect(() =>
       createClient({ kind: 'cloudflare', url: 'http://localhost', agentName: 'a' }),
-    ).toThrow('not implemented');
+    ).not.toThrow();
   });
 });

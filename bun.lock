@@ -617,9 +617,12 @@
       "version": "0.23.2",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
+        "commander": "^14.0.0",
+        "ws": "^8.21.1",
       },
       "devDependencies": {
         "@types/node": "^20.11.0",
+        "@types/ws": "^8.18.1",
         "typescript": "^5.3.0",
       },
     },

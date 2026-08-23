@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Client, Cursor, Session, Target } from './types.js';
 import { LocalSession } from './local-session.js';
+import { cloudflareTransport } from './transports/cloudflare.js';
+import { httpTransport } from './transports/http.js';
 
 function createLocalClient(target: Extract<Target, { kind: 'local' }>): Client {
   const { runtime, eventLog } = target;
@@ -21,8 +23,9 @@ export function createClient(target: Target): Client {
     case 'local':
       return createLocalClient(target);
     case 'http':
+      return httpTransport(target);
     case 'cloudflare':
-      throw new Error('not implemented');
+      return cloudflareTransport(target);
     default: {
       const _exhaustive: never = target;
       return _exhaustive;
