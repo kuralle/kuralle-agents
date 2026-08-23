@@ -25,7 +25,7 @@ function donePart(sessionId: string): StreamPart {
 
 function approvalRuntime(eventLog: SessionEventLog): Runtime {
   let approved = false;
-  const runtime: Pick<Runtime, 'run' | 'abortSession'> = {
+  const runtime: Pick<Runtime, 'run' | 'abortSession' | 'settled'> = {
     run(runOpts) {
       const sessionId = runOpts.sessionId ?? 'default';
       const bus = createEventBus();
@@ -75,6 +75,9 @@ function approvalRuntime(eventLog: SessionEventLog): Runtime {
       return handle;
     },
     abortSession() {},
+    // send() awaits this before reading the log; a stub does no background work, but the cast to
+    // Runtime has to stay honest about every method the CLI calls.
+    async settled() {},
   };
   return runtime as Runtime;
 }

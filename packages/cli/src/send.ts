@@ -202,6 +202,10 @@ export async function runSend(
   }
 
   await collectTurn(turn, hooks);
+  // One turn per process, so the process boundary IS the turn boundary. Extraction runs as
+  // background work by default, which assumes a long-lived host — here the process exits first
+  // and the fact is lost with no error. settled() is what the runtime already offers for this.
+  await demo.runtime.settled();
 
   const { events } = await eventLog.read(sessionId, fromIndex);
   const seed = priorView(resolved.previous);

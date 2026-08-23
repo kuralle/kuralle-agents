@@ -22,7 +22,7 @@ async function countCompletedTurns(eventLog: SessionEventLog, sessionId: string)
 }
 
 function multiTurnRuntime(eventLog: SessionEventLog): Runtime {
-  const runtime: Pick<Runtime, 'run' | 'abortSession'> = {
+  const runtime: Pick<Runtime, 'run' | 'abortSession' | 'settled'> = {
     run(runOpts) {
       const sessionId = runOpts.sessionId ?? 'default';
       const input = typeof runOpts.input === 'string' ? runOpts.input : '';
@@ -52,6 +52,9 @@ function multiTurnRuntime(eventLog: SessionEventLog): Runtime {
       return handle;
     },
     abortSession() {},
+    // send() awaits this before reading the log; a stub does no background work, but the cast to
+    // Runtime has to stay honest about every method the CLI calls.
+    async settled() {},
   };
   return runtime as Runtime;
 }

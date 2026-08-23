@@ -8,6 +8,7 @@ import { createEventBus, createTurnHandle } from '../../../core/src/events/TurnH
 import { readLocalMemory } from '../src/agentMemory.js';
 import { runMemory, watchMemoryEvents } from '../src/memory.js';
 import { fileSessionEventLog } from '../src/fileEventLog.js';
+import { runSend } from '../src/send.js';
 import {
   agent,
   buildRuntime,
@@ -122,5 +123,30 @@ describe('memory command', () => {
     const parsed = JSON.parse(chunks.join('').trim()) as { extracted: Array<{ slug: string }> };
     expect(parsed.extracted.some((entry) => entry.slug === tasteExtractor.slug)).toBe(true);
     expect(chunks.join('')).not.toMatch(/\x1b\[/);
+  });
+});
+
+/**
+ * `kuralle send` is one turn per process, so the process boundary IS the turn boundary.
+ *
+ * Extraction runs as background work by default — a design that assumes a long-lived host. Under
+ * the CLI the process exits first and the fact is lost with no error and no warning. Measured on a
+ * live run before the fix: a turn that named two allergens wrote zero files to the extracted-value
+ * store; with `runtime.settled()` awaited, one.
+ *
+ * The other tests in this file seed the store directly and read it back, so the runtime's own
+ * write path was never crossed and this was invisible to all of them.
+ */
+describe('send settles background extraction before the process can exit', () => {
+  it('an extracted value is durable by the time runSend resolves', async () => {
+    const store = join(mkdtempSync(join(tmpdir(), 'kuralle-extract-')), 'sessions.json');
+    const { buildRuntime, extractedValueStore: slowStore } = await import('./fixtures/extraction-agent.js');
+
+    await runSend(
+      ['--session', 'extract', '--user', 'mithushan', '--store', store, 'a pot of tea please'],
+      buildRuntime,
+    );
+
+    expect(await slowStore.load('user', 'mithushan', 'drink')).not.toBeNull();
   });
 });

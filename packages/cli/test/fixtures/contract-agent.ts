@@ -68,7 +68,7 @@ function partsFor(scenario: Scenario, sessionId: string): StreamPart[] {
 }
 
 function stubRuntime(eventLog: SessionEventLog, scenario: Scenario): Runtime {
-  const runtime: Pick<Runtime, 'run' | 'abortSession'> = {
+  const runtime: Pick<Runtime, 'run' | 'abortSession' | 'settled'> = {
     run(runOpts) {
       const sessionId = runOpts.sessionId ?? 'default';
       const parts = partsFor(scenario, sessionId);
@@ -93,6 +93,9 @@ function stubRuntime(eventLog: SessionEventLog, scenario: Scenario): Runtime {
       return handle;
     },
     abortSession() {},
+    // send() awaits this before reading the log; a stub does no background work, but the cast to
+    // Runtime has to stay honest about every method the CLI calls.
+    async settled() {},
   };
   return runtime as Runtime;
 }
