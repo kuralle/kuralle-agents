@@ -163,10 +163,10 @@ kuralle connect https://my-agent.workers.dev \
   --transport cloudflare \
   --agent-name support-agent
 
-kuralle chat --session customer-42
+bunx kuralle-tui https://my-agent.example.com --session customer-42
 ```
 
-The hosted runtime owns credentials, state, tools, and workspaces. The CLI stores only the non-secret server/transport selection. Provide a bearer token with `KURALLE_TOKEN`; see [CLI & Devtools](./cli.md#hosted-runtimes).
+The hosted runtime owns credentials, state, tools, and workspaces. The CLI stores only the non-secret server/transport selection. Provide a bearer token with `KURALLE_TOKEN`; see the [Agent CLI guide](./cli-agent.md) and [Chat TUI guide](./cli-chat.md).
 
 ## The deployment thread route
 

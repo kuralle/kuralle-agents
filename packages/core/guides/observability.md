@@ -157,7 +157,7 @@ kuralle trace session-42 --json     # the native AgentTrace[] JSON — for agent
 kuralle trace session-42 --web      # loopback dev server with the embedded viewer
 ```
 
-See the [CLI guide](./cli.md) for the full command reference.
+See the [Agent CLI guide](./cli-agent.md) for the `kuralle` command reference and the [Chat TUI guide](./cli-chat.md) for the human-facing trace rail.
 
 ## Choosing a store backend
 
@@ -355,11 +355,12 @@ It renders into a Shadow DOM root when available (`attachShadow`), so its styles
 - **Spans nest by construction**: `turn` is the root, `flow`/`node` spans open and close as the run enters/exits them, and `tool`/`handoff` spans are leaves — this is exactly what the terminal waterfall and `trace-ui` render.
 - **Recording is a side-observer** (`TraceRecorder`) on the existing `StreamPart` event stream — it does not sit in the execution path, so a bug in trace recording can never change a turn's answer.
 - **IDs are OTLP-compatible hex** from the start, so native and exported traces share identifiers without remapping.
-- **Token usage rides the trace — strictly per turn.** The `turn` span carries `attributes.tokensIn` and `attributes.tokensOut` = **this turn's** consumed input/output tokens (deltas, not the running session total), plus `attributes.contextTokens` = the context-window occupancy (last prompt size). Per-turn scoping is deliberate: a trace is one run, so summing a session's traces gives the true total with no double-counting — the correct basis for **cost attribution**, and `contextTokens` is the signal for **window management**. All three flow everywhere the trace goes: `getTrace`/`listTraces`, the OTLP export (`kuralle.tokensIn` / `kuralle.tokensOut` / `kuralle.contextTokens`, so Langfuse shows them), and `kuralle trace` / `kuralle chat --trace`.
+- **Token usage rides the trace — strictly per turn.** The `turn` span carries `attributes.tokensIn` and `attributes.tokensOut` = **this turn's** consumed input/output tokens (deltas, not the running session total), plus `attributes.contextTokens` = the context-window occupancy (last prompt size). Per-turn scoping is deliberate: a trace is one run, so summing a session's traces gives the true total with no double-counting — the correct basis for **cost attribution**, and `contextTokens` is the signal for **window management**. All three flow everywhere the trace goes: `getTrace`/`listTraces`, the OTLP export (`kuralle.tokensIn` / `kuralle.tokensOut` / `kuralle.contextTokens`, so Langfuse shows them), and `kuralle trace` / the TUI Trace rail.
 - **Skill discovery is attributable.** When an agent declares skills, the root turn span records `attributes.skillContentHash` for the initiating agent and `attributes.skillContentHashes` keyed by every skill-bearing agent reached through handoff. Each value is the SHA-256 of the validated discovery snapshot (skill names, descriptions, and `SKILL.md` content), so an eval or incident can identify the instructions presented to the model. Referenced resource contents are loaded later and are not included in that snapshot hash; record their versions in your own tool output if resource-level provenance is required.
 
 ## Related
 
-- [CLI guide](./cli.md) — `kuralle trace`, plus `chat`/`send`/`sim`.
+- [Agent CLI](./cli-agent.md) — `kuralle trace`, `send`, and `sim`.
+- [Chat TUI](./cli-chat.md) — inspect the live Trace rail.
 - [Deployment](./deployment.md) — Cloudflare Workers / Durable Objects setup.
 - [Sessions & State](./sessions.md) — the (separately configured) session store.

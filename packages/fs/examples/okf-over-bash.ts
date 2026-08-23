@@ -39,7 +39,7 @@
  *     bun packages/cli/dist/cli.js trace okf --store runs/okf.json --last
  *     bun packages/cli/dist/cli.js trace okf --store runs/okf.json --web --port 4319
  *
- * See the CLI guide: apps/docs/src/content/docs/guides/cli.mdx
+ * See the Agent CLI guide: apps/docs/src/content/docs/guides/cli-agent.mdx
  *
  * Spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
  */

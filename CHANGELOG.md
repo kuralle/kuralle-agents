@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — separate agent and human CLI surfaces
+
+| Old surface | New surface |
+| --- | --- |
+| `kuralle chat` | `kuralle-tui` |
+| prose stdout | JSON |
+| `--approve` / `--deny` / `--signal` | `--respond` |
+| `--auto` | piped `--resume` |
+
 ## 0.23.0 — dynamic durable flows: a JSON flow dialect, resumable flow runs, and flows agents can author (BREAKING under 0.x)
 
 Three strands land together: flows become data (a validated JSON dialect that registers onto a live runtime), flow runs become durable addresses (mint, resume, recover — across process death), and flow authoring becomes something an agent can do behind a validator instead of a human behind a compiler. Breaking changes ship under **0.x rules**, where a minor may break.

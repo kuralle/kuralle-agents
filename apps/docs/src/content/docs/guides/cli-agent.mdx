@@ -1,0 +1,219 @@
+---
+title: Agent CLI
+description: Drive Kuralle agents from scripts and other agents with the kuralle JSON contract.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This guide shows you how to use `@kuralle-agents/cli`, the package that provides the `kuralle`
+binary for agents, scripts, and CI. Turn output is JSON on stdout, status-discriminated, and paired
+with an exit code an agent can act on. For the human chat surface, use the separate
+[`kuralle-tui` guide](/guides/cli-chat).
+
+```bash
+npm install -g @kuralle-agents/cli
+```
+
+`kuralle chat` is retained as a usage-error stub so an old invocation fails clearly. It does not
+start a chat:
+
+```bash
+kuralle chat
+```
+
+It writes `interactive chat moved to kuralle-tui — install @kuralle-agents/tui (requires Bun)` to
+stderr and exits `2`.
+
+## Choose a command
+
+`kuralle --help` currently exposes these commands:
+
+| Command | Purpose |
+| --- | --- |
+| `chat` | Interactive chat (moved to `kuralle-tui`) |
+| `send` | One turn against a persisted session |
+| `schema` | Print the TurnResult JSON Schema |
+| `resume` | Resume a session after human escalation resolution |
+| `sim` | Simulate a multi-turn conversation toward a goal |
+| `trace` | Inspect persisted agent traces |
+| `connect` | Save a default hosted server connection |
+| `connection` | Show the saved hosted server connection |
+| `disconnect` | Clear the saved hosted server connection |
+| `build` | Build a deployable agent artifact |
+| `start` | Start a built Node server artifact |
+| `memory` | Read working-memory blocks and extracted values |
+| `cancel` | Cancel the active turn on a session |
+| `history` | Print the session TurnView from the event log snapshot |
+
+Global options are `--agent <path.ts>` and `--model <id>`. Use `--agent` to load a local
+`Runtime`, `defineAgent` export, or `buildRuntime` factory. Use `--model` when a bare agent export
+does not provide its own model.
+
+<Aside type="caution" title="Loading a TypeScript agent">
+  Plain Node cannot `import()` a `.ts` agent module. Run the CLI with Bun or `tsx`, or point
+  `--agent` at compiled `.js`. Put global options before the subcommand when the subcommand does
+  not define its own `--agent` option, for example `kuralle --agent ./agent.ts history ...`.
+</Aside>
+
+## Send one turn
+
+If you want one process per turn, use `send` with a file-backed store:
+
+```bash
+S=runs/agent-session.json
+kuralle send --session s --store "$S" "Hi, I am Mithushan. What is today's special?"
+```
+
+The result contains `status`, a cursor, and (for a completed or waiting turn) the reply in
+`message`. `message` carries only this turn's reply. The `view.blocks` array is the cumulative
+transcript.
+
+If you want to continue that session from another process, pipe the previous `TurnResult` to the
+next invocation and add `--resume`:
+
+```bash
+T1=$(kuralle send --session s --store "$S" "Hi, I am Mithushan. What is today's special?")
+echo "$T1" | kuralle send --resume --store "$S" "What is my name?"
+```
+
+Across three turns, `view.blocks` grows `3 → 5 → 7`. Do not join assistant blocks to reconstruct
+the current reply; read `message` for this turn and `view.blocks` when you need the transcript.
+`--resume` reads the cursor from the piped `TurnResult`, so the next process can attach to the
+correct session event-log position.
+
+## Respond to an approval request
+
+If a turn returns `status: "input-required"`, inspect `requests` and the matching `view.pending`
+entry. Pipe that result back with `--resume` and answer the request with `--respond`:
+
+```bash
+printf '%s\n' "$PENDING" | kuralle send --session s --store "$S" \
+  --resume --respond '[{"requestId":"<request-id>","decision":"approve"}]'
+```
+
+Use `"deny"` to reject the operation. The request id comes from the previous result; do not
+invent one. A pending approval is a response to the request-bound interrupt, not a new user turn.
+
+The separate `kuralle resume <session> --summary "..."` command is for a session parked after a
+human escalation has been resolved. It is not an approval bypass:
+
+```bash
+kuralle --agent ./agent.ts resume customer-42 --store runs/support.json \
+  --summary "Identity verified; continue with the billing correction."
+```
+
+## Stream events as NDJSON
+
+If you want progress while a turn is running, add `--stream`:
+
+```bash
+kuralle send --session s --store "$S" --stream "Check the order status"
+```
+
+The command emits one JSON `LoggedEvent` object per line, followed by the `TurnResult` as the
+final line. Parse the final line as the status result and the preceding lines as the event stream.
+
+## Read the JSON contract
+
+If you want to validate or generate a consumer for the turn result, print the schema:
+
+```bash
+kuralle schema
+```
+
+The result is the `TurnResult` JSON Schema. Its status discriminator is one of `completed`,
+`waiting`, `input-required`, `escalated`, `failed`, or `auth-required`.
+
+The turn exit-code contract is:
+
+| Exit code | Meaning |
+| ---: | --- |
+| `0` | completed or waiting |
+| `1` | failed turn |
+| `2` | usage error |
+| `3` | input-required or auth-required |
+
+Commander’s default usage exit code of `1` is overridden so an agent can distinguish “you called it
+wrong” from “the turn failed”. An escalation result is represented in the JSON status contract and
+does not indicate a failed process.
+
+## Read memory
+
+If you want the local agent’s memory, provide both the user id and the agent module:
+
+```bash
+kuralle memory --user mithushan --agent ./agent.ts
+```
+
+`--user <id>` is required. A local read also requires `--agent <path>` so the CLI can load that
+agent’s memory configuration. Without it, the command exits `2` with
+`--agent is required for local memory reads`. Hosted reads can use the saved connection instead.
+
+An empty result is valid:
+
+```json
+{"blocks":[],"extracted":[]}
+```
+
+The default extraction trigger is `{ tokens: 2000 }`. A single short turn is below that threshold,
+so `kuralle memory` correctly returns empty arrays even when the agent has extractors configured.
+If you want extraction after every turn, set the agent configuration to:
+
+```ts
+memory: {
+  extraction: { trigger: 'each-turn' },
+}
+```
+
+With that setting, a turn writes an extracted value under
+`~/.kuralle/extracted/user/<id>/<slug>.json`, and a later `kuralle memory --user <id>
+--agent <path>` reads it back.
+
+## Inspect and cancel a session
+
+If you want the current event-log projection without taking a turn, use `history`:
+
+```bash
+kuralle --agent ./agent.ts history --session s --store "$S"
+```
+
+If you want to stop an active turn, use `cancel`:
+
+```bash
+kuralle --agent ./agent.ts cancel --session s --store "$S"
+```
+
+Both commands print JSON. `history` returns the session `TurnView`; `cancel` returns either
+`{"status":"cancelled"}` or `{"status":"no_active_turn"}`.
+
+## Connect hosted commands
+
+If you want later commands to use a hosted runtime, save its non-secret target:
+
+```bash
+kuralle connect https://my-agent.example.com --agent-name support
+kuralle connection
+kuralle disconnect
+```
+
+The saved connection contains the server, transport, and optional agent name. Credentials are not
+saved; provide them through the environment when the hosted operation runs.
+
+`sim`, `trace`, `build`, and `start` remain available for simulation, persisted trace inspection,
+artifact creation, and starting a built Node artifact. See the command descriptions above and the
+[deployment guide](/guides/deployment) for the surrounding runtime setup.
+
+## Migrate from the old CLI surface
+
+The human-facing chat binary is now [`kuralle-tui`](/guides/cli-chat). For an agent-facing
+integration, keep the `kuralle` binary and consume its JSON contract:
+
+| Old surface | New surface |
+| --- | --- |
+| `kuralle chat` | `kuralle-tui` |
+| prose stdout | JSON |
+| `--approve` / `--deny` / `--signal` | `--respond` |
+| `--auto` | piped `--resume` |
+
+The TUI’s slash commands, rail, Bun runtime requirement, and approval panel are documented in the
+[chat guide](/guides/cli-chat).

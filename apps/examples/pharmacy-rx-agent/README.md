@@ -73,13 +73,13 @@ Native Cloudflare clients use `/agents/pharmacy-agent/{sessionId}` over WebSocke
 ```bash
 # Save the Next.js facade as the default hosted runtime
 kuralle connect https://pharmacy-rx-agent.vercel.app --transport http
-kuralle chat --session customer-42
+bunx kuralle-tui https://pharmacy-rx-agent.vercel.app --session customer-42
 
 # Or connect directly with Cloudflare's native Agents protocol
 kuralle connect https://kuralle-pharmacy-workspace-agent.mithushancj.workers.dev \
   --transport cloudflare --agent-name pharmacy-agent
-kuralle chat --session customer-42 \
-  --auto "check cetirizine 10 mg|what did I ask about?"
+bunx kuralle-tui https://kuralle-pharmacy-workspace-agent.mithushancj.workers.dev \
+  --transport cloudflare --agent-name pharmacy-agent --session customer-42
 
 kuralle connection
 kuralle disconnect

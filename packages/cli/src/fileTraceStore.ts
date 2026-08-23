@@ -1,5 +1,5 @@
 /**
- * A tiny JSONL-file-backed TraceStore so `kuralle chat --trace --store <file>`
+ * A tiny JSONL-file-backed TraceStore so `kuralle send --store <file>`
  * accumulates traces across launches (dev only). Spans are APPENDED one-per-line
  * — O(1) per write, no full-file rewrite — and reconstructed on read (last write
  * wins per spanId). Production trace stores live in @kuralle-agents/{redis,postgres}-store

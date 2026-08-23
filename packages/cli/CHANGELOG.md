@@ -3,6 +3,17 @@
 All `@kuralle-agents/*` packages version in lockstep, so this file records the
 release, not only this package. Full history: https://github.com/kuralle/kuralle-agents
 
+## Unreleased
+
+The CLI split gives agents and humans separate entry points. Migrate integrations as follows:
+
+| Old surface | New surface |
+| --- | --- |
+| `kuralle chat` | `kuralle-tui` |
+| prose stdout | JSON |
+| `--approve` / `--deny` / `--signal` | `--respond` |
+| `--auto` | piped `--resume` |
+
 ## 0.23.2
 
 Packaging only — no runtime change.
@@ -55,4 +66,3 @@ resolution, and an unpinned `ai` moves to v7 silently. Upgrade `ai` alongside it
   written, and surface as HTTP 400 rather than 500.
 - `turn`-lifetime system notes are now consumed at the turn boundary; previously they behaved
   identically to `run` lifetime and leaked into every later turn.
-

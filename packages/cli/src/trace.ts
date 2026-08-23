@@ -44,7 +44,7 @@ function parseTraceArgs(argv: string[]): {
 }
 
 export async function runTrace(argv: string[], buildRuntime: BuildRuntime): Promise<void> {
-  // --store <file> points at the same file `kuralle chat --store` / `kuralle send`
+  // --store <file> points at the same file `kuralle send` uses
   // persist to; traces live in a sidecar with the extension replaced —
   // `runs/app.json` -> `runs/app.traces.jsonl` (JSONL, one span per line).
   // Without wiring these, buildRuntime falls back to an in-memory store that is

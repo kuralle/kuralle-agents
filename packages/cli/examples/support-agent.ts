@@ -1,6 +1,6 @@
 /**
  * Bare-agent export shape — the CLI calls createRuntime for you.
- *   kuralle chat --agent ./examples/support-agent.ts
+ *   kuralle send --agent ./examples/support-agent.ts "hello"
  */
 import { openai } from '@ai-sdk/openai';
 import { defineAgent } from '@kuralle-agents/core';

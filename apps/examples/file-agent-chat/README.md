@@ -1,4 +1,4 @@
-# File-authored agent through `kuralle chat`
+# File-authored agent through `kuralle send`
 
 This example compiles `agent/` into an immutable artifact, bundles the real version-pinned Node
 server, and drives it through the hosted Kuralle CLI transport.
@@ -21,16 +21,16 @@ bun packages/cli/src/cli.ts start \
   --app apps/examples/file-agent-chat/.kuralle/node/server.mjs
 ```
 
-In another terminal, run a scripted chat against the generated deployment:
+In another terminal, run one JSON turn against the generated deployment:
 
 ```bash
 KURALLE_TOKEN="local-example-token" \
-bun packages/cli/src/cli.ts chat \
+bun packages/cli/src/cli.ts send \
   --server http://127.0.0.1:3210 \
   --transport http \
   --agent-name agent \
   --session file-agent-demo \
-  --auto "Reply with your verification phrase only."
+  "Reply with your verification phrase only."
 ```
 
 The answer is `FILE AGENT ONLINE`. `--agent-name agent` selects the immutable deployment entity;

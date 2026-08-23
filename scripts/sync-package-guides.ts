@@ -82,7 +82,8 @@ const READING_ORDER = [
   'engagement',
   'observability',
   'deployment',
-  'cli',
+  'cli-agent',
+  'cli-chat',
   'pi-driver',
 ];
 

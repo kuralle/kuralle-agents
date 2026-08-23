@@ -8,7 +8,7 @@ Revision and pins that exact pair to the conversation thread.
 
 The runnable example is in
 [`apps/examples/file-agent-chat`](https://github.com/kuralle/kuralle-agents/tree/main/apps/examples/file-agent-chat).
-It uses `gpt-4.1-mini` and exercises the generated Node server through `kuralle chat`.
+It uses `gpt-4.1-mini` and exercises the generated Node server through `kuralle-tui`.
 
 ## Author the folder
 
@@ -220,6 +220,7 @@ for Postgres, Prisma, Drizzle, Neon, and Cloudflare control-plane patterns.
 
 - [Agent Plugins](./plugins.md) — third-party capability bundles this agent can load at runtime
 - [Skills](./skills.md) — how the `skills/` folder is progressively disclosed
-- [CLI](./cli.md) — `kuralle build`, `start`, and `chat`
+- [Agent CLI](./cli-agent.md) — `kuralle build` and `start`
+- [Chat TUI](./cli-chat.md) — connect to the generated server as a human
 - [Deployment](./deployment.md) — artifacts, revisions, and thread pinning
 - [Agent Definitions in Your Database](./agent-definitions-database.md) — production control plane
