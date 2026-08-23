@@ -397,7 +397,19 @@ export class Runtime {
       // double emit produced a spurious `human -> human` self-edge in the trace, because
       // by the second emit the recorder's current agent was already the target.
       const announcedHandoffs = new Set<string>();
+      // Same shape as the handoff dedupe above, for the same reason. A failure is announced by
+      // every layer that catches it on the way up: AiSdkModelTurnLoop sees the model stream's
+      // error part and emits before rethrowing, and speakGated's catch emits again as the throw
+      // unwinds past it. Neither emitter can be deleted — each is the only announcement for
+      // failures that originate in its own path — so the funnel they share drops the repeat.
+      // One failure produced two identical `error` parts in the log, and a first-run TUI session
+      // with no API key showed the provider's message twice.
+      const announcedErrors = new Set<string>();
       const emit = (part: StreamPart) => {
+        if (part.type === 'error') {
+          if (announcedErrors.has(part.payload.error)) return;
+          announcedErrors.add(part.payload.error);
+        }
         if (part.type === 'text-delta' && part.payload.delta) sawUserText = true;
         if (part.type === 'handoff') announcedHandoffs.add(part.payload.targetAgent);
         recorder?.record(part);
