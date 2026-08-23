@@ -14,6 +14,8 @@ import {
 import { flowDefinitionsStoreConformanceCases } from '@kuralle-agents/core/flows/definition/testing';
 import { SqlPersistentMemoryStore } from '../src/SqlPersistentMemoryStore.js';
 import { createSqlExecutor } from '../src/sqlExecutor.js';
+import { SqlSessionEventLog } from '../src/SqlSessionEventLog.js';
+import { MemorySessionEventLog, type StreamPart } from '@kuralle-agents/core';
 import { KuralleAgent } from '../src/KuralleAgent.js';
 import { KuralleThreadAgent } from '../src/KuralleThreadAgent.js';
 import { SqlTraceStore } from '../src/SqlTraceStore.js';
@@ -139,6 +141,38 @@ export class TestMemoryDO extends DurableObject {
       });
       await sink.flush();
       return Response.json(captured);
+    }
+    if (url.pathname === '/event-log-parity') {
+      const body = (await request.json()) as {
+        sessionId: string;
+        script: StreamPart[][];
+      };
+      const memory = new MemorySessionEventLog();
+      const workerd = new SqlSessionEventLog(createSqlExecutor(this.ctx.storage.sql));
+      for (const parts of body.script) {
+        await memory.append(body.sessionId, parts, 'run-1');
+        await workerd.append(body.sessionId, parts, 'run-1');
+      }
+      const strip = (event: { index: number; runId: string; part: StreamPart }) => ({
+        index: event.index,
+        runId: event.runId,
+        part: event.part,
+      });
+      const node = (await memory.read(body.sessionId, 0)).events.map(strip);
+      const workerdEvents = (await workerd.read(body.sessionId, 0)).events.map(strip);
+      return Response.json({ node, workerd: workerdEvents });
+    }
+    if (url.pathname === '/event-log-write' && request.method === 'POST') {
+      const body = (await request.json()) as { sessionId: string; parts: StreamPart[] };
+      const store = new SqlSessionEventLog(createSqlExecutor(this.ctx.storage.sql));
+      await store.append(body.sessionId, body.parts, 'run-1');
+      return Response.json({ ok: true });
+    }
+    if (url.pathname === '/event-log-read') {
+      const sessionId = url.searchParams.get('sessionId') ?? '';
+      const store = new SqlSessionEventLog(createSqlExecutor(this.ctx.storage.sql));
+      const { events } = await store.read(sessionId, 0);
+      return Response.json({ events });
     }
     if (url.pathname === '/run-store') {
       return dispatchRunStore(createSqlExecutor(this.ctx.storage.sql), request);

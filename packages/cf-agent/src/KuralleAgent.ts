@@ -46,7 +46,7 @@ import type {
   Scheduler,
   WakeJobPayload,
 } from '@kuralle-agents/core';
-import type { StreamPart } from '@kuralle-agents/core';
+import type { StreamPart, TurnHandle } from '@kuralle-agents/core';
 import { harnessToUIMessageStream } from '@kuralle-agents/core';
 import type { GenerateTextOnFinishCallback, ToolSet, UIMessage } from 'ai';
 import type { OnChatMessageOptions } from '@cloudflare/ai-chat';
@@ -60,6 +60,9 @@ import { durableAgentSurface } from './durable-agent-surface.js';
 import { lastUserInputFromMessages } from './cfMessageInput.js';
 import { SqlFlowDefinitionsStore } from './SqlFlowDefinitionsStore.js';
 import { dispatchStoredFlowsRequest } from './storedFlowsHttp.js';
+import { SqlExtractedValueStore } from './SqlExtractedValueStore.js';
+import { SqlSessionEventLog } from './SqlSessionEventLog.js';
+import { dispatchSessionRequest } from './sessionHttp.js';
 
 export interface ResolvedRuntimeDefinition {
   agents: HarnessConfig['agents'];
@@ -97,6 +100,8 @@ export abstract class KuralleAgent<
   private runtime: Runtime | null = null;
   /** Last approval surfaced by the completion-oriented HTTP chat facade. */
   private lastHttpInterrupt: HitlInterrupt | undefined;
+  private sessionEventLog: SqlSessionEventLog | null = null;
+  private activeTurnHandle: TurnHandle | null = null;
 
   private ensureHttpInterruptTable(): void {
     this.getSql()`CREATE TABLE IF NOT EXISTS kuralle_http_interrupts (
@@ -236,6 +241,29 @@ export abstract class KuralleAgent<
     return new SqlPersistentMemoryStore(this.getSql());
   }
 
+  protected getSessionEventLog(): SqlSessionEventLog {
+    if (!this.sessionEventLog) {
+      this.sessionEventLog = new SqlSessionEventLog(this.getSql());
+    }
+    return this.sessionEventLog;
+  }
+
+  private trackTurn(handle: TurnHandle): TurnHandle {
+    this.activeTurnHandle = handle;
+    void handle.finally(() => {
+      if (this.activeTurnHandle === handle) {
+        this.activeTurnHandle = null;
+      }
+    });
+    return handle;
+  }
+
+  private cancelActiveTurn(): boolean {
+    if (!this.activeTurnHandle) return false;
+    this.activeTurnHandle.cancel('session-cancel');
+    return true;
+  }
+
   /**
    * Who a `/resume` decision is attributed to in the durable audit log.
    *
@@ -333,13 +361,13 @@ export abstract class KuralleAgent<
     const built = await this.buildRuntime();
     this.runtime = built.runtime;
 
-    const handle = this.runtime.run({
+    const handle = this.trackTurn(this.runtime.run({
       input: lastUserMessage,
       sessionId,
       userId: (options?.body as { userId?: string } | undefined)?.userId,
       abortSignal: options?.abortSignal,
       deployment: built.deployment,
-    });
+    }));
 
     const owner = this;
     async function* parts(): AsyncGenerator<StreamPart> {
@@ -382,6 +410,9 @@ export abstract class KuralleAgent<
     const runStore = runtimeConfig.runStore ?? await this.durableRunStore();
     const flowDefinitionsStore =
       runtimeConfig.flowDefinitionsStore ?? this.getFlowDefinitionsStore();
+    const eventLog = runtimeConfig.eventLog ?? this.getSessionEventLog();
+    const extractedValueStore =
+      runtimeConfig.extractedValueStore ?? new SqlExtractedValueStore(this.getSql());
     const runtime = createRuntime({
       ...runtimeConfig,
       agents: definition.agents,
@@ -389,6 +420,8 @@ export abstract class KuralleAgent<
       sessionStore,
       runStore,
       flowDefinitionsStore,
+      eventLog,
+      extractedValueStore,
       ...(workingMemoryStore && !runtimeConfig.defaultWorkingMemoryStore
         ? { defaultWorkingMemoryStore: workingMemoryStore }
         : {}),
@@ -415,11 +448,11 @@ export abstract class KuralleAgent<
   protected async resumeWithSignal(signal: SignalDelivery): Promise<{ text: string }> {
     const sessionId = this.getSessionId();
     const built = await this.buildRuntime();
-    const handle = built.runtime.run({
+    const handle = this.trackTurn(built.runtime.run({
       sessionId,
       signalDelivery: signal,
       deployment: built.deployment,
-    });
+    }));
 
     let text = '';
     for await (const part of handle.events) {
@@ -524,11 +557,11 @@ export abstract class KuralleAgent<
 
     const { reason, payload } = job.payload as unknown as WakeJobPayload;
     const built = await this.buildRuntime();
-    const handle = built.runtime.run({
+    const handle = this.trackTurn(built.runtime.run({
       sessionId: this.getSessionId(),
       wake: { reason, payload },
       deployment: built.deployment,
-    });
+    }));
 
     let text = '';
     for await (const part of handle.events) {
@@ -594,6 +627,15 @@ export abstract class KuralleAgent<
       onMutated: () => this.onStoredFlowsMutated(),
     });
     if (storedFlows) return storedFlows;
+
+    const sessionRoute = await dispatchSessionRequest({
+      request,
+      boundSessionId: this.getSessionId(),
+      eventLog: this.getSessionEventLog(),
+      sql: this.getSql(),
+      cancelTurn: () => this.cancelActiveTurn(),
+    });
+    if (sessionRoute) return sessionRoute;
 
     // HTTP counterpart to the native Agents WebSocket chat protocol. This is
     // intentionally completion-oriented JSON: browser clients should use
