@@ -80,7 +80,13 @@ async function main(): Promise<void> {
       try {
         const { agentPath, modelFlag } = globalAgentFlags();
         const buildRuntime = await resolveBuildRuntime(agentPath, { modelFlag });
-        const result = await runSend(subcommandArgv('send'), buildRuntime);
+        const argv = subcommandArgv('send');
+        const stream = argv.includes('--stream');
+        const result = await runSend(argv, buildRuntime, stream ? {
+          onEvent: (event) => {
+            process.stdout.write(`${JSON.stringify(event)}\n`);
+          },
+        } : undefined);
         writeTurnResult(result);
         process.exit(exitCodeFor(result.status));
       } catch (err) {

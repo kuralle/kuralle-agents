@@ -1,8 +1,8 @@
 /**
  * A tiny JSON-file-backed SessionStore so a conversation survives across separate
  * process invocations — the substrate that lets `send` do adaptive multi-turn
- * (one turn per call). `reviveSession` spreads all keys, so the durable-run state
- * (`durableRuns`: journal + flow position + runEpoch) round-trips through JSON intact.
+ * (one turn per call). `reviveSession` spreads all keys, so the durable run journal
+ * round-trips through JSON intact.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';

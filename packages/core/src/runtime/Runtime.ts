@@ -1092,8 +1092,8 @@ export class Runtime {
     return this.sessionStore;
   }
 
-  getRunStore(): RunStore {
-    return resolveRunStore(this.sessionStore, '', this.runStoreOverride);
+  getRunStore(sessionId = ''): RunStore {
+    return resolveRunStore(this.sessionStore, sessionId, this.runStoreOverride);
   }
 
   /**

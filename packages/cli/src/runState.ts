@@ -1,4 +1,4 @@
-import type { SessionStore } from '@kuralle-agents/core';
+import type { Runtime } from '@kuralle-agents/core';
 
 export interface AgentRunState {
   activeFlow?: string;
@@ -7,26 +7,17 @@ export interface AgentRunState {
   roles: string[];
 }
 
-/** Read flow position + message roles from the durable run journal (CLI-internal). */
+/** Read flow position + message roles from the public runtime stores (CLI-internal). */
 export async function readAgentRunState(
-  store: SessionStore,
+  runtime: Runtime,
   sessionId: string,
 ): Promise<AgentRunState> {
-  const s = await store.get(sessionId);
-  const rs = (s as unknown as {
-    durableRuns?: Record<string, {
-      runState?: {
-        activeFlow?: string;
-        runEpoch?: number;
-        state?: Record<string, unknown>;
-        activeAgentId?: string;
-      };
-    }>;
-  })?.durableRuns?.[sessionId]?.runState;
+  const s = await runtime.getSession(sessionId);
+  const runState = s ? await runtime.getRunStore(sessionId).getRunState(sessionId) : null;
   return {
-    activeFlow: rs?.activeFlow,
-    runEpoch: rs?.runEpoch,
-    completedFlows: (rs?.state as Record<string, unknown> | undefined)?.__completedFlows,
+    activeFlow: runState?.activeFlow,
+    runEpoch: runState?.runEpoch,
+    completedFlows: runState?.state.__completedFlows,
     roles: (s?.messages ?? []).map((m) => m.role),
   };
 }

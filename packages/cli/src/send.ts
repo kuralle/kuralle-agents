@@ -1,21 +1,27 @@
 /**
  * send — ONE turn against a PERSISTED session for adaptive multi-turn conversations.
  *
- * Flags: --session <id> · --store <file> · --state · --reset
+ * Flags: --session <id> · --store <file> · --state · --reset · --resume · --respond · --stream
  *        --approve [by] · --deny [by] · --signal <name> [--payload <json>]
  *
- * A `needsApproval` tool suspends the run durably. Without a way to deliver the decision the
- * CLI could enter that pause and never leave it — every later turn re-requested approval and
- * paused again. The runtime already accepted `signalDelivery`; only the CLI could not send one.
+ * With --resume, a prior TurnResult on stdin carries the session cursor across process
+ * boundaries. --respond answers input-required requests via Session.respond.
  */
 import { join } from 'node:path';
 import { Command } from 'commander';
-import { createClient, reduce } from '@kuralle-agents/client';
+import { createClient, reduce, type LoggedEvent, type TurnView } from '@kuralle-agents/client';
 import type { BuildRuntime } from './agentRuntime.js';
 import { UsageError } from './errors.js';
 import { fileSessionStore } from './fileStore.js';
 import { fileSessionEventLog } from './fileEventLog.js';
 import { fileTraceStore } from './fileTraceStore.js';
+import {
+  priorView,
+  readResumeResult,
+  resolveOperation,
+  resumeCursor,
+  type ResolvedSend,
+} from './resolveOperation.js';
 import { buildTurnResult, type TurnResult } from './turnResult.js';
 
 interface SendOptions {
@@ -24,10 +30,17 @@ interface SendOptions {
   store: string;
   reset?: boolean;
   state?: boolean;
+  resume?: boolean;
+  respond?: string;
+  stream?: boolean;
   approve?: string | boolean;
   deny?: string | boolean;
   signal?: string;
   payload?: string;
+}
+
+export interface SendHooks {
+  onEvent?: (event: LoggedEvent) => void;
 }
 
 function sendCommand(): Command {
@@ -37,6 +50,9 @@ function sendCommand(): Command {
     .option('--store <file>', 'persist session + traces')
     .option('--reset', 'delete the session and exit')
     .option('--state', 'print session state and exit')
+    .option('--resume', 'continue from a TurnResult piped on stdin')
+    .option('--respond <json>', 'answer input-required requests')
+    .option('--stream', 'emit NDJSON LoggedEvent lines, then the TurnResult')
     .option('--approve [by]', 'approve a pending tool')
     .option('--deny [by]', 'deny a pending tool')
     .option('--signal <name>', 'deliver a named signal')
@@ -48,7 +64,6 @@ function sendCommand(): Command {
     .option('--model <id>', 'model override')
     .option('--agent <path>', 'agent module path')
     .option('--summary <text>', 'ignored on send')
-    .option('--auto <script>', 'ignored on send')
     .option('--trace', 'ignored on send')
     .option('--local', 'ignore hosted connection')
     .argument('[message...]', 'message text');
@@ -70,92 +85,125 @@ export function messageFrom(argv: string[]): string {
 async function snapshotView(
   sessionId: string,
   eventLog: Awaited<ReturnType<typeof fileSessionEventLog>>,
+  previousView?: TurnView,
 ): Promise<TurnResult> {
   const tail = await eventLog.tail(sessionId);
   const { events } = await eventLog.read(sessionId, 0);
-  const view = reduce(events);
+  const view = reduce(events, previousView);
   return buildTurnResult(sessionId, { ...view, cursor: tail });
 }
 
-export async function runSend(argv: string[], buildRuntime: BuildRuntime): Promise<TurnResult> {
+async function collectTurn(
+  turn: AsyncIterable<LoggedEvent> & { result(): Promise<unknown> },
+  hooks?: SendHooks,
+): Promise<void> {
+  if (!hooks) {
+    await turn.result();
+    return;
+  }
+  for await (const event of turn) {
+    hooks.onEvent?.(event);
+    if (event.part.type === 'error') break;
+  }
+  await turn.result();
+}
+
+function sessionIdFor(resolved: ResolvedSend, fallback: string): string {
+  return resolved.previous ? resumeCursor(resolved.previous).sessionId : fallback;
+}
+
+export async function runSend(
+  argv: string[],
+  buildRuntime: BuildRuntime,
+  hooks?: SendHooks,
+): Promise<TurnResult> {
   const { opts, message } = parseSendArgs(argv);
-  const sessionId = opts.session;
-  // Without this the CLI could not exercise user-scoped memory at all: preload,
-  // extractors and the USER block are all skipped when a session has no userId
-  // (deliberately — a placeholder owner would pool every anonymous session).
-  const userId = opts.user;
-  const storePath = opts.store;
-  const doReset = opts.reset === true;
-  const doState = opts.state === true;
+  const previous = await readResumeResult(opts.resume === true);
   const approve = opts.approve !== undefined;
   const deny = opts.deny !== undefined;
   const signalName = opts.signal;
   const by = (typeof opts.approve === 'string' ? opts.approve : undefined)
     ?? (typeof opts.deny === 'string' ? opts.deny : undefined)
     ?? 'cli';
-  const store = fileSessionStore(storePath);
-  const stored = await store.get(sessionId);
-  const waitingFor = (
-    stored as {
-      durableRuns?: Record<
-        string,
-        { runState?: { waitingFor?: { requestId?: string; signalName?: string } } }
-      >;
-    }
-  )?.durableRuns?.[sessionId]?.runState?.waitingFor;
+  const doReset = opts.reset === true;
+  const doState = opts.state === true;
 
-  // Traces must be file-backed too. `send` is one turn per process, so a MemoryTraceStore
-  // (what the loader defaults to whenever a session store is supplied) is discarded on
-  // exit and `kuralle trace --store` finds nothing — the exact sidecar `chat --store`
-  // writes and the CLI guide promises for both commands.
+  if (doReset || doState) {
+    const sessionId = previous ? resumeCursor(previous).sessionId : opts.session;
+    const storePath = opts.store;
+    const store = fileSessionStore(storePath);
+    const base = storePath.replace(/\.json$/, '');
+    const traces = fileTraceStore(`${base}.traces.jsonl`);
+    const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
+    await buildRuntime(sessionId, store, traces, eventLog);
+
+    if (doReset) {
+      await store.delete(sessionId);
+      const view = reduce([], priorView(previous));
+      return {
+        status: 'completed',
+        message: `reset session "${sessionId}"`,
+        cursor: { sessionId, index: -1 },
+        view,
+      };
+    }
+    return snapshotView(sessionId, eventLog, priorView(previous));
+  }
+
+  const resolved = resolveOperation(
+    message,
+    opts.respond,
+    approve,
+    deny,
+    signalName,
+    previous,
+  );
+  const sessionId = sessionIdFor(resolved, opts.session);
+  const userId = opts.user;
+  const storePath = opts.store;
+
+  const store = fileSessionStore(storePath);
   const base = storePath.replace(/\.json$/, '');
   const traces = fileTraceStore(`${base}.traces.jsonl`);
   const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
   const demo = await buildRuntime(sessionId, store, traces, eventLog);
   const client = createClient({ kind: 'local', runtime: demo.runtime, eventLog });
-  const session = client.sessions.attach(sessionId);
+  const session = resolved.previous
+    ? client.sessions.attach(sessionId, resumeCursor(resolved.previous))
+    : client.sessions.attach(sessionId);
 
-  if (doReset) {
-    await store.delete(sessionId);
-    const view = reduce([]);
-    return {
-      status: 'completed',
-      message: `reset session "${sessionId}"`,
-      cursor: { sessionId, index: -1 },
-      view,
-    };
-  }
-
-  const hasSignal = approve || deny || signalName;
-  if (doState) {
-    return snapshotView(sessionId, eventLog);
-  }
-
-  if (!message && !hasSignal) {
-    throw new UsageError('pass a message to take a turn, or --state to inspect');
-  }
+  const fromIndex = resolved.previous
+    ? resumeCursor(resolved.previous).index + 1
+    : (await eventLog.tail(sessionId)) + 1;
 
   let turn;
-  const fromIndex = (await eventLog.tail(sessionId)) + 1;
-  if (approve || deny) {
-    turn = await session.respond([{
-      requestId: waitingFor?.requestId ?? '',
-      decision: approve ? 'approve' : 'deny',
-      actor: { id: by, type: 'user' },
-    }], userId ? { userId } : undefined);
-  } else if (signalName) {
-    turn = await session.respond([{
-      requestId: waitingFor?.requestId ?? '',
-      signalName,
-      payload: JSON.parse(opts.payload ?? '{}') as Record<string, unknown>,
-      actor: { id: 'cli', type: 'service' },
-    }], userId ? { userId } : undefined);
+  if (resolved.mode === 'respond') {
+    turn = await session.respond(resolved.responses!, userId ? { userId } : undefined);
+  } else if (resolved.mode === 'signal') {
+    const requestId = previous?.status === 'input-required'
+      ? previous.requests[0]?.requestId ?? ''
+      : '';
+    if (approve || deny) {
+      turn = await session.respond([{
+        requestId,
+        decision: approve ? 'approve' : 'deny',
+        actor: { id: by, type: 'user' },
+      }], userId ? { userId } : undefined);
+    } else {
+      turn = await session.respond([{
+        requestId,
+        signalName,
+        payload: JSON.parse(opts.payload ?? '{}') as Record<string, unknown>,
+        actor: { id: 'cli', type: 'service' },
+      }], userId ? { userId } : undefined);
+    }
   } else {
     turn = await session.send(message, userId ? { userId } : undefined);
   }
 
-  await turn.result();
+  await collectTurn(turn, hooks);
+
   const { events } = await eventLog.read(sessionId, fromIndex);
-  const view = reduce(events);
+  const view = reduce(events, priorView(resolved.previous));
   return buildTurnResult(sessionId, view);
 }

@@ -128,7 +128,7 @@ function assembleAgentRuntime(
     sessionId,
     agentId,
     label: `agent: ${agentId}`,
-    readState: () => readAgentRunState(sessionStore, sessionId),
+    readState: () => readAgentRunState(runtime, sessionId),
   };
 }
 

@@ -112,7 +112,7 @@ export function buildDemoRuntime(
     tracing: { store: traceStore },
   });
 
-  const readState = () => readAgentRunState(store, sessionId);
+  const readState = () => readAgentRunState(runtime, sessionId);
 
   return {
     runtime,
