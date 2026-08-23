@@ -178,6 +178,15 @@ while true; do
 done
 ```
 
+**The monitor must detect a HUNG worker, not just a dead one.** Watching
+`kill -0` alone reports "still running" for a process that stopped doing anything —
+observed on this repo: a dispatch sat for **99 minutes** with its CPU time moving 0.01s
+in 20 seconds and no file written, while the monitor reported it alive the whole time.
+Sample the leaf's **CPU time** and the tree's **mtime** between polls; N consecutive flat
+samples is a stall, and a stall is a terminal state that needs the engine.
+`stall-watch.sh` beside this file implements it — use it rather than re-deriving a
+liveness-only loop.
+
 Three rules that make it useful rather than decorative:
 
 - **Cover the crash branch.** A monitor that greps only for the success marker
