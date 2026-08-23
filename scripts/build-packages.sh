@@ -16,7 +16,7 @@ tier() {
 
 tier http-client analytics-sdk eval widget create-kuralle-agents                          # T0 leaves
 tier core                                                                                  # T1 hub
-tier fs commerce trace-ui pi-driver rag client                                              # T2 (need core)
+tier fs commerce trace-ui pi-driver rag client tui                                          # T2 (need core)
 tier deployment plugins                                                                    # T3 (need core/fs)
 tier mcp                                                                                   # T4 (needs core/plugins)
 tier build                                                                                 # T4 (needs core/deployment)
