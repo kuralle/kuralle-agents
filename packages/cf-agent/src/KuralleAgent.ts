@@ -640,6 +640,7 @@ export abstract class KuralleAgent<
     const sessionRoute = await dispatchSessionRequest({
       request,
       boundSessionId: this.getSessionId(),
+      boundAgentId: (await this.buildRuntime()).runtime.getDefaultAgentId(),
       eventLog: this.getSessionEventLog(),
       sql: this.getSql(),
       cancelTurn: () => this.cancelActiveTurn(),

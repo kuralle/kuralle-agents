@@ -73,6 +73,7 @@ describe('cf-agent session HTTP dispatcher', () => {
       dispatchSessionRequest({
         request,
         boundSessionId: sessionId,
+      boundAgentId: agent,
         eventLog,
         sql,
         cancelTurn,
@@ -225,6 +226,7 @@ describe('cf-agent session HTTP dispatcher', () => {
         headers: authHeaders(),
       }),
       boundSessionId: sessionId,
+      boundAgentId: agent,
       eventLog: tight,
       sql: bunSql(),
       cancelTurn: () => false,
@@ -384,3 +386,23 @@ function stripForParity(event: LoggedEvent): Pick<LoggedEvent, 'index' | 'runId'
     part: event.part,
   };
 }
+
+describe('the agent path segment is validated, not decoration', () => {
+  it('404s an agent this DO does not serve, matching the Node half', async () => {
+    const sessionId = 'sess-agent-check';
+    const log = new SqlSessionEventLog(bunSql());
+    const response = await dispatchSessionRequest({
+      request: new Request(`http://do/v1/agents/GARBAGE/sessions/${sessionId}/events?from=0&follow=false`, {
+        headers: { authorization: 'Bearer t' },
+      }),
+      boundSessionId: sessionId,
+      boundAgentId: 'support',
+      eventLog: log,
+      sql: bunSql(),
+      cancelTurn: () => false,
+      resolvePrincipal: () => ({ tenantId: 't1', userId: 'u1' }),
+    });
+    expect(response?.status).toBe(404);
+    expect(await response!.json()).toEqual({ error: 'agent not found' });
+  });
+});

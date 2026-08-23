@@ -162,6 +162,8 @@ function buildMemoryDeps(sql: SqlExecutor, agentId: string): SessionRouteDeps['m
 export interface SessionHttpOptions {
   request: Request;
   boundSessionId: string;
+  /** Agent this DO serves. The agent path segment is validated against it, or it is decoration. */
+  boundAgentId: string;
   eventLog: SessionEventLog;
   sql: SqlExecutor;
   cancelTurn: () => boolean;
@@ -183,6 +185,13 @@ export async function dispatchSessionRequest(options: SessionHttpOptions): Promi
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  // A path segment that changes nothing is a lie: Node 404s an unknown agent, so this must too.
+  if (match.agent !== options.boundAgentId) {
+    return new Response(JSON.stringify({ error: 'agent not found' }), {
+      status: 404,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+  }
   if (match.kind !== 'memory' && match.sessionId !== options.boundSessionId) {
     return Response.json({ error: 'session not found' }, { status: 404 });
   }
@@ -192,9 +201,10 @@ export async function dispatchSessionRequest(options: SessionHttpOptions): Promi
     memory: buildMemoryDeps(options.sql, match.kind === 'memory' ? match.agent : ''),
     cancelTurn: async () => (options.cancelTurn() ? 'cancelled' : 'no_active_turn'),
     // Raw owner, matching what this runtime writes (KuralleAgent passes the request's userId
-    // through unscoped). The Node router scopes because one process serves every tenant; a Durable
-    // Object is addressed per session, so its isolation comes from the instance boundary rather
-    // than the key. Whether that boundary is genuinely per-tenant is tracked as a follow-up.
+    // through unscoped) — read and write agree, which is the property that matters most here.
+    // It is NOT justified by the instance boundary: the memory arm of matchSessionRoute never
+    // compares against boundSessionId, so that argument does not cover this route. Whether a DO
+    // instance is genuinely a tenant boundary is an open question, tracked as its own task.
     memoryOwner: (p, requestedUserId) => (p.userId === requestedUserId ? requestedUserId : null),
     abortSignal: options.request.signal,
   };
