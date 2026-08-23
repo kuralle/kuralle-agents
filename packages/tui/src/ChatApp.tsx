@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
-import { reduce, type Block, type LoggedEvent, type Session, type TurnStatus } from '@kuralle-agents/client';
+import {
+  reduce,
+  type Block,
+  type LoggedEvent,
+  type Session,
+  type TurnStatus,
+  type TurnView,
+} from '@kuralle-agents/client';
 import { ApprovalPanel } from './ApprovalPanel.js';
 import { buildApprovalResponse, type PendingInterrupt } from './approvalRespond.js';
 import { BlockView } from './BlockView.js';
+import type { FetchMemory, MemorySnapshot } from './memoryTypes.js';
+import { RailPanel, type RailTab } from './RailPanel.js';
 import { blocksFromEvents, nextUserId } from './transcript.js';
+import { nextEventIndex, turnEventsSince } from './turnEvents.js';
 
 export interface ChatAppProps {
   session: Session;
@@ -13,6 +23,10 @@ export interface ChatAppProps {
   terminalWidth?: number;
   terminalHeight?: number;
   bindCancelHandler?: (handler: () => void) => void;
+  userId?: string;
+  agentId?: string;
+  memoryConfigured?: boolean;
+  fetchMemory?: FetchMemory;
 }
 
 function statusLine(
@@ -37,20 +51,8 @@ function pendingApprovalFromEvents(events: LoggedEvent[]): PendingInterrupt | nu
   return interrupt;
 }
 
-function SideRegion() {
-  return (
-    <box
-      title="Trace"
-      style={{
-        width: 40,
-        border: true,
-        flexDirection: 'column',
-        padding: 1,
-      }}
-    >
-      <text style={{ fg: '#565f89' }} content="trace rail · t14" />
-    </box>
-  );
+function emptyRailView(): TurnView {
+  return reduce([]);
 }
 
 function ChatLayout({
@@ -63,6 +65,11 @@ function ChatLayout({
   approvalPending,
   inspectingArgs,
   input,
+  railTab,
+  railView,
+  memorySnapshot,
+  memoryConfigured,
+  userId,
   onInput,
   onSubmit,
   onApprovalDecision,
@@ -77,6 +84,11 @@ function ChatLayout({
   approvalPending: PendingInterrupt | null;
   inspectingArgs: boolean;
   input: string;
+  railTab: RailTab;
+  railView: TurnView;
+  memorySnapshot: MemorySnapshot | null;
+  memoryConfigured: boolean;
+  userId?: string;
   onInput: (value: string) => void;
   onSubmit: (value: string) => void;
   onApprovalDecision: (decision: 'approve' | 'deny') => void;
@@ -123,7 +135,15 @@ function ChatLayout({
             </box>
           )}
         </box>
-        {showSide ? <SideRegion /> : null}
+        {showSide ? (
+          <RailPanel
+            tab={railTab}
+            view={railView}
+            memorySnapshot={memorySnapshot}
+            memoryConfigured={memoryConfigured}
+            userId={userId}
+          />
+        ) : null}
       </box>
     </box>
   );
@@ -136,6 +156,10 @@ function ChatAppInner({
   bindCancelHandler,
   width,
   height,
+  userId,
+  agentId,
+  memoryConfigured = false,
+  fetchMemory,
 }: ChatAppProps & { width: number; height: number }) {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [status, setStatus] = useState<TurnStatus>('idle');
@@ -143,6 +167,9 @@ function ChatAppInner({
   const [approvalPending, setApprovalPending] = useState<PendingInterrupt | null>(null);
   const [inspectingArgs, setInspectingArgs] = useState(false);
   const [input, setInput] = useState('');
+  const [railTab, setRailTab] = useState<RailTab>('trace');
+  const [railView, setRailView] = useState<TurnView>(emptyRailView);
+  const [memorySnapshot, setMemorySnapshot] = useState<MemorySnapshot | null>(null);
   const eventsRef = useRef<LoggedEvent[]>([]);
   const sessionUsersRef = useRef<Block[]>([]);
   const userSeqRef = useRef(0);
@@ -150,6 +177,17 @@ function ChatAppInner({
   const busyRef = useRef(false);
   const turnAbortRef = useRef(false);
   const approvalPendingRef = useRef<PendingInterrupt | null>(null);
+  const turnStartIndexRef = useRef(0);
+  const followAbortRef = useRef<AbortController | null>(null);
+
+  const refreshMemory = useCallback(async () => {
+    if (!fetchMemory || !userId) {
+      setMemorySnapshot(null);
+      return;
+    }
+    const snapshot = await fetchMemory({ userId, agentId });
+    setMemorySnapshot(snapshot);
+  }, [agentId, fetchMemory, userId]);
 
   const refresh = useCallback(() => {
     setBlocks(blocksFromEvents(eventsRef.current, sessionUsersRef.current));
@@ -159,6 +197,8 @@ function ChatAppInner({
     if (pending) {
       setStatus('input-required');
     }
+    const turnEvents = turnEventsSince(eventsRef.current, turnStartIndexRef.current);
+    setRailView(turnEvents.length > 0 ? reduce(turnEvents) : emptyRailView());
   }, []);
 
   useEffect(() => {
@@ -170,12 +210,49 @@ function ChatAppInner({
     void session.snapshot().then((snap) => {
       if (cancelled) return;
       eventsRef.current = snap.events;
+      turnStartIndexRef.current = nextEventIndex(snap.events);
       refresh();
+      void refreshMemory();
     });
     return () => {
       cancelled = true;
     };
-  }, [session, refresh]);
+  }, [refresh, refreshMemory, session]);
+
+  useEffect(() => {
+    followAbortRef.current?.abort();
+    const controller = new AbortController();
+    followAbortRef.current = controller;
+    let cancelled = false;
+
+    const follow = async () => {
+      const snap = await session.snapshot();
+      if (cancelled) return;
+      let cursor = snap.cursor.index;
+      for await (const event of session.stream({
+        startIndex: cursor,
+        follow: true,
+        signal: controller.signal,
+      })) {
+        if (cancelled) return;
+        if (event.index < cursor) continue;
+        if (!eventsRef.current.some((existing) => existing.index === event.index)) {
+          eventsRef.current = [...eventsRef.current, event];
+          refresh();
+          if (event.part.type === 'extraction') {
+            void refreshMemory();
+          }
+        }
+        cursor = event.index + 1;
+      }
+    };
+
+    void follow();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [refresh, refreshMemory, session]);
 
   const drainTurn = useCallback(
     async (turn: AsyncIterable<LoggedEvent> & { result(): Promise<unknown> }) => {
@@ -183,7 +260,9 @@ function ChatAppInner({
         turnAbortRef.current = false;
         for await (const event of turn) {
           if (turnAbortRef.current) break;
-          eventsRef.current = [...eventsRef.current, event];
+          if (!eventsRef.current.some((existing) => existing.index === event.index)) {
+            eventsRef.current = [...eventsRef.current, event];
+          }
           if (event.part.type === 'done') setStatus('completed');
           if (event.part.type === 'paused') setStatus('input-required');
           refresh();
@@ -191,13 +270,22 @@ function ChatAppInner({
         if (!turnAbortRef.current) {
           await turn.result();
         }
+        const snap = await session.snapshot();
+        let appended = false;
+        for (const event of snap.events) {
+          if (eventsRef.current.some((existing) => existing.index === event.index)) continue;
+          eventsRef.current = [...eventsRef.current, event];
+          appended = true;
+        }
+        if (appended) refresh();
       } finally {
         turnAbortRef.current = false;
         setBusy(false);
         refresh();
+        void refreshMemory();
       }
     },
-    [refresh],
+    [refresh, refreshMemory, session],
   );
 
   const submit = useCallback(
@@ -205,6 +293,7 @@ function ChatAppInner({
       const text = raw.trim();
       if (!text || busyRef.current || approvalPendingRef.current) return;
       setInput('');
+      turnStartIndexRef.current = nextEventIndex(eventsRef.current);
       sessionUsersRef.current = [
         ...sessionUsersRef.current,
         { id: nextUserId(userSeqRef.current++), kind: 'user', text },
@@ -214,24 +303,28 @@ function ChatAppInner({
       setStatus('streaming');
       setInspectingArgs(false);
 
-      const turn = await session.send(text);
+      const turn = await session.send(text, userId ? { userId, agentId } : { agentId });
       await drainTurn(turn);
     },
-    [drainTurn, refresh, session],
+    [agentId, drainTurn, refresh, session, userId],
   );
 
   const respondToApproval = useCallback(
     async (decision: 'approve' | 'deny') => {
       const pending = approvalPendingRef.current;
       if (!pending || busyRef.current) return;
+      turnStartIndexRef.current = nextEventIndex(eventsRef.current);
       setInspectingArgs(false);
       setBusy(true);
       setStatus('streaming');
 
-      const turn = await session.respond(buildApprovalResponse(pending, decision));
+      const turn = await session.respond(
+        buildApprovalResponse(pending, decision),
+        userId ? { userId, agentId } : { agentId },
+      );
       await drainTurn(turn);
     },
-    [drainTurn, session],
+    [agentId, drainTurn, session, userId],
   );
 
   const scriptedStartedRef = useRef(false);
@@ -251,6 +344,8 @@ function ChatAppInner({
 
   useKeyboard((key) => {
     if (key.name === 'escape') cancelActiveTurn();
+    if (key.ctrl && key.name === 't') setRailTab('trace');
+    if (key.ctrl && key.name === 'm') setRailTab('memory');
   });
 
   useEffect(() => {
@@ -280,6 +375,11 @@ function ChatAppInner({
       approvalPending={approvalPending}
       inspectingArgs={inspectingArgs}
       input={input}
+      railTab={railTab}
+      railView={railView}
+      memorySnapshot={memorySnapshot}
+      memoryConfigured={memoryConfigured}
+      userId={userId}
       onInput={setInput}
       onSubmit={(value) => {
         void submit(value);

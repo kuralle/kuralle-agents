@@ -99,6 +99,44 @@ export function approvalResumeEvents(
   ];
 }
 
+export function toolTurnEvents(indexBase = 0, sessionId = 'mock-session'): LoggedEvent[] {
+  const baseAt = indexBase * 100;
+  return [
+    logged(indexBase, { channel: 'client', type: 'text-start', payload: { id: 'a1' } }, { at: baseAt }),
+    logged(indexBase + 1, { channel: 'client', type: 'text-delta', payload: { id: 'a1', delta: 'Checking' } }, { at: baseAt + 50 }),
+    logged(indexBase + 2, {
+      channel: 'internal',
+      type: 'tool-call',
+      payload: { toolName: 'lookup_order', args: { orderId: '4471' }, toolCallId: 'call-1' },
+    }, { at: baseAt + 100 }),
+    logged(indexBase + 3, {
+      channel: 'internal',
+      type: 'tool-result',
+      payload: {
+        toolName: 'lookup_order',
+        result: { status: 'shipped', carrier: 'DHL' },
+        toolCallId: 'call-1',
+      },
+    }, { at: baseAt + 300 }),
+    logged(indexBase + 4, { channel: 'client', type: 'text-delta', payload: { id: 'a1', delta: ' your order.' } }, { at: baseAt + 350 }),
+    logged(indexBase + 5, { channel: 'client', type: 'text-end', payload: { id: 'a1' } }, { at: baseAt + 360 }),
+    logged(indexBase + 6, {
+      channel: 'client',
+      type: 'done',
+      payload: { sessionId, usage: { inputTokens: 120, outputTokens: 34, contextTokens: 4096 } },
+    }, { at: baseAt + 600 }),
+  ];
+}
+
+export function lateExtractionTurnEvents(indexBase = 0, sessionId = 'mock-session'): LoggedEvent[] {
+  return [
+    logged(indexBase, { channel: 'client', type: 'text-start', payload: { id: 'a1' } }),
+    logged(indexBase + 1, { channel: 'client', type: 'text-delta', payload: { id: 'a1', delta: 'Done.' } }),
+    logged(indexBase + 2, { channel: 'client', type: 'text-end', payload: { id: 'a1' } }),
+    logged(indexBase + 3, { channel: 'client', type: 'done', payload: { sessionId } }, { at: 500 }),
+  ];
+}
+
 export interface MockSessionOptions {
   id?: string;
   seed?: LoggedEvent[];
@@ -106,6 +144,7 @@ export interface MockSessionOptions {
   onRespond?: (responses: InputResponse[], turn: number) => LoggedEvent[];
   onCancel?: () => void;
   stallAfterDelta?: boolean;
+  afterTurn?: (turn: number) => LoggedEvent[] | Promise<LoggedEvent[]>;
 }
 
 export class MockSession implements Session {
@@ -117,7 +156,9 @@ export class MockSession implements Session {
   private readonly onRespond?: (responses: InputResponse[], turn: number) => LoggedEvent[];
   private readonly onCancel?: () => void;
   private readonly stallAfterDelta: boolean;
+  private readonly afterTurn?: (turn: number) => LoggedEvent[] | Promise<LoggedEvent[]>;
   private respondTurn = 0;
+  private streamWaiters: Array<() => void> = [];
   lastRespondPayload: InputResponse[] | null = null;
 
   constructor(options: MockSessionOptions = {}) {
@@ -127,6 +168,23 @@ export class MockSession implements Session {
     this.onRespond = options.onRespond;
     this.onCancel = options.onCancel;
     this.stallAfterDelta = options.stallAfterDelta ?? false;
+    this.afterTurn = options.afterTurn;
+  }
+
+  private notifyStreamWaiters(): void {
+    for (const wake of this.streamWaiters.splice(0)) wake();
+  }
+
+  pushEvents(templates: LoggedEvent[]): void {
+    const startIndex = (this.events.at(-1)?.index ?? -1) + 1;
+    for (const [offset, template] of templates.entries()) {
+      this.events.push({
+        ...template,
+        index: startIndex + offset,
+        eventId: template.eventId ?? `evt-${startIndex + offset}`,
+      });
+    }
+    this.notifyStreamWaiters();
   }
 
   async snapshot(): Promise<{ events: LoggedEvent[]; cursor: Cursor }> {
@@ -156,6 +214,7 @@ export class MockSession implements Session {
           };
           offset += 1;
           session.events.push(event);
+          session.notifyStreamWaiters();
           yield event;
           if (session.stallAfterDelta && event.part.type === 'text-delta') {
             while (session.active) {
@@ -165,6 +224,11 @@ export class MockSession implements Session {
           }
         }
         session.active = false;
+        const turnIndex = session.turn - 1;
+        if (session.afterTurn) {
+          const late = await session.afterTurn(turnIndex);
+          if (late.length > 0) session.pushEvents(late);
+        }
       },
       result: async () => ({ text: '', toolResults: [], runId: 'run-1' }),
     };
@@ -192,6 +256,7 @@ export class MockSession implements Session {
           };
           offset += 1;
           session.events.push(event);
+          session.notifyStreamWaiters();
           yield event;
         }
         session.active = false;
@@ -203,10 +268,41 @@ export class MockSession implements Session {
   async cancel(_reason?: string): Promise<void> {
     this.active = false;
     this.onCancel?.();
+    this.notifyStreamWaiters();
   }
 
-  stream(): AsyncIterable<LoggedEvent> {
-    throw new Error('stream() not implemented in MockSession');
+  stream(opts?: {
+    startIndex?: number;
+    follow?: boolean;
+    signal?: AbortSignal;
+  }): AsyncIterable<LoggedEvent> {
+    const session = this;
+    return {
+      async *[Symbol.asyncIterator]() {
+        let cursor = opts?.startIndex ?? 0;
+        while (!opts?.signal?.aborted) {
+          while (cursor <= (session.events.at(-1)?.index ?? -1)) {
+            const event = session.events.find((entry) => entry.index === cursor);
+            if (!event) break;
+            yield event;
+            cursor += 1;
+          }
+          if (!opts?.follow || opts.signal?.aborted) return;
+          await new Promise<void>((resolve) => {
+            if (opts.signal?.aborted) {
+              resolve();
+              return;
+            }
+            session.streamWaiters.push(resolve);
+            opts.signal?.addEventListener('abort', () => {
+              const index = session.streamWaiters.indexOf(resolve);
+              if (index >= 0) session.streamWaiters.splice(index, 1);
+              resolve();
+            }, { once: true });
+          });
+        }
+      },
+    };
   }
 }
 
