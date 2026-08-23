@@ -3,7 +3,6 @@
  * order flow (collect item+day → place), global tool (todays_special), repeatable
  * flows, and billing handoff. Provider: OpenAI gpt-4.1-mini (forced).
  */
-import { config } from 'dotenv';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -28,14 +27,12 @@ import { readAgentRunState } from './runState.js';
 import { newSessionId } from './sessionId.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-config({ path: join(here, '../.env') });
-config({ path: join(here, '../../../.env') });
 
 export function demoModel(): LanguageModel {
   const key = process.env.OPENAI_API_KEY;
   if (!key) {
     throw new AuthRequiredError(
-      'No OPENAI_API_KEY — set it in packages/cli/.env or the repo .env',
+      'No OPENAI_API_KEY — export it, put it in ./.env, or pass --env-file <path>',
       'OPENAI_API_KEY',
     );
   }

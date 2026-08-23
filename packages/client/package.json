@@ -31,7 +31,8 @@
   ],
   "dependencies": {
     "@kuralle-agents/core": "workspace:*",
-    "ws": "^8.21.1"
+    "ws": "^8.21.1",
+    "dotenv": "^16.4.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

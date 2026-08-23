@@ -617,6 +617,7 @@
       "version": "0.23.2",
       "dependencies": {
         "@kuralle-agents/core": "workspace:*",
+        "dotenv": "^16.4.0",
         "ws": "^8.21.1",
       },
       "devDependencies": {

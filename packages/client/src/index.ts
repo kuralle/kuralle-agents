@@ -11,6 +11,7 @@ export {
   type HostedConnection,
   type HostedTransport,
 } from './target.js';
+export { loadEnvFile } from './env.js';
 export { httpTransport } from './transports/http.js';
 export { cloudflareTransport } from './transports/cloudflare.js';
 export { projectInputRequest, buildApprovalResponse, type PendingInterrupt } from './inputRequest.js';

@@ -17,6 +17,7 @@ export interface CliLaunchOptions {
   userId?: string;
   tokenEnv?: string;
   model?: string;
+  envFile?: string;
 }
 
 function authFromEnv(tokenEnv?: string): Auth | undefined {
@@ -68,5 +69,6 @@ export function parseCliArgv(argv: string[]): CliLaunchOptions {
     userId: flags.get('user'),
     tokenEnv: flags.get('token-env'),
     model: flags.get('model'),
+    envFile: flags.get('env-file'),
   };
 }

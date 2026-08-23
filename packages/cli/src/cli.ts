@@ -14,6 +14,7 @@
  *   kuralle start [--app .kuralle/node/server.mjs]
  */
 import { Command } from 'commander';
+import { loadEnvFile } from '@kuralle-agents/client';
 import { resolveBuildRuntime } from './agentLoader.js';
 import { AuthRequiredError, UsageError } from './errors.js';
 import { runResume } from './resume.js';
@@ -55,11 +56,20 @@ function globalAgentFlags(): { agentPath?: string; modelFlag?: string } {
 }
 
 async function main(): Promise<void> {
+  // Before anything resolves an agent module: that module reads process.env at import time.
+  // Consumed out of argv rather than declared as an option, because every subcommand parses its
+  // own slice and would otherwise have to declare it too — one of them forgetting is a bug.
+  const envIndex = process.argv.indexOf('--env-file');
+  const envPath = envIndex >= 0 ? process.argv[envIndex + 1] : undefined;
+  if (envIndex >= 0) process.argv.splice(envIndex, envPath ? 2 : 1);
+  loadEnvFile(envPath);
+
   const program = new Command()
     .name('kuralle')
     .description('Kuralle agent CLI')
     .option('--agent <path.ts>', 'Load a Runtime, defineAgent export, or buildRuntime factory')
     .option('--model <id>', 'OpenAI model id when the agent export has no model (bare-agent shape)')
+    .option('--env-file <path>', 'Load environment variables from this file instead of ./.env')
     .showHelpAfterError();
 
   program
