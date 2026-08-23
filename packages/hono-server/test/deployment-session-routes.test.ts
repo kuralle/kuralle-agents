@@ -351,7 +351,7 @@ describe('deployment session routes', () => {
       'http://local/v1/agents/support/users/user-2/memory',
       { headers: { authorization: 'Bearer tenant-a' } },
     );
-    expect(await other.json()).toEqual({ blocks: [], extracted: [] });
+    expect(other.status).toBe(403);
   });
 
   it('memory is tenant-scoped so a colliding userId in another tenant sees empty data', async () => {

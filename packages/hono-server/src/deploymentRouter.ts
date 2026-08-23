@@ -3,18 +3,23 @@ import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { createUIMessageStreamResponse } from 'ai';
 import {
+  cancelSession,
   createRuntime,
   harnessToUIMessageStream,
+  readEvents,
+  readMemory,
+  readSnapshot,
   resolveExtractedValueStore,
   resolveWorkingMemoryStore,
   sanitizePart,
-  scanMemoryWrite,
-  scrubSecrets,
   type Extractor,
+  type ExtractedValueStore,
   type HarnessConfig,
   type LoggedEvent,
   type MemoryBlockScope,
+  type PersistentMemoryStore,
   type SessionEventLog,
+  type SessionRouteDeps,
   type SessionStore,
   type StreamPart,
   type WorkingMemoryConfig,
@@ -94,75 +99,54 @@ function applyNoBufferingHeaders(headers: Headers): void {
   headers.set('X-Accel-Buffering', 'no');
 }
 
-const SNAPSHOT_LIMIT_DEFAULT = 100;
-const SNAPSHOT_LIMIT_MAX = 1000;
-
-function parseNonNegativeInt(
-  raw: string | undefined,
-  fallback: number,
-  param: 'from' | 'limit',
-): number | null {
-  if (raw === undefined) return fallback;
-  const value = Number(raw);
-  if (!Number.isInteger(value)) return null;
-  if (param === 'from' && value < 0) return null;
-  if (param === 'limit' && value < 1) return null;
-  return value;
-}
-
-function clampSnapshotLimit(limit: number): number {
-  return Math.min(limit, SNAPSHOT_LIMIT_MAX);
-}
-
-function parseFollow(raw: string | undefined): boolean {
-  if (raw === undefined) return true;
-  return raw !== 'false' && raw !== '0';
-}
-
 function resolveEventLog(options: DeploymentRouterOptions): SessionEventLog | undefined {
   return options.eventLog ?? options.runtimeConfig?.eventLog;
 }
 
-function filterLoggedEvent(event: LoggedEvent, streamFilter: StreamEventFilter): LoggedEvent | null {
-  if (!shouldEmit(event.part, streamFilter)) return null;
+function tenantScopeOwner(tenantId: string, owner: string): string {
+  return scopedKey(tenantId, owner);
+}
+
+function tenantScopeMemoryStore(store: PersistentMemoryStore, tenantId: string): PersistentMemoryStore {
   return {
-    ...event,
-    part: sanitizePart(event.part),
+    async loadBlock(scope, owner, key) {
+      return store.loadBlock(scope, tenantScopeOwner(tenantId, owner), key);
+    },
+    async saveBlock(block, owner) {
+      return store.saveBlock(block, tenantScopeOwner(tenantId, owner));
+    },
+    async deleteBlock(scope, owner, key) {
+      return store.deleteBlock(scope, tenantScopeOwner(tenantId, owner), key);
+    },
+    async listBlocks(scope, owner) {
+      return store.listBlocks(scope, tenantScopeOwner(tenantId, owner));
+    },
   };
 }
 
-function gateMemoryContent(content: string): string {
-  return scanMemoryWrite(content).safe ? content : '';
+function tenantScopeExtractedStore(store: ExtractedValueStore, tenantId: string): ExtractedValueStore {
+  return {
+    async load(scope, owner, slug) {
+      return store.load(scope, tenantScopeOwner(tenantId, owner), slug);
+    },
+    async save(value, owner) {
+      return store.save(value, tenantScopeOwner(tenantId, owner));
+    },
+    async delete(scope, owner, slug) {
+      return store.delete(scope, tenantScopeOwner(tenantId, owner), slug);
+    },
+  };
 }
 
-function scrubExtractedValue(value: unknown): unknown {
-  const scrubbed = scrubSecrets({
-    channel: 'internal',
-    type: 'extraction',
-    payload: { slug: '', value, changed: false },
-  });
-  if (scrubbed.type !== 'extraction') return value;
-  return scrubbed.payload.value;
-}
-
-function memoryOwner(tenantId: string, userId: string): string {
-  return scopedKey(tenantId, userId);
-}
-
-function ndjsonEventStream(
-  source: AsyncIterable<LoggedEvent>,
-  streamFilter: StreamEventFilter,
-): ReadableStream<Uint8Array> {
+function ndjsonResponse(source: AsyncIterable<LoggedEvent>): Response {
   const encoder = new TextEncoder();
   let cancelled = false;
-  return new ReadableStream({
+  const body = new ReadableStream({
     async start(controller) {
       try {
         for await (const event of source) {
           if (cancelled) break;
-          const filtered = filterLoggedEvent(event, streamFilter);
-          if (!filtered) continue;
-          controller.enqueue(encoder.encode(`${JSON.stringify(filtered)}\n`));
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
         }
         if (!cancelled) controller.close();
       } catch (error) {
@@ -173,48 +157,61 @@ function ndjsonEventStream(
       cancelled = true;
     },
   });
+  const headers = new Headers({
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    Connection: 'keep-alive',
+  });
+  applyNoBufferingHeaders(headers);
+  return new Response(body, { headers });
 }
 
-async function snapshotVisibleEvents(
-  eventLog: SessionEventLog,
-  sessionId: string,
-  limit: number,
-  streamFilter: StreamEventFilter,
-): Promise<{ events: LoggedEvent[]; cursorIndex: number }> {
-  const tail = await eventLog.tail(sessionId);
-  if (tail < 0) {
-    return { events: [], cursorIndex: -1 };
-  }
-
-  const visible: LoggedEvent[] = [];
-  for (let index = tail; index >= 0 && visible.length < limit; index -= 1) {
-    const { events } = await eventLog.read(sessionId, index, 1);
-    if (events.length === 0) continue;
-    const filtered = filterLoggedEvent(events[0]!, streamFilter);
-    if (filtered) visible.unshift(filtered);
-  }
-
-  const cursorIndex = visible.length > 0 ? visible[visible.length - 1]!.index : -1;
-  return { events: visible, cursorIndex };
-}
-
-async function* boundedEventFollow(
-  eventLog: SessionEventLog,
-  sessionId: string,
-  from: number,
-  endIndex: number,
-): AsyncGenerator<LoggedEvent> {
-  let cursor = from;
-  while (cursor <= endIndex) {
-    const { events, next } = await eventLog.read(sessionId, cursor);
-    if (events.length === 0) break;
-    for (const event of events) {
-      if (event.index > endIndex) return;
-      yield event;
-    }
-    if (next <= cursor) break;
-    cursor = next;
-  }
+function buildMemoryDeps(
+  blockStore: PersistentMemoryStore | undefined,
+  extractedStore: ExtractedValueStore,
+  memoryConfig: { extract?: Extractor<unknown>[] } | undefined,
+  userOwner: string,
+  agentOwner: string,
+): SessionRouteDeps['memory'] {
+  return {
+    readBlocks: async () => {
+      const blocks: Array<{ key: string; scope: string; content: string; charLimit: number }> = [];
+      if (!blockStore) return blocks;
+      const scopes: Array<{ scope: MemoryBlockScope; owner: string }> = [
+        { scope: 'user', owner: userOwner },
+        { scope: 'shared', owner: userOwner },
+        { scope: 'agent', owner: agentOwner },
+      ];
+      for (const { scope, owner } of scopes) {
+        const keys = await blockStore.listBlocks(scope, owner);
+        for (const key of keys) {
+          const block = await blockStore.loadBlock(scope, owner, key);
+          if (!block) continue;
+          blocks.push({
+            key: block.key,
+            scope: block.scope,
+            content: block.content,
+            charLimit: block.charLimit,
+          });
+        }
+      }
+      return blocks;
+    },
+    readExtracted: async () => {
+      const extracted: Array<{ slug: string; scope: string; value: unknown; updatedAt: string }> = [];
+      for (const extractor of memoryConfig?.extract ?? []) {
+        const owner = extractor.scope === 'agent' ? agentOwner : userOwner;
+        const value = await extractedStore.load(extractor.scope, owner, extractor.slug);
+        if (!value) continue;
+        extracted.push({
+          slug: value.slug,
+          scope: value.scope,
+          value: value.value,
+          updatedAt: value.updatedAt,
+        });
+      }
+      return extracted;
+    },
+  };
 }
 
 export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
@@ -278,22 +275,20 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     const entity = await options.deploymentStore.getEntity(principal.tenantId, agentEntityId);
     if (!entity) return c.json({ error: 'agent not found' }, 404);
 
-    const from = parseNonNegativeInt(c.req.query('from'), 0, 'from');
-    if (from === null) return c.json({ error: 'from must be a non-negative integer' }, 400);
-    const follow = parseFollow(c.req.query('follow'));
     const sessionId = scopedKey(principal.tenantId, c.req.param('sessionId'));
-
-    const source = follow
-      ? eventLog.follow(sessionId, from, c.req.raw.signal)
-      : boundedEventFollow(eventLog, sessionId, from, await eventLog.tail(sessionId));
-
-    const body = ndjsonEventStream(source, filter);
-    const headers = new Headers({
-      'Content-Type': 'application/x-ndjson; charset=utf-8',
-      Connection: 'keep-alive',
-    });
-    applyNoBufferingHeaders(headers);
-    return new Response(body, { headers });
+    const deps: SessionRouteDeps = {
+      eventLog,
+      memory: { readBlocks: async () => [], readExtracted: async () => [] },
+      cancelTurn: async () => 'no_active_turn',
+      memoryOwner: () => null,
+      abortSignal: c.req.raw.signal,
+    };
+    const outcome = await readEvents(deps, sessionId, {
+      from: c.req.query('from'),
+      follow: c.req.query('follow'),
+    }, filter);
+    if (outcome.ndjson) return ndjsonResponse(outcome.ndjson);
+    return Response.json(outcome.body, { status: outcome.status });
   });
 
   app.get('/v1/agents/:agentEntityId/sessions/:sessionId/snapshot', async c => {
@@ -305,19 +300,18 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     const entity = await options.deploymentStore.getEntity(principal.tenantId, agentEntityId);
     if (!entity) return c.json({ error: 'agent not found' }, 404);
 
-    const rawLimit = parseNonNegativeInt(c.req.query('limit'), SNAPSHOT_LIMIT_DEFAULT, 'limit');
-    if (rawLimit === null) {
-      return c.json({ error: 'limit must be a positive integer' }, 400);
-    }
-    const limit = clampSnapshotLimit(rawLimit);
-
     const rawSessionId = c.req.param('sessionId');
     const sessionId = scopedKey(principal.tenantId, rawSessionId);
-    const { events, cursorIndex } = await snapshotVisibleEvents(eventLog, sessionId, limit, filter);
-    return c.json({
-      events,
-      cursor: { sessionId: rawSessionId, index: cursorIndex },
-    });
+    const deps: SessionRouteDeps = {
+      eventLog,
+      memory: { readBlocks: async () => [], readExtracted: async () => [] },
+      cancelTurn: async () => 'no_active_turn',
+      memoryOwner: () => null,
+    };
+    const outcome = await readSnapshot(deps, sessionId, {
+      limit: c.req.query('limit'),
+    }, filter, rawSessionId);
+    return Response.json(outcome.body, { status: outcome.status });
   });
 
   app.post('/v1/agents/:agentEntityId/sessions/:sessionId/cancel', async c => {
@@ -329,10 +323,19 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     if (!entity) return c.json({ error: 'agent not found' }, 404);
 
     const sessionKey = scopedKey(principal.tenantId, c.req.param('sessionId'));
-    const active = activeTurns.get(sessionKey);
-    if (!active) return c.json({ status: 'no_active_turn' });
-    active.abort('cancelled');
-    return c.json({ status: 'cancelled' });
+    const deps: SessionRouteDeps = {
+      eventLog: eventLog!,
+      memory: { readBlocks: async () => [], readExtracted: async () => [] },
+      cancelTurn: async () => {
+        const active = activeTurns.get(sessionKey);
+        if (!active) return 'no_active_turn';
+        active.abort('cancelled');
+        return 'cancelled';
+      },
+      memoryOwner: () => null,
+    };
+    const outcome = await cancelSession(deps, sessionKey);
+    return Response.json(outcome.body, { status: outcome.status });
   });
 
   app.get('/v1/agents/:agentEntityId/users/:userId/memory', async c => {
@@ -340,9 +343,6 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     if (!principal) return c.json({ error: 'unauthorized' }, 401);
 
     const requestedUserId = c.req.param('userId');
-    if (principal.userId !== requestedUserId) {
-      return c.json({ blocks: [], extracted: [] });
-    }
 
     try {
       const agentEntityId = c.req.param('agentEntityId');
@@ -358,59 +358,24 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
           ? resolveWorkingMemoryStore(workingMemory, options.runtimeConfig?.defaultWorkingMemoryStore)
           : undefined);
       const extractedStore = resolveExtractedValueStore(options.runtimeConfig?.extractedValueStore);
-      const scopedUserOwner = memoryOwner(principal.tenantId, requestedUserId);
-      const scopedAgentOwner = scopedKey(principal.tenantId, bound.agent.id);
 
-      const blocks: Array<{
-        key: string;
-        scope: MemoryBlockScope;
-        chars: number;
-        limit: number;
-        content: string;
-      }> = [];
-
-      if (blockStore) {
-        const scopes: Array<{ scope: MemoryBlockScope; owner: string }> = [
-          { scope: 'user', owner: scopedUserOwner },
-          { scope: 'shared', owner: scopedUserOwner },
-          { scope: 'agent', owner: scopedAgentOwner },
-        ];
-        for (const { scope, owner } of scopes) {
-          const keys = await blockStore.listBlocks(scope, owner);
-          for (const key of keys) {
-            const block = await blockStore.loadBlock(scope, owner, key);
-            if (!block) continue;
-            const content = gateMemoryContent(block.content);
-            blocks.push({
-              key: block.key,
-              scope: block.scope,
-              chars: content.length,
-              limit: block.charLimit,
-              content,
-            });
-          }
-        }
-      }
-
-      const extracted: Array<{
-        slug: string;
-        scope: MemoryBlockScope;
-        value: unknown;
-        updatedAt: string;
-      }> = [];
-      for (const extractor of memoryConfig?.extract ?? []) {
-        const owner = extractor.scope === 'agent' ? scopedAgentOwner : scopedUserOwner;
-        const value = await extractedStore.load(extractor.scope, owner, extractor.slug);
-        if (!value) continue;
-        extracted.push({
-          slug: value.slug,
-          scope: value.scope,
-          value: scrubExtractedValue(value.value),
-          updatedAt: value.updatedAt,
-        });
-      }
-
-      return c.json({ blocks, extracted });
+      const deps: SessionRouteDeps = {
+        eventLog: eventLog!,
+        memory: buildMemoryDeps(
+          blockStore,
+          extractedStore,
+          memoryConfig,
+          scopedKey(principal.tenantId, requestedUserId),
+          scopedKey(principal.tenantId, bound.agent.id),
+        ),
+        cancelTurn: async () => 'no_active_turn',
+        // Scoped, and the run() call below writes under the same key. A userId is an auth-layer
+        // string with no cross-tenant uniqueness guarantee, so comparing userId to userId is not a
+        // tenancy check — two tenants can both have "alice". The tenant has to be in the key.
+        memoryOwner: (p, userId) => (p.userId === userId ? scopedKey(p.tenantId, userId) : null),
+      };
+      const outcome = await readMemory(deps, principal, requestedUserId);
+      return Response.json(outcome.body, { status: outcome.status });
     } catch (error) {
       const status = statusFor(error);
       const message = status === 500 ? 'internal deployment error' : (error as Error).message;
@@ -448,12 +413,18 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
       // Captured after the guard: the narrowing does not reach into the
       // generator declared below.
       const heldLease = lease;
+      const baseMemoryStore = options.runtimeConfig?.defaultWorkingMemoryStore;
+      const baseExtractedStore = resolveExtractedValueStore(options.runtimeConfig?.extractedValueStore);
       const runtime = createRuntime({
         ...options.runtimeConfig,
         agents: [bound.agent],
         defaultAgentId: bound.agent.id,
         sessionStore: options.sessionStore,
         eventLog,
+        ...(baseMemoryStore
+          ? { defaultWorkingMemoryStore: tenantScopeMemoryStore(baseMemoryStore, principal.tenantId) }
+          : {}),
+        extractedValueStore: tenantScopeExtractedStore(baseExtractedStore, principal.tenantId),
       });
 
       const abort = new AbortController();
@@ -474,7 +445,9 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         // traces, durable run state — inherits its isolation from this one
         // composition, so it happens once, here.
         sessionId: sessionKey,
-        userId: principal.userId,
+        // Same scoped key the memory route reads under; a raw owner here would put every
+        // tenant's memory in one keyspace and make the route's tenancy check cosmetic.
+        userId: scopedKey(principal.tenantId, principal.userId),
         idempotencyKey,
         abortSignal: abort.signal,
         deployment: bound.deployment,

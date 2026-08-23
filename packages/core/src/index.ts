@@ -597,6 +597,17 @@ export {
   type MemorySessionEventLogOptions,
   type SessionEventLog,
 } from './events/SessionEventLog.js';
+export {
+  readEvents,
+  readSnapshot,
+  cancelSession,
+  readMemory,
+  sessionRouteParsing,
+  type SessionRouteDeps,
+  type SessionEventsQuery,
+  type SessionSnapshotQuery,
+  type RouteOutcome,
+} from './events/sessionRoutes.js';
 export { PART_CHANNEL } from './types/stream.js';
 export type {
   StreamChannel,

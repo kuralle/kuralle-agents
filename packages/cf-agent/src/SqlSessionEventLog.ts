@@ -171,12 +171,19 @@ export class SqlSessionEventLog implements SessionEventLog {
           resolve();
           return;
         }
-        const timer = setTimeout(resolve, FOLLOW_POLL_MS);
+        const timer = setTimeout(() => {
+          cleanup();
+          resolve();
+        }, FOLLOW_POLL_MS);
         const onAbort = () => {
-          clearTimeout(timer);
+          cleanup();
           resolve();
         };
-        signal?.addEventListener('abort', onAbort, { once: true });
+        const cleanup = () => {
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
+        };
+        signal?.addEventListener('abort', onAbort);
       });
     }
   }
