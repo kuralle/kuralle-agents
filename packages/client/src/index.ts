@@ -1,7 +1,6 @@
 export { createClient } from './client.js';
 export {
   clearHostedConnection,
-  connectionFromArgs,
   connectionToTarget,
   hostedConfigPath,
   inferTargetKind,

@@ -1,7 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Command } from 'commander';
 import type { Auth, Target } from './types.js';
 
 export type HostedTransport = 'http' | 'cloudflare';
@@ -10,27 +9,6 @@ export interface HostedConnection {
   server: string;
   transport?: HostedTransport;
   agentName?: string;
-}
-
-function connectionFlagsCommand(): Command {
-  return new Command()
-    .option('--server <url>', 'hosted server URL')
-    .option('--transport <kind>', 'hosted transport')
-    .option('--agent-name <name>', 'hosted agent name')
-    .option('--local', 'ignore saved hosted connection')
-    .allowUnknownOption()
-    .allowExcessArguments();
-}
-
-function parseConnectionFlags(argv: string[]): {
-  server?: string;
-  transport?: string;
-  agentName?: string;
-  local?: boolean;
-} {
-  const cmd = connectionFlagsCommand();
-  cmd.parse(argv, { from: 'user' });
-  return cmd.opts();
 }
 
 export function hostedConfigPath(): string {
@@ -120,25 +98,42 @@ export async function readHostedConnection(): Promise<HostedConnection | undefin
   }
 }
 
-export async function resolveHostedConnection(argv: string[]): Promise<HostedConnection | undefined> {
-  const flags = parseConnectionFlags(argv);
-  if (flags.local) return undefined;
-  const server = flags.server || process.env.KURALLE_SERVER?.trim();
+/**
+ * Resolve a target from already-parsed inputs. Each surface parses its own — the CLI with its
+ * argument parser, the TUI from a slash command — so this library carries no argv parsing and
+ * therefore no dependency on one.
+ */
+export interface HostedConnectionInput {
+  server?: string;
+  transport?: string;
+  agentName?: string;
+  local?: boolean;
+}
+
+export async function resolveHostedConnection(
+  input: HostedConnectionInput = {},
+): Promise<HostedConnection | undefined> {
+  if (input.local) return undefined;
+  const server = input.server || process.env.KURALLE_SERVER?.trim();
   if (server) {
     return validate({
       server,
       transport: parseTransport(
-        flags.transport || process.env.KURALLE_TRANSPORT,
+        input.transport || process.env.KURALLE_TRANSPORT,
         normalizeServer(server),
       ),
-      agentName: flags.agentName || process.env.KURALLE_AGENT_NAME,
+      agentName: input.agentName || process.env.KURALLE_AGENT_NAME,
     });
   }
   return readHostedConnection();
 }
 
-export async function resolveHostedTarget(argv: string[], auth?: Auth): Promise<Target | undefined> {
-  const connection = await resolveHostedConnection(argv);
+
+export async function resolveHostedTarget(
+  input: HostedConnectionInput = {},
+  auth?: Auth,
+): Promise<Target | undefined> {
+  const connection = await resolveHostedConnection(input);
   return connection ? connectionToTarget(connection, auth) : undefined;
 }
 
@@ -160,18 +155,3 @@ export async function clearHostedConnection(): Promise<boolean> {
   }
 }
 
-export function connectionFromArgs(argv: string[]): HostedConnection {
-  const cmd = new Command('connect')
-    .option('--transport <kind>', 'hosted transport')
-    .option('--agent-name <name>', 'hosted agent name')
-    .argument('<server>', 'server URL');
-  cmd.parse(argv, { from: 'user' });
-  const server = cmd.args[0];
-  if (!server) throw new Error('Usage: kuralle connect <server> [--transport http|cloudflare] [--agent-name <name>]');
-  const opts = cmd.opts<{ transport?: string; agentName?: string }>();
-  return validate({
-    server,
-    transport: parseTransport(opts.transport, normalizeServer(server)),
-    agentName: opts.agentName,
-  });
-}

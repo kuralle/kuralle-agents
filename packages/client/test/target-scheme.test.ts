@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   clearHostedConnection,
-  connectionFromArgs,
   connectionToTarget,
   inferTargetKind,
   readHostedConnection,
@@ -63,38 +62,26 @@ describe('target scheme inference', () => {
       url: 'wss://agent.example',
       agentName: 'pharmacy-agent',
     });
-    expect(connectionFromArgs(['https://agent.example', '--agent-name', 'guide-agent'])).toEqual({
-      server: 'https://agent.example',
-      transport: 'http',
-      agentName: 'guide-agent',
-    });
-    expect(connectionFromArgs(['wss://agent.example', '--agent-name', 'guide-agent'])).toEqual({
-      server: 'wss://agent.example',
-      transport: 'cloudflare',
-      agentName: 'guide-agent',
-    });
+    // Argv parsing belongs to whichever surface is parsing — the CLI has an argument parser, the
+    // TUI has a slash command. The library's job is only to infer the transport from the scheme.
+    expect(inferTargetKind('https://agent.example')).toBe('http');
+    expect(inferTargetKind('http://agent.example')).toBe('http');
+    expect(inferTargetKind('wss://agent.example')).toBe('cloudflare');
+    expect(inferTargetKind('ws://agent.example')).toBe('cloudflare');
+    expect(inferTargetKind('./agent.ts')).toBe('local');
   });
 
-  it('lets --transport override scheme inference', () => {
-    expect(connectionFromArgs([
-      'https://agent.example',
-      '--transport',
-      'cloudflare',
-      '--agent-name',
-      'guide-agent',
-    ])).toEqual({
+  it('lets an explicit transport override scheme inference', async () => {
+    // https:// infers http; an origin serving the native Agents protocol needs the override.
+    const connection = await resolveHostedConnection({
       server: 'https://agent.example',
       transport: 'cloudflare',
-      agentName: 'guide-agent',
+      agentName: 'pharmacy-agent',
     });
-    expect(connectionToTarget({
-      server: 'wss://agent.example',
-      transport: 'http',
-      agentName: 'guide-agent',
-    })).toEqual({
-      kind: 'http',
-      url: 'wss://agent.example',
-      agentName: 'guide-agent',
+    expect(connection).toEqual({
+      server: 'https://agent.example',
+      transport: 'cloudflare',
+      agentName: 'pharmacy-agent',
     });
   });
 
@@ -118,7 +105,7 @@ describe('hosted connection persistence', () => {
       transport: 'cloudflare',
       agentName: 'pharmacy-agent',
     });
-    expect(await resolveHostedConnection(['chat', '--local'])).toBeUndefined();
+    expect(await resolveHostedConnection({ local: true })).toBeUndefined();
     expect(await clearHostedConnection()).toBe(true);
   });
 });

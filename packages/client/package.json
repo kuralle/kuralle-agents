@@ -7,7 +7,7 @@
     "directory": "packages/client"
   },
   "version": "0.23.2",
-  "description": "Pure StreamPart → TurnView reducer shared by the Kuralle CLI and TUI",
+  "description": "Pure StreamPart \u2192 TurnView reducer shared by the Kuralle CLI and TUI",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,7 +31,6 @@
   ],
   "dependencies": {
     "@kuralle-agents/core": "workspace:*",
-    "commander": "^14.0.0",
     "ws": "^8.21.1"
   },
   "devDependencies": {
