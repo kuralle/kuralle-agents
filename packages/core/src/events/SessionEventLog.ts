@@ -254,7 +254,10 @@ export class MemorySessionEventLog implements SessionEventLog {
   }
 
   private enforceCeiling(state: SessionState): void {
-    const targetCount = Math.floor(this.maxEvents * 0.9);
+    // Batching the sweep to 90% keeps markers to a small fraction of retained records at real
+    // ceilings, but floors to 0 below 10 — so maxEvents: 1 meant "keep one" and delivered "keep
+    // none, usually". Everything dropped was still correctly marked; the count was just a lie.
+    const targetCount = Math.max(1, Math.floor(this.maxEvents * 0.9));
 
     while (state.events.length > this.maxEvents || state.bytesUsed > this.maxBytes) {
       let removedCount = 0;

@@ -549,3 +549,28 @@ describe('serialization happens exactly once per event', () => {
     expect(calls).toBe(1);
   });
 });
+
+describe('a small ceiling never empties the log', () => {
+  // The sweep batches to 90% of the ceiling so markers stay a small fraction of retained records,
+  // which means the retained count oscillates between that target and maxEvents — a ceiling is a
+  // maximum, not a guaranteed count. What it must never be is zero: below a ceiling of 10 the
+  // target floored to 0, so maxEvents: 1 read as "keep one event" and delivered "keep none" on
+  // every even append. Everything dropped was still correctly marked; the count was the lie.
+  it('retains at least one real event and always the newest, at maxEvents 1, 2 and 3', async () => {
+    for (const maxEvents of [1, 2, 3]) {
+      const eventLog = new MemorySessionEventLog({ maxEvents });
+
+      for (let index = 0; index < 50; index += 1) {
+        await eventLog.append('small-ceiling', [turnEnd()], 'r1');
+
+        const tail = await eventLog.tail('small-ceiling');
+        const { events } = await eventLog.read('small-ceiling', 0);
+        const real = events.filter((event) => event.part.type !== 'log-truncated');
+
+        expect(real.length).toBeGreaterThanOrEqual(1);
+        expect(real.length).toBeLessThanOrEqual(maxEvents);
+        expect(real[real.length - 1]!.index).toBe(tail);
+      }
+    }
+  });
+});
