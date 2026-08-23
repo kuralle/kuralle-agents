@@ -178,14 +178,23 @@ while true; do
 done
 ```
 
-**The monitor must detect a HUNG worker, not just a dead one.** Watching
-`kill -0` alone reports "still running" for a process that stopped doing anything —
-observed on this repo: a dispatch sat for **99 minutes** with its CPU time moving 0.01s
-in 20 seconds and no file written, while the monitor reported it alive the whole time.
-Sample the leaf's **CPU time** and the tree's **mtime** between polls; N consecutive flat
-samples is a stall, and a stall is a terminal state that needs the engine.
-`stall-watch.sh` beside this file implements it — use it rather than re-deriving a
-liveness-only loop.
+**The monitor must detect a HUNG worker, not just a dead one — and both naive fixes
+are wrong.** Watching `kill -0` alone reports "still running" for a process that stopped
+doing anything: one dispatch here sat **99 minutes** with its CPU moving 0.01s in 20
+seconds and no file written, while the monitor called it alive throughout. But the two
+obvious corrections each produced a *false* stall on the very next wave:
+
+- **File mtime alone.** A worker legitimately pauses minutes between write bursts while it
+  reads and thinks. Three healthy workers were flagged simultaneously — CPU was climbing
+  and each had already written ten files.
+- **`ps … | head -1`.** That picks the *wrapper* shell, whose CPU sits at `0:00.01`
+  forever, so every worker reads as stalled from the first poll.
+
+Take the **max** CPU across matching processes (the leaf burns CPU, the wrapper does not),
+and require CPU flat **and** no writes together before calling it. A real hang stops
+consuming CPU; thinking does not. `stall-watch.sh` beside this file implements exactly
+that — use it rather than re-deriving a loop, which is how both false positives above got
+written.
 
 Three rules that make it useful rather than decorative:
 
