@@ -114,13 +114,17 @@ export function fileSessionEventLog(path: string): SessionEventLog {
       };
       serialized = serializeOnce(poison);
       if (serialized === null) return;
-      poison.eventId = stableEventId(serialized.json);
-      appendFileSync(path, `${serialized.json}\n`);
+      const id = stableEventId(serialized.json);
+      poison.eventId = id;
+      const line = serialized.json.replace('"eventId":""', `"eventId":${JSON.stringify(id)}`);
+      appendFileSync(path, `${line}\n`);
       return;
     }
 
-    draft.eventId = stableEventId(serialized.json);
-    appendFileSync(path, `${serialized.json}\n`);
+    const id = stableEventId(serialized.json);
+    draft.eventId = id;
+    const line = serialized.json.replace('"eventId":""', `"eventId":${JSON.stringify(id)}`);
+    appendFileSync(path, `${line}\n`);
   };
 
   const doAppend = (sessionId: string, parts: StreamPart[], runId: string): void => {

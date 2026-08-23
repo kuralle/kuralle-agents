@@ -5,7 +5,8 @@
  * survive a fresh process reading from index 0.
  */
 import { describe, expect, it } from 'bun:test';
-import { appendFileSync, mkdtempSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { appendFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { StreamPart } from '@kuralle-agents/core';
@@ -19,6 +20,14 @@ function tmpLog(name = 'events.jsonl'): string {
 
 function turnEnd(): StreamPart {
   return { channel: 'internal', type: 'turn-end', payload: {} };
+}
+
+function readRawLines(path: string): string[] {
+  return readFileSync(path, 'utf8').split('\n').filter(Boolean);
+}
+
+function stableEventId(serialized: string): string {
+  return createHash('sha256').update(serialized).digest('hex').slice(0, 32);
 }
 
 async function spawnWorker(path: string, mode: 'write-first' | 'write-second'): Promise<number> {
@@ -48,6 +57,50 @@ describe('test:cli-event-log-file', () => {
     const { events } = await reopened.read('cross-sess', 0);
     expect(events.map((event) => event.index)).toEqual([0, 1, 2]);
     expect(await reopened.tail('cross-sess')).toBe(2);
+  });
+
+  it('persists a non-empty eventId on every appended line', async () => {
+    const path = tmpLog();
+    const log = fileSessionEventLog(path);
+    await log.append('sess', [turnEnd(), turnEnd()], 'run-1');
+
+    const lines = readRawLines(path);
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      const record = JSON.parse(line) as { eventId: string };
+      expect(record.eventId).toBeTruthy();
+    }
+  });
+
+  it('derives a stable eventId from id-less content at the same index', async () => {
+    const path = tmpLog();
+    const log = fileSessionEventLog(path);
+    const part = turnEnd();
+    await log.append('sess', [part], 'run-1');
+
+    // Blank the id in the raw line rather than rebuilding the record by hand: the id is derived
+    // from the serialized bytes, so re-serializing from parsed fields would pass or fail on key
+    // order rather than on the property under test.
+    const line = readRawLines(path)[0]!;
+    const record = JSON.parse(line) as { eventId: string };
+    const idLess = line.replace(`"eventId":${JSON.stringify(record.eventId)}`, '"eventId":""');
+
+    expect(record.eventId).toBe(stableEventId(idLess));
+  });
+
+  it('splices eventId at the top level even when sessionId contains eventId":""', async () => {
+    const sessionId = 'prefix eventId":"" suffix';
+    const path = tmpLog();
+    const log = fileSessionEventLog(path);
+    await log.append(sessionId, [turnEnd()], 'run-1');
+
+    const line = readRawLines(path)[0]!;
+    const record = JSON.parse(line) as { sessionId: string; eventId: string };
+    expect(record.sessionId).toBe(sessionId);
+    expect(record.eventId).toBeTruthy();
+
+    const idLess = line.replace(`"eventId":${JSON.stringify(record.eventId)}`, '"eventId":""');
+    expect(record.eventId).toBe(stableEventId(idLess));
   });
 
   it('a torn final line does not fail the read', async () => {
