@@ -1,5 +1,4 @@
-import type { StreamPart } from '@kuralle-agents/core';
-import type { LoggedEvent } from '../src/reduce.js';
+import type { LoggedEvent, StreamPart } from '@kuralle-agents/core';
 
 export function logged(
   index: number,

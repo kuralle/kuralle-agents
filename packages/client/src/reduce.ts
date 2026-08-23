@@ -1,16 +1,11 @@
 import type {
   ContextCompactedPayload,
   HitlInterrupt,
+  LoggedEvent,
   StreamPart,
 } from '@kuralle-agents/core';
 
-export interface LoggedEvent {
-  index: number;
-  eventId: string;
-  runId: string;
-  at: number;
-  part: StreamPart;
-}
+export type { LoggedEvent };
 
 export type TurnStatus =
   | 'idle'
