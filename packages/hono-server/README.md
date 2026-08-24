@@ -130,6 +130,22 @@ Or use `createKuralleSseChatRouter` for a router that always emits raw JSON-SSE 
 | `DELETE` | `/api/session/:id` | Delete session |
 | `POST` | `/api/sessions/:id/outcome` | Mark conversation outcome |
 | `GET`  | `/api/sessions/:id/audit` | Replay audit log |
+
+## Endpoints (`createDeploymentRouter`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/agents/:agent/threads/:thread/messages` | Start a turn. **Default:** AI SDK `UIMessageStream`. **`?format=events`:** `LoggedEvent` NDJSON. **`?format=raw`:** `StreamPart` SSE |
+| `POST` | `/v1/agents/:agent/threads/:thread/resume` | Deliver a signal or approval into a paused turn; same three wires |
+| `GET`  | `/v1/agents/:agent/sessions/:session/events` | Session event log from `?from=`; `?follow=false` for the backlog alone |
+| `GET`  | `/v1/agents/:agent/sessions/:session/snapshot` | Session tail plus cursor |
+| `POST` | `/v1/agents/:agent/sessions/:session/cancel` | Abort the active turn |
+| `GET`  | `/v1/agents/:agent/users/:user/memory` | Working and extracted memory |
+
+`?format=events` needs an event log; without one the route answers `503` before
+starting a turn. It is the wire `@kuralle-agents/client` speaks, because only it
+carries the log's `index`, `eventId` and `at` — a `UIMessage` stream has nowhere
+to put them, and a client that invents them cannot merge a turn with `/snapshot`.
 | `POST` | `/api/sessions/:id/csat` | Record CSAT score (1–5) |
 | `POST` | `/api/session/:id/compress` | Trigger manual compaction |
 | `GET`  | `/health` | Health check |

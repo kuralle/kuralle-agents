@@ -182,9 +182,41 @@ const transport = new DefaultChatTransport({
 const { messages, sendMessage } = useChat<KuralleUIMessage>({ id: threadId, transport });
 ```
 
-Append `?format=raw` for the named-event `StreamPart` SSE, the same negotiation
-`/api/chat/sse` and `/api/flow/sse` already use. That form is for non-browser
-consumers — CLIs, webhooks, custom transports.
+The wire is negotiated, not sniffed — a client parses the format it asked for:
+
+| Query | Wire | For |
+|-------|------|-----|
+| *(none)* | AI SDK `UIMessageStream` | browsers, `useChat` |
+| `?format=events` | `LoggedEvent` NDJSON, the encoding `/events` serves | `@kuralle-agents/client`, the CLI and TUI |
+| `?format=raw` | named-event `StreamPart` SSE | pre-0.24 non-browser consumers |
+
+`?format=events` carries the session log's envelope — `index`, `eventId` and `at`
+assigned by `SessionEventLog`. That is what lets a client merge a live turn with a
+later `/snapshot` without seeing each event twice, and what makes a trace show the
+server's own durations rather than the client's receive times. A `UIMessage` stream
+has no room for any of it, which is why the two wires exist rather than one.
+
+It requires an event log. A deployment configured without one answers `503` to
+`?format=events`, before a turn starts.
+
+## Resuming a paused turn
+
+A turn that stops for an approval or a signal is continued on the thread it paused
+on:
+
+```bash
+curl -N -X POST \
+  'https://my-agent.example.com/v1/agents/support/threads/thread-42/resume?format=events' \
+  -H 'Authorization: Bearer $KURALLE_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"signal":{"signalId":"sig-1","requestId":"req-1","name":"__approval","decision":"approve"}}'
+```
+
+It answers the same three wires as `/messages`. The actor is taken from the
+credential and never from the body: a client that could name its own actor could
+approve as anyone.
+
+`@kuralle-agents/client` calls this for you — `session.respond([...])`.
 
 > **Transient parts never reach `message.parts`**
 >

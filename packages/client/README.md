@@ -71,3 +71,31 @@ const result = await turn.result();
 
 `buildApprovalResponse()` projects the same approval payload used by the CLI and TUI. The package
 does not render a terminal UI or choose a transport policy; those belong to the consuming surface.
+
+## Hosted deployments
+
+Point the client at a deployment by naming the agent, and it speaks the
+deployment's logged-event wire:
+
+```ts
+const client = createClient({
+  kind: 'http',
+  url: 'https://my-agent.example.com',
+  agentName: 'support',
+  auth: { token: process.env.KURALLE_TOKEN },
+});
+```
+
+The turn route is asked for `?format=events`, so every event arrives with the
+`index`, `eventId` and `at` the server's `SessionEventLog` assigned. `send()`,
+`respond()`, `stream()` and `snapshot()` therefore all speak one identity, and a
+live turn merged with a later `snapshot()` yields one copy of each event rather
+than two.
+
+A deployment must be on the same version as the client. A server older than
+0.24.0 does not know `format=events` and answers its default wire instead; the
+client reports that mismatch rather than mis-parsing it.
+
+Without `agentName` the target is a single-process chat server (`/api/chat`).
+That has no event log behind it, so `stream()` and `snapshot()` are unavailable
+and a turn's envelope is local to that one response.
