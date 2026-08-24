@@ -196,6 +196,13 @@ kuralle disconnect
 The saved connection contains the server, transport, and optional agent name. Credentials are not
 saved; provide them through the environment when the hosted operation runs.
 
+> **Match the deployment's version**
+>
+> From 0.24.0 a hosted turn is read from the deployment's session event log, over
+> `?format=events`. A server older than 0.24.0 does not know that format and
+> answers its browser wire instead; the client reports the mismatch rather than
+> mis-parsing it. Upgrade the deployment and the CLI together.
+
 `sim`, `trace`, `build`, and `start` remain available for simulation, persisted trace inspection,
 artifact creation, and starting a built Node artifact. See the command descriptions above and the
 [deployment guide](./deployment.md) for the surrounding runtime setup.

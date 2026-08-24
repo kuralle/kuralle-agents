@@ -247,6 +247,11 @@ Every one of them accepts `?format=raw` to get the older named-event `StreamPart
 instead. Reach for it only for a non-browser consumer that already parses `StreamPart`
 directly — a CLI, a webhook bridge, a log tap.
 
+The deployment thread route also accepts `?format=events`, which returns the session
+log's own `LoggedEvent` NDJSON. That is what `@kuralle-agents/client` reads, because it
+is the only one of the three wires carrying the log's `index`, `eventId` and `at`. A
+browser wants none of that, so the preview pane stays on the default.
+
 So the preview pane is `useChat`, and the hook you write supplies only the two things
 `useChat` cannot know: the tenant credential, and an idempotency key per logical send.
 

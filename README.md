@@ -115,7 +115,9 @@ More examples: `packages/core/examples/agents/` — form-filler, transfer-agent,
 | [`@kuralle-agents/redis-store`](https://www.npmjs.com/package/@kuralle-agents/redis-store) | Redis-backed session persistence (`RedisSessionStore`) |
 | [`@kuralle-agents/trace-ui`](https://www.npmjs.com/package/@kuralle-agents/trace-ui) | Embeddable read-only trace waterfall and span detail viewer |
 | [`@kuralle-agents/postgres-store`](https://www.npmjs.com/package/@kuralle-agents/postgres-store) | Postgres-backed session persistence |
-| [`@kuralle-agents/cli`](https://www.npmjs.com/package/@kuralle-agents/cli) | `kuralle` CLI — interactive chat, adaptive send, simulation, trace inspection |
+| [`@kuralle-agents/cli`](https://www.npmjs.com/package/@kuralle-agents/cli) | `kuralle` CLI for agents and scripts — JSON turns, approvals, memory, simulation, trace inspection |
+| [`@kuralle-agents/tui`](https://www.npmjs.com/package/@kuralle-agents/tui) | `kuralle-tui` — the human chat surface, with the trace and memory rail and the approval panel |
+| [`@kuralle-agents/client`](https://www.npmjs.com/package/@kuralle-agents/client) | One `Session` interface over in-process, hosted HTTP, and Cloudflare targets |
 
 ## Documentation
 

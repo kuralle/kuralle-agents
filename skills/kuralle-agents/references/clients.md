@@ -48,9 +48,22 @@ const transport = new DefaultChatTransport({
 const { messages, sendMessage } = useChat<KuralleUIMessage>({ id: threadId, transport });
 ```
 
-Append `?format=raw` on any of these for named-event `StreamPart` JSON-SSE. That
-form is for non-browser consumers — CLIs, webhooks, custom transports. Use
-`createKuralleSseChatRouter` for a router that always emits raw JSON-SSE.
+The wire is negotiated, never sniffed — parse the format you asked for:
+
+| Query | Wire | For |
+|-------|------|-----|
+| *(none)* | AI SDK `UIMessageStream` | browsers, `useChat` |
+| `?format=events` | `LoggedEvent` NDJSON | `@kuralle-agents/client`; deployment thread routes only |
+| `?format=raw` | named-event `StreamPart` JSON-SSE | CLIs, webhooks, custom transports |
+
+`?format=events` carries the envelope `SessionEventLog` assigned — `index`,
+`eventId`, `at` — so a live turn merges with a later `/snapshot` without showing
+each event twice, and durations are the server's rather than the client's receive
+times. A `UIMessage` stream has nowhere to put any of it. It needs an event log;
+a deployment without one answers `503`, before the turn starts. Added in 0.24.0,
+so a client and its deployment must be on the same version.
+
+Use `createKuralleSseChatRouter` for a router that always emits raw JSON-SSE.
 
 Without the router, pipe a `TurnHandle` directly:
 
@@ -167,11 +180,19 @@ person; `operation.args` is the raw call and is for a debug view at most. Offer
 only the buttons in `allowedDecisions`, and respect `deadline` (epoch ms, or
 `null` for none).
 
-Resume with `POST /api/chat/resume`:
+Resume on the route that matches the server you are talking to. **A deployment
+does not serve `/api/chat/resume`** — posting an approval there answers 404:
+
+| Server | Route | Body |
+|--------|-------|------|
+| single-process chat (`createKuralleChatRouter`) | `POST /api/chat/resume` | `sessionId` + `signal` |
+| deployment (`createDeploymentRouter`) | `POST /v1/agents/:agent/threads/:thread/resume` | `signal` only — the thread is in the path |
+
+`@kuralle-agents/client` picks the right one: `session.respond([...])`.
 
 ```jsonc
 {
-  "sessionId": "…",
+  "sessionId": "…",       // chat server only; a deployment takes it from the path
   "signal": {
     "signalId": "…",
     "requestId": "…",      // from the interrupt
@@ -186,10 +207,11 @@ Resume with `POST /api/chat/resume`:
 The response is an SSE stream of the resumed turn, so treat it like any other
 turn rather than a fire-and-forget POST.
 
-**The approver identity is not yours to send.** The server resolves the actor
-through `resolveSignalActor`, deliberately ignoring anything in the body — a
-client that names its own actor can approve as anyone. Do not add an `actor`
-field expecting it to be honoured.
+**The approver identity is not yours to send.** The chat server resolves the
+actor through `resolveSignalActor` and a deployment takes it from the
+credential; both deliberately ignore anything in the body — a client that names
+its own actor can approve as anyone. Do not add an `actor` field expecting it to
+be honoured.
 
 ### Parts reconcile on `(type, id)`
 

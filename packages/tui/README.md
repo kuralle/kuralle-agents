@@ -19,6 +19,11 @@ Node is not a supported runtime for `kuralle-tui`. Node 26.1+ can expose `bun:ff
 
 With no target, the TUI opens its connect screen. Pass a hosted URL or a local agent path:
 
+> **Match the deployment's version.** From 0.24.0 a hosted turn is read from the
+> deployment's session event log, over `?format=events`. A server older than
+> 0.24.0 does not know that format and answers its browser wire instead; the
+> client reports the mismatch rather than mis-parsing it. Upgrade both together.
+
 ```bash
 bunx kuralle-tui https://my-agent.example.com --agent-name support
 bunx kuralle-tui ./agent.ts

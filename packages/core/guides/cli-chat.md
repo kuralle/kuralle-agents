@@ -32,6 +32,13 @@ If you want a hosted HTTP target, pass its URL:
 bunx kuralle-tui https://my-agent.example.com --agent-name support
 ```
 
+> **Match the deployment's version**
+>
+> From 0.24.0 a hosted turn is read from the deployment's session event log, over
+> `?format=events`. A server older than 0.24.0 does not know that format and
+> answers its browser wire instead; the client reports the mismatch rather than
+> mis-parsing it. Upgrade the deployment and the CLI together.
+
 If you want a local agent, pass its filesystem path:
 
 ```bash

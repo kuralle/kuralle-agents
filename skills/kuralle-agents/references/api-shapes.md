@@ -309,4 +309,6 @@ The runtime assigns one on the first turn.
 
 For a web UI, `POST /api/chat/sse` on `@kuralle-agents/hono-server` returns a
 native AI SDK `UIMessageStream`. Point `useChat<KuralleUIMessage>` at it — no
-bridge. Append `?format=raw` for raw `StreamPart` JSON-SSE.
+bridge. Append `?format=raw` for raw `StreamPart` JSON-SSE, or, on a deployment
+thread route, `?format=events` for the `LoggedEvent` NDJSON that carries the
+session log's `index`, `eventId` and `at`.
