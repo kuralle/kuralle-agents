@@ -6,7 +6,7 @@
     "url": "git+https://github.com/kuralle/kuralle-agents.git",
     "directory": "packages/cli"
   },
-  "version": "0.23.2",
+  "version": "0.24.0",
   "description": "Kuralle CLI — agent send, simulation, trace inspection, and deployment",
   "type": "module",
   "bin": {
