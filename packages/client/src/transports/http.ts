@@ -34,6 +34,13 @@ function pickTimeout(opts?: SendOptions): number {
   return DEFAULT_TIMEOUT_MS;
 }
 
+/**
+ * Wrap a stateless chat response in a local envelope.
+ *
+ * `/api/chat` has no event log behind it, so nothing has assigned these events an identity and
+ * `stream()` and `snapshot()` on such a target already throw. The index space here is this
+ * response and nothing else — never merge it with a session's.
+ */
 async function* partsToLoggedEvents(
   parts: AsyncIterable<StreamPart>,
   sequencer: EventSequencer,
@@ -194,21 +201,61 @@ export class HttpSession implements Session {
 
     const sequencer = new EventSequencer();
     let response: Response;
+    const agentName = this.target.agentName;
+
+    if (agentName) {
+      // A deployment answers both turn kinds on the same wire. `format=events` asks for the turn
+      // as logged events, the same NDJSON `/events` serves: the log owns index, eventId and at, so
+      // this turn merges with a later `/snapshot` on identity the server assigned. The client used
+      // to read the default AI SDK wire here and invent an envelope around it, numbering from 0
+      // while the log numbered from wherever the session already was, so the two never lined up
+      // and every hosted turn rendered twice.
+      const thread = `/v1/agents/${encodeURIComponent(agentName)}` +
+        `/threads/${encodeURIComponent(this.id)}`;
+      response = input.resume
+        // A resume used to post to `/api/chat/resume`, which a deployment does not register, so
+        // every hosted approval answered 404.
+        ? await request(`${thread}/resume?format=events`, { signal: input.resume })
+        : await request(`${thread}/messages?format=events`, { message: input.message }, {
+          ...headers,
+          'idempotency-key': input.opts?.idempotencyKey ?? randomUUID(),
+        });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(`Hosted chat failed (${response.status}): ${detail.slice(0, 500)}`);
+      }
+      const wire = response.headers.get('content-type') || '';
+      if (!wire.includes('ndjson')) {
+        // The server ignored `format=events`, which means it predates the format. Say so, rather
+        // than feeding an AI SDK message stream to an NDJSON reader and reporting a parse error.
+        throw new Error(
+          'Hosted chat returned ' + (wire || 'an unknown format') + ' for format=events. '
+          + 'The server is older than this client; upgrade the deployment to match.',
+        );
+      }
+      // The server ends a turn by logging `done`, so its absence means the stream was cut — a
+      // turn that failed after the response headers were already sent has no other way to say so.
+      // Without this the caller just gets a short, silent, wrong transcript.
+      let sawDone = false;
+      for await (const event of followNdjsonEvents(response, input.opts?.abortSignal)) {
+        sawDone ||= event.part.type === 'done';
+        yield event;
+      }
+      if (!sawDone && !input.opts?.abortSignal?.aborted) {
+        throw new Error('Hosted turn ended before it completed. The server did not finish the turn.');
+      }
+      return;
+    }
 
     if (input.resume) {
       response = await request('/api/chat/resume', {
         sessionId: this.id,
         signal: input.resume,
       });
-    } else if (this.target.agentName) {
-      const path = `/v1/agents/${encodeURIComponent(this.target.agentName)}` +
-        `/threads/${encodeURIComponent(this.id)}/messages`;
-      response = await request(path, { message: input.message }, {
-        ...headers,
-        'idempotency-key': input.opts?.idempotencyKey ?? randomUUID(),
-      });
     } else {
       response = await request('/api/chat', { sessionId: this.id, message: input.message });
+      // Not dead code. `createKuralleChatRouter` mounts `/api/chat/sse` and nothing else, so a
+      // server built with it answers 404 here and the SSE route is the only way in.
       if (response.status === 404 || response.status === 405) {
         response = await request('/api/chat/sse', { sessionId: this.id, message: input.message });
       }

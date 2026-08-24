@@ -95,10 +95,27 @@ describe('hosted HTTP transport', () => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(chunk as Buffer);
       requestBody = JSON.parse(Buffer.concat(chunks).toString());
-      response.setHeader('content-type', 'text/event-stream');
-      response.write('event: text-delta\n');
-      response.write('data: {"delta":"file "}\n\n');
-      response.end('event: text-delta\ndata: {"delta":"agent"}\n\n');
+      // The deployment answers `format=events` with logged events, the same NDJSON `/events`
+      // serves. Indices start at 40 here so a client that invented its own would be visible.
+      const logged = (index: number, delta: string) => `${JSON.stringify({
+        index,
+        eventId: `srv-${index}`,
+        runId: 'run-1',
+        at: 1_000 + index,
+        part: { channel: 'client', type: 'text-delta', payload: { id: 'a', delta } },
+      })}\n`;
+      response.setHeader('content-type', 'application/x-ndjson');
+      response.write(logged(40, 'file '));
+      response.write(logged(41, 'agent'));
+      // The server ends a turn by logging `done`. A stream without one is a cut turn, and the
+      // transport now says so rather than handing back a short transcript.
+      response.end(`${JSON.stringify({
+        index: 42,
+        eventId: 'srv-42',
+        runId: 'run-1',
+        at: 1_042,
+        part: { channel: 'client', type: 'done', payload: { sessionId: 'thread 1' } },
+      })}\n`);
     });
     const origin = await listen(server);
     try {
@@ -113,11 +130,14 @@ describe('hosted HTTP transport', () => {
       const events = await collectEvents(turn);
       await turn.result();
 
-      expect(requestUrl).toBe('/v1/agents/guide-agent/threads/thread%201/messages');
+      expect(requestUrl).toBe('/v1/agents/guide-agent/threads/thread%201/messages?format=events');
       expect(authorization).toBe('Bearer runtime-token');
       expect(idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
       expect(requestBody).toEqual({ message: 'hello' });
       expect(assistantText(events)).toBe('file agent');
+      // The server's identity survives the transport. Inventing one here is the whole defect.
+      expect(events.map((event) => event.index)).toEqual([40, 41, 42]);
+      expect(events.map((event) => event.eventId)).toEqual(['srv-40', 'srv-41', 'srv-42']);
     } finally {
       server.close();
     }

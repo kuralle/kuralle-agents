@@ -16,6 +16,7 @@ import {
   type ExtractedValueStore,
   type HarnessConfig,
   type LoggedEvent,
+  type SignalDelivery,
   type MemoryBlockScope,
   type PersistentMemoryStore,
   type SessionEventLog,
@@ -35,7 +36,7 @@ import {
   type ThreadPin,
 } from '@kuralle-agents/deployment';
 
-import { wantsRawStreamFormat } from './streamFormat.js';
+import { wantsLoggedEventFormat, wantsRawStreamFormat } from './streamFormat.js';
 
 export interface DeploymentPrincipal {
   tenantId: string;
@@ -87,6 +88,31 @@ interface MessageBody {
   message?: unknown;
 }
 
+interface ResumeBody {
+  signal?: {
+    signalId?: unknown;
+    requestId?: unknown;
+    name?: unknown;
+    decision?: 'approve' | 'deny';
+    reason?: string;
+    payload?: unknown;
+    runId?: string;
+  };
+}
+
+/**
+ * What the runtime is asked to do for one turn on a thread.
+ *
+ * A first message and a resumed approval differ only here. Everything around them — pinning the
+ * agent, taking the thread lease, scoping the session key, choosing a wire, releasing the lease —
+ * is identical, and used to exist only on the message path. `respond()` against a deployment
+ * therefore had nowhere to go: the client posted to `/api/chat/resume`, which this router does not
+ * register, and every hosted approval answered 404.
+ */
+type ThreadTurn =
+  | { input: string; idempotencyKey: string }
+  | { signalDelivery: SignalDelivery };
+
 function statusFor(error: unknown): 403 | 404 | 409 | 500 {
   if (!(error instanceof DeploymentError)) return 500;
   if (error.code === 'ACCESS_DENIED') return 403;
@@ -137,6 +163,37 @@ function tenantScopeExtractedStore(store: ExtractedValueStore, tenantId: string)
       return store.delete(scope, tenantScopeOwner(tenantId, owner), slug);
     },
   };
+}
+
+/**
+ * Swap the composed storage key back out for the thread id the caller already knows.
+ *
+ * `scopedKey(tenantId, threadId)` is addressing. It names the tenant and it shows a caller how keys
+ * are built here, so it must not cross this boundary — the raw turn wire has always rewritten it
+ * out of `done`. A logged event carries it twice more, in `runId` and in `done.payload.sessionId`,
+ * and `/events`, `/snapshot` and the turn stream all serve logged events. One rule, applied
+ * wherever one leaves the router.
+ *
+ * `runId` is rewritten only when it IS the session key, which is the ordinary chat case. A durable
+ * flow run mints its own, and that one is the caller's handle on the run.
+ */
+function withoutStorageKey(event: LoggedEvent, sessionKey: string, threadId: string): LoggedEvent {
+  const part = event.part.type === 'done' && event.part.payload.sessionId === sessionKey
+    ? { ...event.part, payload: { ...event.part.payload, sessionId: threadId } }
+    : event.part;
+  return {
+    ...event,
+    runId: event.runId === sessionKey ? threadId : event.runId,
+    part,
+  };
+}
+
+async function* withoutStorageKeys(
+  source: AsyncIterable<LoggedEvent>,
+  sessionKey: string,
+  threadId: string,
+): AsyncGenerator<LoggedEvent> {
+  for await (const event of source) yield withoutStorageKey(event, sessionKey, threadId);
 }
 
 function ndjsonResponse(source: AsyncIterable<LoggedEvent>): Response {
@@ -276,7 +333,8 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     const entity = await options.deploymentStore.getEntity(principal.tenantId, agentEntityId);
     if (!entity) return c.json({ error: 'agent not found' }, 404);
 
-    const sessionId = scopedKey(principal.tenantId, c.req.param('sessionId'));
+    const rawSessionId = c.req.param('sessionId');
+    const sessionId = scopedKey(principal.tenantId, rawSessionId);
     const deps: SessionRouteDeps = {
       eventLog,
       memory: { readBlocks: async () => [], readExtracted: async () => [] },
@@ -288,7 +346,9 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
       from: c.req.query('from'),
       follow: c.req.query('follow'),
     }, filter);
-    if (outcome.ndjson) return ndjsonResponse(outcome.ndjson);
+    if (outcome.ndjson) {
+      return ndjsonResponse(withoutStorageKeys(outcome.ndjson, sessionId, rawSessionId));
+    }
     return Response.json(outcome.body, { status: outcome.status });
   });
 
@@ -312,7 +372,12 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     const outcome = await readSnapshot(deps, sessionId, {
       limit: c.req.query('limit'),
     }, filter, rawSessionId);
-    return Response.json(outcome.body, { status: outcome.status });
+    const body = outcome.body as { events?: LoggedEvent[] };
+    if (!Array.isArray(body.events)) return Response.json(outcome.body, { status: outcome.status });
+    return Response.json({
+      ...body,
+      events: body.events.map(event => withoutStorageKey(event, sessionId, rawSessionId)),
+    }, { status: outcome.status });
   });
 
   app.post('/v1/agents/:agentEntityId/sessions/:sessionId/cancel', async c => {
@@ -385,21 +450,25 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
     }
   });
 
-  app.post('/v1/agents/:agentEntityId/threads/:threadId/messages', async c => {
-    const principal = await options.resolvePrincipal(c);
-    if (!principal) return c.json({ error: 'unauthorized' }, 401);
-    const agentEntityId = c.req.param('agentEntityId');
-    const threadId = c.req.param('threadId');
-    const idempotencyKey = c.req.header('idempotency-key');
-    if (!idempotencyKey || idempotencyKey.length > 256) {
-      return c.json({ error: 'a valid idempotency-key header is required' }, 400);
+  /**
+   * Run one turn on a thread and answer it on the wire the caller negotiated.
+   *
+   * Shared by `/messages` and `/resume` because the only thing that differs between them is the
+   * `ThreadTurn` handed to `runtime.run`.
+   */
+  const executeThreadTurn = async (
+    c: Context,
+    principal: DeploymentPrincipal,
+    agentEntityId: string,
+    threadId: string,
+    turn: ThreadTurn,
+  ): Promise<Response> => {
+    // Negotiated before anything starts. A client asking for logged events on a deployment with no
+    // log has to be refused before a lease is taken, not after a turn is already running.
+    const wantsLoggedEvents = wantsLoggedEventFormat(c);
+    if (wantsLoggedEvents && !eventLog) {
+      return c.json({ error: 'event log not configured' }, 503);
     }
-    const body = await c.req.json<MessageBody>().catch(() => null);
-    if (!body || typeof body.message !== 'string' || !body.message.trim()) {
-      return c.json({ error: 'message is required' }, 400);
-    }
-    if (body.message.length > 64_000) return c.json({ error: 'message exceeds 64000 characters' }, 413);
-    const message = body.message.trim();
 
     try {
       const { bound } = await resolveBoundAgent(principal, agentEntityId, threadId);
@@ -439,8 +508,12 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         });
       }, Math.max(1_000, Math.floor(leaseTtlMs / 3)));
 
+      // The tail before the turn, so the stream below can follow the log from exactly here. Read
+      // before run() so nothing this turn writes is already past it.
+      const turnFromIndex = eventLog ? (await eventLog.tail(sessionKey)) + 1 : 0;
+
       const handle = runtime.run({
-        input: message,
+        ...turn,
         // A thread id arrives from the client; the tenant is resolved from the
         // credential. Everything keyed by `sessionId` downstream — history,
         // traces, durable run state — inherits its isolation from this one
@@ -451,20 +524,33 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         // while the memory route read scopedKey(t, u) — the value was written and never findable.
         // One scoping site, and it is the store wrapper.
         userId: principal.userId,
-        idempotencyKey,
         abortSignal: abort.signal,
         deployment: bound.deployment,
       });
 
+      /** The tail both wires share: settle the turn, then give the lease back whatever happened. */
+      async function settleTurn(): Promise<void> {
+        await handle;
+        if (renewalFailed) throw renewalFailed;
+      }
+      async function releaseTurn(): Promise<void> {
+        clearInterval(timer);
+        activeTurns.delete(sessionKey);
+        await heldLease.release().catch(error => {
+          console.error('[Kuralle] thread lease release failed', error);
+        });
+      }
+
       /**
-       * The filtered part stream both encodings share.
+       * The turn as bare parts, for the AI SDK encoder.
        *
-       * The filter has to run BEFORE the encoder: `harnessToUIMessageStream`
-       * consumes an iterable directly, so applying `streamFilter` afterwards
-       * would mean it never applied at all.
+       * The filter has to run BEFORE the encoder: `harnessToUIMessageStream` consumes an iterable
+       * directly, so applying `streamFilter` afterwards would mean it never applied at all.
        *
-       * Lease release lives in the `finally` so it happens on either path, and
-       * whether the stream completes, errors, or the client disconnects.
+       * This reads `handle.events` rather than the log on purpose. `Runtime.emit` appends to the
+       * log fire-and-forget and swallows the rejection, so a log-fed default path would silently
+       * drop a part from the browser's stream on any write that did not land. This wire carries no
+       * index, so it has nothing to gain from the log in exchange.
        */
       async function* clientParts(): AsyncGenerator<StreamPart> {
         try {
@@ -472,19 +558,59 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
             if (!shouldEmit(part, filter)) continue;
             yield sanitizePart(part);
           }
-          await handle;
-          if (renewalFailed) throw renewalFailed;
+          await settleTurn();
         } finally {
-          clearInterval(timer);
-          activeTurns.delete(sessionKey);
-          await heldLease.release().catch(error => {
-            console.error('[Kuralle] thread lease release failed', error);
-          });
+          await releaseTurn();
         }
       }
 
-      // Raw named-event SSE stays available for non-browser consumers, on the
-      // same `?format=raw` negotiation the sibling chat routes already use.
+      /**
+       * The same turn as logged events, in the encoding `/events` already uses.
+       *
+       * The log assigns `index`, `eventId` and `at`, so a client that reads this wire and then
+       * reads `/snapshot` sees one copy of each event and the server's own timings. The client
+       * used to fabricate that envelope instead, numbering from 0 while the log numbered from
+       * wherever the session already was; a consumer merging the two matched nothing on index and
+       * showed every hosted turn twice.
+       */
+      async function* clientLoggedEvents(log: SessionEventLog): AsyncGenerator<LoggedEvent> {
+        // A successful turn ends this stream by logging `done`. A failed one may never get that
+        // far — a resume delivered to a thread with nothing waiting fails before it emits
+        // anything — so the failure cuts the follow instead. Only the failure path aborts:
+        // `Runtime.emit` appends fire-and-forget, so `done` can land just after the handle
+        // resolves, and cutting on success would truncate the tail of a good turn.
+        const turnFailed = new AbortController();
+        let failure: unknown;
+        const settled = settleTurn().catch(error => {
+          failure = error ?? new Error('turn failed');
+          turnFailed.abort();
+        });
+        const until = AbortSignal.any([abort.signal, turnFailed.signal]);
+
+        try {
+          for await (const event of log.follow(sessionKey, turnFromIndex, until)) {
+            if (!shouldEmit(event.part, filter)) continue;
+            yield withoutStorageKey({ ...event, part: sanitizePart(event.part) }, sessionKey, threadId);
+            if (event.part.type === 'done') break;
+          }
+          await settled;
+          if (failure) throw failure;
+        } finally {
+          await releaseTurn();
+        }
+      }
+
+      // Two consumers, two projections of one turn. A browser renders it from the AI SDK
+      // UIMessage stream; a Kuralle client stores it, so it reads logged events instead — that is
+      // the only wire here carrying the log's index. `sessionId` is the raw thread id; the
+      // composed storage key is addressing and never crosses this boundary.
+      if (wantsLoggedEvents && eventLog) {
+        return ndjsonResponse(clientLoggedEvents(eventLog));
+      }
+
+      // Raw named-event SSE stays available for non-browser consumers, on the same negotiation the
+      // sibling chat routes already use. It predates `format=events` and nothing in this repo asks
+      // for it, but it is a published HTTP surface, so it keeps the exact shape it shipped with.
       if (wantsRawStreamFormat(c)) {
         return streamSSE(c, async stream => {
           try {
@@ -507,9 +633,6 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
         });
       }
 
-      // Default: the one wire every Kuralle runtime speaks. `sessionId` is the
-      // raw thread id — the composed key is addressing and never crosses this
-      // boundary.
       return createUIMessageStreamResponse({
         stream: harnessToUIMessageStream(clientParts(), { sessionId: threadId }),
       });
@@ -519,6 +642,63 @@ export function createDeploymentRouter(options: DeploymentRouterOptions): Hono {
       if (status === 500) console.error('[Kuralle] deployment request failed', error);
       return c.json({ error: message }, status);
     }
+  };
+
+  app.post('/v1/agents/:agentEntityId/threads/:threadId/messages', async c => {
+    const principal = await options.resolvePrincipal(c);
+    if (!principal) return c.json({ error: 'unauthorized' }, 401);
+    const idempotencyKey = c.req.header('idempotency-key');
+    if (!idempotencyKey || idempotencyKey.length > 256) {
+      return c.json({ error: 'a valid idempotency-key header is required' }, 400);
+    }
+    const body = await c.req.json<MessageBody>().catch(() => null);
+    if (!body || typeof body.message !== 'string' || !body.message.trim()) {
+      return c.json({ error: 'message is required' }, 400);
+    }
+    if (body.message.length > 64_000) return c.json({ error: 'message exceeds 64000 characters' }, 413);
+
+    return executeThreadTurn(
+      c,
+      principal,
+      c.req.param('agentEntityId'),
+      c.req.param('threadId'),
+      { input: body.message.trim(), idempotencyKey },
+    );
+  });
+
+  app.post('/v1/agents/:agentEntityId/threads/:threadId/resume', async c => {
+    const principal = await options.resolvePrincipal(c);
+    if (!principal) return c.json({ error: 'unauthorized' }, 401);
+    const body = await c.req.json<ResumeBody>().catch(() => null);
+    const signal = body?.signal;
+    if (
+      typeof signal?.signalId !== 'string' ||
+      typeof signal.requestId !== 'string' ||
+      typeof signal.name !== 'string'
+    ) {
+      return c.json({ error: 'signal { signalId, requestId, name } is required' }, 400);
+    }
+
+    return executeThreadTurn(
+      c,
+      principal,
+      c.req.param('agentEntityId'),
+      c.req.param('threadId'),
+      {
+        signalDelivery: {
+          signalId: signal.signalId,
+          requestId: signal.requestId,
+          name: signal.name,
+          // Never from the body. A client that names its own actor approves as anyone, and the
+          // credential already says who this is.
+          actor: { id: principal.userId, type: 'user' },
+          ...(signal.decision ? { decision: signal.decision } : {}),
+          ...(signal.reason ? { reason: signal.reason } : {}),
+          ...(signal.payload !== undefined ? { payload: signal.payload } : {}),
+          ...(signal.runId ? { runId: signal.runId } : {}),
+        },
+      },
+    );
   });
 
   return app;

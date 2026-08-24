@@ -4,7 +4,7 @@ interface WireEvent {
   type?: string;
   channel?: string;
   payload?: Record<string, unknown>;
-  delta?: unknown;
+  [key: string]: unknown;
 }
 
 function isStreamPart(value: unknown): value is StreamPart {
@@ -30,16 +30,26 @@ function partFromWire(type: string, payload: Record<string, unknown>): StreamPar
   return { channel, type, payload } as StreamPart;
 }
 
+/**
+ * The fields of an AI SDK chunk, which carries them flat — `{ type, id, delta }` — where a Kuralle
+ * part nests them under `payload`. Lifting all of them keeps `id`, which `reduce()` keys assistant
+ * blocks on. Copying `delta` alone collapsed every block onto 'default', so a turn that spoke on
+ * either side of a tool call rendered as a single block.
+ */
+function flatChunkFields(chunk: WireEvent): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(chunk)) {
+    if (key !== 'type' && key !== 'channel') fields[key] = value;
+  }
+  return fields;
+}
+
 function eventFromData(data: string): StreamPart | undefined {
   try {
     const parsed = JSON.parse(data) as WireEvent;
     if (isStreamPart(parsed)) return parsed;
     if (typeof parsed.type !== 'string') return undefined;
-    const payload = parsed.payload ?? {};
-    if (typeof parsed.delta === 'string' && parsed.type === 'text-delta') {
-      payload.delta = parsed.delta;
-    }
-    return partFromWire(parsed.type, payload);
+    return partFromWire(parsed.type, parsed.payload ?? flatChunkFields(parsed));
   } catch {
     return undefined;
   }

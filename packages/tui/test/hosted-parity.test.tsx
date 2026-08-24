@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { httpTransport, reduce, type Block, type LoggedEvent } from '@kuralle-agents/client';
+import { httpTransport, reduce, type LoggedEvent } from '@kuralle-agents/client';
 import { MockSession, toolTurnEvents } from './helpers.js';
 
 /**
@@ -12,33 +12,25 @@ import { MockSession, toolTurnEvents } from './helpers.js';
  * `httpTransport`, exercising the SSE parser and the client-side sequencer. A transport that
  * reorders, drops, or reshapes a part fails it.
  *
- * It compares reduced transcript blocks rather than rendered frames, and strips two timing fields
- * before comparing. `LoggedEventSequencer.logged()` stamps `at: Date.now()` on receipt, so the
- * server's timestamps do not survive the versioned send route: a tool span the server measured at
- * 200ms reduces to `ms: 0` over HTTP. That is a gap in the wire format, not a rendering bug, and it
- * is tracked separately — comparing frames whole would only encode the gap as expected.
+ * It compares reduced transcript blocks rather than rendered frames, and compares them whole,
+ * timings included. That is the point of the assertion now: the versioned route answers
+ * `format=events` with the log's own envelope, so a tool span the server measured at 200ms still
+ * reduces to 200ms over HTTP. While the client stamped `at: Date.now()` on receipt instead, every
+ * hosted duration collapsed to 0 and this test had to strip the timing fields to pass.
  */
 const parityEvents = (): LoggedEvent[] => toolTurnEvents(0, 'parity-session');
 
 function serveTurn(events: LoggedEvent[]) {
-  const body = events.map((event) => `data: ${JSON.stringify(event.part)}\n\n`).join('');
+  const body = events.map((event) => `${JSON.stringify(event)}\n`).join('');
   return Bun.serve({
     port: 0,
     fetch(request) {
       const { pathname } = new URL(request.url);
       if (pathname.endsWith('/messages')) {
-        return new Response(body, { headers: { 'content-type': 'text/event-stream' } });
+        return new Response(body, { headers: { 'content-type': 'application/x-ndjson' } });
       }
       return new Response('not found', { status: 404 });
     },
-  });
-}
-
-/** Drops the fields the wire format cannot carry today, so everything else is compared strictly. */
-function untimed(blocks: Block[]): Array<Record<string, unknown>> {
-  return blocks.map((block) => {
-    const { ms, startedAt, ...rest } = block as unknown as Record<string, unknown>;
-    return rest;
   });
 }
 
@@ -64,7 +56,7 @@ describe('hosted parity', () => {
       );
 
       expect(hosted.map((event) => event.part)).toEqual(inProcess.map((event) => event.part));
-      expect(untimed(reduce(hosted).blocks)).toEqual(untimed(reduce(inProcess).blocks));
+      expect(reduce(hosted).blocks).toEqual(reduce(inProcess).blocks);
     } finally {
       server.stop(true);
     }
