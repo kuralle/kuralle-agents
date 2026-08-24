@@ -279,31 +279,36 @@ describe('booking_example', () => {
             // Host free-conversation turn: no answer → the injected guard routes
             // into the flow (derived routing).
             return {
-              fullStream: (async function* () {})(),
+              stream: (async function* () {})(),
               finishReason: Promise.resolve('stop'),
-              response: Promise.resolve({ messages: [] }),
+              finalStep: Promise.resolve({ response: { messages: [] } }),
+              usage: Promise.resolve({}),
               toolCalls: Promise.resolve([]),
             };
           }
           if (streamCall === 2) {
             // Flow greet node.
             return {
-              fullStream: (async function* () {
+              stream: (async function* () {
                 yield Object.assign({ type: 'text-delta' }, { text: 'Welcome!' });
               })(),
               finishReason: Promise.resolve('stop'),
-              response: Promise.resolve({ messages: [] }),
+              finalStep: Promise.resolve({ response: { messages: [] } }),
+              usage: Promise.resolve({}),
               toolCalls: Promise.resolve([]),
             };
           }
           return {
-            fullStream: (async function* () {
+            stream: (async function* () {
               yield Object.assign({ type: 'text-delta' }, { text: 'Got it.' });
             })(),
             finishReason: Promise.resolve('tool-calls'),
-            response: Promise.resolve({
-              messages: [{ role: 'assistant', content: [{ type: 'text', text: 'Got it.' }] }],
+            finalStep: Promise.resolve({
+              response: {
+                messages: [{ role: 'assistant', content: [{ type: 'text', text: 'Got it.' }] }],
+              },
             }),
+            usage: Promise.resolve({}),
             toolCalls: Promise.resolve([
               {
                 toolName: 'submit_collectdetails_data',
