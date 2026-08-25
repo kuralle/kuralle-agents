@@ -8,6 +8,18 @@ import { isPackagedSkill } from '@kuralle-agents/core';
 const FIXTURES = join(import.meta.dir, 'fixtures', 'skills-packaging');
 
 describe('packageSkillsDirectory', () => {
+  it('throws when the target is itself a skill folder instead of a skills directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'skills-single-folder-'));
+    await mkdir(join(root, 'references'), { recursive: true });
+    await writeFile(
+      join(root, 'SKILL.md'),
+      '---\nname: house-style\ndescription: House style.\n---\n\nBody.\n',
+    );
+    await writeFile(join(root, 'references', 'note.md'), 'Reference.\n');
+
+    await expect(packageSkillsDirectory(root)).rejects.toThrow(/skill folder/i);
+  });
+
   it('packages a fixture directory twice with byte-identical ids', async () => {
     const first = await packageSkillsDirectory(FIXTURES);
     const second = await packageSkillsDirectory(FIXTURES);

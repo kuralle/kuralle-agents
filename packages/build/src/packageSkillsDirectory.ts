@@ -189,7 +189,26 @@ async function packageOneSkill(root: string, entryName: string): Promise<Package
   return brandPackagedSkill(skill);
 }
 
+async function assertSkillsRootNotSkillFolder(root: string): Promise<void> {
+  const skillMdPath = join(root, 'SKILL.md');
+  try {
+    const stat = await lstat(skillMdPath);
+    if (stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error(
+        `[skills] Expected a directory of skill folders (each containing SKILL.md), but "${root}" is itself a skill folder. Pass the parent directory instead.`,
+      );
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('[skills] Expected')) {
+      throw err;
+    }
+    // SKILL.md absent at the skills root — expected layout for a skills directory.
+  }
+}
+
 export async function packageSkillsDirectory(root: string): Promise<PackagedSkill[]> {
+  await assertSkillsRootNotSkillFolder(root);
+
   const entries = await readdir(root, { withFileTypes: true });
   const skills: PackagedSkill[] = [];
 

@@ -101,14 +101,16 @@ defineSkill({
 
 ### Packaged directory
 
-`packageSkillsDirectory` (from `@kuralle-agents/build`) walks a `SKILL.md` folder at build time,
-content-addresses it, and produces a `PackagedSkill[]` your deployment bundles directly — no
-`workspace` filesystem, and no sandbox, is needed at runtime to serve it:
+`packageSkillsDirectory` (from `@kuralle-agents/build`) walks a **directory of skill folders**
+(each containing `SKILL.md`) at build time, content-addresses them, and produces a
+`PackagedSkill[]` your deployment bundles directly — no `workspace` filesystem, and no sandbox,
+is needed at runtime to serve it. Passing a single skill folder throws at build time rather than
+returning an empty bundle:
 
 ```typescript
 import { packageSkillsDirectory } from '@kuralle-agents/build';
 
-const packaged = await packageSkillsDirectory('./skills/house-style');
+const packaged = await packageSkillsDirectory('./skills');
 
 const agent = defineAgent({
   id: 'editor',
