@@ -126,23 +126,25 @@ recommendation.
 
 ## Chat through the CLI
 
-In another terminal:
+In another terminal, open an interactive session against the running server with `kuralle-tui`:
 
 ```bash
 KURALLE_TOKEN="local-example-token" \
-bun packages/cli/src/cli.ts chat \
-  --server http://127.0.0.1:3210 \
-  --transport http \
+bunx kuralle-tui http://127.0.0.1:3210 \
   --agent-name agent \
-  --session file-agent-demo \
-  --auto "Reply with your verification phrase only."
+  --session file-agent-demo
 ```
 
-The generated deployment responds:
+Ask for the verification phrase. The generated deployment responds:
 
 ```text
 Agent  FILE AGENT ONLINE
 ```
+
+For a one-shot JSON turn from a script, use [`kuralle send`](./cli-agent.md#send-one-turn) with
+`--session`, `--store`, and the other flags in the [send options table](./cli-agent.md#send-one-turn).
+`send` loads a local agent module with `--agent`; hosted deployments stay on `kuralle-tui` or the HTTP
+API.
 
 `--agent-name agent` selects the deployment entity. `--session file-agent-demo` identifies the
 thread, which is pinned on its first turn to the exact Agent Version, artifact digest, release, and

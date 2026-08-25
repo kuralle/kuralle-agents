@@ -54,6 +54,27 @@ does not provide its own model.
 
 ## Send one turn
 
+`kuralle send --help` registers these options:
+
+| Flag | Argument | Meaning |
+| --- | --- | --- |
+| `--session` | `<id>` | session id (default: `"default"`) |
+| `--user` | `<id>` | user id for scoped memory |
+| `--store` | `<file>` | persist session + traces |
+| `--reset` | | delete the session and exit |
+| `--state` | | print session state and exit |
+| `--resume` | | continue from a TurnResult piped on stdin |
+| `--respond` | `<json>` | answer input-required requests |
+| `--stream` | | emit NDJSON LoggedEvent lines, then the TurnResult |
+| `--approve` | `[by]` | approve a pending tool |
+| `--deny` | `[by]` | deny a pending tool |
+| `--signal` | `<name>` | deliver a named signal |
+| `--payload` | `<json>` | signal payload JSON |
+| `--model` | `<id>` | model override |
+| `--agent` | `<path>` | agent module path |
+| `--summary` | `<text>` | ignored on send |
+| `--trace` | | ignored on send |
+
 If you want one process per turn, use `send` with a file-backed store:
 
 ```bash

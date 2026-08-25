@@ -116,22 +116,20 @@ async function runScenario(args: {
     NO_COLOR: '1',
   };
 
-  const chat = await command([
-    process.execPath,
+  const chat = await runScriptedSend({
     cliPath,
-    'chat',
-    '--agent', launcherPath,
-    '--auto', scenario.prompts.join('|'),
-    '--trace',
-    '--store', storePath,
-    '--session', sessionId,
-  ], env);
+    launcherPath,
+    sessionId,
+    storePath,
+    prompts: scenario.prompts,
+    env,
+  });
 
   const trace = await command([
     process.execPath,
     cliPath,
-    'trace', sessionId,
     '--agent', launcherPath,
+    'trace', sessionId,
     '--store', storePath,
     '--json',
   ], env);
@@ -271,7 +269,7 @@ function buildArtifact(
     generatedAt: generatedAt.toISOString(),
     model: `openai:${modelId}`,
     configuration: {
-      executionSurface: 'packages/cli/src/cli.ts chat --auto --trace --store, followed by trace --json',
+      executionSurface: 'packages/cli/src/cli.ts send --agent --session --store (piped --resume per prompt), followed by trace --json',
       applicationDefaultDriver: '@kuralle-agents/pi-driver / @earendil-works/pi-agent-core',
       aiSdkBaseline: 'Kuralle TextDriver / Vercel AI SDK',
       piTypedFlows: 'pi',
@@ -320,11 +318,42 @@ function printSummary(results: ScenarioResult[], otlp: OtlpAssessment, runDir: s
   console.log(`artifacts: ${runDir}`);
 }
 
-async function command(argv: string[], env: Record<string, string | undefined>): Promise<CommandResult> {
+async function runScriptedSend(args: {
+  cliPath: string;
+  launcherPath: string;
+  sessionId: string;
+  storePath: string;
+  prompts: string[];
+  env: Record<string, string | undefined>;
+}): Promise<CommandResult> {
+  const base = [
+    process.execPath,
+    args.cliPath,
+    'send',
+    '--agent', args.launcherPath,
+    '--session', args.sessionId,
+    '--store', args.storePath,
+  ];
+  let piped = '';
+  let last: CommandResult = { code: 2, stdout: '', stderr: 'no prompts' };
+  for (const [index, prompt] of args.prompts.entries()) {
+    const argv = index === 0 ? [...base, prompt] : [...base, '--resume', prompt];
+    last = await command(argv, args.env, piped);
+    if (last.code !== 0) return last;
+    piped = last.stdout;
+  }
+  return last;
+}
+
+async function command(
+  argv: string[],
+  env: Record<string, string | undefined>,
+  input = '',
+): Promise<CommandResult> {
   const proc = Bun.spawn(argv, {
     cwd: repoRoot,
     env,
-    stdin: 'ignore',
+    stdin: input ? new Blob([input]) : 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
   });

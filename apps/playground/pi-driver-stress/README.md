@@ -43,7 +43,8 @@ the default `gpt-4.1-mini` for both lanes.
 For each lane the runner starts the real CLI:
 
 ```text
-kuralle chat --auto ... --trace --store ...
+kuralle send --agent ... --session ... --store ... "<prompt>"
+echo "$T1" | kuralle send --resume --agent ... --session ... --store ... "<prompt>"
 kuralle trace <session> --store ... --json
 ```
 
