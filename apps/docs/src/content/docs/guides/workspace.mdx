@@ -176,7 +176,7 @@ tool journal agree across process boundaries — use `SqlFileSystem`, a drop-in 
 SQL handle (+ optional blob store for large files). Pass the handle your platform gives you:
 
 ```typescript
-// Node — built-in node:sqlite (Node >= 22.5)
+// Node / Bun — built-in sync SQLite (`node:sqlite` on Node >= 22.5, `bun:sqlite` on Bun)
 import { nodeSqlFileSystem } from '@kuralle-agents/fs/node';
 const fs = nodeSqlFileSystem('/data/agent.db');
 
@@ -185,7 +185,7 @@ const fs = nodeSqlFileSystem('/data/agent.db');
 import { sqlFileSystem, libsqlHttpBackend } from '@kuralle-agents/fs';
 const fs = sqlFileSystem(libsqlHttpBackend({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN }));
 
-// Bun / anything — wrap the SQLite handle in a 3-line SqlBackend
+// Custom — wrap any SQLite handle in a 3-line SqlBackend
 import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
 import { Database } from 'bun:sqlite';
 const db = new Database('/data/agent.db');
@@ -206,9 +206,9 @@ const agent = defineAgent({ id: 'support', model, workspace: fs, skills: fsSkill
 |----------|---------|---------|
 | Cloudflare (DO) | `sqlFileSystem(ctx.storage.sql)` | Durable Object SQLite (+ R2 for large files) |
 | Cloudflare (D1) | `sqlFileSystem(env.DB)` | D1 |
-| Node | `nodeSqlFileSystem(path)` | `node:sqlite` file |
+| Node / Bun | `nodeSqlFileSystem(path)` | `node:sqlite` / `bun:sqlite` file |
 | Serverless / edge (Vercel) | `sqlFileSystem(libsqlHttpBackend({url,authToken}))` | Turso / libSQL over `fetch` (zero-dep) |
-| Bun / custom | `sqlFileSystem(backend)` | any `SqlBackend` |
+| Custom | `sqlFileSystem(backend)` | any `SqlBackend` |
 
 Nothing is enforced — a workspace is opt-in, and the backend is entirely yours: in-memory, on-disk
 SQLite, DO SQLite, D1, hosted libSQL, or any `SqlBackend`. `@kuralle-agents/fs` has no `@libsql/client`

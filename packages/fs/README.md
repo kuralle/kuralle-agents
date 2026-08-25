@@ -120,7 +120,8 @@ import { sqlFileSystem, r2BlobStore } from '@kuralle-agents/fs';
 const fs = sqlFileSystem(this.ctx.storage.sql, { blobs: r2BlobStore(env.BUCKET) });
 // or:  sqlFileSystem(env.DB)   // D1
 
-// Node virtual workspace persisted in built-in node:sqlite (Node >= 22.5)
+// Node/Bun virtual workspace persisted in the built-in sync SQLite driver
+// (node:sqlite on Node >= 22.5, bun:sqlite on Bun) — same db file either way
 import { nodeSqlFileSystem } from '@kuralle-agents/fs/node';
 const fs = nodeSqlFileSystem('/data/agent.db');
 
@@ -128,7 +129,7 @@ const fs = nodeSqlFileSystem('/data/agent.db');
 import { nodeFileSystem } from '@kuralle-agents/fs/node/fs';
 const localMarkdown = nodeFileSystem('/data/content-workspace');
 
-// Bun / anything — wrap the SQLite handle in a 3-line SqlBackend
+// Custom driver / anything else — wrap the SQLite handle in a 3-line SqlBackend
 import { sqlFileSystem, type SqlBackend } from '@kuralle-agents/fs';
 import { Database } from 'bun:sqlite';
 const db = new Database('/data/agent.db');
