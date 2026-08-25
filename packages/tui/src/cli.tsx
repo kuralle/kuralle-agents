@@ -5,15 +5,22 @@ import { createRoot } from '@opentui/react';
 import { createClient } from '@kuralle-agents/client';
 import { KuralleTui } from './KuralleTui.js';
 import { parseCliArgv, resolveLaunchTarget } from './cliArgs.js';
+import { printCliUsage, wantsCliUsage } from './cliUsage.js';
 
 async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+
   // Bun already reads <cwd>/.env, so this is for --env-file and for parity with the agent CLI:
   // both surfaces load the same file from the same place, and dotenv never overrides a real
   // environment variable, so the precedence stays env > --env-file > ./.env.
   const envIndex = process.argv.indexOf('--env-file');
   loadEnvFile(envIndex >= 0 ? process.argv[envIndex + 1] : undefined);
 
-  const launch = parseCliArgv(process.argv.slice(2));
+  const launch = parseCliArgv(argv);
+  if (wantsCliUsage(argv)) {
+    printCliUsage();
+    process.exit(0);
+  }
   const resolved = await resolveLaunchTarget(launch);
   const renderer = await createCliRenderer({ exitOnCtrlC: true });
   const root = createRoot(renderer);

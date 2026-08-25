@@ -45,13 +45,19 @@ If you want a local agent, pass its filesystem path:
 bunx kuralle-tui ./agent.ts
 ```
 
+Pass a hosted URL or local agent path as the first positional argument, or use `--server <url>` for
+the same hosted target. Use `--local <path.ts>` to load a local agent explicitly instead of relying
+on scheme inference from a filesystem path.
+
 Transport is inferred from the target scheme: `http://` and `https://` use `http`, `ws://` and
 `wss://` use `cloudflare`, and a filesystem path uses `local`. Use `--transport` to override the
 inference. Cloudflare targets also require `--agent-name`.
 
 Use `--session <id>` to attach to an existing session and `--user <id>` to scope memory for the
 session. For a token in a non-default environment variable, use `--token-env VAR`; otherwise the
-TUI reads `KURALLE_TOKEN`.
+TUI reads `KURALLE_TOKEN`. When a local agent export has no model, pass `--model <id>`. To load
+environment variables from a file other than `./.env`, use `--env-file <path>` (real environment
+variables still win). Run `kuralle-tui --help` to print the full launch contract.
 
 ## Use slash commands
 
