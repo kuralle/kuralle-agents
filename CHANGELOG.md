@@ -1,6 +1,36 @@
 # Changelog
 
-## Unreleased — separate agent and human CLI surfaces
+## 0.25.0 — the developer-report batch: fail-loudly packaging, a truthful send, dual-runtime sqlite, and resilient dispatch
+
+Five developer reports against 0.24.0, each fixed at its located cause rather than its symptom, plus the release hygiene 0.24.0 skipped.
+
+### Fail loudly
+
+- **`packageSkillsDirectory` throws when its target is itself a skill folder.** A directory that directly contains `SKILL.md` used to return `[]` silently, surfacing only at conversation time as "No skills are available." It now fails the build with a message naming the remedy — pass the parent skills root — which is what the skills guide always promised. The guide's example packages `./skills`, not a single skill folder.
+
+### The CLI tells the truth
+
+- **`kuralle send` no longer reports success for a turn it never showed you.** A module exporting a constructed `Runtime` lost the CLI's event log in the agent loader: the turn ran and streamed to nowhere while `send` printed `{"status":"waiting"}` with an empty view and exit 0. The loader now prefers the runtime's own log and otherwise attaches the CLI's file log before the turn runs, and `send` reads the same log it attaches. The store-wiring suite covers every `BuildRuntime` export shape, including the two that were missing.
+- **`kuralle send --help` lists the real surface.** The send options were registered on a throwaway parser, so help showed nothing; the send subcommand is now the real one. Five dead hosted flags (`--server`, `--transport`, `--agent-name`, `--token`, `--local`) are gone — they parsed into options nothing read.
+- **`kuralle-tui --help` prints usage instead of launching the TUI**, states the Bun >= 1.3 requirement, and documents every launch flag; the four previously undocumented flags landed in the cli-chat guide.
+
+### One workspace recipe for both runtimes
+
+- **`nodeSqlFileSystem` runs under Bun.** The static `node:sqlite` import died at module load under Bun, which made the documented Node persistence recipe and the bun-only `kuralle-tui` surface mutually exclusive. The factory now opens the database through `bun:sqlite` under Bun and `node:sqlite` under Node, behind the same signature and the same db file. The module gained its first test.
+
+### Dispatch degrades instead of dying
+
+- **A pure dispatcher survives a classifier misfire.** When the routing classifier returned an unusable pick — or the control-model call itself failed — a routes-only agent used to kill the whole user turn with `Pure dispatcher could not resolve a valid transfer target`. It now falls back deterministically to the first declared route (resolved with the same validity rules as normal salvage), then the first valid transfer target; the throw remains only when nothing is resolvable, which is a configuration error. A `classifier-fallback` telemetry event (`invalid-pick` | `model-error`) makes a misfiring classifier observable. An aborted classifier call still aborts the turn — a cancellation is not a misfire — and answering-agent guard semantics are untouched. Route order now matters: the first route is the fallback.
+
+### The routing guide stops implying a hub
+
+- **Sticky handoffs are documented.** After a handoff the session stays on the target agent; later turns never re-enter the router. The triage example now gives every specialist routes to the other lanes — the topology that survives multi-lane conversations — and the guide documents the new classifier fallback.
+
+### Release hygiene
+
+- The 0.24.0 section below finally carries its version heading (it shipped titled "Unreleased"), per-package `CHANGELOG.md` files now point at this root changelog instead of freezing at whatever changesets last wrote, and CONTRIBUTING counts the actual 30 publishable packages.
+
+## 0.24.0 — separate agent and human CLI surfaces
 
 | Old surface | New surface |
 | --- | --- |

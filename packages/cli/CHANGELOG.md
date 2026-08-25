@@ -1,5 +1,9 @@
 # Changelog
 
+From 0.24.0 on, all packages version together and release notes live in the
+[repository root CHANGELOG](https://github.com/kuralle/kuralle-agents/blob/main/CHANGELOG.md).
+The entries below end at the last changesets-driven release.
+
 All `@kuralle-agents/*` packages version in lockstep, so this file records the
 release, not only this package. Full history: https://github.com/kuralle/kuralle-agents
 

@@ -121,7 +121,7 @@ Full guide: `packages/config/guide/README.md`
 
 ## Publish
 
-All 24 packages version together (`"fixed"` in `.changeset/config.json`). Dev uses Bun; publish uses pnpm (handles `workspace:*` → exact version replacement).
+All 30 packages version together (`"fixed"` in `.changeset/config.json`). Dev uses Bun; publish uses pnpm (handles `workspace:*` → exact version replacement).
 
 ```bash
 # Describe the change and pick bump type
