@@ -95,34 +95,52 @@ export async function classifyHostTarget(options: ClassifyHostOptions): Promise<
     ? 'Return keep, enterFlow with flowName, or transfer with agentId.'
     : 'Return enterFlow with flowName or transfer with agentId. Do not return keep.';
 
-  const object = await instrumentedGenerateObject(
-    {
-      emit: options.emit ?? (() => {}),
-      abortSignal: options.abortSignal,
-      runState: run,
-      runStore: options.runStore,
-    },
-    {
-      model,
-      schema,
-      temperature: 0,
-      controlPath: true,
-      system:
-        'You are an internal routing classifier. Choose exactly one action. ' +
-        'Output schema fields only — never user-facing prose. ' +
-        'Reason over semantic descriptions only; never match keywords or substrings.',
-      prompt:
-        (recentContext
-          ? `Recent conversation:\n${recentContext}\n\n`
-          : `User message:\n${latestUser}\n\n`) +
-        (completedFlows.length > 0 ? `Completed flows: ${completedFlows.join(', ')}\n\n` : '') +
-        (flowLines ? `Available flows:\n${flowLines}\n\n` : '') +
-        (routeLines ? `Routes:\n${routeLines}\n\n` : '') +
-        (transferLines ? `Transfer targets:\n${transferLines}\n\n` : '') +
-        actionHint,
-      abortSignal: options.abortSignal,
-    },
-  );
+  let object: z.infer<typeof guardSchema> | z.infer<typeof dispatcherSchema>;
+  try {
+    object = await instrumentedGenerateObject(
+      {
+        emit: options.emit ?? (() => {}),
+        abortSignal: options.abortSignal,
+        runState: run,
+        runStore: options.runStore,
+      },
+      {
+        model,
+        schema,
+        temperature: 0,
+        controlPath: true,
+        system:
+          'You are an internal routing classifier. Choose exactly one action. ' +
+          'Output schema fields only — never user-facing prose. ' +
+          'Reason over semantic descriptions only; never match keywords or substrings.',
+        prompt:
+          (recentContext
+            ? `Recent conversation:\n${recentContext}\n\n`
+            : `User message:\n${latestUser}\n\n`) +
+          (completedFlows.length > 0 ? `Completed flows: ${completedFlows.join(', ')}\n\n` : '') +
+          (flowLines ? `Available flows:\n${flowLines}\n\n` : '') +
+          (routeLines ? `Routes:\n${routeLines}\n\n` : '') +
+          (transferLines ? `Transfer targets:\n${transferLines}\n\n` : '') +
+          actionHint,
+        abortSignal: options.abortSignal,
+      },
+    );
+  } catch (error) {
+    // A cancellation is not a classifier misfire: an aborted turn must stay
+    // aborted, never resolve into a fallback handoff.
+    const aborted =
+      options.abortSignal?.aborted ||
+      (error instanceof Error && error.name === 'AbortError');
+    if (!allowKeep && !aborted) {
+      return pureDispatcherFallback(
+        agent,
+        availableFlows,
+        'model-error',
+        options.emit,
+      );
+    }
+    throw error;
+  }
 
   const rawConfidence = allowKeep && 'confidence' in object ? object.confidence : null;
   const confidence =
@@ -183,7 +201,7 @@ export async function classifyHostTarget(options: ClassifyHostOptions): Promise<
     if (transferTargets.length === 1) {
       return { action: 'transfer', targetAgentId: transferTargets[0]!.id };
     }
-    throw new Error('Pure dispatcher could not resolve a valid transfer target');
+    return pureDispatcherFallback(agent, availableFlows, 'invalid-pick', options.emit);
   }
 
   return { action: 'keep', confidence: confidence ?? 1 as number };
@@ -223,6 +241,83 @@ export function verdictToSelection(
     return { kind: 'route', agentId: verdict.targetAgentId, reason: verdict.reason };
   }
   return undefined;
+}
+
+type ClassifierFallbackReason = 'invalid-pick' | 'model-error';
+
+function resolveRouteTarget(
+  route: Route,
+  agent: AgentConfig,
+  availableFlows: Flow[],
+): HostGuardVerdict | undefined {
+  if (route.agent && isValidTransferTarget(agent, route.agent)) {
+    return {
+      action: 'transfer',
+      targetAgentId: route.agent,
+      reason: 'classifier-fallback',
+    };
+  }
+  if (route.flow) {
+    const flow = (agent.flows ?? []).find((candidate) => candidate.name === route.flow);
+    if (flow && availableFlows.some((candidate) => candidate.name === flow.name)) {
+      return {
+        action: 'enterFlow',
+        flowName: flow.name,
+        reason: 'classifier-fallback',
+      };
+    }
+  }
+  return undefined;
+}
+
+function firstValidTransferTarget(agent: AgentConfig): HostGuardVerdict | undefined {
+  for (const target of collectTransferTargets(agent)) {
+    if (isValidTransferTarget(agent, target.id)) {
+      return {
+        action: 'transfer',
+        targetAgentId: target.id,
+        reason: 'classifier-fallback',
+      };
+    }
+  }
+  return undefined;
+}
+
+function emitClassifierFallbackTelemetry(
+  emit: ClassifyHostOptions['emit'],
+  reason: ClassifierFallbackReason,
+  verdict: HostGuardVerdict,
+): void {
+  emit?.({
+    channel: 'internal',
+    type: 'custom',
+    payload: {
+      name: 'classifier-fallback',
+      data: {
+        reason,
+        action: verdict.action,
+        ...(verdict.targetAgentId ? { targetAgentId: verdict.targetAgentId } : {}),
+        ...(verdict.flowName ? { flowName: verdict.flowName } : {}),
+      },
+    },
+  });
+}
+
+function pureDispatcherFallback(
+  agent: AgentConfig,
+  availableFlows: Flow[],
+  reason: ClassifierFallbackReason,
+  emit: ClassifyHostOptions['emit'],
+): HostGuardVerdict {
+  const routes = agent.routes ?? [];
+  const fromFirstRoute =
+    routes.length > 0 ? resolveRouteTarget(routes[0]!, agent, availableFlows) : undefined;
+  const verdict = fromFirstRoute ?? firstValidTransferTarget(agent);
+  if (!verdict) {
+    throw new Error('Pure dispatcher could not resolve a valid transfer target');
+  }
+  emitClassifierFallbackTelemetry(emit, reason, verdict);
+  return verdict;
 }
 
 function isValidTransferTarget(agent: AgentConfig, targetId: string): boolean {
