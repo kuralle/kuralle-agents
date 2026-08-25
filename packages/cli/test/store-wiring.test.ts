@@ -146,4 +146,12 @@ describe('every BuildRuntime shape forwards the event log', () => {
     const built = await build('demo', undefined, undefined, log);
     expect(built.runtime.getEventLog()).toBe(log);
   });
+
+  it('an exported bare Runtime', async () => {
+    process.env.OPENAI_API_KEY ||= 'test-key';
+    const log = recorder();
+    const build = await resolveBuildRuntime(join(here, '../examples/memory-concierge/agent.ts'));
+    const built = await build('demo', undefined, undefined, log);
+    expect(built.runtime.getEventLog()).toBe(log);
+  });
 });

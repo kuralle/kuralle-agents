@@ -116,6 +116,20 @@ function defaultStores(
   };
 }
 
+type MutableHarnessConfig = { config: { eventLog?: import('@kuralle-agents/core').SessionEventLog } };
+
+/** Prefer the export's own log; otherwise attach the caller-supplied store before the turn runs. */
+function wireRuntimeEventLog(
+  runtime: Runtime,
+  supplied?: import('@kuralle-agents/core').SessionEventLog,
+): import('@kuralle-agents/core').SessionEventLog | undefined {
+  const own = runtime.getEventLog?.();
+  if (own) return own;
+  if (!supplied) return undefined;
+  (runtime as unknown as MutableHarnessConfig).config.eventLog = supplied;
+  return supplied;
+}
+
 function assembleAgentRuntime(
   runtime: Runtime,
   sessionStore: SessionStore,
@@ -153,11 +167,11 @@ function buildFromAgent(
 }
 
 function buildFromRuntime(runtime: Runtime): BuildRuntime {
-  return (sessionId?) => {
+  return (sessionId?, store?, _traceStore?, eventLog?) => {
     const sid = sessionId ?? newSessionId();
-    const sessionStore = runtime.getSessionStore();
-    const agentId = 'agent';
-    return assembleAgentRuntime(runtime, sessionStore, sid, agentId);
+    const sessionStore = store ?? runtime.getSessionStore();
+    wireRuntimeEventLog(runtime, eventLog);
+    return assembleAgentRuntime(runtime, sessionStore, sid, 'agent');
   };
 }
 
@@ -168,6 +182,7 @@ function buildFromFactory(factory: BuildRuntimeFactory): BuildRuntime {
     const result = await factory(sid, stores.sessionStore, stores.traceStore, eventLog ?? stores.eventLog);
     if (isAgentRuntime(result)) return result;
     if (isRuntime(result)) {
+      wireRuntimeEventLog(result, eventLog ?? stores.eventLog);
       return assembleAgentRuntime(result, stores.sessionStore, sid, 'agent');
     }
     console.error('buildRuntime factory must return Runtime or AgentRuntime');

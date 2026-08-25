@@ -43,7 +43,7 @@ export interface SendHooks {
   onEvent?: (event: LoggedEvent) => void;
 }
 
-function sendCommand(): Command {
+export function sendCommand(): Command {
   return new Command('send')
     .option('--session <id>', 'session id', 'default')
     .option('--user <id>', 'user id for scoped memory')
@@ -57,15 +57,10 @@ function sendCommand(): Command {
     .option('--deny [by]', 'deny a pending tool')
     .option('--signal <name>', 'deliver a named signal')
     .option('--payload <json>', 'signal payload JSON')
-    .option('--server <url>', 'hosted server URL')
-    .option('--transport <kind>', 'hosted transport')
-    .option('--agent-name <name>', 'hosted agent name')
-    .option('--token <token>', 'hosted bearer token')
     .option('--model <id>', 'model override')
     .option('--agent <path>', 'agent module path')
     .option('--summary <text>', 'ignored on send')
     .option('--trace', 'ignored on send')
-    .option('--local', 'ignore hosted connection')
     .argument('[message...]', 'message text');
 }
 
@@ -78,10 +73,6 @@ export function parseSendArgs(argv: string[]): { opts: SendOptions; message: str
 }
 
 /** Flag values must never become message text — exercised by packages/cli/test/hosted-commands.test.ts */
-export function messageFrom(argv: string[]): string {
-  return parseSendArgs(argv).message;
-}
-
 async function snapshotView(
   sessionId: string,
   eventLog: Awaited<ReturnType<typeof fileSessionEventLog>>,
@@ -135,7 +126,8 @@ export async function runSend(
     const base = storePath.replace(/\.json$/, '');
     const traces = fileTraceStore(`${base}.traces.jsonl`);
     const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
-    await buildRuntime(sessionId, store, traces, eventLog);
+    const demo = await buildRuntime(sessionId, store, traces, eventLog);
+    const effectiveLog = demo.runtime.getEventLog?.() ?? eventLog;
 
     if (doReset) {
       await store.delete(sessionId);
@@ -147,7 +139,7 @@ export async function runSend(
         view,
       };
     }
-    return snapshotView(sessionId, eventLog, priorView(previous));
+    return snapshotView(sessionId, effectiveLog, priorView(previous));
   }
 
   const resolved = resolveOperation(
@@ -167,14 +159,15 @@ export async function runSend(
   const traces = fileTraceStore(`${base}.traces.jsonl`);
   const eventLog = fileSessionEventLog(`${base}.events.jsonl`);
   const demo = await buildRuntime(sessionId, store, traces, eventLog);
-  const client = createClient({ kind: 'local', runtime: demo.runtime, eventLog });
+  const effectiveLog = demo.runtime.getEventLog?.() ?? eventLog;
+  const client = createClient({ kind: 'local', runtime: demo.runtime, eventLog: effectiveLog });
   const session = resolved.previous
     ? client.sessions.attach(sessionId, resumeCursor(resolved.previous))
     : client.sessions.attach(sessionId);
 
   const fromIndex = resolved.previous
     ? resumeCursor(resolved.previous).index + 1
-    : (await eventLog.tail(sessionId)) + 1;
+    : (await effectiveLog.tail(sessionId)) + 1;
 
   let turn;
   if (resolved.mode === 'respond') {
@@ -217,7 +210,7 @@ export async function runSend(
   // and the fact is lost with no error. settled() is what the runtime already offers for this.
   await demo.runtime.settled();
 
-  const { events } = await eventLog.read(sessionId, fromIndex);
+  const { events } = await effectiveLog.read(sessionId, fromIndex);
   const seed = priorView(resolved.previous);
   const view = reduce(events, seed);
   if (turnError !== undefined) {

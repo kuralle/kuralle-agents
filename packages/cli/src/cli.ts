@@ -19,7 +19,7 @@ import { resolveBuildRuntime } from './agentLoader.js';
 import { AuthRequiredError, UsageError } from './errors.js';
 import { runResume } from './resume.js';
 import { runSchema } from './schema.js';
-import { runSend } from './send.js';
+import { runSend, sendCommand } from './send.js';
 import { runSim } from './sim.js';
 import { runTrace } from './trace.js';
 import {
@@ -81,37 +81,37 @@ async function main(): Promise<void> {
       process.exit(2);
     });
 
-  program
-    .command('send')
-    .description('One turn against a persisted session')
-    .allowUnknownOption()
-    .allowExcessArguments()
-    .action(async () => {
-      try {
-        const { agentPath, modelFlag } = globalAgentFlags();
-        const buildRuntime = await resolveBuildRuntime(agentPath, { modelFlag });
-        const argv = subcommandArgv('send');
-        const stream = argv.includes('--stream');
-        const result = await runSend(argv, buildRuntime, stream ? {
-          onEvent: (event) => {
-            process.stdout.write(`${JSON.stringify(event)}\n`);
-          },
-        } : undefined);
-        writeTurnResult(result);
-        process.exit(exitCodeFor(result.status));
-      } catch (err) {
-        if (err instanceof UsageError) {
-          process.stderr.write(`${err.message}\n`);
-          process.exit(2);
-        }
-        if (err instanceof AuthRequiredError) {
-          const result = authRequiredResult(err.message, err.code);
+  program.addCommand(
+    sendCommand()
+      .description('One turn against a persisted session')
+      .allowExcessArguments()
+      .action(async () => {
+        try {
+          const { agentPath, modelFlag } = globalAgentFlags();
+          const buildRuntime = await resolveBuildRuntime(agentPath, { modelFlag });
+          const argv = subcommandArgv('send');
+          const stream = argv.includes('--stream');
+          const result = await runSend(argv, buildRuntime, stream ? {
+            onEvent: (event) => {
+              process.stdout.write(`${JSON.stringify(event)}\n`);
+            },
+          } : undefined);
           writeTurnResult(result);
           process.exit(exitCodeFor(result.status));
+        } catch (err) {
+          if (err instanceof UsageError) {
+            process.stderr.write(`${err.message}\n`);
+            process.exit(2);
+          }
+          if (err instanceof AuthRequiredError) {
+            const result = authRequiredResult(err.message, err.code);
+            writeTurnResult(result);
+            process.exit(exitCodeFor(result.status));
+          }
+          throw err;
         }
-        throw err;
-      }
-    });
+      }),
+  );
 
   program
     .command('schema')
