@@ -35,9 +35,23 @@ Set `routing: { model }` to classify with a separate (e.g. cheaper) control mode
 
 Model every fallback as a normal route with a semantic `when` (e.g. "general support") — there is no `routing.default`.
 
+### Classifier fallback (pure dispatchers)
+
+On a **pure dispatcher**, when the classifier returns an unusable pick (`invalid-pick`) or the control model fails (`model-error`), the runtime falls back to the **first declared route** — resolved with the same validity rules as a normal salvage, then the first valid transfer target if that route cannot resolve. The turn only throws when nothing is resolvable, which is a configuration error. An aborted classifier call still aborts the turn; fallback does not swallow cancellation.
+
+Route order therefore matters: put the lane you want as the automatic fallback **first**. The runtime emits a `classifier-fallback` telemetry event (`reason`: `invalid-pick` | `model-error`) when fallback fires.
+
+Answering agents (`allowKeep: true`) do not get this automatic fallback — an invalid classifier verdict keeps the current agent instead.
+
 ## Handoffs
 
 A handoff moves the conversation to another agent and carries full session context. The receiving agent picks up with the complete message history.
+
+### Sticky handoffs
+
+After a handoff, the session **stays on the target agent** — `activeAgentId` is updated and later turns run on that specialist without re-entering the router. Turn 1 may classify through triage; turn 2 goes directly to billing. This is intentional: the handoff parks the conversation on the specialist who owns the thread.
+
+Triage is not consulted again on later turns. If the user's topic shifts (e.g. from billing to product support while parked on billing), the **current** agent must handle re-routing. Give each specialist its own `routes` and `routing: { model }` pointing at the other lanes — the routes-on-every-specialist pattern shown in the triage example below.
 
 ### Silent handoffs (default)
 
@@ -88,16 +102,25 @@ The runtime intercepts `{ __handoff: true, targetAgentId }` in the tool result a
 import { openai } from '@ai-sdk/openai';
 import { defineAgent, createRuntime } from '@kuralle-agents/core';
 
-const billingAgent = defineAgent({
-  id: 'billing',
-  instructions: 'You handle billing questions and payment issues.',
-  model: openai('gpt-4o-mini'),
-});
+const model = openai('gpt-4o-mini');
 
 const supportAgent = defineAgent({
   id: 'support',
   instructions: 'You handle product support requests.',
-  model: openai('gpt-4o-mini'),
+  model,
+  // After the initial triage handoff, later turns stay on this agent. Give
+  // each specialist routes to the other lanes so topic switches re-route
+  // without returning to triage.
+  routes: [{ agent: 'billing', when: 'billing question or payment issue' }],
+  routing: { model },
+});
+
+const billingAgent = defineAgent({
+  id: 'billing',
+  instructions: 'You handle billing questions and payment issues.',
+  model,
+  routes: [{ agent: 'support', when: 'product support or general help' }],
+  routing: { model },
 });
 
 const triage = defineAgent({
@@ -106,7 +129,8 @@ const triage = defineAgent({
     { agent: 'billing', when: 'billing question or payment issue' },
     { agent: 'support', when: 'product support or general help' },
   ],
-  routing: { model: openai('gpt-4o-mini') },
+  routing: { model },
+  agents: [billingAgent, supportAgent],
 });
 
 const runtime = createRuntime({
@@ -115,6 +139,6 @@ const runtime = createRuntime({
   // A pure dispatcher declares no `model` of its own, and the runtime's model
   // gate reads `agent.model ?? defaultModel` — it does not fall back to
   // `routing.model`. Without this line every turn throws before classifying.
-  defaultModel: openai('gpt-4o-mini'),
+  defaultModel: model,
 });
 ```

@@ -39,9 +39,23 @@ Set `routing: { model }` to classify with a separate (e.g. cheaper) control mode
 
 Model every fallback as a normal route with a semantic `when` (e.g. "general support") — there is no `routing.default`.
 
+### Classifier fallback (pure dispatchers)
+
+On a **pure dispatcher**, when the classifier returns an unusable pick (`invalid-pick`) or the control model fails (`model-error`), the runtime falls back to the **first declared route** — resolved with the same validity rules as a normal salvage, then the first valid transfer target if that route cannot resolve. The turn only throws when nothing is resolvable, which is a configuration error. An aborted classifier call still aborts the turn; fallback does not swallow cancellation.
+
+Route order therefore matters: put the lane you want as the automatic fallback **first**. The runtime emits a `classifier-fallback` telemetry event (`reason`: `invalid-pick` | `model-error`) when fallback fires.
+
+Answering agents (`allowKeep: true`) do not get this automatic fallback — an invalid classifier verdict keeps the current agent instead.
+
 ## Handoffs
 
 A handoff moves the conversation to another agent and carries full session context. The receiving agent picks up with the complete message history.
+
+### Sticky handoffs
+
+After a handoff, the session **stays on the target agent** — `activeAgentId` is updated and later turns run on that specialist without re-entering the router. Turn 1 may classify through triage; turn 2 goes directly to billing. This is intentional: the handoff parks the conversation on the specialist who owns the thread.
+
+Triage is not consulted again on later turns. If the user's topic shifts (e.g. from billing to product support while parked on billing), the **current** agent must handle re-routing. Give each specialist its own `routes` and `routing: { model }` pointing at the other lanes — the routes-on-every-specialist pattern shown in the triage example below.
 
 ### Silent handoffs (default)
 
