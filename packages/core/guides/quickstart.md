@@ -63,6 +63,15 @@ Build your first Kuralle agent in minutes.
 >
 > `handle.events` is a property on `TurnHandle`, not a method. Writing `handle.events()` with parentheses will throw.
 
+If a tool sets `interim` and `interimAfterMs`, the raw run stream marks its
+`text-start` part with `payload.kind === 'interim'` and `payload.toolName`.
+The following `text-delta` and `text-end` use the same `payload.id`, so a
+consumer can distinguish that message from answer text without checking its
+words. Text without an interim marker remains unchanged. The AI SDK
+`UIMessageStream` adapter uses the SDK's standard flat text chunks and does
+not carry this raw-stream metadata; read `handle.events` when the distinction
+matters.
+
 ## Full example
 
 Put it all together in `agent.ts`:

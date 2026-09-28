@@ -11,6 +11,10 @@ export interface StreamPartBase<Channel extends StreamChannel = StreamChannel> {
 
 export interface TextStartPayload {
   id: string;
+  /** Marks a tool's pre-result message; omitted for ordinary answer text. */
+  kind?: 'interim';
+  /** The tool that produced the interim message. */
+  toolName?: string;
 }
 
 export interface TextDeltaPayload {

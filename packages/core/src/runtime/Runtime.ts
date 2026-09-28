@@ -451,9 +451,9 @@ export class Runtime {
         tools: openingSurface.executorTools,
         enforcer: policies.enforcer,
         agentId: opened.agent.id,
-        onInterim: (message) => {
+        onInterim: (message, toolName) => {
           const id = crypto.randomUUID();
-          emit({ channel: 'client', type: 'text-start', payload: { id } });
+          emit({ channel: 'client', type: 'text-start', payload: { id, kind: 'interim', toolName } });
           emit({ channel: 'client', type: 'text-delta', payload: { id, delta: message } });
           emit({ channel: 'client', type: 'text-end', payload: { id } });
         },
@@ -844,9 +844,9 @@ export class Runtime {
               tools: targetSurface.executorTools,
               enforcer: targetPolicies.enforcer,
               agentId: target.id,
-              onInterim: (message) => {
+              onInterim: (message, toolName) => {
                 const id = crypto.randomUUID();
-                emit({ channel: 'client', type: 'text-start', payload: { id } });
+                emit({ channel: 'client', type: 'text-start', payload: { id, kind: 'interim', toolName } });
                 emit({
                   channel: 'client',
                   type: 'text-delta',
